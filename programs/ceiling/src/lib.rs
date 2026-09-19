@@ -1,0 +1,575 @@
+//! Ceiling: a permission to spend that the chain enforces.
+//!
+//! A mandate is opened by a human and carries four limits: a total cap, a
+//! largest single payment, an expiry, and one allowed merchant. An agent key
+//! may submit charges against it and can do nothing else.
+//!
+//! The design decision the whole program rests on: when a charge breaks a
+//! rule, `charge` does not return an error. Returning an error would roll back
+//! every account write, so the refusal would leave no trace on chain and would
+//! be indistinguishable from nothing having happened. Instead the instruction
+//! transfers nothing, writes a refusal to the ledger with a reason code, logs
+//! a human-readable line, and returns Ok. The transaction confirms, the
+//! balance is unchanged, and the refusal is a durable, verifiable artifact.
+
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program_option::COption;
+use anchor_spl::token_interface::{
+    self, Mint, TokenAccount, TokenInterface,
+};
+
+pub mod state;
+pub use state::*;
+
+declare_id!("9LSdJGMoqUSmejd1eZLKUzeSwcQqovkBHCHncmeXfkPm");
+
+#[program]
+pub mod ceiling {
+    use super::*;
+
+    /// Open a mandate and delegate `cap` to it in the same transaction, so the
+    /// owner signs exactly once.
+    pub fn open_mandate(ctx: Context<OpenMandate>, args: OpenMandateArgs) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+
+        require!(args.cap > 0, CeilingError::CapMustBePositive);
+        require!(args.per_tx_max > 0, CeilingError::PerTxMaxMustBePositive);
+        require!(args.per_tx_max <= args.cap, CeilingError::PerTxMaxAboveCap);
+        require!(args.expires_at > now, CeilingError::ExpiryInThePast);
+        require!(
+            args.purpose.chars().count() <= PURPOSE_MAX_LEN,
+            CeilingError::PurposeTooLong
+        );
+        require_keys_neq!(
+            args.merchant,
+            Pubkey::default(),
+            CeilingError::MerchantRequired
+        );
+        require_keys_neq!(
+            args.agent,
+            ctx.accounts.owner.key(),
+            CeilingError::AgentMustNotBeOwner
+        );
+
+        let mandate = &mut ctx.accounts.mandate;
+        mandate.owner = ctx.accounts.owner.key();
+        mandate.agent = args.agent;
+        mandate.mint = ctx.accounts.mint.key();
+        mandate.source = ctx.accounts.source.key();
+        mandate.merchant = args.merchant;
+        mandate.mandate_id = args.mandate_id;
+        mandate.cap = args.cap;
+        mandate.spent = 0;
+        mandate.per_tx_max = args.per_tx_max;
+        mandate.expires_at = args.expires_at;
+        mandate.override_amount = 0;
+        mandate.override_nonce = 0;
+        mandate.last_nonce = 0;
+        mandate.purpose = args.purpose;
+        mandate.status = STATUS_ACTIVE;
+        mandate.spend_count = 0;
+        mandate.refusal_count = 0;
+        mandate.bump = ctx.bumps.mandate;
+
+        let ledger = &mut ctx.accounts.ledger;
+        ledger.mandate = mandate.key();
+        ledger.head = 0;
+        ledger.total = 0;
+        ledger.bump = ctx.bumps.ledger;
+        ledger.record(Entry {
+            ts: now,
+            amount: args.cap,
+            counterparty: args.merchant,
+            nonce: 0,
+            kind: KIND_OPENED,
+            reason: REASON_OK,
+        });
+
+        // Delegate the cap to the mandate PDA. The tokens do not move: the
+        // owner keeps them and keeps the right to revoke at any moment.
+        token_interface::approve_checked(
+            CpiContext::new(
+                ctx.accounts.token_program.key(),
+                token_interface::ApproveChecked {
+                    to: ctx.accounts.source.to_account_info(),
+                    delegate: ctx.accounts.mandate.to_account_info(),
+                    authority: ctx.accounts.owner.to_account_info(),
+                    mint: ctx.accounts.mint.to_account_info(),
+                },
+            ),
+            args.cap,
+            ctx.accounts.mint.decimals,
+        )?;
+
+        msg!(
+            "CEILING OPENED cap={} per_tx_max={} expires_at={} purpose={}",
+            args.cap,
+            args.per_tx_max,
+            args.expires_at,
+            ctx.accounts.mandate.purpose
+        );
+        Ok(())
+    }
+
+    /// Submit a charge. Signed by the agent, decided by this program.
+    ///
+    /// Returns Ok whether the charge is paid or refused. See the module doc
+    /// for why a refusal must not be an error.
+    pub fn charge(ctx: Context<Charge>, amount: u64, nonce: u64) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+
+        // Re-derive the mandate address from its own stored fields. The CPI
+        // below signs as this PDA, so this also proves the stored bump is the
+        // canonical one.
+        let expected = Pubkey::create_program_address(
+            &[
+                b"mandate",
+                ctx.accounts.mandate.owner.as_ref(),
+                &ctx.accounts.mandate.mandate_id.to_le_bytes(),
+                &[ctx.accounts.mandate.bump],
+            ],
+            &crate::ID,
+        )
+        .map_err(|_| error!(CeilingError::InvalidMandatePda))?;
+        require_keys_eq!(
+            expected,
+            ctx.accounts.mandate.key(),
+            CeilingError::InvalidMandatePda
+        );
+
+        let reason = evaluate(
+            &ctx.accounts.mandate,
+            ctx.accounts.mandate.key(),
+            &ctx.accounts.source,
+            &ctx.accounts.destination,
+            amount,
+            nonce,
+            now,
+        );
+
+        if reason == REASON_OK {
+            let owner = ctx.accounts.mandate.owner;
+            let mandate_id = ctx.accounts.mandate.mandate_id.to_le_bytes();
+            let bump = [ctx.accounts.mandate.bump];
+            let seeds: &[&[u8]] = &[b"mandate", owner.as_ref(), &mandate_id, &bump];
+
+            token_interface::transfer_checked(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.key(),
+                    token_interface::TransferChecked {
+                        from: ctx.accounts.source.to_account_info(),
+                        to: ctx.accounts.destination.to_account_info(),
+                        authority: ctx.accounts.mandate.to_account_info(),
+                        mint: ctx.accounts.mint.to_account_info(),
+                    },
+                    &[seeds],
+                ),
+                amount,
+                ctx.accounts.mint.decimals,
+            )?;
+
+            let mandate = &mut ctx.accounts.mandate;
+            mandate.spent = mandate
+                .spent
+                .checked_add(amount)
+                .ok_or(CeilingError::MathOverflow)?;
+            mandate.spend_count = mandate.spend_count.saturating_add(1);
+            mandate.last_nonce = nonce;
+            if mandate.override_nonce == nonce {
+                mandate.override_nonce = 0;
+                mandate.override_amount = 0;
+            }
+            if mandate.spent >= mandate.cap {
+                mandate.status = STATUS_EXHAUSTED;
+            }
+
+            ctx.accounts.ledger.record(Entry {
+                ts: now,
+                amount,
+                counterparty: ctx.accounts.destination.key(),
+                nonce,
+                kind: KIND_PAID,
+                reason: REASON_OK,
+            });
+
+            msg!(
+                "CEILING PAID amount={} spent={} of cap={} remaining={}",
+                amount,
+                mandate.spent,
+                mandate.cap,
+                mandate.remaining()
+            );
+            emit!(Paid {
+                mandate: mandate.key(),
+                amount,
+                nonce,
+                spent: mandate.spent,
+            });
+        } else {
+            let mandate = &mut ctx.accounts.mandate;
+            if reason == REASON_EXPIRED && mandate.status == STATUS_ACTIVE {
+                mandate.status = STATUS_EXPIRED;
+            }
+            mandate.refusal_count = mandate.refusal_count.saturating_add(1);
+
+            ctx.accounts.ledger.record(Entry {
+                ts: now,
+                amount,
+                counterparty: ctx.accounts.destination.key(),
+                nonce,
+                kind: KIND_REFUSED,
+                reason,
+            });
+
+            msg!(
+                "CEILING REFUSED reason={} ({}) amount={} per_tx_max={} remaining={}",
+                reason,
+                reason_text(reason),
+                amount,
+                ctx.accounts.mandate.effective_per_tx_max(nonce),
+                ctx.accounts.mandate.remaining()
+            );
+            emit!(Refused {
+                mandate: ctx.accounts.mandate.key(),
+                amount,
+                nonce,
+                reason,
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Let one specific charge through above the per-payment ceiling.
+    ///
+    /// The owner signs, so the override is explicit. It is written to the
+    /// ledger, so it is on the record. It raises the per-payment ceiling only:
+    /// the total cap stays absolute.
+    pub fn grant_override(ctx: Context<OwnerAction>, amount: u64, nonce: u64) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(nonce != 0, CeilingError::NonceRequired);
+        require!(amount > 0, CeilingError::AmountMustBePositive);
+        require!(
+            ctx.accounts.mandate.status == STATUS_ACTIVE,
+            CeilingError::MandateNotActive
+        );
+        require!(
+            amount <= ctx.accounts.mandate.remaining(),
+            CeilingError::OverrideAboveCap
+        );
+
+        let mandate = &mut ctx.accounts.mandate;
+        mandate.override_amount = amount;
+        mandate.override_nonce = nonce;
+
+        ctx.accounts.ledger.record(Entry {
+            ts: now,
+            amount,
+            counterparty: mandate.merchant,
+            nonce,
+            kind: KIND_OVERRIDE,
+            reason: REASON_OK,
+        });
+
+        msg!("CEILING OVERRIDE amount={} nonce={}", amount, nonce);
+        Ok(())
+    }
+
+    /// Withdraw the agent's authority immediately, in one owner signature.
+    pub fn revoke_mandate(ctx: Context<OwnerAction>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(
+            ctx.accounts.mandate.status == STATUS_ACTIVE,
+            CeilingError::MandateNotActive
+        );
+
+        let mandate = &mut ctx.accounts.mandate;
+        mandate.status = STATUS_REVOKED;
+        mandate.override_amount = 0;
+        mandate.override_nonce = 0;
+
+        ctx.accounts.ledger.record(Entry {
+            ts: now,
+            amount: 0,
+            counterparty: mandate.merchant,
+            nonce: 0,
+            kind: KIND_REVOKED,
+            reason: REASON_OK,
+        });
+
+        // Also drop the SPL delegation, so nothing can be pulled even if this
+        // program were replaced.
+        token_interface::revoke(CpiContext::new(
+            ctx.accounts.token_program.key(),
+            token_interface::Revoke {
+                source: ctx.accounts.source.to_account_info(),
+                authority: ctx.accounts.owner.to_account_info(),
+            },
+        ))?;
+
+        msg!("CEILING REVOKED spent={} of cap={}", mandate.spent, mandate.cap);
+        Ok(())
+    }
+
+    /// Reclaim rent once a mandate is finished. Only the owner, never while active.
+    pub fn close_mandate(ctx: Context<CloseMandate>) -> Result<()> {
+        require!(
+            ctx.accounts.mandate.status != STATUS_ACTIVE,
+            CeilingError::MandateStillActive
+        );
+        msg!("CEILING CLOSED");
+        Ok(())
+    }
+}
+
+/// Pure policy evaluation. No writes, no CPI, so it reads as a single list of
+/// the rules the owner agreed to. Order matters only for which reason is
+/// reported when a charge breaks more than one rule.
+fn evaluate(
+    mandate: &Mandate,
+    mandate_key: Pubkey,
+    source: &InterfaceAccount<TokenAccount>,
+    destination: &InterfaceAccount<TokenAccount>,
+    amount: u64,
+    nonce: u64,
+    now: i64,
+) -> u8 {
+    if mandate.status != STATUS_ACTIVE {
+        return REASON_NOT_ACTIVE;
+    }
+    if now >= mandate.expires_at {
+        return REASON_EXPIRED;
+    }
+    if amount == 0 {
+        return REASON_ZERO_AMOUNT;
+    }
+    // Only a paid charge advances the nonce, so a refused charge can be
+    // retried after an override without minting a new one.
+    if nonce <= mandate.last_nonce {
+        return REASON_STALE_NONCE;
+    }
+    if destination.owner != mandate.merchant {
+        return REASON_MERCHANT_NOT_ALLOWED;
+    }
+    if amount > mandate.effective_per_tx_max(nonce) {
+        return REASON_OVER_PER_TX_MAX;
+    }
+    match mandate.spent.checked_add(amount) {
+        Some(total) if total <= mandate.cap => {}
+        _ => return REASON_OVER_CAP,
+    }
+    // The owner can revoke the SPL delegation directly, without this program.
+    // Notice that rather than failing the transfer.
+    if source.delegate != COption::Some(mandate_key) {
+        return REASON_DELEGATE_MISSING;
+    }
+    if source.delegated_amount < amount || source.amount < amount {
+        return REASON_INSUFFICIENT_FUNDS;
+    }
+    REASON_OK
+}
+
+fn reason_text(reason: u8) -> &'static str {
+    match reason {
+        REASON_OK => "ok",
+        REASON_NOT_ACTIVE => "mandate not active",
+        REASON_EXPIRED => "past expiry",
+        REASON_STALE_NONCE => "nonce already settled",
+        REASON_MERCHANT_NOT_ALLOWED => "merchant not allowed",
+        REASON_OVER_PER_TX_MAX => "over per-payment maximum",
+        REASON_OVER_CAP => "over remaining cap",
+        REASON_DELEGATE_MISSING => "delegation withdrawn",
+        REASON_INSUFFICIENT_FUNDS => "insufficient funds",
+        REASON_ZERO_AMOUNT => "zero amount",
+        _ => "unknown",
+    }
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct OpenMandateArgs {
+    pub mandate_id: u64,
+    pub agent: Pubkey,
+    pub merchant: Pubkey,
+    pub cap: u64,
+    pub per_tx_max: u64,
+    pub expires_at: i64,
+    pub purpose: String,
+}
+
+#[derive(Accounts)]
+#[instruction(args: OpenMandateArgs)]
+pub struct OpenMandate<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + Mandate::INIT_SPACE,
+        seeds = [b"mandate", owner.key().as_ref(), &args.mandate_id.to_le_bytes()],
+        bump
+    )]
+    pub mandate: Account<'info, Mandate>,
+
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + Ledger::INIT_SPACE,
+        seeds = [b"ledger", mandate.key().as_ref()],
+        bump
+    )]
+    pub ledger: Account<'info, Ledger>,
+
+    #[account(
+        mut,
+        constraint = source.owner == owner.key() @ CeilingError::SourceNotOwnedByOwner,
+        constraint = source.mint == mint.key() @ CeilingError::MintMismatch,
+    )]
+    pub source: InterfaceAccount<'info, TokenAccount>,
+
+    pub mint: InterfaceAccount<'info, Mint>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct Charge<'info> {
+    /// The agent holds authority and nothing else. It is not the owner, it
+    /// pays only the transaction fee, and it cannot change any limit.
+    pub agent: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = agent @ CeilingError::NotTheAgent,
+        has_one = mint @ CeilingError::MintMismatch,
+        has_one = source @ CeilingError::SourceMismatch,
+    )]
+    pub mandate: Account<'info, Mandate>,
+
+    #[account(
+        mut,
+        seeds = [b"ledger", mandate.key().as_ref()],
+        bump = ledger.bump,
+        has_one = mandate @ CeilingError::LedgerMismatch,
+    )]
+    pub ledger: Account<'info, Ledger>,
+
+    #[account(mut)]
+    pub source: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        constraint = destination.mint == mandate.mint @ CeilingError::MintMismatch,
+    )]
+    pub destination: InterfaceAccount<'info, TokenAccount>,
+
+    pub mint: InterfaceAccount<'info, Mint>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct OwnerAction<'info> {
+    pub owner: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = owner @ CeilingError::NotTheOwner,
+        has_one = source @ CeilingError::SourceMismatch,
+    )]
+    pub mandate: Account<'info, Mandate>,
+
+    #[account(
+        mut,
+        seeds = [b"ledger", mandate.key().as_ref()],
+        bump = ledger.bump,
+        has_one = mandate @ CeilingError::LedgerMismatch,
+    )]
+    pub ledger: Account<'info, Ledger>,
+
+    #[account(mut)]
+    pub source: InterfaceAccount<'info, TokenAccount>,
+
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct CloseMandate<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(
+        mut,
+        close = owner,
+        has_one = owner @ CeilingError::NotTheOwner,
+    )]
+    pub mandate: Account<'info, Mandate>,
+
+    #[account(
+        mut,
+        close = owner,
+        seeds = [b"ledger", mandate.key().as_ref()],
+        bump = ledger.bump,
+        has_one = mandate @ CeilingError::LedgerMismatch,
+    )]
+    pub ledger: Account<'info, Ledger>,
+}
+
+#[event]
+pub struct Paid {
+    pub mandate: Pubkey,
+    pub amount: u64,
+    pub nonce: u64,
+    pub spent: u64,
+}
+
+#[event]
+pub struct Refused {
+    pub mandate: Pubkey,
+    pub amount: u64,
+    pub nonce: u64,
+    pub reason: u8,
+}
+
+#[error_code]
+pub enum CeilingError {
+    #[msg("cap must be greater than zero")]
+    CapMustBePositive,
+    #[msg("per-payment maximum must be greater than zero")]
+    PerTxMaxMustBePositive,
+    #[msg("per-payment maximum cannot exceed the cap")]
+    PerTxMaxAboveCap,
+    #[msg("expiry must be in the future")]
+    ExpiryInThePast,
+    #[msg("purpose is longer than the on-chain limit")]
+    PurposeTooLong,
+    #[msg("a mandate must name the merchant it may pay")]
+    MerchantRequired,
+    #[msg("the agent key must not be the owner key")]
+    AgentMustNotBeOwner,
+    #[msg("source token account is not owned by the mandate owner")]
+    SourceNotOwnedByOwner,
+    #[msg("token mint does not match the mandate")]
+    MintMismatch,
+    #[msg("source token account does not match the mandate")]
+    SourceMismatch,
+    #[msg("ledger does not belong to this mandate")]
+    LedgerMismatch,
+    #[msg("signer is not the agent named in the mandate")]
+    NotTheAgent,
+    #[msg("signer is not the owner of this mandate")]
+    NotTheOwner,
+    #[msg("mandate address does not match its stored fields")]
+    InvalidMandatePda,
+    #[msg("mandate is not active")]
+    MandateNotActive,
+    #[msg("mandate is still active")]
+    MandateStillActive,
+    #[msg("an override needs a non-zero nonce")]
+    NonceRequired,
+    #[msg("amount must be greater than zero")]
+    AmountMustBePositive,
+    #[msg("an override cannot raise the total cap")]
+    OverrideAboveCap,
+    #[msg("arithmetic overflow")]
+    MathOverflow,
+}
