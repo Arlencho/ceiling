@@ -1,35 +1,64 @@
-# Ceiling
+# Veto
 
-**A wallet that is allowed to do less, on purpose.**
+**Limits on chain already exist. Every one of them makes an overspend impossible. We make the
+refusal legible.**
 
-AI can already decide what to buy. Crypto still offers two bad options: sign every transaction, or
-hand an agent a blank check. Ceiling is the missing middle, on Solana Mobile.
+An impossible transaction protects your money and teaches you nothing. No artifact, no reason, no
+trail. Veto is a permission to spend where the decline is a first-class on-chain record: a
+recorded no, a one-line why, and the override that would have cleared it. On a phone, with the key
+in Seed Vault.
 
-You write a mandate once: what it may pay for, up to how much, and until when. An agent can act
-inside that box without another tap. When a charge breaks the rule, the program refuses, records
-why on chain, and moves no money.
+AP2 standardised the record of a yes. This is the missing half.
 
-> Status: in active development for the Solana Mobile "Clock In" hackathon. Submissions close
-> 2026-10-09. This README describes what is built; see [docs/PLAN.md](docs/PLAN.md) for what is
-> planned and [docs/DECISIONS.md](docs/DECISIONS.md) for why.
+> Status: in development for the Solana Mobile "Clock In" hackathon, submissions close
+> 2026-10-09. See [docs/PLAN.md](docs/PLAN.md) for the build plan,
+> [docs/PITCH.md](docs/PITCH.md) for the positioning, and
+> [docs/DECISIONS.md](docs/DECISIONS.md) for why each choice was made and what would reverse it.
+
+## What is and is not new here
+
+Capped agent spending on Solana is not new, and this project does not claim it. Being specific
+about that is the point:
+
+| Prior art | What it does | Why this is different |
+|---|---|---|
+| [Squads v4 spending limits](https://squads.xyz/blog/spending-limits) | Pre-approved allowances, roles, per-member caps. Audited by Neodyme, OtterSec and Trail of Bits, two formal verifications underway | Treasury operations for humans. An overspend is impossible, never legible |
+| SPL `approve` / delegate | Caps what a delegate may pull | Cap only. No purpose, no expiry, no reason, no record |
+| [LazorKit](https://github.com/lazor-kit/lazor-kit) | Passkey smart wallet, session keys with slot-height expiry, on-chain RBAC and spending limits | Wallet infrastructure for app developers, not a product about trust |
+| [SolAgent Pay](https://github.com/altaranexus-ship-it/solagent-pay) | Session PDA with lifetime and per-request ceilings, merchant allowlist, TTL, revoke and sweep | Closest on the numbers, and states outright that an overspend "is not a policy violation logged after the fact, it is an impossible transaction". Opposite thesis. It also escrows into a vault; we never move the funds |
+| [Oculus](https://github.com/useoculusagent/useoculusagent) | On-chain policy check per transaction, a USDC reserve reimburses a breach within 60 seconds | Insurance after the fact. We decline before money moves, then explain |
+| [x402](https://metamask.io/news/what-is-x402) / [AP2](https://www.cobo.com/post/ap2-protocol-complete-guide-to-agent-payments-for-web3-developers-2026) | HTTP 402 settlement; signed Intent, Cart and Payment mandates as verifiable credentials | The record of a yes, held off chain as the merchant's evidence |
+
+Capped on-chain agent budgets are documented well enough that infrastructure vendors publish
+tutorials on them. Treat the primitive as commodity. The claim here is narrower: **the refusal is
+an artifact.**
 
 ## The refusal is the product
 
-Most payment programs demonstrate a transaction that succeeds. Ceiling demonstrates a transaction
-that **confirms on chain and deliberately moves nothing.**
-
-When `charge` declines, it does not return an error. Returning an error would roll back every
-account write, so the refusal would leave no trace and would be indistinguishable from nothing
-having happened. Instead the instruction transfers nothing, writes a refusal to an on-chain ledger
-with a reason code, logs a readable line, and returns `Ok`.
+When `charge` declines, it does not return an error. An error would roll back every account write,
+so the refusal would leave no trace and would be indistinguishable from nothing having happened.
+Instead the instruction transfers nothing, writes a refusal to an on-chain ledger with a reason
+code and the override that would have cleared it, logs a readable line, and returns `Ok`.
 
 So a refusal has a signature you can open in an explorer:
 
 ```
-CEILING REFUSED reason=5 (over per-payment maximum) amount=180000000 per_tx_max=60000000 remaining=158000000
+VETO REFUSED reason=5 (over per-payment maximum) amount=180000000 per_tx_max=60000000 remaining=158000000 override_to_clear=180000000
 ```
 
 The transaction succeeded. The balance did not change. Neither party can edit the record.
+
+That last field is the part no prior art has: a decline that tells you what would have worked.
+
+## Why Solana Mobile
+
+Seed Vault is built so a human approves every signature. That is the right default, and it is
+exactly why unattended agent spend has nowhere to live on this platform. A mandate is the Seed
+Vault-shaped answer: the key never leaves the vault, and the agent gets bounded authority beside
+it rather than a copy of the key.
+
+Squads cannot make that argument. AP2 cannot. It is the only "why here" that is not
+interchangeable.
 
 ## How authority is split
 
@@ -42,25 +71,19 @@ The transaction succeeded. The balance did not change. Neither party can edit th
 Funds never leave the owner's wallet. The mandate PDA is an SPL delegate on the owner's own token
 account, not a vault holding the money. The owner can revoke in one signature, and can also revoke
 the SPL delegation directly without this program, which the program notices and reports as a
-refusal reason rather than a crash.
+refusal reason rather than crashing on.
 
 ## What the chain enforces
 
-Four limits, all on chain, checked on every charge:
-
-- **cap** total that may ever be spent
-- **per-payment maximum** largest single payment
-- **expiry** unix timestamp after which nothing moves
-- **merchant** the only wallet that may receive funds
-
-Plus replay protection: only a *paid* charge advances the nonce, so a settled payment cannot be
-replayed while a refused one can still be retried after an override.
+Four limits, all on chain, checked on every charge: **cap**, **per-payment maximum**, **expiry**,
+and a single allowed **merchant**. Plus replay protection: only a paid charge advances the nonce,
+so a settled payment cannot be replayed while a refused one can still be retried after an override.
 
 The human-readable purpose is stored on chain as written and cannot be edited afterwards. Be
 precise about what that means: the chain does not understand the word "groceries". The purpose is
-an immutable statement of intent, and it is bound to a merchant the chain does enforce.
+an immutable statement of intent, bound to a merchant the chain does enforce.
 
-## Refusal reasons
+### Refusal reasons
 
 | Code | Meaning |
 |---|---|
@@ -77,22 +100,30 @@ an immutable statement of intent, and it is bound to a merchant the chain does e
 ## Overrides are on the record
 
 The owner can wave one specific payment through above the per-payment ceiling. It takes an owner
-signature, it applies to exactly one nonce, and it is written to the ledger as an override. An
-override raises the per-payment ceiling only. It can never raise the total cap, so the number the
-owner committed to stays absolute.
+signature, applies to exactly one nonce, and is written to the ledger as an override. An override
+raises the per-payment ceiling only. It can never raise the total cap, so the number the owner
+committed to stays absolute.
 
-Blind autopilot is the failure mode this removes. Overriding is allowed; overriding silently is
-not.
+Blind autopilot is the failure mode this removes. Overriding is allowed. Overriding silently is not.
+
+## The demo data is real, and here is exactly how real
+
+The agent watches [Nordic day-ahead electricity spot prices](https://www.elprisetjustnu.se/) and
+pays for charging when power is under the ceiling the owner set. That feed is public, needs no key,
+and anyone can verify the same numbers against the same URL.
+
+**The counterparty is a terminal we run**, because no charge point operator accepts USDC. We are
+not claiming a real merchant. What the real feed buys is the property that matters: refusals happen
+because electricity got expensive, not because someone pressed a button on camera.
 
 ## Repository layout
 
 ```
-programs/ceiling/     the Anchor program: state, policy, ledger
-docs/PLAN.md          build plan, milestones, verified event rules
+programs/veto/        the Anchor program: state, policy, zero-copy ledger
+docs/PLAN.md          build plan, milestones, verified event rules, prior art
+docs/PITCH.md         positioning, the sixty seconds, judge Q&A
 docs/DECISIONS.md     architecture decisions and what would reverse them
 ```
-
-The mobile app and the merchant terminal land next; see the plan for the order.
 
 ## Build
 
@@ -105,22 +136,25 @@ cargo test
 
 ## Threat model
 
-Written out in full before the security pass, because "the agent cannot overspend" is a claim that
-has to survive reading rather than be taken on faith.
+Written out because "the agent cannot overspend" is a claim that has to survive reading rather than
+be taken on faith.
 
 - **A compromised agent key** can submit charges to the named merchant, up to the per-payment
-  maximum, up to the remaining cap, until the expiry. That is the blast radius and it is the point:
-  the mandate is what the owner agreed to lose in the worst case.
+  maximum, up to the remaining cap, until the expiry. That is the blast radius, and it is the point:
+  the mandate is what the owner agreed to lose in the worst case. The owner revokes in one signature.
 - **A compromised agent key cannot** change any field of the mandate, name a different merchant,
-  extend the expiry, grant itself an override, or touch any other mandate, because every widening
-  instruction requires the owner's signature and `charge` requires `has_one = agent`.
+  extend the expiry, grant itself an override, or touch any other mandate. Every widening
+  instruction requires the owner's signature, and `charge` requires `has_one = agent`.
 - **The program cannot move funds the owner has not delegated.** The SPL delegation is the hard
   ceiling underneath the program's own accounting.
 - **A malicious merchant** can only receive what the mandate allows, and cannot replay a settled
-  charge because the nonce is monotonic on payment.
-- **A stale or wrong mandate account** cannot be substituted: `charge` re-derives the mandate
-  address from the fields stored inside it and rejects a mismatch, and the CPI signs as that PDA,
-  so a forged account cannot be the delegate.
+  charge, because the nonce is monotonic on payment.
+- **A forged mandate account cannot be substituted.** `charge` re-derives the mandate address from
+  the fields stored inside it and rejects a mismatch, and the CPI signs as that PDA.
+- **Known limit, stated rather than hidden.** The ledger records every decision the agent submits.
+  It cannot record a charge the agent never attempted, and nothing on chain can. What is guaranteed
+  is narrower and still worth having: no payment happens without a record, and no attempt is judged
+  by the agent instead of by the chain. The alternative design records nothing in either case.
 
 ## License
 

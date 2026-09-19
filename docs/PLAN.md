@@ -3,8 +3,8 @@
 Solana Mobile "Clock In" hackathon. Submissions close **2026-10-09 at 08:59 GMT+2**.
 Rewritten 2026-09-20 after the competitive check. 19 days.
 
-> Product name is pending. Working repo name is `ceiling`; the recommendation is `veto`, because
-> the cap is the commodity and the refusal is the product.
+> Named `veto`, because the cap is the commodity half and the recorded refusal is the product.
+
 
 ## The claim, after the competitive check
 

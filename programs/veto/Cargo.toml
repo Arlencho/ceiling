@@ -1,5 +1,5 @@
 [package]
-name = "ceiling"
+name = "veto"
 version = "0.1.0"
 description = "Mandate enforcement for agent spending"
 edition.workspace = true
@@ -7,7 +7,7 @@ rust-version.workspace = true
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "ceiling"
+name = "veto"
 
 [features]
 default = []
@@ -22,6 +22,7 @@ custom-panic = []
 [dependencies]
 anchor-lang = "1.2.0"
 anchor-spl = "1.2.0"
+bytemuck = { version = "1", features = ["derive", "min_const_generics"] }
 
 [dev-dependencies]
 litesvm = "0.10.0"

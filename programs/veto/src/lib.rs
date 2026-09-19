@@ -1,16 +1,25 @@
-//! Ceiling: a permission to spend that the chain enforces.
+//! Veto: a permission to spend, and a legible record when it is declined.
 //!
 //! A mandate is opened by a human and carries four limits: a total cap, a
 //! largest single payment, an expiry, and one allowed merchant. An agent key
 //! may submit charges against it and can do nothing else.
 //!
-//! The design decision the whole program rests on: when a charge breaks a
-//! rule, `charge` does not return an error. Returning an error would roll back
-//! every account write, so the refusal would leave no trace on chain and would
-//! be indistinguishable from nothing having happened. Instead the instruction
-//! transfers nothing, writes a refusal to the ledger with a reason code, logs
-//! a human-readable line, and returns Ok. The transaction confirms, the
-//! balance is unchanged, and the refusal is a durable, verifiable artifact.
+//! Caps enforced on chain are not new. Squads ships them, session-key wallets
+//! ship them, AP2 standardised the signed mandate that carries them. What
+//! every one of those designs has in common is that an overspend becomes an
+//! impossible transaction, which protects the money and leaves nothing behind:
+//! no artifact, no reason, no trail.
+//!
+//! This program takes the opposite side, and that is the whole point of it.
+//! When a charge breaks a rule, `charge` does not return an error. Returning
+//! an error would roll back every account write, so the refusal would leave no
+//! trace on chain and would be indistinguishable from nothing having happened.
+//! Instead the instruction transfers nothing, writes a refusal to the ledger
+//! with a reason code and the override that would have cleared it, logs a
+//! readable line, and returns Ok.
+//!
+//! The transaction confirms. The balance is unchanged. The refusal is a
+//! durable artifact with a signature you can open in an explorer.
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program_option::COption;
@@ -24,7 +33,7 @@ pub use state::*;
 declare_id!("9LSdJGMoqUSmejd1eZLKUzeSwcQqovkBHCHncmeXfkPm");
 
 #[program]
-pub mod ceiling {
+pub mod veto {
     use super::*;
 
     /// Open a mandate and delegate `cap` to it in the same transaction, so the
@@ -32,25 +41,26 @@ pub mod ceiling {
     pub fn open_mandate(ctx: Context<OpenMandate>, args: OpenMandateArgs) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
 
-        require!(args.cap > 0, CeilingError::CapMustBePositive);
-        require!(args.per_tx_max > 0, CeilingError::PerTxMaxMustBePositive);
-        require!(args.per_tx_max <= args.cap, CeilingError::PerTxMaxAboveCap);
-        require!(args.expires_at > now, CeilingError::ExpiryInThePast);
+        require!(args.cap > 0, VetoError::CapMustBePositive);
+        require!(args.per_tx_max > 0, VetoError::PerTxMaxMustBePositive);
+        require!(args.per_tx_max <= args.cap, VetoError::PerTxMaxAboveCap);
+        require!(args.expires_at > now, VetoError::ExpiryInThePast);
         require!(
             args.purpose.chars().count() <= PURPOSE_MAX_LEN,
-            CeilingError::PurposeTooLong
+            VetoError::PurposeTooLong
         );
         require_keys_neq!(
             args.merchant,
             Pubkey::default(),
-            CeilingError::MerchantRequired
+            VetoError::MerchantRequired
         );
         require_keys_neq!(
             args.agent,
             ctx.accounts.owner.key(),
-            CeilingError::AgentMustNotBeOwner
+            VetoError::AgentMustNotBeOwner
         );
 
+        let mandate_key = ctx.accounts.mandate.key();
         let mandate = &mut ctx.accounts.mandate;
         mandate.owner = ctx.accounts.owner.key();
         mandate.agent = args.agent;
@@ -71,8 +81,8 @@ pub mod ceiling {
         mandate.refusal_count = 0;
         mandate.bump = ctx.bumps.mandate;
 
-        let ledger = &mut ctx.accounts.ledger;
-        ledger.mandate = mandate.key();
+        let ledger = &mut ctx.accounts.ledger.load_init()?;
+        ledger.mandate = mandate_key;
         ledger.head = 0;
         ledger.total = 0;
         ledger.bump = ctx.bumps.ledger;
@@ -81,8 +91,10 @@ pub mod ceiling {
             amount: args.cap,
             counterparty: args.merchant,
             nonce: 0,
+            suggested_override: 0,
             kind: KIND_OPENED,
             reason: REASON_OK,
+            _pad: [0; 6],
         });
 
         // Delegate the cap to the mandate PDA. The tokens do not move: the
@@ -102,7 +114,7 @@ pub mod ceiling {
         )?;
 
         msg!(
-            "CEILING OPENED cap={} per_tx_max={} expires_at={} purpose={}",
+            "VETO OPENED cap={} per_tx_max={} expires_at={} purpose={}",
             args.cap,
             args.per_tx_max,
             args.expires_at,
@@ -130,11 +142,11 @@ pub mod ceiling {
             ],
             &crate::ID,
         )
-        .map_err(|_| error!(CeilingError::InvalidMandatePda))?;
+        .map_err(|_| error!(VetoError::InvalidMandatePda))?;
         require_keys_eq!(
             expected,
             ctx.accounts.mandate.key(),
-            CeilingError::InvalidMandatePda
+            VetoError::InvalidMandatePda
         );
 
         let reason = evaluate(
@@ -172,7 +184,7 @@ pub mod ceiling {
             mandate.spent = mandate
                 .spent
                 .checked_add(amount)
-                .ok_or(CeilingError::MathOverflow)?;
+                .ok_or(VetoError::MathOverflow)?;
             mandate.spend_count = mandate.spend_count.saturating_add(1);
             mandate.last_nonce = nonce;
             if mandate.override_nonce == nonce {
@@ -183,17 +195,19 @@ pub mod ceiling {
                 mandate.status = STATUS_EXHAUSTED;
             }
 
-            ctx.accounts.ledger.record(Entry {
+            ctx.accounts.ledger.load_mut()?.record(Entry {
                 ts: now,
                 amount,
                 counterparty: ctx.accounts.destination.key(),
                 nonce,
+                suggested_override: 0,
                 kind: KIND_PAID,
                 reason: REASON_OK,
+                _pad: [0; 6],
             });
 
             msg!(
-                "CEILING PAID amount={} spent={} of cap={} remaining={}",
+                "VETO PAID amount={} spent={} of cap={} remaining={}",
                 amount,
                 mandate.spent,
                 mandate.cap,
@@ -211,29 +225,34 @@ pub mod ceiling {
                 mandate.status = STATUS_EXPIRED;
             }
             mandate.refusal_count = mandate.refusal_count.saturating_add(1);
+            let suggestion = suggested_override(mandate, reason, amount);
 
-            ctx.accounts.ledger.record(Entry {
+            ctx.accounts.ledger.load_mut()?.record(Entry {
                 ts: now,
                 amount,
                 counterparty: ctx.accounts.destination.key(),
                 nonce,
+                suggested_override: suggestion,
                 kind: KIND_REFUSED,
                 reason,
+                _pad: [0; 6],
             });
 
             msg!(
-                "CEILING REFUSED reason={} ({}) amount={} per_tx_max={} remaining={}",
+                "VETO REFUSED reason={} ({}) amount={} per_tx_max={} remaining={} override_to_clear={}",
                 reason,
                 reason_text(reason),
                 amount,
                 ctx.accounts.mandate.effective_per_tx_max(nonce),
-                ctx.accounts.mandate.remaining()
+                ctx.accounts.mandate.remaining(),
+                suggestion
             );
             emit!(Refused {
                 mandate: ctx.accounts.mandate.key(),
                 amount,
                 nonce,
                 reason,
+                suggested_override: suggestion,
             });
         }
 
@@ -247,31 +266,33 @@ pub mod ceiling {
     /// the total cap stays absolute.
     pub fn grant_override(ctx: Context<OwnerAction>, amount: u64, nonce: u64) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        require!(nonce != 0, CeilingError::NonceRequired);
-        require!(amount > 0, CeilingError::AmountMustBePositive);
+        require!(nonce != 0, VetoError::NonceRequired);
+        require!(amount > 0, VetoError::AmountMustBePositive);
         require!(
             ctx.accounts.mandate.status == STATUS_ACTIVE,
-            CeilingError::MandateNotActive
+            VetoError::MandateNotActive
         );
         require!(
             amount <= ctx.accounts.mandate.remaining(),
-            CeilingError::OverrideAboveCap
+            VetoError::OverrideAboveCap
         );
 
         let mandate = &mut ctx.accounts.mandate;
         mandate.override_amount = amount;
         mandate.override_nonce = nonce;
 
-        ctx.accounts.ledger.record(Entry {
+        ctx.accounts.ledger.load_mut()?.record(Entry {
             ts: now,
             amount,
             counterparty: mandate.merchant,
             nonce,
+            suggested_override: amount,
             kind: KIND_OVERRIDE,
             reason: REASON_OK,
+            _pad: [0; 6],
         });
 
-        msg!("CEILING OVERRIDE amount={} nonce={}", amount, nonce);
+        msg!("VETO OVERRIDE amount={} nonce={}", amount, nonce);
         Ok(())
     }
 
@@ -280,7 +301,7 @@ pub mod ceiling {
         let now = Clock::get()?.unix_timestamp;
         require!(
             ctx.accounts.mandate.status == STATUS_ACTIVE,
-            CeilingError::MandateNotActive
+            VetoError::MandateNotActive
         );
 
         let mandate = &mut ctx.accounts.mandate;
@@ -288,13 +309,15 @@ pub mod ceiling {
         mandate.override_amount = 0;
         mandate.override_nonce = 0;
 
-        ctx.accounts.ledger.record(Entry {
+        ctx.accounts.ledger.load_mut()?.record(Entry {
             ts: now,
             amount: 0,
             counterparty: mandate.merchant,
             nonce: 0,
+            suggested_override: 0,
             kind: KIND_REVOKED,
             reason: REASON_OK,
+            _pad: [0; 6],
         });
 
         // Also drop the SPL delegation, so nothing can be pulled even if this
@@ -307,7 +330,7 @@ pub mod ceiling {
             },
         ))?;
 
-        msg!("CEILING REVOKED spent={} of cap={}", mandate.spent, mandate.cap);
+        msg!("VETO REVOKED spent={} of cap={}", mandate.spent, mandate.cap);
         Ok(())
     }
 
@@ -315,9 +338,9 @@ pub mod ceiling {
     pub fn close_mandate(ctx: Context<CloseMandate>) -> Result<()> {
         require!(
             ctx.accounts.mandate.status != STATUS_ACTIVE,
-            CeilingError::MandateStillActive
+            VetoError::MandateStillActive
         );
-        msg!("CEILING CLOSED");
+        msg!("VETO CLOSED");
         Ok(())
     }
 }
@@ -369,6 +392,17 @@ fn evaluate(
     REASON_OK
 }
 
+/// The one-shot override that would clear this exact charge, or zero when none
+/// would. An override raises the per-payment ceiling only, so a charge blocked
+/// by the total cap cannot be cleared by one and honestly says so.
+fn suggested_override(mandate: &Mandate, reason: u8, amount: u64) -> u64 {
+    if reason == REASON_OVER_PER_TX_MAX && amount <= mandate.remaining() {
+        amount
+    } else {
+        0
+    }
+}
+
 fn reason_text(reason: u8) -> &'static str {
     match reason {
         REASON_OK => "ok",
@@ -414,16 +448,16 @@ pub struct OpenMandate<'info> {
     #[account(
         init,
         payer = owner,
-        space = 8 + Ledger::INIT_SPACE,
+        space = 8 + std::mem::size_of::<Ledger>(),
         seeds = [b"ledger", mandate.key().as_ref()],
         bump
     )]
-    pub ledger: Account<'info, Ledger>,
+    pub ledger: AccountLoader<'info, Ledger>,
 
     #[account(
         mut,
-        constraint = source.owner == owner.key() @ CeilingError::SourceNotOwnedByOwner,
-        constraint = source.mint == mint.key() @ CeilingError::MintMismatch,
+        constraint = source.owner == owner.key() @ VetoError::SourceNotOwnedByOwner,
+        constraint = source.mint == mint.key() @ VetoError::MintMismatch,
     )]
     pub source: InterfaceAccount<'info, TokenAccount>,
 
@@ -440,26 +474,25 @@ pub struct Charge<'info> {
 
     #[account(
         mut,
-        has_one = agent @ CeilingError::NotTheAgent,
-        has_one = mint @ CeilingError::MintMismatch,
-        has_one = source @ CeilingError::SourceMismatch,
+        has_one = agent @ VetoError::NotTheAgent,
+        has_one = mint @ VetoError::MintMismatch,
+        has_one = source @ VetoError::SourceMismatch,
     )]
     pub mandate: Account<'info, Mandate>,
 
     #[account(
         mut,
         seeds = [b"ledger", mandate.key().as_ref()],
-        bump = ledger.bump,
-        has_one = mandate @ CeilingError::LedgerMismatch,
+        bump,
     )]
-    pub ledger: Account<'info, Ledger>,
+    pub ledger: AccountLoader<'info, Ledger>,
 
     #[account(mut)]
     pub source: InterfaceAccount<'info, TokenAccount>,
 
     #[account(
         mut,
-        constraint = destination.mint == mandate.mint @ CeilingError::MintMismatch,
+        constraint = destination.mint == mandate.mint @ VetoError::MintMismatch,
     )]
     pub destination: InterfaceAccount<'info, TokenAccount>,
 
@@ -473,18 +506,17 @@ pub struct OwnerAction<'info> {
 
     #[account(
         mut,
-        has_one = owner @ CeilingError::NotTheOwner,
-        has_one = source @ CeilingError::SourceMismatch,
+        has_one = owner @ VetoError::NotTheOwner,
+        has_one = source @ VetoError::SourceMismatch,
     )]
     pub mandate: Account<'info, Mandate>,
 
     #[account(
         mut,
         seeds = [b"ledger", mandate.key().as_ref()],
-        bump = ledger.bump,
-        has_one = mandate @ CeilingError::LedgerMismatch,
+        bump,
     )]
-    pub ledger: Account<'info, Ledger>,
+    pub ledger: AccountLoader<'info, Ledger>,
 
     #[account(mut)]
     pub source: InterfaceAccount<'info, TokenAccount>,
@@ -500,7 +532,7 @@ pub struct CloseMandate<'info> {
     #[account(
         mut,
         close = owner,
-        has_one = owner @ CeilingError::NotTheOwner,
+        has_one = owner @ VetoError::NotTheOwner,
     )]
     pub mandate: Account<'info, Mandate>,
 
@@ -508,10 +540,9 @@ pub struct CloseMandate<'info> {
         mut,
         close = owner,
         seeds = [b"ledger", mandate.key().as_ref()],
-        bump = ledger.bump,
-        has_one = mandate @ CeilingError::LedgerMismatch,
+        bump,
     )]
-    pub ledger: Account<'info, Ledger>,
+    pub ledger: AccountLoader<'info, Ledger>,
 }
 
 #[event]
@@ -528,10 +559,11 @@ pub struct Refused {
     pub amount: u64,
     pub nonce: u64,
     pub reason: u8,
+    pub suggested_override: u64,
 }
 
 #[error_code]
-pub enum CeilingError {
+pub enum VetoError {
     #[msg("cap must be greater than zero")]
     CapMustBePositive,
     #[msg("per-payment maximum must be greater than zero")]

@@ -94,28 +94,42 @@ impl Mandate {
 }
 
 /// One decision, paid or refused, exactly as the program made it.
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, Default, Debug, PartialEq)]
+///
+/// `repr(C)` with explicit padding, because the ledger is a zero-copy account:
+/// the ring is larger than the BPF stack frame and must never be deserialized
+/// onto it.
+#[zero_copy]
+#[derive(Debug, PartialEq)]
 pub struct Entry {
     pub ts: i64,
     pub amount: u64,
     pub counterparty: Pubkey,
     pub nonce: u64,
+    /// For a refusal, the one-shot override that would have cleared this exact
+    /// charge, or zero when no override could. A decline that tells you how to
+    /// proceed is the difference between a limit and an answer.
+    pub suggested_override: u64,
     pub kind: u8,
     pub reason: u8,
+    pub _pad: [u8; 6],
 }
 
 /// A ring of the most recent decisions. Refusals are recorded here with the
 /// same weight as payments, which is the point of the whole program.
-#[account]
-#[derive(InitSpace)]
+///
+/// The ring is the authoritative recent window. Longer history is rebuilt by
+/// indexing `Paid` and `Refused` events from transaction logs, so a busy week
+/// wrapping the ring costs nothing.
+#[account(zero_copy)]
 pub struct Ledger {
     pub mandate: Pubkey,
-    /// Index the next entry is written to.
-    pub head: u16,
     /// Total entries ever written, including those the ring has overwritten.
     pub total: u32,
-    pub entries: [Entry; LEDGER_CAPACITY],
+    /// Index the next entry is written to.
+    pub head: u16,
     pub bump: u8,
+    pub _pad: [u8; 1],
+    pub entries: [Entry; LEDGER_CAPACITY],
 }
 
 impl Ledger {
