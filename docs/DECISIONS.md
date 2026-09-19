@@ -35,3 +35,48 @@ The agent holds a separate hot key with authority and no spending power of its o
 stays in Seed Vault and is reached through Mobile Wallet Adapter.
 
 Reversed by: the delegate path proving unworkable, per the entry above.
+
+## 2026-09-20: the claim is legible refusal, not bounded authority
+
+A competitive check found that capped on-chain agent budgets are commodity: Squads v4 ships
+audited and formally verified spending limits, LazorKit ships session keys with on-chain roles and
+limits, AP2 standardised signed mandates carrying limits and validity windows, and an
+infrastructure vendor publishes a tutorial on capped on-chain agent budgets. Three GitHub projects
+built the same session-PDA shape this year.
+
+The closest of them, SolAgent Pay, states outright that an overspend "is not a policy violation
+logged after the fact, it is an impossible transaction". That is the opposite thesis and it is what
+we differentiate against. An impossible transaction leaves no artifact, no reason and no trail.
+
+So the claim is narrowed and sharpened: the refusal is legible. A recorded no, a reason, and the
+override that would clear it, on a phone, with the key in Seed Vault.
+
+Reversed by: nothing found so far. If someone ships a recorded on-chain refusal on mobile before
+Oct 9, the entry needs a different wedge.
+
+## 2026-09-20: the offer feed is Nordic day-ahead electricity spot
+
+The agent pays for charging when power is under the owner's ceiling. Verified 2026-09-20: the
+endpoint returns HTTP 200 with no authentication at 15-minute resolution.
+
+A DEX price feed was rejected. A bot buying a dip is a trading app, which is the crowded category
+the brief contrasts with, and a token purchase is a trade rather than a purchase, so a refusal
+loses its force.
+
+The price is real and independently verifiable. The counterparty is a terminal we run, because no
+charge point operator accepts USDC, and the README and video say so. The property this buys is
+that refusals are caused by the real price crossing the ceiling rather than by staging.
+
+Reversed by: the endpoint becoming unavailable, in which case any public feed with genuinely moving
+prices for a recognisable purchase substitutes.
+
+## 2026-09-20: the program is frozen
+
+It compiles, it enforces four limits on chain, it has nine reason codes and a recorded refusal.
+Competing with the prior art on policy surface is a losing race and it is not the wedge. One
+addition only: the refusal states the override that would have cleared it, which no prior art does.
+
+Every remaining day goes to the watcher, the feed and the phone. Innovation is banked; UX and
+presentation are half the score and have not started.
+
+Reversed by: a defect found in the security pass.
