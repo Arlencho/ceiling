@@ -1,0 +1,30 @@
+# rust / anchor
+target/
+.anchor/
+test-ledger/
+**/*.rs.bk
+
+# node / expo
+node_modules/
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+
+# android
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# secrets and keys
+.env
+.env.*
+!.env.example
+*.pem
+keys/
+*-keypair.json
+!program-keypair.example.json
+
+# os
+.DS_Store
