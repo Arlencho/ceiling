@@ -7,8 +7,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-# Match the Makefile: one artifact path, one arch. See the Makefile header.
-export ANCHOR_BUILD_SBF_ARCH="${ANCHOR_BUILD_SBF_ARCH:-v0}"
+# A deploy uses the Anchor default arch. The v0 build is for LiteSVM only and a
+# validator refuses to execute it. See the Makefile header.
+unset ANCHOR_BUILD_SBF_ARCH
 
 export PATH="${HOME}/.cargo/bin:${HOME}/.avm/bin:${HOME}/.local/share/solana/install/active_release/bin:${PATH}"
 
@@ -419,6 +420,10 @@ main() {
   log "anchor build --no-idl"
   # IDL generation compiles workspace tests; those live outside this task
   # and currently fail to compile. The .so is what we deploy.
+  # Delete the artifact first. The test path builds this same file at SBPF v0
+  # for LiteSVM, and anchor would otherwise treat it as up to date, relink
+  # nothing, and deploy a binary the validator refuses to execute.
+  rm -f "${ROOT}/target/deploy/veto.so"
   anchor build --no-idl
   restore_after_build
   trap - EXIT

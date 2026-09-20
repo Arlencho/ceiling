@@ -1,8 +1,14 @@
-# SBPF v0 everywhere, not just in the test path. Anchor 1.2 defaults to v3 and
-# LiteSVM 0.10 cannot load a v3 ELF, but the deploy script also calls anchor
-# build, so leaving the two paths on different arches means whichever ran last
-# wins and the other one breaks. v0 deploys and runs fine on every cluster.
-export ANCHOR_BUILD_SBF_ARCH ?= v0
+# Two consumers, two SBPF arches, and they are not interchangeable.
+#
+# LiteSVM 0.10 can only load an SBPFv3-free ELF, so the tests need v0. A
+# validator rejects that same v0 binary with "Detected sbpf_version required by
+# the executable which are not enabled", so a deploy needs the Anchor default.
+# An earlier attempt to pin v0 everywhere deployed a program the cluster could
+# not execute.
+#
+# Both targets write to the same target/deploy/veto.so, so each one deletes it
+# first. Without that, anchor sees the artifact as up to date, relinks nothing,
+# and whichever arch ran last silently wins.
 
 # One command per thing a judge or a contributor needs. `make test` from a
 # fresh clone is the contract.
@@ -32,11 +38,15 @@ require-anchor:
 	  exit 1; \
 	}
 
-build: require-anchor ## Build the on-chain program (SBPF v0)
+build: require-anchor ## Build the program for deployment (Anchor default arch)
 	@rm -f target/deploy/veto.so
 	anchor build --ignore-keys
 
-test: build ## Build and run the program test suite
+build-test: require-anchor ## Build the program for LiteSVM (SBPF v0)
+	@rm -f target/deploy/veto.so
+	ANCHOR_BUILD_SBF_ARCH=v0 anchor build --ignore-keys
+
+test: build-test ## Build and run the program test suite
 	cargo test --manifest-path programs/veto/Cargo.toml
 
 # Provision a chain plus the demo fixtures. Devnet by default; localnet when
