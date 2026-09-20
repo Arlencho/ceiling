@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Veto / design proposal / kimi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --page: #17130e;
+    --paper: #f4efe3;
+    --paper-2: #ece5d4;
+    --ink: #1a1410;
+    --ink-2: #6f6455;
+    --hairline: #d9cfba;
+    --ochre: #a8681c;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    background: var(--page);
+    font-family: "IBM Plex Sans", sans-serif;
+    color: var(--ink);
+    padding: 56px 48px 72px;
+    overflow-x: auto;
+  }
+
+  .deck-head {
+    margin: 0 0 40px 4px;
+    max-width: 1760px;
+  }
+  .deck-head .kicker {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #8a7d68;
+  }
+  .deck-head h1 {
+    font-family: "Fraunces", serif;
+    font-weight: 500;
+    font-size: 34px;
+    color: #efe8d8;
+    margin-top: 10px;
+    letter-spacing: 0.01em;
+  }
+  .deck-head p {
+    margin-top: 10px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: #a1937d;
+    max-width: 560px;
+  }
+  .deck-head p strong { color: #e8e0cd; font-weight: 500; }
+
+  .row {
+    display: flex;
+    gap: 44px;
+    align-items: flex-start;
+  }
+
+  .screen { flex: 0 0 auto; }
+  .screen-label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #8a7d68;
+    margin: 0 0 14px 6px;
+  }
+  .screen-label b { color: #d8cfb9; font-weight: 500; }
+
+  .phone {
+    width: 390px;
+    height: 844px;
+    background: var(--paper);
+    border-radius: 46px;
+    padding: 12px;
+    box-shadow: 0 0 0 1px #322a1f, 0 30px 60px rgba(0,0,0,0.45);
+  }
+  .phone-inner {
+    height: 100%;
+    border-radius: 36px;
+    background: var(--paper);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  .statusbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 30px 0;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .statusbar .net {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    border: 1px solid var(--hairline);
+    padding: 2px 7px;
+    border-radius: 3px;
+  }
+
+  .content {
+    flex: 1;
+    padding: 22px 24px 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .homebar {
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .homebar::after {
+    content: "";
+    width: 120px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--ink);
+    opacity: 0.75;
+  }
+
+  .wordmark {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    color: var(--ink);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .wordmark .sub {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--ink-2);
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+
+  .rule-name {
+    font-family: "Fraunces", serif;
+    font-weight: 600;
+    font-size: 30px;
+    line-height: 1.08;
+    letter-spacing: 0.005em;
+    margin-top: 6px;
+  }
+
+  .big-number {
+    font-family: "Fraunces", serif;
+    font-weight: 500;
+    font-size: 88px;
+    line-height: 0.95;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+  .big-number small {
+    font-size: 22px;
+    color: var(--ink-2);
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+
+  .meter {
+    margin-top: 14px;
+    height: 3px;
+    background: var(--hairline);
+    position: relative;
+  }
+  .meter .fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 0.666%;
+    min-width: 5px;
+    background: var(--ochre);
+  }
+  .meter-label {
+    margin-top: 8px;
+    display: flex;
+    justify-content: space-between;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    color: var(--ink-2);
+  }
+
+  .stat-row {
+    display: flex;
+    margin-top: 26px;
+    border-top: 1px solid var(--hairline);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .stat {
+    flex: 1;
+    padding: 14px 2px 13px;
+    text-align: left;
+  }
+  .stat + .stat { border-left: 1px solid var(--hairline); padding-left: 14px; }
+  .stat .n {
+    font-family: "Fraunces", serif;
+    font-weight: 600;
+    font-size: 27px;
+    line-height: 1;
+  }
+  .stat .t {
+    margin-top: 5px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .chip-refused {
+    display: inline-block;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding: 3px 7px 2px;
+    border-radius: 2px;
+    margin-top: 7px;
+  }
+
+  .section-label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin-top: 28px;
+    margin-bottom: 4px;
+  }
+
+  .ledger-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 11px 2px;
+    border-bottom: 1px solid var(--hairline);
+    font-size: 13px;
+  }
+  .ledger-row .time {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    color: var(--ink-2);
+    width: 44px;
+    flex: 0 0 auto;
+  }
+  .ledger-row .amt {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .ledger-row .px {
+    margin-left: auto;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    color: var(--ink-2);
+  }
+  .verdict-paid {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    border: 1px solid var(--hairline);
+    padding: 2px 6px 1px;
+    border-radius: 2px;
+  }
+  .ledger-row.refused {
+    background: var(--ink);
+    color: var(--paper);
+    border-bottom: none;
+    padding: 12px 12px;
+    border-radius: 3px;
+    margin-top: 6px;
+  }
+  .ledger-row.refused .time { color: #b9ac93; }
+  .ledger-row.refused .px { color: #b9ac93; }
+  .verdict-refused {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink);
+    background: var(--paper);
+    padding: 2px 6px 1px;
+    border-radius: 2px;
+    font-weight: 500;
+  }
+
+  .foot-note {
+    margin-top: auto;
+    padding: 14px 2px 4px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--ink-2);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* spec table */
+  .spec { margin-top: 18px; }
+  .spec-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 12px 2px;
+    border-bottom: 1px solid var(--hairline);
+    font-size: 13.5px;
+  }
+  .spec-row .k { color: var(--ink-2); }
+  .spec-row .v {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .tpl {
+    padding: 13px 2px;
+    border-bottom: 1px solid var(--hairline);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .tpl .name { font-weight: 600; font-size: 14px; }
+  .tpl .spec-line {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    color: var(--ink-2);
+    margin-top: 4px;
+  }
+  .tpl .use {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ochre);
+    flex: 0 0 auto;
+  }
+
+  /* decisions screen */
+  .decision-head h2 {
+    font-family: "Fraunces", serif;
+    font-weight: 600;
+    font-size: 30px;
+    letter-spacing: 0.005em;
+    margin-top: 6px;
+  }
+  .decision-head p {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--ink-2);
+    line-height: 1.5;
+  }
+
+  .refusal-hero {
+    margin-top: 20px;
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 4px;
+    padding: 20px 18px 16px;
+    position: relative;
+  }
+  .stamp {
+    display: inline-block;
+    border: 2px solid var(--paper);
+    color: var(--paper);
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 500;
+    font-size: 12px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    padding: 6px 12px 5px 14px;
+    transform: rotate(-2deg);
+    border-radius: 3px;
+  }
+  .refusal-hero .amount {
+    font-family: "Fraunces", serif;
+    font-weight: 600;
+    font-size: 52px;
+    line-height: 1;
+    margin-top: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  .refusal-hero .amount small {
+    font-size: 16px;
+    color: #b9ac93;
+    font-weight: 500;
+  }
+  .refusal-hero .when {
+    margin-top: 6px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    color: #b9ac93;
+  }
+  .refusal-hero .reason {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #453b2e;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #e9e1cf;
+  }
+  .refusal-hero .override {
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #e9e1cf;
+  }
+  .refusal-hero .override b {
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 500;
+    color: var(--paper);
+  }
+  .refusal-hero .tx {
+    margin-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .refusal-hero .tx a {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    color: var(--paper);
+    text-decoration: none;
+    border-bottom: 1px solid #8d8069;
+    padding-bottom: 1px;
+  }
+  .refusal-hero .tx .onchain {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #b9ac93;
+  }
+
+  .paid-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 13px 2px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .paid-row .time {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    color: var(--ink-2);
+    width: 44px;
+    flex: 0 0 auto;
+  }
+  .paid-row .mid { flex: 1; }
+  .paid-row .amt {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13.5px;
+    font-weight: 500;
+  }
+  .paid-row .why {
+    font-size: 11px;
+    color: var(--ink-2);
+    margin-top: 3px;
+  }
+  .paid-row .px {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    color: var(--ink-2);
+    text-align: right;
+  }
+
+  /* share screen */
+  .doc {
+    margin-top: 18px;
+    background: #faf6ec;
+    border: 1px solid var(--hairline);
+    border-top: 3px solid var(--ink);
+    border-radius: 3px;
+    padding: 18px 16px 14px;
+  }
+  .doc .doc-kicker {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .doc .stamp-line { margin-top: 14px; }
+  .doc .stamp { border-color: var(--ink); color: var(--ink); }
+  .doc .doc-amount {
+    font-family: "Fraunces", serif;
+    font-weight: 600;
+    font-size: 40px;
+    margin-top: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .doc .doc-amount small { font-size: 15px; color: var(--ink-2); font-weight: 500; }
+  .doc .doc-at {
+    margin-top: 4px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    color: var(--ink-2);
+  }
+  .doc .doc-line {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .doc .doc-line .held { font-weight: 600; }
+  .doc .doc-rule {
+    margin-top: 14px;
+    padding-top: 11px;
+    border-top: 1px solid var(--hairline);
+  }
+  .doc .doc-rule .h {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .doc .doc-rule .r {
+    margin-top: 6px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    line-height: 1.7;
+  }
+  .doc .proof {
+    margin-top: 14px;
+    padding-top: 11px;
+    border-top: 1px solid var(--hairline);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .doc .proof .sig {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    color: var(--ink-2);
+  }
+  .doc .proof a {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px solid var(--ink-2);
+    padding-bottom: 1px;
+    white-space: nowrap;
+  }
+  .share-btn {
+    margin-top: 16px;
+    display: block;
+    text-align: center;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 14px 0 13px;
+    border-radius: 3px;
+    text-decoration: none;
+  }
+  .share-alt {
+    margin-top: 10px;
+    text-align: center;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    color: var(--ink-2);
+  }
+</style>
+</head>
+<body>
+
+<header class="deck-head">
+  <div class="kicker">Veto · visual proposal · 20 Sep 2026</div>
+  <h1>The recorded no is the product.</h1>
+  <p>A paper ledger, not another neon wallet. Every screen is quiet document typography so the
+  one solid ink block on the page, <strong>the refusal</strong>, reads as the most confident
+  thing the product does: the rule held, on chain, with proof anyone can check.</p>
+</header>
+
+<div class="row">
+
+  <!-- 1 / OVERVIEW -->
+  <section class="screen">
+    <div class="screen-label"><b>01</b> / Overview</div>
+    <div class="phone"><div class="phone-inner">
+      <div class="statusbar"><span>18:04</span><span class="net">devnet</span></div>
+      <div class="content">
+        <div class="wordmark"><span>Veto</span><span class="sub">active rule</span></div>
+        <div class="rule-name">SE3 home charging</div>
+
+        <div style="margin-top:26px;">
+          <div class="eyebrow">Spent of 100 SOL cap</div>
+          <div class="big-number">0.666<small> SOL</small></div>
+          <div class="meter"><div class="fill"></div></div>
+          <div class="meter-label"><span>0</span><span>99.334 left</span><span>100</span></div>
+        </div>
+
+        <div class="stat-row">
+          <div class="stat"><div class="n">3</div><div class="t">Paid</div></div>
+          <div class="stat"><div class="n">1</div><span class="chip-refused">Refused</span></div>
+          <div class="stat"><div class="n">90</div><div class="t">Days left</div></div>
+        </div>
+
+        <div class="section-label">Recent activity</div>
+        <div class="ledger-row refused">
+          <span class="time">18:00</span>
+          <span class="verdict-refused">Refused</span>
+          <span class="amt">6.2325</span>
+          <span class="px">0.12465 SEK/kWh</span>
+        </div>
+        <div class="ledger-row">
+          <span class="time">12:00</span>
+          <span class="verdict-paid">Paid</span>
+          <span class="amt">0.0055</span>
+          <span class="px">0.00011 SEK/kWh</span>
+        </div>
+        <div class="ledger-row">
+          <span class="time">06:00</span>
+          <span class="verdict-paid">Paid</span>
+          <span class="amt">0.2145</span>
+          <span class="px">0.00429 SEK/kWh</span>
+        </div>
+        <div class="ledger-row">
+          <span class="time">00:00</span>
+          <span class="verdict-paid">Paid</span>
+          <span class="amt">0.446</span>
+          <span class="px">0.00892 SEK/kWh</span>
+        </div>
+
+        <div class="foot-note"><span>Owner · Seed Vault</span><span>Agent · authority, no funds</span></div>
+      </div>
+      <div class="homebar"></div>
+    </div></div>
+  </section>
+
+  <!-- 2 / RULES -->
+  <section class="screen">
+    <div class="screen-label"><b>02</b> / Rules</div>
+    <div class="phone"><div class="phone-inner">
+      <div class="statusbar"><span>18:04</span><span class="net">devnet</span></div>
+      <div class="content">
+        <div class="wordmark"><span>Veto</span><span class="sub">one rule, on chain</span></div>
+        <div class="eyebrow" style="margin-top:24px;">The rule</div>
+        <div class="rule-name">SE3 home charging</div>
+
+        <div class="spec">
+          <div class="spec-row"><span class="k">Total cap</span><span class="v">100 SOL</span></div>
+          <div class="spec-row"><span class="k">Per payment</span><span class="v">0.5 SOL</span></div>
+          <div class="spec-row"><span class="k">Expires</span><span class="v">19 Dec 2026</span></div>
+          <div class="spec-row"><span class="k">Payee</span><span class="v">6i99...PdCG</span></div>
+        </div>
+
+        <div class="spec" style="margin-top:22px;">
+          <div class="spec-row"><span class="k">Owner key</span><span class="v">Seed Vault</span></div>
+          <div class="spec-row"><span class="k">Agent key</span><span class="v">authority, no funds</span></div>
+        </div>
+
+        <div class="section-label">Start from a template</div>
+        <div class="tpl">
+          <div>
+            <div class="name">Mint bot</div>
+            <div class="spec-line">cap 2 SOL · 0.2 per payment · 24 h</div>
+          </div>
+          <span class="use">Use</span>
+        </div>
+        <div class="tpl">
+          <div>
+            <div class="name">Quest farm</div>
+            <div class="spec-line">cap 0.5 SOL · 0.05 per payment · 7 days</div>
+          </div>
+          <span class="use">Use</span>
+        </div>
+        <div class="tpl">
+          <div>
+            <div class="name">Trading agent</div>
+            <div class="spec-line">cap 10 SOL · 1 per payment · 30 days</div>
+          </div>
+          <span class="use">Use</span>
+        </div>
+
+        <div class="foot-note"><span>Changing the rule needs the owner key</span></div>
+      </div>
+      <div class="homebar"></div>
+    </div></div>
+  </section>
+
+  <!-- 3 / DECISIONS -->
+  <section class="screen">
+    <div class="screen-label"><b>03</b> / Decisions</div>
+    <div class="phone"><div class="phone-inner">
+      <div class="statusbar"><span>18:04</span><span class="net">devnet</span></div>
+      <div class="content">
+        <div class="decision-head">
+          <div class="eyebrow">20 Sep 2026 · 4 decisions</div>
+          <h2>Every answer is on the record.</h2>
+        </div>
+
+        <div class="refusal-hero">
+          <span class="stamp">Refused</span>
+          <div class="amount">6.2325<small> SOL</small></div>
+          <div class="when">18:00 · 0.12465 SEK per kWh</div>
+          <div class="reason">Over the per-payment maximum of 0.5 SOL. The rule held. Nothing moved.</div>
+          <div class="override">Override of <b>6.2325 SOL</b> would have cleared it.</div>
+          <div class="tx">
+            <a href="#">View transaction ↗</a>
+            <span class="onchain">Recorded on chain</span>
+          </div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <div class="paid-row">
+            <span class="time">12:00</span>
+            <div class="mid">
+              <span class="verdict-paid">Paid</span>
+              <div class="why">Within cap and per-payment limit.</div>
+            </div>
+            <div class="px"><span class="amt">0.0055</span><br>0.00011 SEK/kWh</div>
+          </div>
+          <div class="paid-row">
+            <span class="time">06:00</span>
+            <div class="mid">
+              <span class="verdict-paid">Paid</span>
+              <div class="why">Within cap and per-payment limit.</div>
+            </div>
+            <div class="px"><span class="amt">0.2145</span><br>0.00429 SEK/kWh</div>
+          </div>
+          <div class="paid-row">
+            <span class="time">00:00</span>
+            <div class="mid">
+              <span class="verdict-paid">Paid</span>
+              <div class="why">Within cap and per-payment limit.</div>
+            </div>
+            <div class="px"><span class="amt">0.446</span><br>0.00892 SEK/kWh</div>
+          </div>
+        </div>
+
+        <div class="foot-note"><span>Paid and refused carry the same weight here</span></div>
+      </div>
+      <div class="homebar"></div>
+    </div></div>
+  </section>
+
+  <!-- 4 / SHARE -->
+  <section class="screen">
+    <div class="screen-label"><b>04</b> / Share a decision</div>
+    <div class="phone"><div class="phone-inner">
+      <div class="statusbar"><span>18:04</span><span class="net">devnet</span></div>
+      <div class="content">
+        <div class="wordmark"><span>Veto</span><span class="sub">hand it to someone</span></div>
+        <div class="eyebrow" style="margin-top:24px;">Share a decision</div>
+        <div class="rule-name" style="font-size:24px;">One decision, off the phone.</div>
+
+        <div class="doc">
+          <div class="doc-kicker"><span>Decision record</span><span>20 Sep 2026 · 18:00</span></div>
+          <div class="stamp-line"><span class="stamp">Refused</span></div>
+          <div class="doc-amount">6.2325<small> SOL</small></div>
+          <div class="doc-at">at 0.12465 SEK per kWh</div>
+          <div class="doc-line">Over the per-payment maximum of 0.5 SOL. <span class="held">The rule held. Nothing moved.</span></div>
+          <div class="doc-rule">
+            <div class="h">The rule agreed in advance</div>
+            <div class="r">SE3 home charging · cap 100 SOL · max 0.5 SOL per payment<br>expires 19 Dec 2026 · payee 6i99...PdCG</div>
+          </div>
+          <div class="proof">
+            <span class="sig">tx 3Zk9QmWv...rT7dPu · devnet</span>
+            <a href="#">Verify on chain ↗</a>
+          </div>
+        </div>
+
+        <a class="share-btn" href="#">Share record</a>
+        <div class="share-alt">Anyone can check this against the chain. No login, no trust.</div>
+
+        <div class="foot-note"><span>Refusals are worth showing</span></div>
+      </div>
+      <div class="homebar"></div>
+    </div></div>
+  </section>
+
+</div>
+
+</body>
+</html>
