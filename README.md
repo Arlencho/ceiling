@@ -121,8 +121,12 @@ because electricity got expensive, not because someone pressed a button on camer
 ```
 programs/veto/            the Anchor program: state, policy, zero-copy ledger
 app/                      the Android app: Expo, custom dev client, Seed Vault via MWA
+watcher/                  unattended agent: live SE3 feed, charge, JSONL diary
 indexer/                  rebuild Paid and Refused history from transaction logs
+tools/                    export one decision and verify it against the chain
 scripts/devnet-setup.sh   recreate the chain deploy and demo fixtures from nothing
+tools/                    export one decision as JSON; verify it off the phone
+docs/DECISION_RECORD.md   stable schema for that JSON
 docs/PROBLEM.md           who this is for, and why a burner wallet is not enough
 docs/PLAN.md              build plan, milestones, verified event rules, prior art
 docs/PITCH.md             positioning, the sixty seconds, judge Q&A
@@ -150,8 +154,22 @@ To provision a chain and the demo fixtures, `make setup` for devnet or `make loc
 local validator.
 
 The history indexer lives in `indexer/`. It walks program logs rather than trusting the 32-entry
-ring. `make indexer-test` typechecks and tests it. `make indexer-seed` opens a mandate and submits
-one paid charge and refused charges so the CLI can compare against the ring.
+ring, because a busy week wraps the ring and the full trail has to survive that. `make
+indexer-test` typechecks and tests it. `make indexer-seed` opens a mandate and submits one paid
+charge and several refused ones so the CLI can be compared against the ring.
+
+To take one decision off the phone and check it from a laptop:
+
+```bash
+cd tools
+npm ci
+npx tsx produce.ts
+npx tsx export.ts --signature <tx> --out refused.json
+npx tsx verify.ts refused.json
+```
+
+The JSON schema is [docs/DECISION_RECORD.md](docs/DECISION_RECORD.md). Verify re-reads the
+cluster; it does not trust the file.
 
 ## Threat model
 

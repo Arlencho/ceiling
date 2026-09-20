@@ -33,6 +33,11 @@ LOCALNET_RPC ?= http://127.0.0.1:8899
 localnet: ## Provision fixtures against a local validator
 	VETO_RPC=$(LOCALNET_RPC) VETO_CLUSTER=localnet ./scripts/devnet-setup.sh
 
+# Off-phone decision record (schema in docs/DECISION_RECORD.md).
+#   cd tools && npm ci && npm test
+#   cd tools && npx tsx produce.ts
+#   cd tools && npx tsx export.ts --signature <tx> | npx tsx verify.ts
+
 fmt: ## Format program sources
 	cargo fmt --manifest-path programs/veto/Cargo.toml
 

@@ -1,6 +1,6 @@
 # Veto on Solana devnet
 
-Recorded by `scripts/devnet-setup.sh` at 2026-09-20T02:12:17Z UTC.
+Recorded by `scripts/devnet-setup.sh` at 2026-09-20T02:13:49Z UTC.
 
 This file lists **public addresses only**. Keypairs live under gitignored `keys/` and must never be committed.
 
