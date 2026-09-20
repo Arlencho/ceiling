@@ -80,3 +80,38 @@ Every remaining day goes to the watcher, the feed and the phone. Innovation is b
 presentation are half the score and have not started.
 
 Reversed by: a defect found in the security pass.
+
+## 2026-09-20: the energy feed stays, and the Seeker answer is mandate templates
+
+Owner review asked for the demo scenario to become something a Seeker owner would actually set
+(airdrop bot budget, mint sniper ceiling, quest-farm spend), described as a scenario-line change
+with the same code. Taken literally that is not possible, and the reason matters.
+
+The scenario and the feed are coupled. The watcher pays for charging because it is watching a real
+electricity price. Relabelling those same rows as an airdrop bot budget would make the numbers
+fiction, which breaks the honest-data rule and is exactly the misleading-materials ground in T&C 15.
+
+The obvious substitution does not work either. A Solana-native feed with genuinely moving prices
+is priority fees, but a priority fee is not a transfer to a payee, so it cannot pass through a
+mandate that enforces a merchant allowlist. Every other Seeker-native purchase is either a fixed
+price (a mint), a trade (a swap, which was already rejected), or metered API usage we would have to
+simulate anyway.
+
+So, decided:
+
+1. **The feed stays** Nordic day-ahead electricity spot. It is the only candidate with real moving
+   prices for a real purchase, and it is what makes refusals happen because the world moved.
+2. **The watcher is written against a `PriceFeed` interface** with the energy source as the first
+   implementation, so swapping costs an afternoon rather than a rewrite if this is revisited.
+3. **The Seeker answer is delivered as mandate templates in the app, not as fabricated history.**
+   The mandate creation screen offers shapes a Seeker owner recognises: cap a mint bot, cap a
+   quest-farm spend, cap an agent's weekly outgoings. Offering a template is honest; it claims no
+   data. Only the energy mandate has real history behind it, and only that one appears in the
+   ledger.
+
+This gives the Tuesday answer in the surface a judge actually looks at, at the cost of one screen
+rather than an integration, and without a single invented row.
+
+Reversed by: the owner preferring a different feed, in which case the interface makes it cheap; or
+finding a Seeker-native purchase with a real public moving price and a real payee, which would be
+strictly better and should replace the energy source outright.
