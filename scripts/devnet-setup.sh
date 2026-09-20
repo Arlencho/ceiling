@@ -7,6 +7,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# Match the Makefile: one artifact path, one arch. See the Makefile header.
+export ANCHOR_BUILD_SBF_ARCH="${ANCHOR_BUILD_SBF_ARCH:-v0}"
+
 export PATH="${HOME}/.cargo/bin:${HOME}/.avm/bin:${HOME}/.local/share/solana/install/active_release/bin:${PATH}"
 
 # Endpoint is overridable so the same script provisions a local validator.

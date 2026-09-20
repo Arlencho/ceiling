@@ -1,3 +1,9 @@
+# SBPF v0 everywhere, not just in the test path. Anchor 1.2 defaults to v3 and
+# LiteSVM 0.10 cannot load a v3 ELF, but the deploy script also calls anchor
+# build, so leaving the two paths on different arches means whichever ran last
+# wins and the other one breaks. v0 deploys and runs fine on every cluster.
+export ANCHOR_BUILD_SBF_ARCH ?= v0
+
 # One command per thing a judge or a contributor needs. `make test` from a
 # fresh clone is the contract.
 
@@ -18,7 +24,8 @@ help: ## List targets
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make <target>\n\n"} /^[a-zA-Z0-9_-]+:.*?##/ { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
 build: ## Build the on-chain program (SBPF v0)
-	ANCHOR_BUILD_SBF_ARCH=v0 anchor build --ignore-keys
+	@rm -f target/deploy/veto.so
+	anchor build --ignore-keys
 
 test: build ## Build and run the program test suite
 	cargo test --manifest-path programs/veto/Cargo.toml
