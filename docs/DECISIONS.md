@@ -115,3 +115,15 @@ rather than an integration, and without a single invented row.
 Reversed by: the owner preferring a different feed, in which case the interface makes it cheap; or
 finding a Seeker-native purchase with a real public moving price and a real payee, which would be
 strictly better and should replace the energy source outright.
+
+## 2026-09-20: the decision record is JSON anyone can re-read from the chain
+
+The off-phone beat is a documented schema (`docs/DECISION_RECORD.md`) plus two node tools:
+`tools/export.ts` writes one decision, `tools/verify.ts` re-fetches the cluster and prints
+CONFIRMED or REJECTED. No signing ceremony, no hosted verifier, no W3C VC envelope. The
+transaction signature is not stored in the ledger account; export recovers it from cluster
+history. The program is unchanged: fields the chain does not hold are listed in the doc
+instead of being added to the program.
+
+Reversed by: a third party that will not talk to an RPC, in which case a signed envelope
+becomes the product and this export stays the source it wraps.
