@@ -24,8 +24,10 @@ test: build
 setup:
 	./scripts/devnet-setup.sh
 
+LOCALNET_RPC ?= http://127.0.0.1:8899
+
 localnet:
-	VETO_RPC=http://127.0.0.1:8899 VETO_CLUSTER=localnet ./scripts/devnet-setup.sh
+	VETO_RPC=$(LOCALNET_RPC) VETO_CLUSTER=localnet ./scripts/devnet-setup.sh
 
 fmt:
 	cargo fmt --manifest-path programs/veto/Cargo.toml

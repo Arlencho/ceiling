@@ -49,7 +49,11 @@ assert_devnet() {
   if is_mainnet_url "$url"; then
     die "refusing to run against mainnet (url=${url})"
   fi
-  printf '%s' "$url" | grep -Eqi 'devnet' || die "refusing to run against non-devnet url: ${url}"
+  # Devnet or a local validator. Anything else is refused on purpose: this
+  # script mints, funds and deploys, and none of that belongs on a network
+  # nobody intended to touch.
+  printf '%s' "$url" | grep -Eqi 'devnet|127\.0\.0\.1|localhost' \
+    || die "refusing to run against a url that is neither devnet nor local: ${url}"
 }
 
 ensure_keypair() {
@@ -422,14 +426,14 @@ main() {
   log "anchor deploy --provider.cluster ${CLUSTER_NAME} --no-idl"
   if ! anchor deploy \
       --no-idl \
-      --provider.cluster "$CLUSTER_NAME" \
+      --provider.cluster "$RPC" \
       --provider.wallet "$DEPLOYER_KP" \
       --program-name veto \
       --program-keypair "$PROGRAM_KP"; then
     log "deploy failed, retrying with a compute unit price"
     anchor deploy \
       --no-idl \
-      --provider.cluster "$CLUSTER_NAME" \
+      --provider.cluster "$RPC" \
       --provider.wallet "$DEPLOYER_KP" \
       --program-name veto \
       --program-keypair "$PROGRAM_KP" \

@@ -13,7 +13,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-veto = "9LSdJGMoqUSmejd1eZLKUzeSwcQqovkBHCHncmeXfkPm"
+veto = "3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV"
 
 [provider]
 cluster = "localnet"
@@ -23,3 +23,6 @@ wallet = "~/.config/solana/id.json"
 test = "cargo test"
 
 [hooks]
+
+[programs.devnet]
+veto = "3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV"

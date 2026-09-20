@@ -30,7 +30,7 @@ use anchor_spl::token_interface::{
 pub mod state;
 pub use state::*;
 
-declare_id!("9LSdJGMoqUSmejd1eZLKUzeSwcQqovkBHCHncmeXfkPm");
+declare_id!("3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV");
 
 #[program]
 pub mod veto {
