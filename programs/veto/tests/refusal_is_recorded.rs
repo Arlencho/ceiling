@@ -5,6 +5,9 @@
 //! cleared it, all in the same confirmed transaction. If `charge` ever becomes
 //! an error on refusal, these tests fail, because an error rolls back the
 //! ledger write and the refusal stops existing.
+//!
+//! LiteSVM 0.10 cannot load an SBPFv3 ELF. Build the program with
+//! `ANCHOR_BUILD_SBF_ARCH=v0 anchor build --ignore-keys` before `cargo test`.
 
 use {
     anchor_lang::{
@@ -24,6 +27,8 @@ use {
 const DECIMALS: u8 = 6;
 const ONE: u64 = 1_000_000;
 const FAR_FUTURE: i64 = 4_000_000_000;
+const PROGRAM_BYTES: &[u8] =
+    include_bytes!(concat!(env!("CARGO_TARGET_TMPDIR"), "/../deploy/veto.so"));
 
 struct World {
     svm: LiteSVM,
@@ -42,7 +47,14 @@ fn send(svm: &mut LiteSVM, payer: &Keypair, signers: &[&Keypair], ixs: &[Instruc
     let msg = Message::new_with_blockhash(ixs, Some(&payer.pubkey()), &blockhash);
     let tx = VersionedTransaction::try_new(VersionedMessage::Legacy(msg), signers)
         .map_err(|e| format!("{e:?}"))?;
-    svm.send_transaction(tx).map(|_| ()).map_err(|e| format!("{:?}", e.err))
+    svm.send_transaction(tx)
+        .map(|_| {
+            // LiteSVM rejects a second tx with the same signature as AlreadyProcessed.
+            // A retry of the same charge after an override is the same instruction
+            // bytes, so the blockhash has to change between sends.
+            svm.expire_blockhash();
+        })
+        .map_err(|e| format!("{:?}\n{}", e.err, e.meta.pretty_logs()))
 }
 
 fn token_balance(svm: &LiteSVM, account: &Pubkey) -> u64 {
@@ -82,15 +94,23 @@ fn create_token_account(svm: &mut LiteSVM, payer: &Keypair, mint: &Pubkey, owner
     account.pubkey()
 }
 
+fn load_program(svm: &mut LiteSVM) {
+    // ELF64 e_flags sits at offset 48. Anchor 1.2 defaults to SBPFv3 (e_flags = 3);
+    // LiteSVM 0.10 rejects that ELF as Instruction(InvalidAccountData).
+    let e_flags = u32::from_le_bytes(PROGRAM_BYTES[48..52].try_into().expect("elf e_flags"));
+    assert!(
+        e_flags == 0,
+        "target/deploy/veto.so is SBPFv{e_flags}; LiteSVM 0.10 can only load v0. Rebuild with: ANCHOR_BUILD_SBF_ARCH=v0 anchor build --ignore-keys"
+    );
+    svm.add_program(veto::id(), PROGRAM_BYTES)
+        .unwrap_or_else(|e| panic!("program loads: {e:?}"));
+}
+
 /// Owner holds 1000 tokens. A mandate is open for 500 total, 100 per payment,
 /// payable only to the merchant.
 fn setup() -> World {
     let mut svm = LiteSVM::new();
-    svm.add_program(
-        veto::id(),
-        include_bytes!(concat!(env!("CARGO_TARGET_TMPDIR"), "/../deploy/veto.so")),
-    )
-    .expect("program loads");
+    load_program(&mut svm);
 
     let owner = Keypair::new();
     let agent = Keypair::new();
@@ -262,7 +282,8 @@ fn an_override_clears_the_exact_charge_it_was_granted_for() {
     let owner = w.owner.insecure_clone();
     let agent = w.agent.insecure_clone();
 
-    send(&mut w.svm, &agent, &[&agent], &[charge_ix(&w, 180 * ONE, 7)]).expect("refusal confirms");
+    let first = charge_ix(&w, 180 * ONE, 7);
+    send(&mut w.svm, &agent, &[&agent], &[first]).expect("refusal confirms");
     assert_eq!(token_balance(&w.svm, &w.destination), 0);
 
     let grant = Instruction::new_with_bytes(
@@ -279,11 +300,13 @@ fn an_override_clears_the_exact_charge_it_was_granted_for() {
     );
     send(&mut w.svm, &owner, &[&owner], &[grant]).expect("owner grants the override");
 
-    send(&mut w.svm, &agent, &[&agent], &[charge_ix(&w, 180 * ONE, 7)]).expect("retry after override");
+    let retry = charge_ix(&w, 180 * ONE, 7);
+    send(&mut w.svm, &agent, &[&agent], &[retry]).expect("retry after override");
     assert_eq!(token_balance(&w.svm, &w.destination), 180 * ONE);
 
     // The override was one-shot: the same amount under a fresh nonce is refused again.
-    send(&mut w.svm, &agent, &[&agent], &[charge_ix(&w, 180 * ONE, 8)]).expect("second attempt confirms");
+    let second = charge_ix(&w, 180 * ONE, 8);
+    send(&mut w.svm, &agent, &[&agent], &[second]).expect("second attempt confirms");
     assert_eq!(token_balance(&w.svm, &w.destination), 180 * ONE, "override was reusable");
     assert_eq!(last_entry(&w.svm, &w.ledger).reason, REASON_OVER_PER_TX_MAX);
 }
