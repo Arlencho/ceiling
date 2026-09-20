@@ -24,6 +24,7 @@ import {
   type OpenMandateResult,
   type RevokeResult,
 } from './chain';
+import { mandateReadStatus, type MandateReadStatus } from './mandateRead';
 import type { MandateAccount } from './mandate';
 import type { LedgerRow, LedgerSnapshot } from './ring';
 import { secureStore } from './mwa';
@@ -36,6 +37,8 @@ export type ChainState = {
   ready: boolean;
   loading: boolean;
   error: string | null;
+  checkedOwner: string | null;
+  mandateStatus: MandateReadStatus;
   config: AppConfig | null;
   configError: string | null;
   mandate: MandateAccount | null;
@@ -61,6 +64,7 @@ function useChainState(): ChainState {
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkedOwner, setCheckedOwner] = useState<string | null>(null);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const [mandate, setMandate] = useState<MandateAccount | null>(null);
@@ -78,6 +82,8 @@ function useChainState(): ChainState {
       setMandate(null);
       setSnapshot(null);
       setRows([]);
+      setError(null);
+      setCheckedOwner(null);
       setReady(true);
       return;
     }
@@ -88,15 +94,18 @@ function useChainState(): ChainState {
       setMandate(null);
       setSnapshot(null);
       setRows([]);
+      setError(null);
+      setCheckedOwner(null);
       setReady(true);
       return;
     }
 
+    const ownerKey = wallet.ownerPublicKey;
     setLoading(true);
     setError(null);
     try {
       const client = createClient(loaded.config);
-      const owner = new PublicKey(wallet.ownerPublicKey);
+      const owner = new PublicKey(ownerKey);
       const preferred = await loadSelected(secureStore);
       const mandates = await fetchOwnerMandates(client, owner);
       const selected = pickMandate(mandates, preferred);
@@ -123,6 +132,7 @@ function useChainState(): ChainState {
     } finally {
       setLoading(false);
       setReady(true);
+      setCheckedOwner(ownerKey);
     }
   }, [wallet.ownerPublicKey]);
 
@@ -183,11 +193,21 @@ function useChainState(): ChainState {
     return result;
   }, [mandate, refresh, wallet]);
 
+  const mandateStatus = mandateReadStatus({
+    checkedOwner,
+    ownerPublicKey: wallet.ownerPublicKey,
+    loading,
+    error,
+    hasMandate: mandate != null,
+  });
+
   return useMemo(
     () => ({
       ready,
       loading,
       error,
+      checkedOwner,
+      mandateStatus,
       config,
       configError,
       mandate,
@@ -203,6 +223,8 @@ function useChainState(): ChainState {
       ready,
       loading,
       error,
+      checkedOwner,
+      mandateStatus,
       config,
       configError,
       mandate,

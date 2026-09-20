@@ -4,6 +4,9 @@ import { PublicKey } from '@solana/web3.js';
 import {
   buffersEqual,
   ENTRY_SIZE,
+  KIND_OVERRIDE,
+  KIND_PAID,
+  KIND_REFUSED,
   kindName,
   LEDGER_ACCOUNT_SIZE,
   LEDGER_CAPACITY,
@@ -101,7 +104,26 @@ export type DecodedTxDecision = {
   amount: bigint;
   nonce: bigint;
   reason: number;
+  blockTime?: number | null;
 };
+
+function sameDecision(tx: DecodedTxDecision, entry: RingEntry): boolean {
+  if (tx.kind !== entry.kind) {
+    return false;
+  }
+  if (entry.kind === KIND_PAID || entry.kind === KIND_REFUSED || entry.kind === KIND_OVERRIDE) {
+    if (tx.amount !== entry.amount || tx.nonce !== entry.nonce) {
+      return false;
+    }
+  }
+  // When the RPC gives a time, require it. Two refusals of the same charge
+  // share kind, nonce and amount; after the ring wraps, an evicted decision
+  // can still sit in the 50-signature window with that same key.
+  if (tx.blockTime != null && tx.blockTime !== Number(entry.ts)) {
+    return false;
+  }
+  return true;
+}
 
 export function attachSignatures(
   entries: RingEntry[],
@@ -113,13 +135,7 @@ export function attachSignatures(
       if (used.has(i)) {
         return false;
       }
-      if (tx.kind !== entry.kind) {
-        return false;
-      }
-      if (entry.kind === 1 || entry.kind === 2 || entry.kind === 3) {
-        return tx.amount === entry.amount && tx.nonce === entry.nonce;
-      }
-      return true;
+      return sameDecision(tx, entry);
     });
     if (index >= 0) {
       used.add(index);

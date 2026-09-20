@@ -9,6 +9,7 @@ import { Screen } from '../components/Screen';
 import { ScreenTitle, SectionTitle } from '../components/SectionTitle';
 import { colors } from '../components/theme';
 import { todaysAgentDecisions } from '../lib/format';
+import { mandateAbsenceCopy } from '../lib/mandateRead';
 import { useChain } from '../lib/useChain';
 
 export default function TodayScreen() {
@@ -18,6 +19,12 @@ export default function TodayScreen() {
   const rpcUrl = chain.config?.rpcUrl ?? '';
   const cluster = chain.config?.explorerCluster ?? 'devnet';
   const refresh = chain.refresh;
+  const absence = chain.configError
+    ? null
+    : mandateAbsenceCopy(
+        chain.mandateStatus,
+        'No mandate on chain for this owner yet. Open one on the Mandate tab. This screen reads real history only and never invents rows.',
+      );
 
   const onRefresh = useCallback(() => {
     void refresh();
@@ -29,14 +36,8 @@ export default function TodayScreen() {
       <ConnectGate>
         {chain.configError ? <EmptyState>{chain.configError}</EmptyState> : null}
         {chain.error ? <Text style={styles.error}>{chain.error}</Text> : null}
-        {!chain.configError && !chain.mandate ? (
-          <EmptyState>
-            {!chain.ready || chain.loading
-              ? 'Reading the chain for this owner.'
-              : 'No mandate on chain for this owner yet. Open one on the Mandate tab. This screen reads real history only and never invents rows.'}
-          </EmptyState>
-        ) : null}
-        {chain.mandate ? (
+        {absence ? <EmptyState>{absence}</EmptyState> : null}
+        {chain.mandateStatus === 'present' && chain.mandate ? (
           <View style={styles.block}>
             <MandateSummary
               heading="Mandate, read from chain"

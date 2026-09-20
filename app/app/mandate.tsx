@@ -12,6 +12,7 @@ import { ScreenTitle, SectionTitle } from '../components/SectionTitle';
 import { colors } from '../components/theme';
 import { PURPOSE_MAX_LEN } from '../lib/constants';
 import { parseBaseUnits } from '../lib/format';
+import { mandateAbsenceCopy } from '../lib/mandateRead';
 import { applyTemplate, TEMPLATES, type MandateFields } from '../lib/templates';
 import { useChain } from '../lib/useChain';
 import { useWallet } from '../lib/useWallet';
@@ -33,6 +34,13 @@ export default function MandateScreen() {
   const [committedAddress, setCommittedAddress] = useState<string | null>(null);
   const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
   const refresh = chain.refresh;
+  const mayOpen = chain.mandateStatus === 'empty' || chain.mandateStatus === 'present';
+  const absence = chain.configError
+    ? null
+    : mandateAbsenceCopy(
+        chain.mandateStatus,
+        'Nothing committed yet for this owner. This screen does not invent a mandate.',
+      );
 
   const onRefresh = useCallback(() => {
     void refresh();
@@ -84,6 +92,7 @@ export default function MandateScreen() {
       </EmptyState>
       <ConnectGate>
         {chain.configError ? <EmptyState>{chain.configError}</EmptyState> : null}
+        {chain.error ? <Text style={styles.error}>{chain.error}</Text> : null}
         <SectionTitle>Starting templates</SectionTitle>
         <EmptyState>
           A template is an empty starting point. It never ships example transactions or prices.
@@ -146,12 +155,13 @@ export default function MandateScreen() {
           label={wallet.busy ? 'Waiting on Seed Vault...' : 'Open mandate'}
           accessibilityLabel="Open mandate"
           busy={wallet.busy}
+          disabled={!mayOpen}
           onPress={() => {
             void onSubmit();
           }}
         />
         {formError ? <Text style={styles.error}>{formError}</Text> : null}
-        {chain.mandate ? (
+        {chain.mandateStatus === 'present' && chain.mandate ? (
           <MandateSummary
             heading={
               committedAddress
@@ -162,13 +172,9 @@ export default function MandateScreen() {
             decimals={chain.decimals}
             nowSec={nowSec}
           />
-        ) : (
-          <EmptyState>
-            {!chain.ready || chain.loading
-              ? 'Reading the chain for this owner.'
-              : 'Nothing committed yet for this owner. This screen does not invent a mandate.'}
-          </EmptyState>
-        )}
+        ) : absence ? (
+          <EmptyState>{absence}</EmptyState>
+        ) : null}
       </ConnectGate>
     </Screen>
   );

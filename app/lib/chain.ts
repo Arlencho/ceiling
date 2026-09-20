@@ -355,7 +355,13 @@ export async function fetchLedgerRows(
       if (!tx || !info) {
         continue;
       }
-      decoded.push(...decisionsFromTx(info.signature, tx, client.programId.toBase58()));
+      const blockTime = info.blockTime ?? tx.blockTime ?? null;
+      decoded.push(
+        ...decisionsFromTx(info.signature, tx, client.programId.toBase58()).map((decision) => ({
+          ...decision,
+          blockTime,
+        })),
+      );
     }
   }
 

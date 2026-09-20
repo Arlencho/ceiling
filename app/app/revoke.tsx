@@ -9,6 +9,7 @@ import { Screen } from '../components/Screen';
 import { ScreenTitle, SectionTitle } from '../components/SectionTitle';
 import { colors } from '../components/theme';
 import { STATUS_REVOKED } from '../lib/constants';
+import { mandateAbsenceCopy } from '../lib/mandateRead';
 import { notActiveHint } from '../lib/reasons';
 import { useChain } from '../lib/useChain';
 import { useWallet } from '../lib/useWallet';
@@ -39,6 +40,12 @@ export default function RevokeScreen() {
   };
 
   const alreadyRevoked = chain.mandate?.status === STATUS_REVOKED;
+  const absence = chain.configError
+    ? null
+    : mandateAbsenceCopy(
+        chain.mandateStatus,
+        'No mandate on chain for this owner. There is nothing to revoke, and this screen does not invent one.',
+      );
 
   return (
     <Screen refreshing={chain.loading} onRefresh={onRefresh}>
@@ -46,13 +53,9 @@ export default function RevokeScreen() {
       <ConnectGate>
         {chain.configError ? <EmptyState>{chain.configError}</EmptyState> : null}
         {chain.error ? <Text style={styles.error}>{chain.error}</Text> : null}
-        {!chain.mandate ? (
-          <EmptyState>
-            {!chain.ready || chain.loading
-              ? 'Reading the chain for this owner.'
-              : 'No mandate on chain for this owner. There is nothing to revoke, and this screen does not invent one.'}
-          </EmptyState>
-        ) : (
+        {absence ? (
+          <EmptyState>{absence}</EmptyState>
+        ) : chain.mandateStatus === 'present' && chain.mandate ? (
           <View style={styles.block}>
             <MandateSummary
               heading="Mandate, read from chain"
@@ -85,7 +88,7 @@ export default function RevokeScreen() {
             {message ? <Text style={styles.ok}>{message}</Text> : null}
             {formError ? <Text style={styles.error}>{formError}</Text> : null}
           </View>
-        )}
+        ) : null}
       </ConnectGate>
     </Screen>
   );
