@@ -49,8 +49,44 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: app/package-lock.json
+      # Pin npm 11 to match the lockfile generator. Node 22 on the runner
+      # ships npm 10, and npm 10 ci rejects this lock (Missing: typescript@5.9.3).
+      # Regenerating under npm 10 would drift on the next local npm 11 install.
+      - run: npm install -g npm@11
       - run: npm ci
       - run: npx tsc --noEmit
+
+  watcher:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: watcher
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: watcher/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  tools:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
 
   indexer:
     runs-on: ubuntu-latest
