@@ -13,7 +13,22 @@ From this directory:
 ```bash
 npx tsc --noEmit
 npx expo config
+npm test
 ```
+
+`npm test` runs the wallet module tests. They do not need a device. Mobile Wallet
+Adapter `authorize` against Seed Vault still has to be checked on a Seeker.
+
+## Sign-in
+
+Connect runs `transact`, then `authorize`, against the Seed Vault wallet through
+Mobile Wallet Adapter. The owner public key is shown truncated. The
+authorization token is stored in `expo-secure-store` so a returning user is not
+prompted again. Disconnect deauthorizes that token and clears it.
+
+The agent keypair is generated on the phone with `@solana/web3.js` and stored in
+`expo-secure-store`. It is a different key from the owner. It holds authority
+and no funds. The owner private key is never written to storage.
 
 ## One-time: Expo account
 
