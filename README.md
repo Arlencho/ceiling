@@ -119,20 +119,34 @@ because electricity got expensive, not because someone pressed a button on camer
 ## Repository layout
 
 ```
-programs/veto/        the Anchor program: state, policy, zero-copy ledger
-docs/PLAN.md          build plan, milestones, verified event rules, prior art
-docs/PITCH.md         positioning, the sixty seconds, judge Q&A
-docs/DECISIONS.md     architecture decisions and what would reverse them
+programs/veto/            the Anchor program: state, policy, zero-copy ledger
+app/                      the Android app: Expo, custom dev client, Seed Vault via MWA
+scripts/devnet-setup.sh   recreate the chain deploy and demo fixtures from nothing
+docs/PROBLEM.md           who this is for, and why a burner wallet is not enough
+docs/PLAN.md              build plan, milestones, verified event rules, prior art
+docs/PITCH.md             positioning, the sixty seconds, judge Q&A
+docs/DECK.md              the deck, slide by slide
+docs/DECISIONS.md         architecture decisions and what would reverse them
 ```
 
-## Build
+## Build and run
 
-Requires Rust, the Solana CLI and Anchor.
+Requires Rust, the Solana CLI and Anchor. From a fresh clone:
 
 ```bash
-anchor build
-cargo test
+make test
 ```
+
+That builds the program and runs the suite, including the test that matters: a
+refused charge produces a transaction that confirms, moves nothing, and records why.
+
+`make test` rather than `anchor build && cargo test` for two reasons, both documented in the
+Makefile. Anchor 1.2 emits an SBPFv3 ELF that LiteSVM 0.10 cannot load, so the test build pins
+SBPF v0. And `target/` is gitignored, so a fresh clone has no program keypair and Anchor needs
+`--ignore-keys` rather than rewriting the program id to match a throwaway key.
+
+To provision a chain and the demo fixtures, `make setup` for devnet or `make localnet` against a
+local validator.
 
 ## Threat model
 
