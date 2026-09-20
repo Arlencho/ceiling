@@ -43,10 +43,11 @@ understood and requires no program at all. Anything in this space has to beat it
 | Payee restriction | None. It can pay anyone | One named merchant, enforced on chain |
 | Expiry | None. It is live until you empty it | A timestamp the program checks |
 | Revocation | Move the funds out | One signature |
+| Stops an overspend | Only by running out of money | Yes, on chain, before any transfer executes |
 | Record of a decline | None. A refused attempt is a silent bot error in a log file nobody keeps | A confirmed transaction with a reason code and the override that would have cleared it |
 | Third party can verify | Only that transfers happened | The limits agreed in advance, and every payment made against them |
 
-The first five rows are conveniences. The last row is the one that is not reproducible with a
+The first four rows are conveniences. The last two are the ones that are not reproducible with a
 burner at any price, and it is the reason this is a product rather than a settings screen.
 
 ## What the record is for, after the hackathon
