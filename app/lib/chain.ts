@@ -1,0 +1,353 @@
+import { Buffer } from 'buffer';
+import { getAssociatedTokenAddressSync, getMint } from '@solana/spl-token';
+import {
+  Connection,
+  PublicKey,
+  Transaction,
+  type ConfirmedSignatureInfo,
+  type VersionedTransactionResponse,
+} from '@solana/web3.js';
+
+import type { AppConfig } from './appConfig';
+import { loadConfig } from './config';
+import { KIND_OPENED, KIND_OVERRIDE, KIND_REVOKED, PURPOSE_MAX_LEN } from './constants';
+import { decodeEventsFromLogs, decodeInstructionKind } from './events';
+import { openMandateInstruction, revokeMandateInstruction } from './instructions';
+import { decodeMandateAccount, type MandateAccount } from './mandate';
+import {
+  attachSignatures,
+  decodeLedgerAccount,
+  ledgerPda,
+  mandatePda,
+  type DecodedTxDecision,
+  type LedgerRow,
+  type LedgerSnapshot,
+} from './ring';
+
+export type SignAndSend = (transactions: Transaction[]) => Promise<string[]>;
+
+export type OpenMandateInput = {
+  owner: PublicKey;
+  agent: PublicKey;
+  merchant: PublicKey;
+  cap: bigint;
+  perTxMax: bigint;
+  expiresAt: bigint;
+  purpose: string;
+  mint?: PublicKey;
+};
+
+export type OpenMandateResult = {
+  signature: string;
+  mandate: MandateAccount;
+  ledger: string;
+};
+
+export type RevokeResult = {
+  signature: string;
+  mandate: MandateAccount;
+};
+
+export type ChainClient = {
+  config: AppConfig;
+  connection: Connection;
+  programId: PublicKey;
+};
+
+export function createClient(config: AppConfig = loadConfig()): ChainClient {
+  return {
+    config,
+    connection: new Connection(config.rpcUrl, 'confirmed'),
+    programId: new PublicKey(config.programId),
+  };
+}
+
+export async function fetchMandate(
+  client: ChainClient,
+  address: PublicKey,
+): Promise<MandateAccount> {
+  const info = await client.connection.getAccountInfo(address, 'confirmed');
+  if (!info) {
+    throw new Error(`mandate ${address.toBase58()} was not found on chain`);
+  }
+  return decodeMandateAccount(address.toBase58(), info.data);
+}
+
+export async function fetchLedger(
+  client: ChainClient,
+  mandate: PublicKey,
+): Promise<LedgerSnapshot> {
+  const address = ledgerPda(client.programId, mandate);
+  const info = await client.connection.getAccountInfo(address, 'confirmed');
+  if (!info) {
+    throw new Error(`ledger ${address.toBase58()} was not found on chain`);
+  }
+  return decodeLedgerAccount(address.toBase58(), info.data);
+}
+
+export async function fetchOwnerMandates(
+  client: ChainClient,
+  owner: PublicKey,
+): Promise<MandateAccount[]> {
+  const accounts = await client.connection.getProgramAccounts(client.programId, {
+    commitment: 'confirmed',
+    filters: [{ memcmp: { offset: 8, bytes: owner.toBase58() } }],
+  });
+  const mandates: MandateAccount[] = [];
+  for (const account of accounts) {
+    try {
+      mandates.push(decodeMandateAccount(account.pubkey.toBase58(), account.account.data));
+    } catch {
+      // Ledgers and other program accounts share the program id. Skip those.
+    }
+  }
+  mandates.sort((a, b) => (a.mandateId < b.mandateId ? 1 : a.mandateId > b.mandateId ? -1 : 0));
+  return mandates;
+}
+
+export function pickMandate(
+  mandates: MandateAccount[],
+  preferredAddress: string | null,
+): MandateAccount | null {
+  if (mandates.length === 0) {
+    return null;
+  }
+  if (preferredAddress) {
+    const preferred = mandates.find((m) => m.address === preferredAddress);
+    if (preferred) {
+      return preferred;
+    }
+  }
+  const active = mandates.find((m) => m.status === 0);
+  return active ?? mandates[0] ?? null;
+}
+
+export async function fetchMintDecimals(client: ChainClient, mint: PublicKey): Promise<number> {
+  const mintInfo = await getMint(client.connection, mint, 'confirmed');
+  return mintInfo.decimals;
+}
+
+export async function tokenProgramOfMint(
+  client: ChainClient,
+  mint: PublicKey,
+): Promise<PublicKey> {
+  const info = await client.connection.getAccountInfo(mint, 'confirmed');
+  if (!info) {
+    throw new Error(`mint ${mint.toBase58()} was not found on chain`);
+  }
+  return info.owner;
+}
+
+async function confirmSignature(
+  connection: Connection,
+  signature: string,
+  blockhash: string,
+  lastValidBlockHeight: number,
+): Promise<void> {
+  const result = await connection.confirmTransaction(
+    { signature, blockhash, lastValidBlockHeight },
+    'confirmed',
+  );
+  if (result.value.err) {
+    throw new Error(`transaction ${signature} landed with an error`);
+  }
+}
+
+export async function openMandate(
+  client: ChainClient,
+  signAndSend: SignAndSend,
+  input: OpenMandateInput,
+): Promise<OpenMandateResult> {
+  if (input.cap <= 0n) {
+    throw new Error('cap must be greater than zero');
+  }
+  if (input.perTxMax <= 0n) {
+    throw new Error('per-payment maximum must be greater than zero');
+  }
+  if (input.perTxMax > input.cap) {
+    throw new Error('per-payment maximum cannot exceed the cap');
+  }
+  if (input.purpose.length > PURPOSE_MAX_LEN) {
+    throw new Error('purpose is longer than the on-chain limit');
+  }
+  if (input.merchant.equals(PublicKey.default)) {
+    throw new Error('a mandate must name the merchant it may pay');
+  }
+  if (input.agent.equals(input.owner)) {
+    throw new Error('the agent key must not be the owner key');
+  }
+
+  const mint = input.mint ?? (client.config.mint ? new PublicKey(client.config.mint) : null);
+  if (!mint) {
+    throw new Error(
+      'Mint is missing from config. Set EXPO_PUBLIC_VETO_MINT as documented in app/README.md.',
+    );
+  }
+
+  const tokenProgram = await tokenProgramOfMint(client, mint);
+  const source = getAssociatedTokenAddressSync(mint, input.owner, false, tokenProgram);
+  const sourceInfo = await client.connection.getAccountInfo(source, 'confirmed');
+  if (!sourceInfo) {
+    throw new Error(
+      `Owner token account ${source.toBase58()} was not found. The mandate keeps funds in that account.`,
+    );
+  }
+
+  let mandateId = BigInt(Date.now());
+  let mandatePk = mandatePda(client.programId, input.owner, mandateId);
+  for (let i = 0; i < 8; i++) {
+    const existing = await client.connection.getAccountInfo(mandatePk, 'confirmed');
+    if (!existing) {
+      break;
+    }
+    mandateId += 1n;
+    mandatePk = mandatePda(client.programId, input.owner, mandateId);
+  }
+
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  if (input.expiresAt <= now) {
+    throw new Error('expiry must be in the future');
+  }
+
+  const built = openMandateInstruction({
+    programId: client.programId,
+    owner: input.owner,
+    agent: input.agent,
+    merchant: input.merchant,
+    mint,
+    source,
+    tokenProgram,
+    mandateId,
+    cap: input.cap,
+    perTxMax: input.perTxMax,
+    expiresAt: input.expiresAt,
+    purpose: input.purpose,
+  });
+
+  const latest = await client.connection.getLatestBlockhash('confirmed');
+  const tx = new Transaction();
+  tx.feePayer = input.owner;
+  tx.recentBlockhash = latest.blockhash;
+  tx.add(built.instruction);
+
+  const [signature] = await signAndSend([tx]);
+  if (!signature) {
+    throw new Error('wallet returned no signature');
+  }
+  await confirmSignature(client.connection, signature, latest.blockhash, latest.lastValidBlockHeight);
+
+  const mandate = await fetchMandate(client, built.mandate);
+  return { signature, mandate, ledger: built.ledger.toBase58() };
+}
+
+export async function revokeMandate(
+  client: ChainClient,
+  signAndSend: SignAndSend,
+  owner: PublicKey,
+  mandate: MandateAccount,
+): Promise<RevokeResult> {
+  const tokenProgram = await tokenProgramOfMint(client, new PublicKey(mandate.mint));
+  const ix = revokeMandateInstruction({
+    programId: client.programId,
+    owner,
+    mandate: new PublicKey(mandate.address),
+    source: new PublicKey(mandate.source),
+    tokenProgram,
+  });
+  const latest = await client.connection.getLatestBlockhash('confirmed');
+  const tx = new Transaction();
+  tx.feePayer = owner;
+  tx.recentBlockhash = latest.blockhash;
+  tx.add(ix);
+
+  const [signature] = await signAndSend([tx]);
+  if (!signature) {
+    throw new Error('wallet returned no signature');
+  }
+  await confirmSignature(client.connection, signature, latest.blockhash, latest.lastValidBlockHeight);
+  const next = await fetchMandate(client, new PublicKey(mandate.address));
+  return { signature, mandate: next };
+}
+
+function instructionData(data: string | Uint8Array | number[] | Buffer): Uint8Array {
+  if (typeof data === 'string') {
+    try {
+      return Buffer.from(data, 'base64');
+    } catch {
+      return new Uint8Array();
+    }
+  }
+  return Uint8Array.from(data);
+}
+
+export function decisionsFromTx(
+  signature: string,
+  tx: VersionedTransactionResponse,
+  programId: string,
+): DecodedTxDecision[] {
+  const logs = tx.meta?.logMessages ?? [];
+  const fromEvents = decodeEventsFromLogs(signature, logs);
+  if (fromEvents.length > 0) {
+    return fromEvents;
+  }
+
+  const message = tx.transaction.message;
+  const keys = message.getAccountKeys({
+    accountKeysFromLookups: tx.meta?.loadedAddresses,
+  });
+  const compiled =
+    'compiledInstructions' in message
+      ? message.compiledInstructions
+      : (message as unknown as { instructions?: Array<{ programIdIndex: number; data: string }> })
+          .instructions ?? [];
+
+  const out: DecodedTxDecision[] = [];
+  for (const ix of compiled) {
+    const program = keys.get(ix.programIdIndex);
+    if (!program || program.toBase58() !== programId) {
+      continue;
+    }
+    const data =
+      'data' in ix && ix.data !== undefined ? instructionData(ix.data as string | Uint8Array) : new Uint8Array();
+    const decoded = decodeInstructionKind(signature, data);
+    if (decoded && (decoded.kind === KIND_OPENED || decoded.kind === KIND_REVOKED || decoded.kind === KIND_OVERRIDE)) {
+      out.push(decoded);
+    }
+  }
+  return out;
+}
+
+export async function fetchLedgerRows(
+  client: ChainClient,
+  mandate: PublicKey,
+): Promise<{ snapshot: LedgerSnapshot; rows: LedgerRow[] }> {
+  const snapshot = await fetchLedger(client, mandate);
+  const ledgerAddress = new PublicKey(snapshot.address);
+  let signatures: ConfirmedSignatureInfo[] = [];
+  try {
+    signatures = await client.connection.getSignaturesForAddress(ledgerAddress, { limit: 50 }, 'confirmed');
+  } catch {
+    signatures = [];
+  }
+
+  const decoded: DecodedTxDecision[] = [];
+  for (const info of signatures) {
+    if (info.err) {
+      continue;
+    }
+    try {
+      const tx = await client.connection.getTransaction(info.signature, {
+        commitment: 'confirmed',
+        maxSupportedTransactionVersion: 0,
+      });
+      if (!tx) {
+        continue;
+      }
+      decoded.push(...decisionsFromTx(info.signature, tx, client.programId.toBase58()));
+    } catch {
+      // A missing body is a validator-config issue, not a reason to invent a row.
+    }
+  }
+
+  return { snapshot, rows: attachSignatures(snapshot.entries, decoded) };
+}

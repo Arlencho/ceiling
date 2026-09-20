@@ -1,7 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import { Keypair, Transaction } from '@solana/web3.js';
 
 import { secureStore, transact } from './mwa';
-import { connect, disconnect, restore } from './wallet';
+import {
+  connect,
+  disconnect,
+  loadAgentKeypair,
+  restore,
+  signAndSendTransactions,
+} from './wallet';
 
 export type WalletState = {
   ready: boolean;
@@ -11,6 +19,8 @@ export type WalletState = {
   agentPublicKey: string | null;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
+  signAndSend: (transactions: Transaction[]) => Promise<string[]>;
+  getAgentKeypair: () => Promise<Keypair | null>;
 };
 
 function messageFromUnknown(error: unknown): string {
@@ -28,7 +38,7 @@ function messageFromUnknown(error: unknown): string {
   return 'Wallet request failed';
 }
 
-export function useWallet(): WalletState {
+function useWalletState(): WalletState {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,13 +97,59 @@ export function useWallet(): WalletState {
     }
   }, []);
 
-  return {
-    ready,
-    busy,
-    error,
-    ownerPublicKey,
-    agentPublicKey,
-    connect: onConnect,
-    disconnect: onDisconnect,
-  };
+  const signAndSend = useCallback(async (transactions: Transaction[]) => {
+    setBusy(true);
+    setError(null);
+    try {
+      return await signAndSendTransactions(transact, secureStore, transactions);
+    } catch (err) {
+      const message = messageFromUnknown(err);
+      setError(message);
+      throw err instanceof Error ? err : new Error(message);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const getAgentKeypair = useCallback(() => loadAgentKeypair(secureStore), []);
+
+  return useMemo(
+    () => ({
+      ready,
+      busy,
+      error,
+      ownerPublicKey,
+      agentPublicKey,
+      connect: onConnect,
+      disconnect: onDisconnect,
+      signAndSend,
+      getAgentKeypair,
+    }),
+    [
+      ready,
+      busy,
+      error,
+      ownerPublicKey,
+      agentPublicKey,
+      onConnect,
+      onDisconnect,
+      signAndSend,
+      getAgentKeypair,
+    ],
+  );
+}
+
+const WalletContext = createContext<WalletState | null>(null);
+
+export function WalletProvider({ children }: { children: ReactNode }) {
+  const value = useWalletState();
+  return createElement(WalletContext.Provider, { value }, children);
+}
+
+export function useWallet(): WalletState {
+  const ctx = useContext(WalletContext);
+  if (!ctx) {
+    throw new Error('useWallet must be used within WalletProvider');
+  }
+  return ctx;
 }
