@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1760" />
+  <title>Veto</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --board: #3A342C;
+      --board-type: #E8DCC8;
+      --board-quiet: #B7A88F;
+      --bezel: #161310;
+      --paper: #EDE3CE;
+      --paper-2: #E5D8BE;
+      --ink: #1A1612;
+      --quiet: #6B6156;
+      --line: #D3C6AF;
+      --sea: #122E29;
+      --bone: #F1E6D0;
+      --bone-dim: rgba(241, 230, 208, 0.58);
+      --bone-faint: rgba(241, 230, 208, 0.16);
+      --sans: "Familjen Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+      --serif: "Newsreader", "Iowan Old Style", "Palatino Linotype", serif;
+      --mono: "IBM Plex Mono", "ui-monospace", Menlo, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      background: var(--board);
+      color: var(--board-type);
+      font-family: var(--sans);
+      min-width: 1760px;
+    }
+    body {
+      padding: 36px 40px 48px;
+    }
+
+    .mast {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin: 0 8px 28px;
+      max-width: 1680px;
+    }
+    .mast h1 {
+      font-family: var(--serif);
+      font-size: 42px;
+      font-weight: 500;
+      font-optical-sizing: auto;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      color: var(--board-type);
+    }
+    .mast p {
+      color: var(--board-quiet);
+      font-size: 14px;
+      line-height: 1.45;
+      text-align: right;
+      max-width: 280px;
+    }
+
+    .row {
+      display: flex;
+      flex-direction: row;
+      gap: 28px;
+      align-items: flex-start;
+      justify-content: flex-start;
+    }
+
+    figure.col {
+      margin: 0;
+      width: 390px;
+      flex: 0 0 390px;
+    }
+    figcaption {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin: 0 6px 12px;
+      color: var(--board-type);
+    }
+    figcaption .idx {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--board-quiet);
+    }
+    figcaption .name {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    figcaption .hint {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--board-quiet);
+      letter-spacing: 0.01em;
+    }
+    figure.col.is-hero figcaption .name {
+      color: var(--bone);
+    }
+
+    .device {
+      width: 390px;
+      height: 844px;
+      background: var(--bezel);
+      border-radius: 42px;
+      padding: 12px 11px 14px;
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.06),
+        0 24px 48px rgba(0, 0, 0, 0.28);
+    }
+    .screen {
+      height: 100%;
+      border-radius: 32px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .screen-paper {
+      background: var(--paper);
+      color: var(--ink);
+    }
+    .screen-sea {
+      background: var(--sea);
+      color: var(--bone);
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 22px 0;
+      height: 36px;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      flex: 0 0 36px;
+    }
+    .screen-paper .status { color: var(--ink); }
+    .screen-sea .status { color: var(--bone); }
+    .sig {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .sig i {
+      display: block;
+      width: 14px;
+      height: 8px;
+      border: 1.5px solid currentColor;
+      border-radius: 2px;
+      position: relative;
+      opacity: 0.85;
+    }
+    .sig i::after {
+      content: "";
+      position: absolute;
+      right: -3px;
+      top: 1.5px;
+      width: 1.5px;
+      height: 3.5px;
+      background: currentColor;
+      border-radius: 0 1px 1px 0;
+    }
+    .sig i::before {
+      content: "";
+      position: absolute;
+      left: 1.5px;
+      top: 1.5px;
+      bottom: 1.5px;
+      width: 8px;
+      background: currentColor;
+    }
+
+    .appbar {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding: 8px 22px 10px;
+      flex: 0 0 auto;
+    }
+    .mark {
+      font-family: var(--sans);
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: 0.16em;
+      text-transform: lowercase;
+    }
+    .cluster {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .screen-paper .cluster { color: var(--quiet); }
+    .screen-sea .cluster { color: var(--bone-dim); }
+
+    .body {
+      flex: 1 1 auto;
+      padding: 0 22px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 0;
+      padding: 8px 8px 18px;
+      flex: 0 0 auto;
+      position: relative;
+    }
+    .screen-paper .tabs {
+      border-top: 1px solid var(--line);
+    }
+    .screen-sea .tabs {
+      border-top: 1px solid var(--bone-faint);
+    }
+    .tabs a {
+      text-align: left;
+      padding: 8px 6px 10px;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+      color: inherit;
+      opacity: 0.45;
+      border-bottom: 2px solid transparent;
+    }
+    .tabs a[aria-current="page"] {
+      opacity: 1;
+      font-weight: 600;
+    }
+    .screen-paper .tabs a[aria-current="page"] {
+      border-bottom-color: var(--sea);
+      color: var(--ink);
+    }
+    .screen-sea .tabs a[aria-current="page"] {
+      border-bottom-color: var(--bone);
+      color: var(--bone);
+    }
+    .home {
+      position: absolute;
+      left: 50%;
+      bottom: 7px;
+      width: 108px;
+      height: 4px;
+      margin-left: -54px;
+      border-radius: 4px;
+    }
+    .screen-paper .home { background: var(--ink); opacity: 0.22; }
+    .screen-sea .home { background: var(--bone); opacity: 0.28; }
+
+    .kicker {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+    .screen-paper .kicker { color: var(--quiet); }
+    .screen-sea .kicker { color: var(--bone-dim); }
+
+    .num {
+      font-family: var(--serif);
+      font-optical-sizing: auto;
+      font-variant-numeric: lining-nums;
+      font-weight: 500;
+      letter-spacing: -0.03em;
+      line-height: 0.9;
+    }
+
+    .purpose {
+      font-family: var(--serif);
+      font-optical-sizing: auto;
+      font-size: 26px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      margin: 6px 0 18px;
+    }
+
+    .spent .num {
+      font-size: 68px;
+      display: block;
+      margin: 8px 0 4px;
+    }
+    .spent .of {
+      font-size: 14px;
+      color: var(--quiet);
+      margin-bottom: 18px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      list-style: none;
+      margin: 0 0 22px;
+      padding: 0;
+      gap: 8px;
+    }
+    .stats li {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+    }
+    .stats b {
+      font-family: var(--serif);
+      font-weight: 500;
+      font-size: 28px;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      font-variant-numeric: lining-nums;
+    }
+    .stats span {
+      font-size: 11px;
+      color: var(--quiet);
+      letter-spacing: 0.04em;
+    }
+    .stats .stat-no b {
+      color: var(--sea);
+      font-size: 36px;
+    }
+    .stats .stat-no span {
+      color: var(--sea);
+      font-weight: 600;
+    }
+
+    .section-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      margin: 0 0 10px;
+    }
+    .screen-paper .section-label { color: var(--quiet); }
+    .screen-sea .section-label { color: var(--bone-dim); }
+
+    .day {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+    .day li {
+      display: grid;
+      grid-template-columns: 52px 1fr auto;
+      gap: 8px;
+      align-items: baseline;
+      padding: 9px 0;
+      font-size: 13px;
+    }
+    .screen-paper .day li {
+      border-top: 1px solid var(--line);
+    }
+    .hh {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+    .kind {
+      font-size: 13px;
+    }
+    .amt {
+      font-family: var(--serif);
+      font-variant-numeric: lining-nums tabular-nums;
+      font-size: 15px;
+      font-weight: 500;
+    }
+    .spot {
+      grid-column: 2 / -1;
+      font-size: 11px;
+      color: var(--quiet);
+      margin-top: -2px;
+    }
+
+    .pulse {
+      background: var(--sea);
+      color: var(--bone);
+      margin: 0 -22px 0;
+      padding: 14px 22px 16px;
+      display: grid;
+      grid-template-columns: 52px 1fr auto;
+      gap: 4px 8px;
+      align-items: baseline;
+    }
+    .pulse .hh, .pulse .kind, .pulse .amt { color: var(--bone); }
+    .pulse .kind {
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 16px;
+    }
+    .pulse .amt { font-size: 26px; letter-spacing: -0.03em; }
+    .pulse .why {
+      grid-column: 2 / -1;
+      font-size: 12px;
+      color: var(--bone-dim);
+    }
+
+    .note {
+      margin-top: 14px;
+      padding: 0 0 8px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--quiet);
+    }
+
+    /* Rules */
+    dl.spec {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0;
+      margin: 4px 0 16px;
+    }
+    dl.spec dt, dl.spec dd {
+      padding: 10px 0;
+      border-top: 1px solid var(--line);
+      font-size: 14px;
+    }
+    dl.spec dt {
+      color: var(--quiet);
+      font-size: 12px;
+      letter-spacing: 0.04em;
+    }
+    dl.spec dd {
+      font-family: var(--serif);
+      font-size: 18px;
+      font-weight: 500;
+      font-variant-numeric: lining-nums;
+      text-align: right;
+      letter-spacing: -0.02em;
+    }
+    dl.spec dd.mono {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0;
+    }
+
+    .templates-block {
+      margin-top: auto;
+      padding: 12px 0 6px;
+      border-top: 1px solid var(--line);
+    }
+    .templates-block .section-label { margin-bottom: 2px; }
+
+    .custody {
+      padding: 12px 0 16px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--ink);
+      border-top: 1px solid var(--line);
+    }
+
+    .templates {
+      list-style: none;
+      margin-top: 4px;
+    }
+    .templates li {
+      padding: 10px 0;
+      border-top: 1px solid var(--line);
+    }
+    .templates h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 2px;
+    }
+    .templates p {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--quiet);
+    }
+
+    /* Decisions, the product screen */
+    .hero {
+      margin: 0 -22px;
+      padding: 4px 22px 20px;
+      position: relative;
+    }
+    .hero .when {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--bone-dim);
+      margin-bottom: 12px;
+      padding-right: 108px;
+    }
+    .hero h2 {
+      font-family: var(--serif);
+      font-style: italic;
+      font-weight: 500;
+      font-optical-sizing: auto;
+      font-size: 28px;
+      letter-spacing: -0.02em;
+      line-height: 1.12;
+      margin: 0 0 4px;
+      color: var(--bone);
+      padding-right: 108px;
+    }
+    .hero .amount {
+      font-family: var(--serif);
+      font-optical-sizing: auto;
+      font-variant-numeric: lining-nums;
+      font-weight: 500;
+      font-size: 86px;
+      letter-spacing: -0.045em;
+      line-height: 0.86;
+      color: var(--bone);
+      margin: 20px 0 16px;
+    }
+    .hero .why {
+      font-size: 16px;
+      font-weight: 500;
+      line-height: 1.3;
+      color: var(--bone);
+      margin: 0 0 8px;
+    }
+    .hero .price {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--bone-dim);
+      margin: 0 0 16px;
+    }
+    .hero .clear {
+      font-size: 14px;
+      line-height: 1.4;
+      color: var(--bone);
+      max-width: 22em;
+    }
+    .hero .tx {
+      display: inline-block;
+      margin-top: 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--bone);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      letter-spacing: 0.02em;
+    }
+
+    .stamp {
+      position: absolute;
+      top: 0;
+      right: 14px;
+      width: 100px;
+      height: 100px;
+      border: 1.5px solid var(--bone);
+      border-radius: 50%;
+      box-shadow: inset 0 0 0 4px var(--sea), inset 0 0 0 5.5px var(--bone);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transform: rotate(-9deg);
+      color: var(--bone);
+      text-align: center;
+      line-height: 1.15;
+      pointer-events: none;
+    }
+    .stamp .s1 {
+      font-size: 8px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      opacity: 0.8;
+    }
+    .stamp .s2 {
+      font-family: var(--serif);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin: 4px 0;
+    }
+    .stamp .s3 {
+      font-family: var(--mono);
+      font-size: 8px;
+      letter-spacing: 0.08em;
+    }
+
+    .earlier {
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--bone-faint);
+    }
+    .paid-table {
+      width: 100%;
+      border-collapse: collapse;
+      color: var(--bone-dim);
+    }
+    .paid-table th {
+      text-align: left;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      padding: 0 0 8px;
+      color: var(--bone-faint);
+    }
+    .paid-table th.r, .paid-table td.r { text-align: right; }
+    .paid-table td {
+      font-size: 13px;
+      padding: 7px 0;
+      border-top: 1px solid var(--bone-faint);
+      vertical-align: baseline;
+    }
+    .paid-table .t {
+      font-family: var(--mono);
+      font-size: 12px;
+      width: 52px;
+      color: var(--bone-dim);
+    }
+    .paid-table .v {
+      font-family: var(--serif);
+      font-variant-numeric: lining-nums tabular-nums;
+      font-size: 15px;
+      color: var(--bone);
+    }
+    .paid-table .p {
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    /* Share */
+    .slip {
+      background: #F6EFE0;
+      border: 1px solid var(--line);
+      margin: 0 -6px 8px;
+      padding: 0 16px 16px;
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 0;
+    }
+    .perf {
+      height: 14px;
+      margin: 0 -16px 12px;
+      background:
+        radial-gradient(circle at 8px 0, var(--paper) 5px, transparent 5.5px) repeat-x;
+      background-size: 16px 14px;
+      background-color: #F6EFE0;
+      border-bottom: 1px dashed var(--line);
+    }
+    .slip .doc-kicker {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--quiet);
+    }
+    .slip h2 {
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 32px;
+      font-weight: 500;
+      letter-spacing: -0.03em;
+      color: var(--sea);
+      line-height: 1;
+      margin: 8px 0 6px;
+    }
+    .slip .when {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--quiet);
+      margin-bottom: 14px;
+    }
+    .slip .summary {
+      font-size: 16px;
+      line-height: 1.35;
+      margin: 0 0 8px;
+    }
+    .slip .reason {
+      font-size: 14px;
+      margin: 0 0 4px;
+    }
+    .slip .override {
+      font-size: 14px;
+      margin: 0 0 14px;
+    }
+    .slip h3 {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--quiet);
+      margin: 0;
+      padding: 10px 0 6px;
+      border-top: 1px solid var(--line);
+    }
+    .slip .rule-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      padding: 4px 0;
+    }
+    .slip .rule-line span { color: var(--quiet); }
+    .slip .rule-line b {
+      font-weight: 500;
+      font-family: var(--serif);
+      font-size: 14px;
+    }
+    .slip .rule-line b.mono {
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .proof-block {
+      padding-top: 4px;
+    }
+    .proof-sig {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      line-height: 1.45;
+      word-break: break-all;
+      color: var(--ink);
+      margin: 4px 0 8px;
+    }
+    .proof-note {
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--ink);
+    }
+    .proof-note a {
+      color: var(--sea);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .colophon {
+      margin: 28px 8px 0;
+      color: var(--board-quiet);
+      font-size: 12px;
+      max-width: 720px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <header class="mast">
+    <h1>Veto</h1>
+    <p>A spending rule for AI agents, on a Seeker.<br />The recorded no is the product.</p>
+  </header>
+
+  <main class="row">
+    <figure class="col">
+      <figcaption>
+        <span class="idx">01</span>
+        <span class="name">Overview</span>
+        <span class="hint">State first</span>
+      </figcaption>
+      <div class="device">
+        <div class="screen screen-paper">
+          <div class="status">
+            <span>20:14</span>
+            <span class="sig"><i></i></span>
+          </div>
+          <div class="appbar">
+            <span class="mark">veto</span>
+            <span class="cluster">devnet</span>
+          </div>
+          <div class="body">
+            <p class="kicker">SE3 home charging</p>
+            <div class="spent">
+              <span class="num">0.666</span>
+              <p class="of">of 100 spent</p>
+            </div>
+            <ul class="stats">
+              <li>
+                <b>3</b>
+                <span>paid</span>
+              </li>
+              <li class="stat-no">
+                <b>1</b>
+                <span>refused</span>
+              </li>
+              <li>
+                <b>90</b>
+                <span>days left</span>
+              </li>
+            </ul>
+            <p class="section-label">Today, 20 Sep 2026</p>
+            <ul class="day">
+              <li>
+                <span class="hh">00:00</span>
+                <span class="kind">paid</span>
+                <span class="amt">0.446</span>
+                <span class="spot">0.00892 SEK per kWh</span>
+              </li>
+              <li>
+                <span class="hh">06:00</span>
+                <span class="kind">paid</span>
+                <span class="amt">0.2145</span>
+                <span class="spot">0.00429 SEK per kWh</span>
+              </li>
+              <li>
+                <span class="hh">12:00</span>
+                <span class="kind">paid</span>
+                <span class="amt">0.0055</span>
+                <span class="spot">0.00011 SEK per kWh</span>
+              </li>
+            </ul>
+            <div class="pulse">
+              <span class="hh">18:00</span>
+              <span class="kind">recorded</span>
+              <span class="amt">6.2325</span>
+              <span class="why">over per-payment maximum</span>
+              <span class="why">an override of 6.2325 would clear it</span>
+            </div>
+            <p class="note">Owner key lives in Seed Vault. Agent key holds authority and no funds.</p>
+          </div>
+          <nav class="tabs" aria-label="Primary">
+            <a href="#overview" aria-current="page">Overview</a>
+            <a href="#rules">Rules</a>
+            <a href="#decisions">Decisions</a>
+            <a href="#share">Share</a>
+            <span class="home"></span>
+          </nav>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="col">
+      <figcaption>
+        <span class="idx">02</span>
+        <span class="name">Rules</span>
+        <span class="hint">Agreed in advance</span>
+      </figcaption>
+      <div class="device">
+        <div class="screen screen-paper">
+          <div class="status">
+            <span>20:14</span>
+            <span class="sig"><i></i></span>
+          </div>
+          <div class="appbar">
+            <span class="mark">veto</span>
+            <span class="cluster">devnet</span>
+          </div>
+          <div class="body">
+            <p class="kicker">The rule</p>
+            <p class="purpose">SE3 home charging</p>
+            <dl class="spec">
+              <dt>Total cap</dt>
+              <dd>100</dd>
+              <dt>Per payment</dt>
+              <dd>0.5</dd>
+              <dt>Expires</dt>
+              <dd>19 Dec 2026</dd>
+              <dt>Payee</dt>
+              <dd class="mono">6i99...PdCG</dd>
+            </dl>
+            <p class="custody">Owner key lives in Seed Vault. Agent key holds authority and no funds.</p>
+            <div class="templates-block">
+              <p class="section-label">Start from a template</p>
+              <ul class="templates">
+                <li>
+                  <h3>Cap a mint bot</h3>
+                  <p>50 total · 5 per payment · 7 days</p>
+                </li>
+                <li>
+                  <h3>Cap a quest farm</h3>
+                  <p>20 total · 2 per payment · 7 days</p>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <nav class="tabs" aria-label="Primary">
+            <a href="#overview">Overview</a>
+            <a href="#rules" aria-current="page">Rules</a>
+            <a href="#decisions">Decisions</a>
+            <a href="#share">Share</a>
+            <span class="home"></span>
+          </nav>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="col is-hero">
+      <figcaption>
+        <span class="idx">03</span>
+        <span class="name">Decisions</span>
+        <span class="hint">The recorded no</span>
+      </figcaption>
+      <div class="device">
+        <div class="screen screen-sea">
+          <div class="status">
+            <span>20:14</span>
+            <span class="sig"><i></i></span>
+          </div>
+          <div class="appbar">
+            <span class="mark">veto</span>
+            <span class="cluster">devnet</span>
+          </div>
+          <div class="body">
+            <section class="hero">
+              <div class="stamp" aria-hidden="true">
+                <span class="s1">on chain</span>
+                <span class="s2">Recorded</span>
+                <span class="s3">18:00</span>
+              </div>
+              <p class="when">20 Sep 2026 · 18:00</p>
+              <h2>Refused,<br />and recorded</h2>
+              <p class="amount">6.2325</p>
+              <p class="why">over per-payment maximum</p>
+              <p class="price">0.12465 SEK per kWh</p>
+              <p class="clear">The rule allows 0.5 per payment.<br />An override of 6.2325 would clear it.</p>
+              <a class="tx" href="https://explorer.solana.com/tx/3rTpyrHEScEPhjHL3cUDYSGwGAxU6JVzbdWVZbr4YMHt3wAM7ad9JGPC26R8aQMH9aqYVzrFqbEogX1CquNcWqib?cluster=devnet">3rTp...Wqib</a>
+            </section>
+            <div class="earlier">
+              <p class="section-label">Earlier today, paid</p>
+              <table class="paid-table">
+                <thead>
+                  <tr>
+                    <th>Hour</th>
+                    <th class="r">Paid</th>
+                    <th class="r">SEK/kWh</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="t">00:00</td>
+                    <td class="v r">0.446</td>
+                    <td class="p r">0.00892</td>
+                  </tr>
+                  <tr>
+                    <td class="t">06:00</td>
+                    <td class="v r">0.2145</td>
+                    <td class="p r">0.00429</td>
+                  </tr>
+                  <tr>
+                    <td class="t">12:00</td>
+                    <td class="v r">0.0055</td>
+                    <td class="p r">0.00011</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <nav class="tabs" aria-label="Primary">
+            <a href="#overview">Overview</a>
+            <a href="#rules">Rules</a>
+            <a href="#decisions" aria-current="page">Decisions</a>
+            <a href="#share">Share</a>
+            <span class="home"></span>
+          </nav>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="col">
+      <figcaption>
+        <span class="idx">04</span>
+        <span class="name">Share</span>
+        <span class="hint">Off the phone</span>
+      </figcaption>
+      <div class="device">
+        <div class="screen screen-paper">
+          <div class="status">
+            <span>20:14</span>
+            <span class="sig"><i></i></span>
+          </div>
+          <div class="appbar">
+            <span class="mark">veto</span>
+            <span class="cluster">devnet</span>
+          </div>
+          <div class="body">
+            <p class="kicker">Take this off the phone</p>
+            <div class="slip">
+              <div>
+                <div class="perf"></div>
+                <p class="doc-kicker">Decision record</p>
+                <h2>Recorded</h2>
+                <p class="when">20 September 2026, 18:00</p>
+                <p class="summary">The agent did not pay 6.2325 for SE3 home charging.</p>
+                <p class="reason">over per-payment maximum</p>
+                <p class="override">An override of 6.2325 would clear it.</p>
+              </div>
+              <div>
+                <h3>The rule, agreed in advance</h3>
+                <p class="rule-line"><span>Purpose</span><b>SE3 home charging</b></p>
+                <p class="rule-line"><span>Cap</span><b>100</b></p>
+                <p class="rule-line"><span>Per payment</span><b>0.5</b></p>
+                <p class="rule-line"><span>Expires</span><b>19 Dec 2026</b></p>
+                <p class="rule-line"><span>Payee</span><b class="mono">6i99...PdCG</b></p>
+              </div>
+              <div class="proof-block">
+                <h3>Proof anyone can check</h3>
+                <p class="proof-sig">3rTpyrHEScEPhjHL3cUDYSGwGAxU6JVzbdWVZbr4YMHt3wAM7ad9JGPC26R8aQMH9aqYVzrFqbEogX1CquNcWqib</p>
+                <p class="proof-note">The transaction confirmed. The balance did not move. <a href="https://explorer.solana.com/tx/3rTpyrHEScEPhjHL3cUDYSGwGAxU6JVzbdWVZbr4YMHt3wAM7ad9JGPC26R8aQMH9aqYVzrFqbEogX1CquNcWqib?cluster=devnet">Open on the chain</a>.</p>
+              </div>
+            </div>
+          </div>
+          <nav class="tabs" aria-label="Primary">
+            <a href="#overview">Overview</a>
+            <a href="#rules">Rules</a>
+            <a href="#decisions">Decisions</a>
+            <a href="#share" aria-current="page">Share</a>
+            <span class="home"></span>
+          </nav>
+        </div>
+      </div>
+    </figure>
+  </main>
+
+  <p class="colophon">
+    Bone paper for the mandate. Baltic ink for the record. The 18:00 refusal is a full screen, not a row.
+  </p>
+</body>
+</html>
