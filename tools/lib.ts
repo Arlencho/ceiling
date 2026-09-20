@@ -613,8 +613,8 @@ export function parseRecord(input: unknown): DecisionRecord {
   return record;
 }
 
-export function recordToJson(record: DecisionRecord): string {
-  const body = {
+export function recordToPlain(record: DecisionRecord): Record<string, unknown> {
+  return {
     schema_version: record.schema_version,
     cluster: record.cluster,
     genesis_hash: record.genesis_hash,
@@ -637,7 +637,10 @@ export function recordToJson(record: DecisionRecord): string {
     suggested_override: Number(record.suggested_override),
     signature: record.signature,
   };
-  return `${JSON.stringify(body, null, 2)}\n`;
+}
+
+export function recordToJson(record: DecisionRecord): string {
+  return `${JSON.stringify(recordToPlain(record), null, 2)}\n`;
 }
 
 export function buildRecord(args: {
@@ -687,6 +690,18 @@ export function entryMatches(
   if (entry.kind !== want.kind) return false;
   if (want.ts !== undefined && entry.ts !== want.ts) return false;
   return true;
+}
+
+export function matchingRingEntry(
+  ledger: LedgerAccount,
+  want: { amount: bigint; nonce: bigint; kind: "paid" | "refused" },
+): LedgerEntry | null {
+  const kind = kindByte(want.kind);
+  const hits = indexedEntries(ledger).filter((row) =>
+    entryMatches(row.entry, { amount: want.amount, nonce: want.nonce, kind }),
+  );
+  if (hits.length === 0) return null;
+  return hits[hits.length - 1]!.entry;
 }
 
 export async function tokenAccountOwner(conn: Connection, address: PublicKey): Promise<PublicKey> {

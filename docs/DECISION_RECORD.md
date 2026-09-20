@@ -1,8 +1,12 @@
 # Decision record
 
-A single Veto decision, paid or refused, as JSON. Anyone with an RPC can re-read
-the chain and say yes or no. That is the ten-second beat: the refusal is not a
+A Veto decision, paid or refused, as JSON. Anyone with an RPC can re-read the
+chain and say yes or no. That is the ten-second beat: the refusal is not a
 story we tell, it is a file you can check from a laptop that is not the phone.
+
+A single record is one answer. A bulk file is the population: a date range, or
+everything under one rule. Same fields, one row per decision, each with its own
+transaction signature.
 
 This is not a W3C VC profile, not a signing ceremony, and not a hosted verifier.
 The chain is the verifier. `tools/verify.ts` is a client of that chain.
@@ -138,6 +142,12 @@ its logs, and the mandate account are enough. Verify then confirms the
 transaction and the limits, and reports that the ring no longer contains the
 row.
 
+Bulk export does not use the ring as the population. It calls the indexer
+library (`indexer/src/history.ts`), which rebuilds Paid and Refused events from
+transaction logs. A range longer than the 32-entry window would otherwise be
+silently incomplete. The ring is still read when it still holds a matching row,
+so timestamps on recent decisions match the on-chain entry verify checks.
+
 ## What the chain does not have
 
 Documented here so nobody adds them to the program.
@@ -176,6 +186,11 @@ It confirms, independently:
 Any mismatch prints `VERDICT: REJECTED` and a line per failure, exit status 1.
 A genuine record prints `VERDICT: CONFIRMED` and exit status 0.
 
+A bulk JSON bundle or CSV is checked the same way, one row at a time. The
+verdict names how many rows were confirmed and lists every row that was not,
+with the signature and the reason. Exit 0 only when every row confirms. A
+tampered amount on one row rejects that row and leaves the others confirmed.
+
 Default RPC, in order: `--rpc`, then `VETO_RPC`, then
 `keys/devnet-addresses.env` `RPC=`, then `https://api.devnet.solana.com`.
 
@@ -189,25 +204,137 @@ From a machine that is not the phone. Node 20 or newer. Keypairs are only
 needed to **produce** a decision, never to export or verify one.
 
 ```bash
-cd tools
-npm ci
+# Indexer first: bulk export loads it as a library (bs58 and the log decoder).
+cd indexer && npm ci
+cd ../tools && npm ci
 
 # One paid charge and one refused charge against a fresh mandate.
 # Uses gitignored keys/ from scripts/devnet-setup.sh.
 npx tsx produce.ts
 
-# JSON for one decision, by signature or by mandate.
+# JSON for one decision, by signature.
 npx tsx export.ts --signature <tx>
-npx tsx export.ts --mandate <mandate> --kind refused
 npx tsx export.ts --signature <tx> --out refused.json
+
+# Everything under one rule, or a UTC date range. JSON default, or CSV.
+npx tsx export.ts --mandate <mandate> --out rule.json
+npx tsx export.ts --mandate <mandate> --format csv --out rule.csv
+npx tsx export.ts --from 2026-09-20 --to 2026-09-21 --mandate <mandate> --out day.json
 
 # Re-read the chain. Confirm a genuine file, reject a tampered one.
 npx tsx verify.ts refused.json
+npx tsx verify.ts rule.json
+npx tsx verify.ts rule.csv
 npx tsx export.ts --signature <tx> | npx tsx verify.ts
 ```
 
 `produce.ts` opens its own source token account so it does not replace the SPL
 delegate on the demo owner ATA that the watcher uses.
+
+`--kind paid` or `--kind refused` is an optional filter on a bulk export. The
+default includes both. Refused rows are never dropped unless you ask.
+
+## Bulk JSON
+
+Schema version 1, extended with a `decisions` array. Each element is a full
+single-decision record as documented above, including `signature`. The envelope
+states the honest limit on itself:
+
+```json
+{
+  "schema_version": 1,
+  "completeness": "payments",
+  "completeness_note": "Complete over paid and refused charges that landed on chain. Never complete over attempts. A charge the agent never submitted cannot appear here, and this file does not invent rows for missing signatures.",
+  "cluster": "devnet",
+  "genesis_hash": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+  "program_id": "3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV",
+  "scope": {
+    "type": "rule",
+    "mandate": "CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g",
+    "from": null,
+    "to": null
+  },
+  "decisions": [
+    {
+      "schema_version": 1,
+      "cluster": "devnet",
+      "genesis_hash": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+      "program_id": "3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV",
+      "mandate": "CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g",
+      "limits": {
+        "cap": 100000000,
+        "per_tx_max": 500000,
+        "expires_at": 1797713870,
+        "merchant": "6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG",
+        "purpose": "SE3 home charging"
+      },
+      "kind": "paid",
+      "amount": 446000,
+      "counterparty": "2bt9HMQbNy6t2J4hnw15QF8iUesPrgJoNDvf99HNay7F",
+      "timestamp": 1789937883,
+      "nonce": 1789855200,
+      "reason_code": 0,
+      "reason_text": "ok",
+      "suggested_override": 0,
+      "signature": "4N13AokSVj2A9fJyCZiypzhG9P6mdpMvpjcnDvzVUi2Qp6jUx1Ud34tHUDt1TQENzXu7TFWTfrKHHCLfrpKTBJ9a"
+    }
+  ]
+}
+```
+
+That envelope is a live export from public Solana devnet on 2026-09-21 (mandate
+`CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g`). The full file had five paid
+and refused charges. `tools/verify.ts` confirmed all five. Changing one refused
+amount to `1` rejected exactly that row (`confirmed: 4`, `rejected: 1`) and
+named the signature.
+
+`scope.type` is `rule` (everything under that mandate) or `date_range` (`from`
+and/or `to` as unix seconds, inclusive). A date range may also name a mandate.
+`--from 2026-09-20` is 00:00:00 UTC that day. `--to 2026-09-20` is 23:59:59 UTC
+that day. Unix integers are used as-is.
+
+`completeness` is always `payments`. Verify rejects any other value. The record
+is complete over paid and refused charges that landed on chain. It is never
+complete over attempts: a charge the agent never submitted cannot appear, and
+the exporter does not invent a row for a gap in a range. An empty scope is an
+empty `decisions` array, still with `completeness=payments`.
+
+A bare JSON array is not this schema. Completeness has to live on the file.
+
+## CSV columns
+
+CSV is the same population for a spreadsheet. Comment lines at the top repeat
+the completeness limit and the scope so a file with zero data rows still states
+them. The header row is:
+
+| Column | Meaning |
+|---|---|
+| `completeness` | Always `payments`. Same honest limit as the JSON envelope. |
+| `scope_type` | `rule` or `date_range`. |
+| `scope_mandate` | Mandate pubkey, empty when the range covers every rule. |
+| `scope_from` | Inclusive unix seconds, empty if unbounded. |
+| `scope_to` | Inclusive unix seconds, empty if unbounded. |
+| `schema_version` | `1` |
+| `cluster` | Same as the JSON field. |
+| `genesis_hash` | Same as the JSON field. |
+| `program_id` | Same as the JSON field. |
+| `mandate` | Mandate PDA for this row. |
+| `limits_cap` | Mandate cap, base units. |
+| `limits_per_tx_max` | Mandate per-payment maximum, base units. |
+| `limits_expires_at` | Mandate expiry, unix seconds. |
+| `limits_merchant` | Mandate merchant wallet. |
+| `limits_purpose` | Mandate purpose string. Quoted if it contains a comma. |
+| `kind` | `paid` or `refused`. |
+| `amount` | Base units. |
+| `counterparty` | Destination token account. |
+| `timestamp` | Unix seconds. |
+| `nonce` | Charge nonce. |
+| `reason_code` | Integer reason. `0` on a paid charge. |
+| `reason_text` | Canonical string for that code. |
+| `suggested_override` | Base units, or `0`. |
+| `signature` | Transaction signature of this charge. Every row has one. |
+
+`tools/verify.ts` accepts this CSV as well as the JSON bundle.
 
 ## Out of scope
 

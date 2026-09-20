@@ -210,18 +210,23 @@ ring, because a busy week wraps the ring and the full trail has to survive that.
 indexer-test` typechecks and tests it. `make indexer-seed` opens a mandate and submits one paid
 charge and several refused ones so the CLI can be compared against the ring.
 
-To take one decision off the phone and check it from a laptop:
+To take a decision off the phone and check it from a laptop:
 
 ```bash
-cd tools
-npm ci
+cd indexer && npm ci
+cd ../tools && npm ci
 npx tsx produce.ts
 npx tsx export.ts --signature <tx> --out refused.json
 npx tsx verify.ts refused.json
+npx tsx export.ts --mandate <mandate> --format csv --out rule.csv
+npx tsx verify.ts rule.csv
 ```
 
-The JSON schema is [docs/DECISION_RECORD.md](docs/DECISION_RECORD.md). Verify re-reads the
-cluster; it does not trust the file.
+The JSON schema, the bulk envelope, and the CSV columns are in
+[docs/DECISION_RECORD.md](docs/DECISION_RECORD.md). Verify re-reads the cluster; it does
+not trust the file. Bulk rows come from the indexer, not the 32-entry ring. The
+file itself states `completeness=payments`: complete over charges that landed,
+never over attempts.
 
 ## Threat model
 
