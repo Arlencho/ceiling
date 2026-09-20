@@ -65,3 +65,25 @@ Spend boldness in one place and keep the rest quiet.
 Whether the refusal reads as the hero. Whether a stranger understands the product from the
 Decisions screen alone. Typographic hierarchy and restraint. Whether it looks like it belongs on a
 Seeker in 2026. One real idea beats five safe ones.
+
+## Addendum: several rules at once
+
+One owner can hold many rules at the same time. The program supports this already, because the
+rule id is part of the account address, and each rule carries its own agent key, its own limits
+and its own decision history. The app currently renders only one, which understates the product.
+
+This is not one extra screen. It changes the shape of the others:
+
+- **Overview** has to answer "which rule" before it answers anything else, or aggregate honestly
+  across all of them and say that it is doing so.
+- **Decisions** needs to show which rule a decision belongs to, and be filterable to one.
+- The switcher is also where "one owner, many agents" becomes visible, which is a point the
+  product makes and the current design hides.
+
+Add a fifth screen: **Rules list.** Every rule the owner holds, each with its purpose, how much of
+its cap is spent, time left, its agent key, and its state. Switching to one makes it the rule the
+other screens are about. Design for a person holding three or four rules at once, for example a
+mint bot, a quest farm and home charging, each with different limits and a different agent.
+
+Make the switch feel like changing context, not like filtering a table. A judge should see
+immediately that this is a system for many bounded agents, not a single toy allowance.
