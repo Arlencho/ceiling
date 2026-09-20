@@ -16,6 +16,7 @@ test("reasonText matches the program table", () => {
   assert.equal(reasonText(0), "ok");
   assert.equal(reasonText(5), "over per-payment maximum");
   assert.equal(reasonText(6), "over remaining cap");
+  assert.equal(reasonText(10), "account frozen");
   assert.equal(reasonText(99), "unknown");
 });
 

@@ -7,7 +7,7 @@ export ANCHOR_BUILD_SBF_ARCH ?= v0
 # One command per thing a judge or a contributor needs. `make test` from a
 # fresh clone is the contract.
 
-.PHONY: help build test localnet setup fmt clean indexer indexer-test indexer-seed
+.PHONY: help build test localnet setup fmt clean indexer indexer-test indexer-seed require-anchor
 
 # Two flags that are not obvious and both are required from a clean checkout.
 #
@@ -23,7 +23,16 @@ export ANCHOR_BUILD_SBF_ARCH ?= v0
 help: ## List targets
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make <target>\n\n"} /^[a-zA-Z0-9_-]+:.*?##/ { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
-build: ## Build the on-chain program (SBPF v0)
+# Anchor and Solana live off PATH in a non-interactive shell. Name the three
+# directories to prepend rather than failing as "anchor: No such file or
+# directory". Do not hardcode a home directory into the build.
+require-anchor:
+	@command -v anchor >/dev/null 2>&1 || { \
+	  echo "anchor is not on PATH. Prepend ~/.cargo/bin, ~/.avm/bin, and ~/.local/share/solana/install/active_release/bin"; \
+	  exit 1; \
+	}
+
+build: require-anchor ## Build the on-chain program (SBPF v0)
 	@rm -f target/deploy/veto.so
 	anchor build --ignore-keys
 

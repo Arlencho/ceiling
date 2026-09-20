@@ -180,7 +180,7 @@ be taken on faith.
 - **A compromised agent key** can submit charges to the named merchant, up to the per-payment
   maximum, up to the remaining cap, until the expiry. That is the blast radius, and it is the point:
   the mandate is what the owner agreed to lose in the worst case. The owner revokes in one signature.
-- **A compromised agent key cannot** change any field of the mandate, name a different merchant,
+- **A compromised agent key cannot** widen any field of the mandate, name a different merchant,
   extend the expiry, grant itself an override, or touch any other mandate. Every widening
   instruction requires the owner's signature, and `charge` requires `has_one = agent`.
 - **The program cannot move funds the owner has not delegated.** The SPL delegation is the hard

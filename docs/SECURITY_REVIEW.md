@@ -57,7 +57,7 @@ that case.
 
 Fix: allow `revoke_mandate` on any status that still has a delegation, or add the `token::revoke` CPI
 to `close_mandate` (with `has_one = source`). Either way a finished mandate ends with `delegate = None`.
-Test: `finding_1_expired_status_locks_out_revoke_and_the_delegation_survives_close`.
+Test: `finding_1_expired_status_still_allows_revoke_and_drops_the_delegation`.
 
 ### F2: MEDIUM, `grant_override` accepts a nonce that can never pay, and the shipped watcher never retries a refused nonce
 
@@ -76,7 +76,7 @@ this watcher the retry does not happen. No funds at risk; the owner signs someth
 be used.
 
 Fix: `require!(nonce > mandate.last_nonce)` in `grant_override`; watcher resubmits a refused nonce once
-after seeing an OVERRIDE for it. Test: `finding_2_grant_override_accepts_a_nonce_that_can_never_pay`.
+after seeing an OVERRIDE for it. Test: `finding_2_grant_override_rejects_a_nonce_that_can_never_pay`.
 
 ### F3: LOW, the agent can strand a mandate by paying with nonce `u64::MAX`
 
@@ -102,7 +102,7 @@ the agent instead of by the chain", which still holds.
 Fix, one of: add a `REASON_ACCOUNT_FROZEN` check on `source.state` and `destination.state` before the
 CPI (reopens the frozen-program decision, which names a security finding as its reversal condition), or
 narrow the README to decisions this program makes and say that a token-program decline is a failed
-transaction with no entry. Test: `finding_4_a_frozen_account_declines_without_any_record`.
+transaction with no entry. Test: `finding_4_a_frozen_account_is_a_recorded_refusal`.
 
 ### F5: LOW, `purpose` is limited in characters but the account is sized in bytes
 

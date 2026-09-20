@@ -892,7 +892,7 @@ fn claim_an_expired_mandate_is_refused_even_while_its_status_is_still_active() {
 /// it to EXHAUSTED), `revoke_mandate` still runs and drops the SPL delegation.
 /// A second revoke is refused. Close after revoke leaves no lingering delegate.
 #[test]
-fn finding_1_expired_status_locks_out_revoke_and_the_delegation_survives_close() {
+fn finding_1_expired_status_still_allows_revoke_and_drops_the_delegation() {
     let mut w = setup();
     let owner = w.owner.insecure_clone();
     charge(&mut w, 100 * ONE, 1).expect("paid");
@@ -936,7 +936,7 @@ fn finding_1_expired_status_locks_out_revoke_and_the_delegation_survives_close()
 /// FINDING 2 (fixed): `grant_override` rejects a nonce at or below `last_nonce`
 /// with `NonceAlreadySettled`, and does not write a dead OVERRIDE entry.
 #[test]
-fn finding_2_grant_override_accepts_a_nonce_that_can_never_pay() {
+fn finding_2_grant_override_rejects_a_nonce_that_can_never_pay() {
     let mut w = setup();
     let owner = w.owner.insecure_clone();
     charge(&mut w, 50 * ONE, 8).expect("nonce 8 pays");
@@ -959,6 +959,22 @@ fn finding_2_grant_override_accepts_a_nonce_that_can_never_pay() {
     grant_override(&mut w, &owner, 180 * ONE, 9).expect("future nonce is allowed");
     assert_eq!(read_mandate(&w.svm, &w.mandate).override_nonce, 9);
     assert_eq!(last_entry(&w.svm, &w.ledger).kind, KIND_OVERRIDE);
+
+    // Known limit, accepted: an override clears only when its nonce pays.
+    // Grant 7, then pay 8, and override_nonce stays 7 forever. A retry of 7
+    // is STALE_NONCE. Clearing the pending override when a higher nonce pays
+    // would be a program change beyond the three findings.
+    let mut w = setup();
+    let owner = w.owner.insecure_clone();
+    grant_override(&mut w, &owner, 180 * ONE, 7).expect("granted for nonce 7");
+    charge(&mut w, 50 * ONE, 8).expect("nonce 8 pays first");
+    charge(&mut w, 180 * ONE, 7).expect("refusal confirms");
+    assert_eq!(last_entry(&w.svm, &w.ledger).reason, REASON_STALE_NONCE);
+    assert_eq!(
+        read_mandate(&w.svm, &w.mandate).override_nonce,
+        7,
+        "orphaned override still pending; accepted known limit"
+    );
 }
 
 /// FINDING 3: the agent chooses nonces, and `last_nonce` only ever rises, so a
@@ -984,7 +1000,7 @@ fn finding_3_a_paid_charge_at_nonce_u64_max_strands_the_mandate() {
 /// (`REASON_ACCOUNT_FROZEN`), not a token-program error that rolls the ledger
 /// write back. The transaction confirms, nothing moves.
 #[test]
-fn finding_4_a_frozen_account_declines_without_any_record() {
+fn finding_4_a_frozen_account_is_a_recorded_refusal() {
     let mut w = setup_with(Limits {
         freeze_authority: true,
         ..Limits::default()
