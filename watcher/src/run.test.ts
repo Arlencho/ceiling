@@ -111,3 +111,56 @@ test("a down feed writes a gap instead of a fabricated price", async () => {
   assert.equal(calls, 0);
   assert.equal(journal.load()[0]?.decision, "gap");
 });
+
+// Regression: a transient feed failure used to burn the window permanently,
+// because a gap counted as a settled decision. Over an eighteen-day run each
+// burned window is a row missing from the demo ledger.
+test("a gap leaves the window due, and is recorded only once", () => {
+  const dir = mkdtempSync(join(tmpdir(), "veto-gap-"));
+  const journal = new JsonlJournal(join(dir, "decisions.jsonl"));
+  const nonce = 1789898400n;
+
+  journal.append({
+    ts: new Date().toISOString(),
+    window_start: "2026-09-20T10:00:00.000Z",
+    window_end: null,
+    sek_per_kwh: null,
+    kwh_milli: "50000",
+    amount: "0",
+    nonce: nonce.toString(),
+    decision: "gap",
+    reason: "feed unavailable",
+    reason_code: null,
+    signature: null,
+    suggested_override: null,
+  });
+
+  assert.equal(journal.hasNonce(nonce), false, "a gap must not settle the window");
+  assert.equal(journal.hasGap(nonce), true, "but the outage is recorded");
+  assert.equal(journal.maxSettledNonce(), 0n, "nothing settled on chain yet");
+});
+
+// A window below a settled nonce can never pay, because nonces only move
+// forward on payment. Retrying it would add a meaningless replay refusal.
+test("a window overtaken by a later settled charge is not retried", () => {
+  const dir = mkdtempSync(join(tmpdir(), "veto-overtaken-"));
+  const journal = new JsonlJournal(join(dir, "decisions.jsonl"));
+
+  journal.append({
+    ts: new Date().toISOString(),
+    window_start: "2026-09-20T18:00:00+02:00",
+    window_end: "2026-09-20T18:15:00+02:00",
+    sek_per_kwh: "0.12465",
+    kwh_milli: "50000",
+    amount: "6232500",
+    nonce: "1789927200",
+    decision: "paid",
+    reason: "ok",
+    reason_code: 0,
+    signature: "sig",
+    suggested_override: null,
+  });
+
+  assert.equal(journal.maxSettledNonce(), 1789927200n);
+  assert.ok(1789898400n <= journal.maxSettledNonce(), "the earlier window is overtaken");
+});

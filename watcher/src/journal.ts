@@ -18,7 +18,16 @@ export type JournalRow = {
   suggested_override: string | null;
 };
 
-const TERMINAL: ReadonlySet<Decision> = new Set(["paid", "refused", "gap", "skipped"]);
+// Only a decision the chain actually made settles a window. A gap is an
+// outage note, not a decision: the feed was unreachable, nothing was submitted,
+// and the window is still owed a charge. Treating a gap as terminal meant one
+// transient fetch failure permanently burned that window, and over an
+// eighteen-day run each burned window is a row missing from the demo ledger.
+const TERMINAL: ReadonlySet<Decision> = new Set(["paid", "refused", "skipped"]);
+
+// A gap row already exists for this window, so a retry should not append a
+// second one. The window stays retryable; the outage is recorded once.
+const GAP: Decision = "gap";
 
 export class JsonlJournal {
   constructor(readonly path: string) {}
@@ -42,6 +51,30 @@ export class JsonlJournal {
     const key = nonce.toString();
     for (const row of this.load()) {
       if (row.nonce === key && TERMINAL.has(row.decision)) return true;
+    }
+    return false;
+  }
+
+  /// The highest nonce that actually settled on chain. Nonces are monotonic on
+  /// payment, so a window below this can never pay again and retrying it would
+  /// only produce a meaningless "nonce already settled" refusal.
+  maxSettledNonce(): bigint {
+    let max = 0n;
+    for (const row of this.load()) {
+      if (row.signature !== null && (row.decision === "paid" || row.decision === "refused")) {
+        const n = BigInt(row.nonce);
+        if (n > max) max = n;
+      }
+    }
+    return max;
+  }
+
+  /// True when an outage was already recorded for this window. The window is
+  /// still retryable; this only stops the journal filling with duplicate gaps.
+  hasGap(nonce: bigint): boolean {
+    const key = nonce.toString();
+    for (const row of this.load()) {
+      if (row.nonce === key && row.decision === GAP) return true;
     }
     return false;
   }
