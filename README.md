@@ -121,6 +121,7 @@ because electricity got expensive, not because someone pressed a button on camer
 ```
 programs/veto/            the Anchor program: state, policy, zero-copy ledger
 app/                      the Android app: Expo, custom dev client, Seed Vault via MWA
+indexer/                  rebuild Paid and Refused history from transaction logs
 scripts/devnet-setup.sh   recreate the chain deploy and demo fixtures from nothing
 docs/PROBLEM.md           who this is for, and why a burner wallet is not enough
 docs/PLAN.md              build plan, milestones, verified event rules, prior art
@@ -147,6 +148,10 @@ SBPF v0. And `target/` is gitignored, so a fresh clone has no program keypair an
 
 To provision a chain and the demo fixtures, `make setup` for devnet or `make localnet` against a
 local validator.
+
+The history indexer lives in `indexer/`. It walks program logs rather than trusting the 32-entry
+ring. `make indexer-test` typechecks and tests it. `make indexer-seed` opens a mandate and submits
+one paid charge and refused charges so the CLI can compare against the ring.
 
 ## Threat model
 

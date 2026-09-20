@@ -1,0 +1,83 @@
+export type DecisionKind = "paid" | "refused";
+
+export type Decision = {
+  signature: string;
+  slot: number;
+  timestamp: number | null;
+  mandate: string;
+  amount: bigint;
+  nonce: bigint;
+  counterparty: string;
+  kind: DecisionKind;
+  reason: number;
+  reasonText: string;
+  suggestedOverride: bigint;
+};
+
+export type RingEntry = {
+  ts: bigint;
+  amount: bigint;
+  counterparty: string;
+  nonce: bigint;
+  suggestedOverride: bigint;
+  kind: number;
+  kindName: string;
+  reason: number;
+  reasonText: string;
+};
+
+export type LedgerSnapshot = {
+  address: string;
+  mandate: string;
+  total: number;
+  head: number;
+  bump: number;
+  entries: RingEntry[];
+};
+
+export type SignaturePage = {
+  signature: string;
+  slot: number;
+  blockTime: number | null;
+  err: unknown;
+};
+
+export type CompiledIx = {
+  programId: string;
+  accounts: string[];
+  data: Buffer;
+};
+
+export type TxView = {
+  signature: string;
+  slot: number;
+  blockTime: number | null;
+  err: unknown;
+  logs: string[];
+  accountKeys: string[];
+  instructions: CompiledIx[];
+};
+
+export type FetchHistoryOptions = {
+  rpcUrl: string;
+  programId?: string;
+  mandate?: string;
+  pageSize?: number;
+  allowBlockScan?: boolean;
+  maxSlots?: number;
+};
+
+export type OverlapRow = {
+  ring: RingEntry;
+  indexed: Decision | null;
+  equal: boolean;
+  diffs: string[];
+};
+
+export type Comparison = {
+  ringDecisions: number;
+  matched: number;
+  ok: boolean;
+  rows: OverlapRow[];
+  extraInIndexer: Decision[];
+};

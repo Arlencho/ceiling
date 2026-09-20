@@ -51,3 +51,19 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
       - run: npx tsc --noEmit
+
+  indexer:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: indexer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: indexer/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
