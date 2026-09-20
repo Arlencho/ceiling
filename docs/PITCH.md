@@ -15,10 +15,13 @@ authority. Bounded authority is crowded and partly commodity; do not claim it an
 > Funds stay in your wallet under a delegate. The key never leaves Seed Vault. Every one of those
 > others is infrastructure. None of them is on a phone.
 >
-> The demo: one fill under the mandate. One refusal over it, on chain and readable. And seven days
-> of real history from a live price feed, not three rows from this morning.
+> The demo: one fill under the mandate. One refusal over it, on chain and readable. Seven days of
+> real history from a live price feed, not three rows from this morning. Then we take one refusal
+> off the phone and verify it against the chain from somewhere else.
 >
-> AP2 standardised the record of a yes. This is the missing half.
+> Because that record is the point. A worst case you fixed in advance, every payment made against
+> it, and every refusal the agent surfaced. AP2 standardised the record of a yes. This is the
+> missing half.
 
 Lead with the moment, then disarm. Naming competitors is the memorable move, but it should not
 spend the first ten seconds, which are the ones the judge is actually paying attention for.
@@ -32,6 +35,13 @@ spend the first ten seconds, which are the ones the judge is actually paying att
   Say what is defensible: "every one of those is infrastructure, none of them is on a phone."
 - **"Capped budgets", "spending limits" as the headline.** Commodity. An infrastructure vendor
   publishes a tutorial on it.
+- **"Credential".** It means W3C Verifiable Credentials to anyone who knows AP2, and we are not
+  building one. Say "export" or "on-chain decision record".
+- **"Proof of restraint" on its own.** Too easy to fake: a one million ceiling mints beautiful
+  restraint on a five dollar charge. Always pair it with the mandate, which is the commitment made
+  in advance. See [PROBLEM.md](PROBLEM.md).
+- **"Every attempt".** Unprovable. The complete thing is every *payment*, because a spend has to
+  pass the program to happen.
 
 ## Judge Q&A
 
@@ -87,10 +97,26 @@ plain-language why from a reason code. Hard caps never depend on a model. Semant
 declining because a purchase does not match the stated purpose, ships only once the happy path is
 green.
 
+**What is the record actually good for?**
+A complete record of every payment made under this authority, a worst case fixed in advance by the
+mandate, and every refusal the agent surfaced. The mandate is the prior claim, the ledger is the
+evidence, and neither is worth anything alone. Eventually that is what lets someone underwrite
+agent spend, dispute a drained wallet with a trail, or compare agents by how they behave at a
+limit. Nobody is buying that in 2026 and we say so. It is the last thirty seconds of the pitch, not
+its spine.
+
+**Isn't a burner wallet with fifty dollars in it the same thing?**
+The honest competitor, and better than most of the prior art at this. It beats us on simplicity and
+loses on everything that needs a prior commitment: no payee restriction, no expiry, revocation
+means migrating funds, and a refused attempt is a silent error in a log nobody keeps. The row a
+burner cannot reproduce at any price is a third party being able to check the limits that were
+agreed in advance and every payment made against them.
+
 **What is out of scope for the deadline?**
 One mandate type. Delegate, not vault. One pay path, one refusal path with a reason and an override
-hint, an audit view, and a real week of history from the live feed. No DeFi zoo, no marketplace, no
-multi-mandate management.
+hint, an audit view, an export anyone can re-read from the chain, and a real week of history from
+the live feed. No DeFi zoo, no marketplace, no multi-mandate management, no verifiable-credential
+profile, no signing ceremony, no verifier service.
 
 ## The prior art slide
 
