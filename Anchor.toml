@@ -1,5 +1,11 @@
 skip_local_validator = true
 
+# LiteSVM 0.10 cannot load the SBPFv3 ELF that `anchor build` emits by default.
+# Build the program the tests embed with:
+#   ANCHOR_BUILD_SBF_ARCH=v0 anchor build --ignore-keys
+# `--ignore-keys` is required because target/deploy/veto-keypair.json does not
+# match declare_id, and we must not rewrite the program id to suit a test key.
+
 [toolchain]
 
 [features]
