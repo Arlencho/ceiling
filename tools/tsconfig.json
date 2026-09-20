@@ -7,10 +7,9 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "outDir": "dist",
-    "rootDir": ".",
     "types": ["node"],
-    "noEmitOnError": true
+    "noEmit": true
   },
-  "include": ["./**/*.ts"]
+  "include": ["./**/*.ts", "../indexer/src/**/*.ts"],
+  "exclude": ["../indexer/src/**/*.test.ts"]
 }

@@ -13,7 +13,7 @@
 # One command per thing a judge or a contributor needs. `make test` from a
 # fresh clone is the contract.
 
-.PHONY: help build test localnet setup fmt clean indexer indexer-test indexer-seed require-anchor
+.PHONY: help build test localnet setup fmt clean indexer indexer-test indexer-seed tools-test require-anchor
 
 # Two flags that are not obvious and both are required from a clean checkout.
 #
@@ -60,9 +60,16 @@ localnet: ## Provision fixtures against a local validator
 	VETO_RPC=$(LOCALNET_RPC) VETO_CLUSTER=localnet ./scripts/devnet-setup.sh
 
 # Off-phone decision record (schema in docs/DECISION_RECORD.md).
-#   cd tools && npm ci && npm test
+# Bulk export reads the indexer library, so tools-test installs both packages.
+#   make tools-test
 #   cd tools && npx tsx produce.ts
 #   cd tools && npx tsx export.ts --signature <tx> | npx tsx verify.ts
+#   cd tools && npx tsx export.ts --mandate <addr> --format csv --out decisions.csv
+
+tools-test: ## Typecheck and test the decision-record tools
+	cd indexer && npm ci
+	cd tools && npm ci
+	cd tools && npm run typecheck && npm test
 
 fmt: ## Format program sources
 	cargo fmt --manifest-path programs/veto/Cargo.toml
