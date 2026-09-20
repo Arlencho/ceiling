@@ -121,6 +121,7 @@ because electricity got expensive, not because someone pressed a button on camer
 ```
 programs/veto/            the Anchor program: state, policy, zero-copy ledger
 app/                      the Android app: Expo, custom dev client, Seed Vault via MWA
+watcher/                  unattended agent: live SE3 feed, charge, JSONL diary
 scripts/devnet-setup.sh   recreate the chain deploy and demo fixtures from nothing
 docs/PROBLEM.md           who this is for, and why a burner wallet is not enough
 docs/PLAN.md              build plan, milestones, verified event rules, prior art
