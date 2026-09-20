@@ -23,9 +23,7 @@
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program_option::COption;
-use anchor_spl::token_interface::{
-    self, Mint, TokenAccount, TokenInterface,
-};
+use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface};
 
 pub mod state;
 pub use state::*;
@@ -273,6 +271,10 @@ pub mod veto {
             VetoError::MandateNotActive
         );
         require!(
+            nonce > ctx.accounts.mandate.last_nonce,
+            VetoError::NonceAlreadySettled
+        );
+        require!(
             amount <= ctx.accounts.mandate.remaining(),
             VetoError::OverrideAboveCap
         );
@@ -297,10 +299,14 @@ pub mod veto {
     }
 
     /// Withdraw the agent's authority immediately, in one owner signature.
+    ///
+    /// Allowed from any status except already REVOKED, so an EXPIRED or
+    /// EXHAUSTED mandate can still drop its SPL delegation. A second revoke
+    /// is refused.
     pub fn revoke_mandate(ctx: Context<OwnerAction>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         require!(
-            ctx.accounts.mandate.status == STATUS_ACTIVE,
+            ctx.accounts.mandate.status != STATUS_REVOKED,
             VetoError::MandateNotActive
         );
 
@@ -330,7 +336,11 @@ pub mod veto {
             },
         ))?;
 
-        msg!("VETO REVOKED spent={} of cap={}", mandate.spent, mandate.cap);
+        msg!(
+            "VETO REVOKED spent={} of cap={}",
+            mandate.spent,
+            mandate.cap
+        );
         Ok(())
     }
 
@@ -389,6 +399,11 @@ fn evaluate(
     if source.delegated_amount < amount || source.amount < amount {
         return REASON_INSUFFICIENT_FUNDS;
     }
+    // A frozen account would fail inside transfer_checked and roll the
+    // ledger write back with it. Record it as a refusal instead.
+    if source.is_frozen() || destination.is_frozen() {
+        return REASON_ACCOUNT_FROZEN;
+    }
     REASON_OK
 }
 
@@ -415,6 +430,7 @@ fn reason_text(reason: u8) -> &'static str {
         REASON_DELEGATE_MISSING => "delegation withdrawn",
         REASON_INSUFFICIENT_FUNDS => "insufficient funds",
         REASON_ZERO_AMOUNT => "zero amount",
+        REASON_ACCOUNT_FROZEN => "account frozen",
         _ => "unknown",
     }
 }
@@ -604,4 +620,6 @@ pub enum VetoError {
     OverrideAboveCap,
     #[msg("arithmetic overflow")]
     MathOverflow,
+    #[msg("override nonce is at or below the last paid nonce")]
+    NonceAlreadySettled,
 }

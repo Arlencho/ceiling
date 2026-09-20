@@ -116,6 +116,26 @@ Reversed by: the owner preferring a different feed, in which case the interface 
 finding a Seeker-native purchase with a real public moving price and a real payee, which would be
 strictly better and should replace the energy source outright.
 
+## 2026-09-20: freeze lifted for F1, F2 and F4, then frozen again
+
+The program freeze names "a defect found in the security pass" as its reversal condition. That pass
+filed three MEDIUM defects: revoke unreachable after EXPIRED or EXHAUSTED (#33), `grant_override`
+accepting a nonce that can never pay (#34), and a frozen token account declining with no ledger
+entry (#35).
+
+The freeze was lifted for exactly those three fixes, and nothing else:
+
+- `revoke_mandate` runs on any status except already REVOKED, so the owner can always drop the SPL
+  delegation in one signature.
+- `grant_override` rejects `nonce <= last_nonce` with `NonceAlreadySettled`.
+- `evaluate` checks source and destination freeze state before the transfer and records
+  `REASON_ACCOUNT_FROZEN` (10) as a refusal. Existing reason codes are unchanged.
+
+No new instructions, no new policy fields, no decline turned into an error. The program is frozen
+again after this.
+
+Reversed by: a further defect found in a later security pass, same condition as the original freeze.
+
 ## 2026-09-20: the decision record is JSON anyone can re-read from the chain
 
 The off-phone beat is a documented schema (`docs/DECISION_RECORD.md`) plus two node tools:

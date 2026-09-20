@@ -30,6 +30,7 @@ export const REASON_TEXT: Record<number, string> = {
   7: "delegation withdrawn",
   8: "insufficient funds",
   9: "zero amount",
+  10: "account frozen",
 };
 
 export function reasonText(code: number): string {

@@ -30,6 +30,7 @@ pub const REASON_OVER_CAP: u8 = 6;
 pub const REASON_DELEGATE_MISSING: u8 = 7;
 pub const REASON_INSUFFICIENT_FUNDS: u8 = 8;
 pub const REASON_ZERO_AMOUNT: u8 = 9;
+pub const REASON_ACCOUNT_FROZEN: u8 = 10;
 
 /// A permission to spend, owned by the human and enforced by this program.
 ///

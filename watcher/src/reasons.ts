@@ -9,6 +9,7 @@ export const REASON_OVER_CAP = 6;
 export const REASON_DELEGATE_MISSING = 7;
 export const REASON_INSUFFICIENT_FUNDS = 8;
 export const REASON_ZERO_AMOUNT = 9;
+export const REASON_ACCOUNT_FROZEN = 10;
 
 const TEXT: Record<number, string> = {
   [REASON_OK]: "ok",
@@ -21,6 +22,7 @@ const TEXT: Record<number, string> = {
   [REASON_DELEGATE_MISSING]: "delegation withdrawn",
   [REASON_INSUFFICIENT_FUNDS]: "insufficient funds",
   [REASON_ZERO_AMOUNT]: "zero amount",
+  [REASON_ACCOUNT_FROZEN]: "account frozen",
 };
 
 export function reasonText(code: number): string {

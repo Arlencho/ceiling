@@ -91,6 +91,7 @@ Same mapping the program logs. Zero means the charge was allowed.
 | 7 | delegation withdrawn |
 | 8 | insufficient funds |
 | 9 | zero amount |
+| 10 | account frozen |
 
 Any other code is `unknown`. Verify rejects `unknown` on a genuine record,
 because the deployed program does not emit one.

@@ -96,6 +96,7 @@ an immutable statement of intent, bound to a merchant the chain does enforce.
 | 7 | delegation withdrawn |
 | 8 | insufficient funds |
 | 9 | zero amount |
+| 10 | account frozen |
 
 ## Overrides are on the record
 
@@ -179,19 +180,22 @@ be taken on faith.
 - **A compromised agent key** can submit charges to the named merchant, up to the per-payment
   maximum, up to the remaining cap, until the expiry. That is the blast radius, and it is the point:
   the mandate is what the owner agreed to lose in the worst case. The owner revokes in one signature.
-- **A compromised agent key cannot** change any field of the mandate, name a different merchant,
+- **A compromised agent key cannot** widen any field of the mandate, name a different merchant,
   extend the expiry, grant itself an override, or touch any other mandate. Every widening
   instruction requires the owner's signature, and `charge` requires `has_one = agent`.
 - **The program cannot move funds the owner has not delegated.** The SPL delegation is the hard
   ceiling underneath the program's own accounting.
-- **A malicious merchant** can only receive what the mandate allows, and cannot replay a settled
-  charge, because the nonce is monotonic on payment.
+- **A malicious merchant** can only receive what the mandate allows. A merchant cannot submit a
+  charge at all; only the named agent signs `charge`.
 - **A forged mandate account cannot be substituted.** `charge` re-derives the mandate address from
   the fields stored inside it and rejects a mismatch, and the CPI signs as that PDA.
-- **Known limit, stated rather than hidden.** The ledger records every decision the agent submits.
-  It cannot record a charge the agent never attempted, and nothing on chain can. What is guaranteed
-  is narrower and still worth having: no payment happens without a record, and no attempt is judged
-  by the agent instead of by the chain. The alternative design records nothing in either case.
+- **Known limit, stated rather than hidden.** The ledger records every decision this program
+  reaches. A frozen source or destination is inspected in `evaluate` and recorded as a refusal.
+  Anchor account validation failures (wrong mint, wrong source, wrong ledger) and token-program
+  declines this program does not inspect are errors with no entry. It cannot record a charge the
+  agent never attempted, and nothing on chain can. What is guaranteed is narrower and still worth
+  having: no payment happens without a record, and no attempt is judged by the agent instead of by
+  the chain. The alternative design records nothing in either case.
 
 ## License
 

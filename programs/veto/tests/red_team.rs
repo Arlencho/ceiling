@@ -888,11 +888,11 @@ fn claim_an_expired_mandate_is_refused_even_while_its_status_is_still_active() {
 // Findings. Each pins current behaviour; invert when fixed.
 // ---------------------------------------------------------------------------
 
-/// FINDING 1: once `charge` flips status to EXPIRED (or the cap flips it to
-/// EXHAUSTED), `revoke_mandate` is rejected, so the program never drops the
-/// SPL delegation on those paths and `close_mandate` does not either.
+/// FINDING 1 (fixed): once `charge` flips status to EXPIRED (or the cap flips
+/// it to EXHAUSTED), `revoke_mandate` still runs and drops the SPL delegation.
+/// A second revoke is refused. Close after revoke leaves no lingering delegate.
 #[test]
-fn finding_1_expired_status_locks_out_revoke_and_the_delegation_survives_close() {
+fn finding_1_expired_status_still_allows_revoke_and_drops_the_delegation() {
     let mut w = setup();
     let owner = w.owner.insecure_clone();
     charge(&mut w, 100 * ONE, 1).expect("paid");
@@ -900,31 +900,72 @@ fn finding_1_expired_status_locks_out_revoke_and_the_delegation_survives_close()
     charge(&mut w, 10 * ONE, 2).expect("refusal flips status");
     assert_eq!(read_mandate(&w.svm, &w.mandate).status, STATUS_EXPIRED);
 
+    revoke(&mut w, &owner).expect("revoke on EXPIRED");
+    assert_eq!(read_mandate(&w.svm, &w.mandate).status, STATUS_REVOKED);
+    let src = token_account(&w.svm, &w.source);
+    assert!(
+        src.delegate.is_none(),
+        "revoke on EXPIRED must drop the SPL delegation"
+    );
     assert_err_contains(revoke(&mut w, &owner), "MandateNotActive");
-    close(&mut w, &owner).expect("close succeeds");
+
+    close(&mut w, &owner).expect("close after revoke");
     assert!(w
         .svm
         .get_account(&w.mandate)
         .map(|a| a.data.is_empty())
         .unwrap_or(true));
-
     let src = token_account(&w.svm, &w.source);
-    assert_eq!(
-        src.delegate,
-        anchor_lang::solana_program::program_option::COption::Some(w.mandate)
-    );
-    assert_eq!(
-        src.delegated_amount,
-        400 * ONE,
-        "400 remains delegated to a closed mandate's PDA"
+    assert!(src.delegate.is_none());
+
+    let mut w = setup();
+    let owner = w.owner.insecure_clone();
+    for n in 1..=5 {
+        charge(&mut w, 100 * ONE, n).expect("paid");
+    }
+    assert_eq!(read_mandate(&w.svm, &w.mandate).status, STATUS_EXHAUSTED);
+    revoke(&mut w, &owner).expect("revoke on EXHAUSTED");
+    assert_eq!(read_mandate(&w.svm, &w.mandate).status, STATUS_REVOKED);
+    let src = token_account(&w.svm, &w.source);
+    assert!(
+        src.delegate.is_none(),
+        "revoke on EXHAUSTED must drop the SPL delegation"
     );
 }
 
-/// FINDING 2: `grant_override` accepts a nonce at or below `last_nonce`, and a
-/// pending override is silently orphaned when a later nonce pays first. Both
-/// leave an OVERRIDE entry on the ledger that no charge can ever consume.
+/// FINDING 2 (fixed): `grant_override` rejects a nonce at or below `last_nonce`
+/// with `NonceAlreadySettled`, and does not write a dead OVERRIDE entry.
 #[test]
-fn finding_2_grant_override_accepts_a_nonce_that_can_never_pay() {
+fn finding_2_grant_override_rejects_a_nonce_that_can_never_pay() {
+    let mut w = setup();
+    let owner = w.owner.insecure_clone();
+    charge(&mut w, 50 * ONE, 8).expect("nonce 8 pays");
+    assert_eq!(read_mandate(&w.svm, &w.mandate).last_nonce, 8);
+
+    assert_err_contains(
+        grant_override(&mut w, &owner, 180 * ONE, 3),
+        "NonceAlreadySettled",
+    );
+    assert_err_contains(
+        grant_override(&mut w, &owner, 180 * ONE, 8),
+        "NonceAlreadySettled",
+    );
+
+    let m = read_mandate(&w.svm, &w.mandate);
+    assert_eq!(m.override_nonce, 0);
+    assert_eq!(m.override_amount, 0);
+    assert_eq!(last_entry(&w.svm, &w.ledger).kind, KIND_PAID);
+
+    grant_override(&mut w, &owner, 180 * ONE, 9).expect("future nonce is allowed");
+    assert_eq!(read_mandate(&w.svm, &w.mandate).override_nonce, 9);
+    assert_eq!(last_entry(&w.svm, &w.ledger).kind, KIND_OVERRIDE);
+
+    // Known limit, accepted: an override clears only when its own nonce pays.
+    // Grant 7, then pay 8, and override_nonce stays 7 until the owner grants
+    // another override or revokes. No charge can ever consume it, because a
+    // retry of 7 is STALE_NONCE. Clearing a pending override when a higher
+    // nonce pays would be a program change beyond the three findings, so the
+    // limit is bounded by the assertions below rather than by this comment.
     let mut w = setup();
     let owner = w.owner.insecure_clone();
     grant_override(&mut w, &owner, 180 * ONE, 7).expect("granted for nonce 7");
@@ -934,14 +975,23 @@ fn finding_2_grant_override_accepts_a_nonce_that_can_never_pay() {
     assert_eq!(
         read_mandate(&w.svm, &w.mandate).override_nonce,
         7,
-        "orphaned override still pending"
+        "orphaned override still pending; accepted known limit"
     );
 
-    // And the owner can mint a dead override directly.
-    grant_override(&mut w, &owner, 180 * ONE, 3).expect("accepted although 3 <= last_nonce 8");
-    assert_eq!(last_entry(&w.svm, &w.ledger).kind, KIND_OVERRIDE);
-    charge(&mut w, 180 * ONE, 3).expect("refusal confirms");
-    assert_eq!(last_entry(&w.svm, &w.ledger).reason, REASON_STALE_NONCE);
+    // The limit is bounded, not open-ended: the owner has two ways out, and
+    // both are asserted here so the comment above cannot drift from the code.
+    grant_override(&mut w, &owner, 180 * ONE, 9).expect("a later grant is allowed");
+    assert_eq!(
+        read_mandate(&w.svm, &w.mandate).override_nonce,
+        9,
+        "granting again replaces the orphan"
+    );
+    revoke(&mut w, &owner).expect("revoke");
+    assert_eq!(
+        read_mandate(&w.svm, &w.mandate).override_nonce,
+        0,
+        "revoking clears any pending override"
+    );
 }
 
 /// FINDING 3: the agent chooses nonces, and `last_nonce` only ever rises, so a
@@ -963,11 +1013,11 @@ fn finding_3_a_paid_charge_at_nonce_u64_max_strands_the_mandate() {
     );
 }
 
-/// FINDING 4: a decline raised by the token program (frozen account here) is a
-/// transaction error, so it is exactly the unrecorded refusal the product says
-/// it does not produce. `evaluate` does not look at `state`.
+/// FINDING 4 (fixed): a frozen source or destination is a recorded refusal
+/// (`REASON_ACCOUNT_FROZEN`), not a token-program error that rolls the ledger
+/// write back. The transaction confirms, nothing moves.
 #[test]
-fn finding_4_a_frozen_account_declines_without_any_record() {
+fn finding_4_a_frozen_account_is_a_recorded_refusal() {
     let mut w = setup_with(Limits {
         freeze_authority: true,
         ..Limits::default()
@@ -985,13 +1035,35 @@ fn finding_4_a_frozen_account_declines_without_any_record() {
         .expect("merchant account frozen by the mint authority");
 
     let before = read_ledger(&w.svm, &w.ledger).total;
-    assert_err_contains(charge(&mut w, 10 * ONE, 1), "frozen");
-    assert_eq!(
-        read_ledger(&w.svm, &w.ledger).total,
-        before,
-        "no ledger entry for the decline"
-    );
-    assert_eq!(read_mandate(&w.svm, &w.mandate).refusal_count, 0);
+    let dest_before = balance(&w.svm, &w.destination);
+    charge(&mut w, 10 * ONE, 1).expect("frozen destination is a recorded refusal");
+    assert_eq!(read_ledger(&w.svm, &w.ledger).total, before + 1);
+    assert_eq!(last_entry(&w.svm, &w.ledger).kind, KIND_REFUSED);
+    assert_eq!(last_entry(&w.svm, &w.ledger).reason, REASON_ACCOUNT_FROZEN);
+    assert_eq!(last_entry(&w.svm, &w.ledger).suggested_override, 0);
+    assert_eq!(read_mandate(&w.svm, &w.mandate).refusal_count, 1);
+    assert_eq!(balance(&w.svm, &w.destination), dest_before);
+
+    let mut w = setup_with(Limits {
+        freeze_authority: true,
+        ..Limits::default()
+    });
+    let owner = w.owner.insecure_clone();
+    let ix = spl_token::instruction::freeze_account(
+        &spl_token::ID,
+        &w.source,
+        &w.mint,
+        &owner.pubkey(),
+        &[],
+    )
+    .unwrap();
+    send(&mut w.svm, &owner, &[&owner], &[ix]).expect("source frozen");
+    let before = read_ledger(&w.svm, &w.ledger).total;
+    charge(&mut w, 10 * ONE, 1).expect("frozen source is a recorded refusal");
+    assert_eq!(read_ledger(&w.svm, &w.ledger).total, before + 1);
+    assert_eq!(last_entry(&w.svm, &w.ledger).reason, REASON_ACCOUNT_FROZEN);
+    assert_eq!(read_mandate(&w.svm, &w.mandate).refusal_count, 1);
+    assert_eq!(balance(&w.svm, &w.destination), 0);
 }
 
 /// FINDING 5: the purpose limit is checked in characters and allocated in
