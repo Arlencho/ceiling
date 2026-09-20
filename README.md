@@ -50,6 +50,48 @@ The transaction succeeded. The balance did not change. Neither party can edit th
 
 That last field is the part no prior art has: a decline that tells you what would have worked.
 
+## See it yourself, without installing anything
+
+Live on Solana devnet. Open this transaction:
+
+**[A refusal, recorded](https://explorer.solana.com/tx/3rTpyrHEScEPhjHL3cUDYSGwGAxU6JVzbdWVZbr4YMHt3wAM7ad9JGPC26R8aQMH9aqYVzrFqbEogX1CquNcWqib?cluster=devnet)**
+
+Three things to look at, in this order: the transaction **succeeded**, the token balances are
+**unchanged**, and the program log says why.
+
+```
+Program log: VETO REFUSED reason=5 (over per-payment maximum)
+             amount=6232500 per_tx_max=500000 remaining=99339500 override_to_clear=6232500
+```
+
+The agent tried to pay 6.2325 tokens for electricity at an evening spike price. The mandate allows
+0.5 per payment. It did not pay, it said why, and it said what would have cleared it. Nobody can
+edit that, including us.
+
+For contrast, the same mandate paid three times earlier the same day, when power was cheap:
+
+| Window | Spot price | Decision |
+|---|---|---|
+| 00:00 | 0.00892 SEK/kWh | [paid](https://explorer.solana.com/tx/4N13AokSVj2A9fJyCZiypzhG9P6mdpMvpjcnDvzVUi2Qp6jUx1Ud34tHUDt1TQENzXu7TFWTfrKHHCLfrpKTBJ9a?cluster=devnet) |
+| 06:00 | 0.00429 SEK/kWh | [paid](https://explorer.solana.com/tx/5heSaH7LCYKAUXcPo9M2167oxLPvJSuTDmtyRboPv4pbif2ndNqgNJ9DagWeT2T2XKa5BU9erjfw7wjS6wyxM7xb?cluster=devnet) |
+| 12:00 | 0.00011 SEK/kWh | [paid](https://explorer.solana.com/tx/289RQXJW2vkvXxiVM13vwSEWb1SuRAxPKTHCgkF5kqPYWPQ2hFGsq13PUrDTMZ8ibApq9BBJz2u2zpzjkRV92swU?cluster=devnet) |
+| 18:00 | 0.12465 SEK/kWh | [refused](https://explorer.solana.com/tx/3rTpyrHEScEPhjHL3cUDYSGwGAxU6JVzbdWVZbr4YMHt3wAM7ad9JGPC26R8aQMH9aqYVzrFqbEogX1CquNcWqib?cluster=devnet) |
+
+Those prices are the real Nordic day-ahead spot for SE3 on 2026-09-20 and you can check them at
+the [same public URL the agent reads](https://www.elprisetjustnu.se/). Nobody arranged that
+refusal: electricity got twenty nine times more expensive in the evening and the rule did the rest.
+
+To take one off chain and check it independently:
+
+```bash
+cd tools && npm ci
+VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --signature <tx> --out refusal.json
+VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts refusal.json
+# Mandate limits, ledger entry, and charge transaction agree.
+```
+
+Change one number in that file and run verify again; it reports REJECTED and names the field.
+
 ## Why Solana Mobile
 
 Seed Vault is built so a human approves every signature. That is the right default, and it is
