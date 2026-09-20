@@ -37,6 +37,16 @@ jobs:
       - name: Build and test
         run: make test
 
+  # The deploy-script checks read source and refuse a mismatched or missing
+  # program keypair. They do not need a cluster or a funded key, so they run
+  # here instead of waiting on the Solana toolchain in the program job.
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy-script checks
+        run: make test-scripts
+
   app:
     runs-on: ubuntu-latest
     defaults:

@@ -13,7 +13,7 @@
 # One command per thing a judge or a contributor needs. `make test` from a
 # fresh clone is the contract.
 
-.PHONY: help build test localnet setup fmt clean indexer indexer-test indexer-seed require-anchor
+.PHONY: help build test test-scripts localnet setup fmt clean indexer indexer-test indexer-seed require-anchor
 
 # Two flags that are not obvious and both are required from a clean checkout.
 #
@@ -48,6 +48,9 @@ build-test: require-anchor ## Build the program for LiteSVM (SBPF v0)
 
 test: build-test ## Build and run the program test suite
 	cargo test --manifest-path programs/veto/Cargo.toml
+
+test-scripts: ## Run deploy-script checks that do not need a cluster
+	./scripts/devnet-setup.test.sh
 
 # Provision a chain plus the demo fixtures. Devnet by default; localnet when
 # the devnet faucet is rate limiting.

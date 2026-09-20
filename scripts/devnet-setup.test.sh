@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Prove that a declare_id mismatch is a loud refusal naming both ids, and that
 # a missing program keypair is refused rather than minted.
+#
+# These checks read source and exercise the keypair guards. They do not talk
+# to a cluster and do not need a funded key. CI runs this file as-is.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
