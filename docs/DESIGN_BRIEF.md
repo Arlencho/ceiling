@@ -10,8 +10,10 @@ much in total, how much per payment, until when, and to which payee. An agent ca
 that rule with nobody present. When a payment breaks the rule the program does not pay, and it
 RECORDS the refusal on chain with the reason and the override that would have cleared it.
 
-Every competing product makes an overspend impossible, which leaves no trace. This one makes the
-refusal legible. **The recorded no is the product.** Your design has to know that.
+Every competing product stops the overspend too, and this one stops it the same way: when a rule
+fails, the transfer is never executed and no tokens move. The difference is that everywhere else
+the block is a failed transaction that leaves no trace. Here the no is recorded.
+**The recorded no is the product.** Your design has to know that.
 
 ## The one rule you cannot break
 
