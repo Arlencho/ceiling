@@ -79,25 +79,34 @@ export async function processWindow(args: {
     if (attempt < feedAttempts) await sleep(feedRetryMs);
   }
 
-  if (window === null) {
-    const nonce = nonceFromWindowStart(args.at.toISOString());
-    if (args.journal.hasNonce(nonce)) return "skipped";
-    // A later window already settled on chain, so this one can never pay:
-    // nonces only move forward on payment. Close it honestly rather than
-    // submitting a charge whose only possible outcome is a replay refusal.
-    if (nonce <= args.journal.maxSettledNonce()) {
-      args.journal.append({
-        ...rowBase({ window: null, nonce, kwhMilli: args.kwhMilli, amount: 0n }),
-        window_start: args.at.toISOString(),
-        decision: "skipped",
-        reason: "window overtaken by a later settled charge",
-        reason_code: null,
-        signature: null,
-        suggested_override: null,
-      });
-      log(`skipped overtaken window at=${args.at.toISOString()}`);
-      return "skipped";
+  const nonce = nonceFromWindowStart(window === null ? args.at.toISOString() : window.timeStart);
+  if (args.journal.hasNonce(nonce)) {
+    if (window !== null) {
+      log(`skipped already decided nonce=${nonce.toString()} window=${window.timeStart}`);
     }
+    return "skipped";
+  }
+
+  // A later window already paid on chain, so this one can never pay:
+  // only a payment advances last_nonce. Close it honestly rather than
+  // submitting a charge whose only possible outcome is a replay refusal.
+  // This check sits before the feed-up / feed-down branch so a recovered
+  // feed cannot resubmit an overtaken gap.
+  if (nonce <= args.journal.maxSettledNonce()) {
+    args.journal.append({
+      ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: 0n }),
+      ...(window === null ? { window_start: args.at.toISOString() } : {}),
+      decision: "skipped",
+      reason: "window overtaken by a later settled charge",
+      reason_code: null,
+      signature: null,
+      suggested_override: null,
+    });
+    log(`skipped overtaken window at=${args.at.toISOString()}`);
+    return "skipped";
+  }
+
+  if (window === null) {
     // Record the outage once, then leave the window retryable so a later cycle
     // can still submit it when the feed comes back.
     if (args.journal.hasGap(nonce)) {
@@ -117,17 +126,17 @@ export async function processWindow(args: {
     return "gap";
   }
 
-  const nonce = nonceFromWindowStart(window.timeStart);
-  if (args.journal.hasNonce(nonce)) {
-    log(`skipped already decided nonce=${nonce.toString()} window=${window.timeStart}`);
-    return "skipped";
-  }
-
   let scaled: bigint;
   try {
     scaled = sekPerKwhToScaled(window.sekPerKwh);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    if (args.journal.hasGap(nonce)) {
+      log(
+        `gap unreadable price still at window=${window.timeStart} sek=${window.sekPerKwh}, window stays due`,
+      );
+      return "gap";
+    }
     args.journal.append({
       ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: 0n }),
       decision: "gap",
