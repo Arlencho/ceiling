@@ -40,6 +40,36 @@ MINT_DECIMALS=6
 log() { printf '%s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
+# The committed program id. Bundled consumers (watcher, indexer, tools, app)
+# point at this value. A deploy under any other id looks like it succeeded
+# and then nothing talks to the program that was just built.
+declared_program_id() {
+  local src="${ROOT}/programs/veto/src/lib.rs"
+  [[ -f "$src" ]] || die "missing ${src}"
+  local id
+  id="$(sed -n 's/^[[:space:]]*declare_id!("\([^"]*\)");/\1/p' "$src" | head -n1)"
+  [[ -n "$id" ]] || die "could not read declare_id from ${src}"
+  printf '%s\n' "$id"
+}
+
+# Fail before build or deploy when keys/program.json is not the committed id.
+# Naming both ids is the whole point: the operator must restore the backed-up
+# program keypair rather than minting a new one and rewriting source.
+assert_program_keypair_matches_declare_id() {
+  local key_id="$1"
+  local declared
+  declared="$(declared_program_id)"
+  if [[ "$key_id" != "$declared" ]]; then
+    die "program keypair pubkey ${key_id} does not match declare_id ${declared}; the program keypair must be restored from backup"
+  fi
+}
+
+require_backed_up_program_keypair() {
+  if [[ ! -f "$PROGRAM_KP" ]]; then
+    die "keys/program.json is missing; the program keypair must be restored from backup (declare_id $(declared_program_id))"
+  fi
+}
+
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
@@ -379,6 +409,7 @@ main() {
   umask 077
 
   ensure_keypair "$DEPLOYER_KP"
+  require_backed_up_program_keypair
   ensure_keypair "$PROGRAM_KP"
   ensure_keypair "$MINT_KP"
   ensure_keypair "$OWNER_KP"
@@ -393,6 +424,9 @@ main() {
   owner="$(solana-keygen pubkey "$OWNER_KP")"
   merchant="$(solana-keygen pubkey "$MERCHANT_KP")"
   agent="$(solana-keygen pubkey "$AGENT_KP")"
+
+  assert_program_keypair_matches_declare_id "$program_id"
+  log "program keypair matches declare_id ${program_id}"
 
   solana config set --url "$RPC" --keypair "$DEPLOYER_KP" --commitment confirmed >/dev/null
   local cfg_url
@@ -411,9 +445,9 @@ main() {
     die "programs/veto/src has local edits; refusing to run anchor keys sync"
   fi
 
-  # Sync declare_id for this build only so the deployed bytecode accepts
-  # the program address. Restore source afterwards. Program source is not
-  # part of the commit from this script.
+  # keys sync is belt-and-braces for the build now that the keypair has
+  # already been checked against declare_id. Restore source afterwards.
+  # Program source is not part of the commit from this script.
   trap restore_after_build EXIT
   log "anchor keys sync for program id ${program_id}"
   anchor keys sync --program-name veto
@@ -578,4 +612,6 @@ EOF
   log "agent ${agent}"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
