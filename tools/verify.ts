@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
+import { COMPLETENESS, formatBulkReport, parseExportText, type RowVerdict } from "./bulk.js";
 import {
   connection,
   fetchLedger,
@@ -10,7 +11,6 @@ import {
   parseArgs,
   parseChargeFromTx,
   parseChargeLogs,
-  parseRecord,
   reasonText,
   resolveRpc,
   tokenAccountOwner,
@@ -21,8 +21,13 @@ function usage(): never {
   console.error(`verify a Veto decision record against the chain
 
 Usage:
-  npx tsx verify.ts <file.json> [--rpc url]
+  npx tsx verify.ts <file.json|file.csv> [--rpc url]
   npx tsx export.ts --signature <tx> | npx tsx verify.ts
+  npx tsx export.ts --mandate <addr> | npx tsx verify.ts
+
+A single version-1 JSON object prints one verdict.
+A bulk JSON bundle or CSV prints how many rows were confirmed and names every
+row that was not, with the reason. Exit 0 only when every row confirms.
 
 Exit 0 on CONFIRMED, 1 on REJECTED, 2 on usage error.
 Does not need a keypair. Re-reads the cluster independently of the phone.
@@ -52,13 +57,26 @@ function eq(a: bigint | string | number, b: bigint | string | number, field: str
   }
 }
 
-async function verify(record: DecisionRecord, rpc: string): Promise<void> {
+type CheckCache = {
+  conn: Connection;
+  genesis?: string;
+  mandates: Map<string, Awaited<ReturnType<typeof fetchMandate>>>;
+  ledgers: Map<string, Awaited<ReturnType<typeof fetchLedger>>>;
+  destOwners: Map<string, PublicKey>;
+};
+
+async function checkRecord(
+  record: DecisionRecord,
+  rpc: string,
+  cache: CheckCache,
+): Promise<{ failures: string[]; notes: string[] }> {
   const failures: string[] = [];
-  const conn = connection(rpc);
+  const notes: string[] = [];
+  const conn = cache.conn;
   const programId = new PublicKey(record.program_id);
   const mandatePk = new PublicKey(record.mandate);
 
-  const genesis = await conn.getGenesisHash();
+  const genesis = cache.genesis ?? (cache.genesis = await conn.getGenesisHash());
   eq(record.genesis_hash, genesis, "genesis_hash", failures);
 
   if (record.reason_text !== reasonText(record.reason_code)) {
@@ -84,7 +102,7 @@ async function verify(record: DecisionRecord, rpc: string): Promise<void> {
     failures.push(
       `signature ${record.signature} not found on ${rpc} (wrong cluster, tampered signature, or history pruned)`,
     );
-    fail(failures);
+    return { failures, notes };
   }
   if (tx.meta?.err) {
     failures.push(`transaction failed on chain: ${JSON.stringify(tx.meta.err)}`);
@@ -93,7 +111,7 @@ async function verify(record: DecisionRecord, rpc: string): Promise<void> {
   const charge = parseChargeFromTx(tx, programId);
   if (!charge) {
     failures.push(`transaction does not invoke charge on ${programId.toBase58()}`);
-    fail(failures);
+    return { failures, notes };
   }
   eq(record.amount, charge.amount, "amount (instruction)", failures);
   eq(record.nonce, charge.nonce, "nonce (instruction)", failures);
@@ -103,7 +121,11 @@ async function verify(record: DecisionRecord, rpc: string): Promise<void> {
   const expectedLedger = ledgerPda(programId, mandatePk);
   eq(charge.ledger.toBase58(), expectedLedger.toBase58(), "ledger PDA", failures);
 
-  const mandate = await fetchMandate(conn, mandatePk);
+  let mandate = cache.mandates.get(record.mandate);
+  if (!mandate) {
+    mandate = await fetchMandate(conn, mandatePk);
+    cache.mandates.set(record.mandate, mandate);
+  }
   eq(record.limits.cap, mandate.cap, "limits.cap", failures);
   eq(record.limits.per_tx_max, mandate.perTxMax, "limits.per_tx_max", failures);
   eq(record.limits.expires_at, mandate.expiresAt, "limits.expires_at", failures);
@@ -123,14 +145,23 @@ async function verify(record: DecisionRecord, rpc: string): Promise<void> {
     );
   }
 
-  const destOwner = await tokenAccountOwner(conn, charge.destination);
+  let destOwner = cache.destOwners.get(charge.destination.toBase58());
+  if (!destOwner) {
+    destOwner = await tokenAccountOwner(conn, charge.destination);
+    cache.destOwners.set(charge.destination.toBase58(), destOwner);
+  }
   if (!destOwner.equals(mandate.merchant)) {
     failures.push(
       `destination token account owner is ${destOwner.toBase58()}, mandate merchant is ${mandate.merchant.toBase58()}`,
     );
   }
 
-  const ledger = await fetchLedger(conn, expectedLedger);
+  const ledgerKey = expectedLedger.toBase58();
+  let ledger = cache.ledgers.get(ledgerKey);
+  if (!ledger) {
+    ledger = await fetchLedger(conn, expectedLedger);
+    cache.ledgers.set(ledgerKey, ledger);
+  }
   if (!ledger.mandate.equals(mandatePk)) {
     failures.push(`ledger.mandate is ${ledger.mandate.toBase58()}, expected ${record.mandate}`);
   }
@@ -143,7 +174,7 @@ async function verify(record: DecisionRecord, rpc: string): Promise<void> {
     if (!logs) {
       failures.push("ledger ring has no matching row and transaction logs have neither PAID nor REFUSED");
     } else {
-      console.log("note: ledger ring no longer holds this decision; checking transaction logs");
+      notes.push("ledger ring no longer holds this decision; checking transaction logs");
       eq(record.kind, logs.kind, "kind (logs)", failures);
       eq(record.reason_code, logs.reasonCode, "reason_code (logs)", failures);
       eq(record.amount, logs.amount, "amount (logs)", failures);
@@ -169,8 +200,10 @@ async function verify(record: DecisionRecord, rpc: string): Promise<void> {
     eq(record.reason_code, logs.reasonCode, "reason_code (logs)", failures);
   }
 
-  if (failures.length > 0) fail(failures);
+  return { failures, notes };
+}
 
+function printConfirmed(record: DecisionRecord, rpc: string): void {
   console.log("VERDICT: CONFIRMED");
   console.log("");
   console.log(`rpc                 ${rpc}`);
@@ -195,20 +228,72 @@ async function verify(record: DecisionRecord, rpc: string): Promise<void> {
   console.log("Mandate limits, ledger entry, and charge transaction agree.");
 }
 
+async function verifySingle(record: DecisionRecord, rpc: string, cache: CheckCache): Promise<void> {
+  const { failures, notes } = await checkRecord(record, rpc, cache);
+  for (const note of notes) {
+    console.log(`note: ${note}`);
+  }
+  if (failures.length > 0) fail(failures);
+  printConfirmed(record, rpc);
+}
+
+async function verifyBulk(
+  bundle: { completeness: string; decisions: DecisionRecord[] },
+  rpc: string,
+  cache: CheckCache,
+): Promise<void> {
+  if (bundle.completeness !== COMPLETENESS) {
+    fail([
+      `completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${JSON.stringify(bundle.completeness)}`,
+    ]);
+  }
+  const rows: RowVerdict[] = [];
+  for (const [i, record] of bundle.decisions.entries()) {
+    let failures: string[];
+    try {
+      failures = (await checkRecord(record, rpc, cache)).failures;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      failures = [message];
+    }
+    rows.push({
+      index: i + 1,
+      signature: record.signature,
+      kind: record.kind,
+      nonce: record.nonce.toString(),
+      ok: failures.length === 0,
+      failures,
+    });
+  }
+  const report = formatBulkReport(rows);
+  process.stdout.write(report.text);
+  process.exit(report.ok ? 0 : 1);
+}
+
 async function main(): Promise<void> {
   const cli = parseArgs(process.argv.slice(2));
   if (cli.flags.help || cli.flags.h) usage();
   const path = cli.positional[0];
   if (!path && process.stdin.isTTY) usage();
   const rpc = resolveRpc(cli);
-  let parsed: DecisionRecord;
+  let parsed;
   try {
-    parsed = parseRecord(JSON.parse(readInput(path)));
+    parsed = parseExportText(readInput(path));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    fail([`record is not valid schema version 1 JSON: ${message}`]);
+    fail([`record is not valid schema version 1 JSON or CSV: ${message}`]);
   }
-  await verify(parsed, rpc);
+  const cache: CheckCache = {
+    conn: connection(rpc),
+    mandates: new Map(),
+    ledgers: new Map(),
+    destOwners: new Map(),
+  };
+  if (parsed.kind === "single") {
+    await verifySingle(parsed.record, rpc, cache);
+    return;
+  }
+  await verifyBulk(parsed.bundle, rpc, cache);
 }
 
 main().catch((err: unknown) => {

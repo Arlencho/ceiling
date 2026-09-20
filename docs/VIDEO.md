@@ -54,8 +54,9 @@ VETO REFUSED reason=5 (over per-payment maximum) amount=180000000
 per_tx_max=60000000 remaining=158000000 override_to_clear=180000000
 ```
 
-Voice: *"The transaction confirmed. The balance did not move. Every other design makes an overspend
-impossible, which protects your money and leaves nothing behind. This one leaves a record."*
+Voice: *"The transaction confirmed and the balance did not move. It succeeded at deciding no.
+Every other design stops this too, and then leaves nothing behind: no reason, no trail, nothing an
+auditor could look at. This one leaves a record."*
 
 This is the shot the entry lives or dies on. Rehearse it most.
 
@@ -98,9 +99,10 @@ Voice: *"Authority ends when you say it ends. The money never moved and never wa
 
 **02:35 to 03:00. Close.**
 
-Voice: *"Limits on chain already exist. Squads, AP2, session keys. Every one of them makes an
-overspend impossible. We make the refusal legible: a recorded no, a reason, and the override that
-would have cleared it. AP2 standardised the record of a yes. This is the missing half."*
+Voice: *"Limits on chain already exist. Squads, AP2, session keys. Every one of them stops the
+overspend, and so does this. The difference is that everywhere else the block is a failed
+transaction that leaves nothing behind. Here the no is recorded, with the reason and the override
+that would have cleared it. AP2 standardised the record of a yes. This is the missing half."*
 
 Last frame: the refusal card. Same image the video opened on.
 

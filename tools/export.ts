@@ -1,8 +1,20 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { Connection, PublicKey, type ConfirmedSignatureInfo } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
+import { fetchDecisionHistory } from "../indexer/src/index.js";
 import {
-  REPO_DIR,
+  bundleToCsv,
+  bundleToJson,
+  buildRecordFromIndexed,
+  buildScope,
+  filterIndexed,
+  inferFormat,
+  makeBundle,
+  overlayRing,
+  parseTimeBound,
+  type IndexedDecision,
+} from "./bulk.js";
+import {
   buildRecord,
   connection,
   entryMatches,
@@ -11,7 +23,6 @@ import {
   flagString,
   indexedEntries,
   kindByte,
-  kindName,
   ledgerPda,
   parseArgs,
   parseChargeFromTx,
@@ -20,17 +31,34 @@ import {
   resolveClusterName,
   resolveProgramId,
   resolveRpc,
+  type DecisionRecord,
+  type LedgerAccount,
   type LedgerEntry,
+  type MandateAccount,
 } from "./lib.js";
 
 function usage(): never {
-  console.error(`export a Veto decision as JSON
+  console.error(`export a Veto decision as JSON, or a population as JSON or CSV
 
 Usage:
   npx tsx export.ts --signature <tx> [--out file] [--rpc url]
-  npx tsx export.ts --mandate <addr> [--kind paid|refused] [--nonce n] [--out file] [--rpc url]
+  npx tsx export.ts --mandate <addr> [--kind paid|refused] [--format json|csv] [--out file] [--rpc url]
+  npx tsx export.ts --from <when> --to <when> [--mandate <addr>] [--format json|csv] [--out file] [--rpc url]
 
-The record is written to stdout. --out also writes the same JSON to a file.
+--signature writes one version-1 record (the demo beat).
+--mandate writes everything under that rule.
+--from / --to writes the date range (UTC calendar day or unix seconds). Combine with
+--mandate to bound one rule.
+
+Bulk rows come from the indexer (transaction logs), not the 32-entry on-chain ring.
+A long range is otherwise silently incomplete once the ring wraps. Default includes
+paid and refused. The file states completeness=payments: complete over charges that
+landed on chain, never over attempts.
+
+--format json (default) or csv. A .csv --out infers csv.
+--page-size N and --block-scan are passed through to the indexer. Block scan
+is off by default (public RPC has a signature index; a local validator may
+need it).
 Export does not need a keypair. It re-reads the cluster.
 `);
   process.exit(2);
@@ -127,72 +155,70 @@ async function recordFromSignature(
   });
 }
 
-async function findSignatureForEntry(
-  conn: Connection,
-  mandate: PublicKey,
-  programId: PublicKey,
-  entry: LedgerEntry,
-): Promise<string> {
-  let before: string | undefined;
-  for (let page = 0; page < 20; page += 1) {
-    const opts: { limit: number; before?: string } = { limit: 1000 };
-    if (before) opts.before = before;
-    const sigs: ConfirmedSignatureInfo[] = await conn.getSignaturesForAddress(mandate, opts, "confirmed");
-    if (sigs.length === 0) break;
-    for (const info of sigs) {
-      if (info.err) continue;
-      const tx = await conn.getTransaction(info.signature, {
-        commitment: "confirmed",
-        maxSupportedTransactionVersion: 0,
-      });
-      if (!tx || tx.meta?.err) continue;
-      const charge = parseChargeFromTx(tx, programId);
-      if (!charge) continue;
-      if (!charge.mandate.equals(mandate)) continue;
-      if (charge.amount !== entry.amount || charge.nonce !== entry.nonce) continue;
-      const logs = parseChargeLogs(tx.meta?.logMessages ?? []);
-      const kind = logs ? kindName(kindByte(logs.kind)) : kindName(entry.kind);
-      if (kind !== kindName(entry.kind)) continue;
-      if (logs && logs.reasonCode !== entry.reason) continue;
-      return info.signature;
+async function recordsFromIndexer(args: {
+  conn: Connection;
+  rpc: string;
+  programId: PublicKey;
+  cluster: string;
+  genesisHash: string;
+  mandate?: string;
+  from?: number | null;
+  to?: number | null;
+  kind?: "paid" | "refused";
+  nonce?: bigint;
+  pageSize?: number;
+  allowBlockScan: boolean;
+}): Promise<DecisionRecord[]> {
+  const history = await fetchDecisionHistory({
+    rpcUrl: args.rpc,
+    programId: args.programId.toBase58(),
+    mandate: args.mandate,
+    pageSize: args.pageSize,
+    allowBlockScan: args.allowBlockScan,
+  });
+  const filtered = filterIndexed(history.decisions as IndexedDecision[], {
+    mandate: args.mandate,
+    from: args.from,
+    to: args.to,
+    kind: args.kind,
+    nonce: args.nonce,
+  });
+  const mandates = new Map<string, MandateAccount>();
+  const ledgers = new Map<string, LedgerAccount | null>();
+  const records: DecisionRecord[] = [];
+  for (const decision of filtered) {
+    if (!mandates.has(decision.mandate)) {
+      const pk = new PublicKey(decision.mandate);
+      mandates.set(decision.mandate, await fetchMandate(args.conn, pk));
+      try {
+        ledgers.set(decision.mandate, await fetchLedger(args.conn, ledgerPda(args.programId, pk)));
+      } catch {
+        ledgers.set(decision.mandate, null);
+      }
     }
-    before = sigs[sigs.length - 1]!.signature;
-    if (sigs.length < 1000) break;
+    const mandateAccount = mandates.get(decision.mandate)!;
+    const ledger = ledgers.get(decision.mandate) ?? null;
+    records.push(
+      buildRecordFromIndexed({
+        cluster: args.cluster,
+        genesisHash: args.genesisHash,
+        programId: args.programId,
+        mandateAccount,
+        decision,
+        ringEntry: overlayRing(ledger, decision),
+      }),
+    );
   }
-  throw new Error(
-    "could not recover a transaction signature for this ledger entry; pass --signature, and check the cluster retains history",
-  );
+  return records;
 }
 
-async function recordFromMandate(
-  conn: Connection,
-  mandate: PublicKey,
-  programId: PublicKey,
-  cluster: string,
-  genesisHash: string,
-  kindFilter: "paid" | "refused" | undefined,
-  nonceFilter: bigint | undefined,
-) {
-  const mandateAccount = await fetchMandate(conn, mandate);
-  const ledger = await fetchLedger(conn, ledgerPda(programId, mandate));
-  const rows = indexedEntries(ledger)
-    .filter((row) => kindName(row.entry.kind) !== null)
-    .filter((row) => (kindFilter ? kindName(row.entry.kind) === kindFilter : true))
-    .filter((row) => (nonceFilter !== undefined ? row.entry.nonce === nonceFilter : true));
-  if (rows.length === 0) {
-    throw new Error("no paid/refused ledger entry matches the filters");
+function writeOutput(text: string, out: string | undefined): void {
+  if (out) {
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, text);
+    console.error(`wrote ${out}`);
   }
-  const chosen = rows[rows.length - 1]!;
-  const signature = await findSignatureForEntry(conn, mandate, programId, chosen.entry);
-  return buildRecord({
-    cluster,
-    genesisHash,
-    programId,
-    mandate,
-    mandateAccount,
-    entry: chosen.entry,
-    signature,
-  });
+  process.stdout.write(text);
 }
 
 async function main(): Promise<void> {
@@ -208,7 +234,13 @@ async function main(): Promise<void> {
   const mandateStr = flagString(cli, "mandate");
   const kindStr = flagString(cli, "kind");
   const nonceStr = flagString(cli, "nonce");
+  const fromStr = flagString(cli, "from");
+  const toStr = flagString(cli, "to");
   const out = flagString(cli, "out");
+  const format = inferFormat(out, flagString(cli, "format"));
+  const pageSizeStr = flagString(cli, "page-size");
+  const pageSize = pageSizeStr !== undefined ? Number(pageSizeStr) : undefined;
+  const allowBlockScan = cli.flags["block-scan"] === true;
 
   if (kindStr !== undefined && kindStr !== "paid" && kindStr !== "refused") {
     throw new Error("--kind must be paid or refused");
@@ -216,31 +248,57 @@ async function main(): Promise<void> {
   const kindFilter: "paid" | "refused" | undefined =
     kindStr === "paid" || kindStr === "refused" ? kindStr : undefined;
   const nonce = nonceStr !== undefined ? BigInt(nonceStr) : undefined;
+  const from = fromStr !== undefined ? parseTimeBound(fromStr, false) : undefined;
+  const to = toStr !== undefined ? parseTimeBound(toStr, true) : undefined;
 
-  let record;
   if (signature) {
-    record = await recordFromSignature(conn, signature, programId, cluster, genesisHash);
-  } else if (mandateStr) {
-    record = await recordFromMandate(
-      conn,
-      new PublicKey(mandateStr),
-      programId,
-      cluster,
-      genesisHash,
-      kindFilter,
-      nonce,
-    );
-  } else {
-    usage();
+    const record = await recordFromSignature(conn, signature, programId, cluster, genesisHash);
+    if (format === "csv") {
+      const bundle = makeBundle({
+        cluster,
+        genesisHash,
+        programId: programId.toBase58(),
+        scope: buildScope({ mandate: record.mandate }),
+        decisions: [record],
+      });
+      writeOutput(bundleToCsv(bundle), out);
+      return;
+    }
+    writeOutput(recordToJson(record), out);
+    return;
   }
 
-  const json = recordToJson(record);
-  if (out) {
-    mkdirSync(dirname(out), { recursive: true });
-    writeFileSync(out, json);
-    console.error(`wrote ${out}`);
-  }
-  process.stdout.write(json);
+  if (!mandateStr && from === undefined && to === undefined) usage();
+
+  const records = await recordsFromIndexer({
+    conn,
+    rpc,
+    programId,
+    cluster,
+    genesisHash,
+    mandate: mandateStr,
+    from: from ?? null,
+    to: to ?? null,
+    kind: kindFilter,
+    nonce,
+    pageSize,
+    allowBlockScan,
+  });
+  const bundle = makeBundle({
+    cluster,
+    genesisHash,
+    programId: programId.toBase58(),
+    scope: buildScope({
+      mandate: mandateStr,
+      from: from ?? null,
+      to: to ?? null,
+    }),
+    decisions: records,
+  });
+  console.error(
+    `export ${records.length} decision(s) completeness=${bundle.completeness} scope=${bundle.scope.type}`,
+  );
+  writeOutput(format === "csv" ? bundleToCsv(bundle) : bundleToJson(bundle), out);
 }
 
 main().catch((err: unknown) => {

@@ -8,9 +8,9 @@ authority. Bounded authority is crowded and partly commodity; do not claim it an
 > The agent tries to pay. The amount is over the ceiling you set. It does not pay, it tells you
 > why, on chain, in one line, with the override that would clear it.
 >
-> Limits like that already exist. Squads, AP2, session keys. Every one of them makes an overspend
-> impossible, and an impossible transaction protects your money and teaches you nothing. No
-> artifact, no reason, no trail. We make the refusal legible.
+> Limits like that already exist. Squads, AP2, session keys. Every one of them stops the overspend,
+> and so does this. The difference is what is left behind. Everywhere else a blocked overspend is a
+> failed transaction: no artifact, no reason, no trail, nothing to audit. Here the no is recorded.
 >
 > Funds stay in your wallet under a delegate. The key never leaves Seed Vault. Every one of those
 > others is infrastructure. None of them is on a phone.
@@ -35,6 +35,9 @@ spend the first ten seconds, which are the ones the judge is actually paying att
   Say what is defensible: "every one of those is infrastructure, none of them is on a phone."
 - **"Capped budgets", "spending limits" as the headline.** Commodity. An infrastructure vendor
   publishes a tutorial on it.
+- **Anything that implies this does not prevent the spend.** "We make it legible rather than
+  impossible" is the trap: it reads as if the money moves and we merely write it down. It does not
+  move. Say "everyone stops it, only this one can prove it stopped" and the ambiguity is gone.
 - **"Credential".** It means W3C Verifiable Credentials to anyone who knows AP2, and we are not
   building one. Say "export" or "on-chain decision record".
 - **"Proof of restraint" on its own.** Too easy to fake: a one million ceiling mints beautiful
@@ -46,8 +49,10 @@ spend the first ten seconds, which are the ones the judge is actually paying att
 ## Judge Q&A
 
 **Isn't this just a spending limit? Isn't this Squads?**
-Squads and session keys make an overspend impossible. We make the refusal legible: a reason, a
-trail, and the override that would clear it. Protection plus evidence, not protection instead of it.
+Squads and session keys stop the overspend, and so do we: when a rule fails the transfer is never
+executed and no tokens move. What they cannot do is prove it. Their block is a failed transaction
+that leaves no reason and no trail. Ours is a recorded decision with the rule it broke and the
+override that would clear it. Protection plus evidence, never evidence instead of protection.
 
 **Isn't AP2 already "mandates"?**
 AP2 mandates prove the user said yes to a merchant. They are the record of a yes, and they live off

@@ -64,15 +64,17 @@ almost no hackathon deck does it.
 
 ## 5. What every one of them has in common
 
-> They make an overspend **impossible**.
+> They all stop it. So do we.
 >
-> An impossible transaction protects your money and teaches you nothing. No artifact. No reason.
-> No trail.
+> The difference is what is left behind. Everywhere else a blocked overspend is a failed
+> transaction: no artifact, no reason, no trail, nothing an auditor could ever look at.
 
 Quote SolAgent Pay's own README on screen, verbatim, in their words: an overspend "is not a policy
 violation logged after the fact, it is an impossible transaction."
 
-That is the opposite thesis, stated by someone else, which is far more persuasive than stating ours.
+They are right that it should be impossible, and it is impossible here too. What they treat as the
+end of the story is where this one starts: they are choosing to leave nothing behind, and saying so
+in their own words is far more persuasive than asserting our side of it.
 
 ---
 
@@ -85,7 +87,8 @@ VETO REFUSED reason=5 (over per-payment maximum) amount=180000000
 per_tx_max=60000000 remaining=158000000 override_to_clear=180000000
 ```
 
-> The transaction succeeded. The balance did not change. Neither party can edit the record.
+> The transaction succeeded at deciding no. The payment did not happen. The balance is unchanged,
+> and neither party can edit the record.
 >
 > And it tells you what would have worked. No prior art does anything but decline.
 

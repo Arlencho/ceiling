@@ -1,12 +1,14 @@
 # Veto
 
-**Limits on chain already exist. Every one of them makes an overspend impossible. We make the
-refusal legible.**
+**Everyone stops the overspend. Only this one can prove it stopped.**
 
-An impossible transaction protects your money and teaches you nothing. No artifact, no reason, no
-trail. Veto is a permission to spend where the decline is a first-class on-chain record: a
-recorded no, a one-line why, and the override that would have cleared it. On a phone, with the key
-in Seed Vault.
+Veto enforces a spending rule on chain: when a charge breaks it, the transfer is never executed
+and no tokens move. That much is table stakes, and every serious design does it.
+
+What nothing else does is leave anything behind. Elsewhere a blocked overspend is a failed
+transaction: no artifact, no reason, no trail, nothing to audit. Here the decline is a first-class
+on-chain record, with a one-line why and the override that would have cleared it. On a phone, with
+the key in Seed Vault.
 
 AP2 standardised the record of a yes. This is the missing half.
 
@@ -22,7 +24,7 @@ about that is the point:
 
 | Prior art | What it does | Why this is different |
 |---|---|---|
-| [Squads v4 spending limits](https://squads.xyz/blog/spending-limits) | Pre-approved allowances, roles, per-member caps. Audited by Neodyme, OtterSec and Trail of Bits, two formal verifications underway | Treasury operations for humans. An overspend is impossible, never legible |
+| [Squads v4 spending limits](https://squads.xyz/blog/spending-limits) | Pre-approved allowances, roles, per-member caps. Audited by Neodyme, OtterSec and Trail of Bits, two formal verifications underway | Treasury operations for humans. It stops the overspend, as this does, and keeps no record of having stopped it |
 | SPL `approve` / delegate | Caps what a delegate may pull | Cap only. No purpose, no expiry, no reason, no record |
 | [LazorKit](https://github.com/lazor-kit/lazor-kit) | Passkey smart wallet, session keys with slot-height expiry, on-chain RBAC and spending limits | Wallet infrastructure for app developers, not a product about trust |
 | [SolAgent Pay](https://github.com/altaranexus-ship-it/solagent-pay) | Session PDA with lifetime and per-request ceilings, merchant allowlist, TTL, revoke and sweep | Closest on the numbers, and states outright that an overspend "is not a policy violation logged after the fact, it is an impossible transaction". Opposite thesis. It also escrows into a vault; we never move the funds |
@@ -35,8 +37,13 @@ an artifact.**
 
 ## The refusal is the product
 
-When `charge` declines, it does not return an error. An error would roll back every account write,
-so the refusal would leave no trace and would be indistinguishable from nothing having happened.
+**The spend is stopped either way.** When a rule fails, the token transfer instruction is never
+executed, so zero tokens move, and the SPL delegation underneath is a second hard ceiling the
+program itself cannot exceed.
+
+The question is only what survives. When `charge` declines it does not return an error, because an
+error would roll back every account write and the refusal would leave no trace, indistinguishable
+from nothing having happened.
 Instead the instruction transfers nothing, writes a refusal to an on-chain ledger with a reason
 code and the override that would have cleared it, logs a readable line, and returns `Ok`.
 
@@ -46,7 +53,9 @@ So a refusal has a signature you can open in an explorer:
 VETO REFUSED reason=5 (over per-payment maximum) amount=180000000 per_tx_max=60000000 remaining=158000000 override_to_clear=180000000
 ```
 
-The transaction succeeded. The balance did not change. Neither party can edit the record.
+Read those two lines together, because they are the whole idea. The **transaction** succeeded: it
+succeeded at deciding no. The **payment** did not happen: the balance is unchanged. A refusal is a
+transaction that worked and a payment that did not, and neither party can edit the record of it.
 
 That last field is the part no prior art has: a decline that tells you what would have worked.
 
@@ -201,18 +210,23 @@ ring, because a busy week wraps the ring and the full trail has to survive that.
 indexer-test` typechecks and tests it. `make indexer-seed` opens a mandate and submits one paid
 charge and several refused ones so the CLI can be compared against the ring.
 
-To take one decision off the phone and check it from a laptop:
+To take a decision off the phone and check it from a laptop:
 
 ```bash
-cd tools
-npm ci
+cd indexer && npm ci
+cd ../tools && npm ci
 npx tsx produce.ts
 npx tsx export.ts --signature <tx> --out refused.json
 npx tsx verify.ts refused.json
+npx tsx export.ts --mandate <mandate> --format csv --out rule.csv
+npx tsx verify.ts rule.csv
 ```
 
-The JSON schema is [docs/DECISION_RECORD.md](docs/DECISION_RECORD.md). Verify re-reads the
-cluster; it does not trust the file.
+The JSON schema, the bulk envelope, and the CSV columns are in
+[docs/DECISION_RECORD.md](docs/DECISION_RECORD.md). Verify re-reads the cluster; it does
+not trust the file. Bulk rows come from the indexer, not the 32-entry ring. The
+file itself states `completeness=payments`: complete over charges that landed,
+never over attempts.
 
 ## Threat model
 
