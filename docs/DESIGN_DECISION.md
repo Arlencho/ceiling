@@ -51,3 +51,34 @@ communicate.
   structure and the words and raise the weight.
 - **Several rules at once**, per the brief addendum and issue 47. A person holding a mint bot cap,
   a quest farm cap and a charging cap, each with its own agent key.
+
+## Sharing is one decision or the whole population
+
+Added 2026-09-21. Single-decision share is the demo beat. Bulk export is the product.
+
+The claim this entry rests on is that anyone can check the complete record of what an agent was
+allowed to do and every answer the chain gave. An auditor testing a sample, or an insurer pricing
+a risk, does not want one decision. They want all of them, and the value is precisely that it is
+the whole population rather than a sample. Shipping only single-decision share would demonstrate
+the idea while withholding the thing that makes it worth anything.
+
+So the share surface offers three scopes:
+
+| Scope | For |
+|---|---|
+| This decision | Showing someone one answer, the demo beat |
+| A date range | A period under review, a month, a week |
+| Everything under this rule | The complete population, which is the whole argument |
+
+And two shapes, because the two readers are different:
+
+- **CSV**, so it opens in a spreadsheet and a person can sort and total it.
+- **JSON**, the documented decision record schema in `docs/DECISION_RECORD.md`, so another
+  system can consume it and `tools/verify.ts` can re-check it against the chain.
+
+Every exported row carries its own transaction signature. A bulk export that cannot be verified
+row by row is just a spreadsheet, and a spreadsheet is what everyone already has. The export is
+worth something only because each line can be taken back to the chain independently.
+
+Say the honest limit on the export itself, not only in the pitch: the record is complete over
+payments, never over attempts.
