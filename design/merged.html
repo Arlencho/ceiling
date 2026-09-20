@@ -3,13 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Veto: six screens at phone width, the recorded no</title>
+<title>Veto: seven screens at phone width, the recorded no</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  /* Merged direction. Base: the Claude proposal (information design, writing, palette).
-     From Codex: the tab bar structure and the refusal line. Rendered at true phone width:
+  /* Merged direction, per docs/DESIGN_DECISION.md. Base: the proposal chosen there for its
+     information design, writing and palette. From the second proposal named there: the tab
+     bar structure and the refusal line. Rendered at true phone width:
      every phone is 390 CSS px and the type is the size it ships at. Where the base went thin
      at this width the words and structure are kept and the weight or size is raised.
      The refusal is the only bright object on any screen. No cards. No red anywhere. */
@@ -31,15 +32,15 @@
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { background: var(--page); color: var(--ink); font-family: var(--sans); }
-  body { padding: 48px 56px 64px; min-width: 2680px; }
+  body { padding: 48px 56px 64px; min-width: 3130px; }
 
-  /* Page chrome around the six phones */
+  /* Page chrome around the seven phones */
   .sheet-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 36px; }
   .sheet-head h1 { font-family: var(--serif); font-weight: 400; font-size: 40px; letter-spacing: -0.01em; }
   .sheet-head h1 em { font-style: italic; }
   .sheet-head p { font-family: var(--mono); font-size: 12px; color: #5B615A; letter-spacing: 0.02em; }
 
-  .row { display: grid; grid-template-columns: repeat(6, 390px); gap: 40px; align-items: start; }
+  .row { display: grid; grid-template-columns: repeat(7, 390px); gap: 40px; align-items: start; }
   .slot { display: flex; flex-direction: column; gap: 14px; }
   .slot > .label { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #5B615A; display: flex; justify-content: space-between; gap: 12px; }
   .slot > .label b { font-weight: 500; color: var(--ink); white-space: nowrap; }
@@ -213,15 +214,59 @@
   .qr { display: grid; grid-template-columns: repeat(11, 1fr); gap: 1px; width: 64px; height: 64px; padding: 4px; background: var(--ink); border-radius: 3px; }
   .qr i { display: block; background: transparent; }
   .qr i.on { background: var(--bone); }
-  .scope { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr 1fr; border: 1px solid var(--hair); border-radius: 6px; overflow: hidden; }
-  .scope span { min-height: 44px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 13px; font-weight: 500; color: var(--olive); padding: 4px 6px; border-right: 1px solid var(--hair); line-height: 1.2; }
-  .scope span:last-child { border-right: 0; }
-  .scope span.on { background: var(--bone); color: var(--ink); font-weight: 600; }
+  /* Share: choosing what to prove, then who reads it. Rows, not a file picker. */
+  .ask { margin-top: 12px; }
+  .ask .eyebrow { display: flex; justify-content: space-between; }
+  .ask .eyebrow span:last-child { color: var(--bone-2); letter-spacing: 0; text-transform: none; font-size: 12px; }
+  .opts { margin-top: 8px; border: 1px solid var(--hair); border-radius: 6px; overflow: hidden; }
+  .opt { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: start; padding: 10px 12px; border-top: 1px solid var(--hair); min-height: 48px; }
+  .opt:first-child { border-top: 0; }
+  .opt .dot { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--olive); margin-top: 2px; }
+  .opt .n { font-size: 15px; font-weight: 600; color: var(--bone); line-height: 1.2; }
+  .opt .n small { display: block; font-size: 12.5px; font-weight: 500; color: var(--olive); margin-top: 2px; line-height: 1.35; }
+  .opt .c { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--olive); white-space: nowrap; padding-top: 2px; }
+  .opt.on { background: var(--bone); }
+  .opt.on .dot { border-color: var(--ink); background: var(--ink); box-shadow: inset 0 0 0 3px var(--bone); }
+  .opt.on .n, .opt.on .c { color: var(--ink); }
+  .opt.on .n small { color: var(--ink-on-bone); }
+  .opts.two { display: grid; grid-template-columns: 1fr 1fr; }
+  .opts.two .opt { border-top: 0; border-left: 1px solid var(--hair); grid-template-columns: 1fr; gap: 2px; padding: 9px 12px 10px; }
+  .opts.two .opt:first-child { border-left: 0; }
+  .opts.two .opt .n small { font-size: 12px; }
+  .share-card.compact { padding: 12px 14px; margin-top: 10px; }
+  .share-card.compact .say { font-size: 26px; }
+  .share-card.compact .sum { font-size: 13.5px; line-height: 1.4; margin-top: 8px; }
+  .share-card.compact .agreed { margin-top: 10px; padding-top: 8px; }
+  .share-card.compact .agreed p { font-size: 17px; }
+  .share-card.compact .check { margin-top: 8px; }
   .gets { margin-top: 12px; font-size: 14px; line-height: 1.45; color: var(--bone-2); }
   .gets b { font-weight: 600; color: var(--bone); }
 
-  /* Tab bar. Structure from the Codex proposal: icon over label, one clearly active.
-     Rendered in the Claude palette: bone on ink, nothing that reads as caution. */
+  /* Bulk export: the whole record, every row signed */
+  .sum-line { margin-top: 10px; font-size: 14.5px; line-height: 1.45; color: var(--bone-2); }
+  .sum-line b { font-weight: 600; color: var(--bone); }
+  .xrows { margin-top: 6px; }
+  .xrow { display: grid; grid-template-columns: 44px 1fr auto; gap: 3px 12px; padding: 8px 0; border-top: 1px solid var(--hair); align-items: baseline; }
+  .xrow .t { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--olive); }
+  .xrow .a { font-family: var(--serif); font-size: 21px; line-height: 1; color: var(--bone); }
+  .xrow .a i { font-style: italic; color: var(--olive); }
+  .xrow .amt { font-family: var(--mono); font-size: 15px; font-weight: 500; color: var(--bone); text-align: right; }
+  .xrow .sig { grid-column: 2 / -1; font-family: var(--mono); font-size: 12.5px; font-weight: 500; color: var(--bone-2); display: flex; justify-content: space-between; gap: 8px; }
+  .xrow .sig::before { content: "\2713 "; color: var(--brass); }
+  .xrow .sig span { color: var(--olive); font-weight: 500; }
+  .xrow.refused { background: var(--bone); margin: 4px -8px 0; padding: 10px 8px 11px; border-radius: 6px; border-top: 0; }
+  .xrow.refused + .xrow { border-top: 0; }
+  .xrow.refused .t, .xrow.refused .amt, .xrow.refused .a, .xrow.refused .sig { color: var(--ink); }
+  .xrow.refused .a i { color: var(--ink-on-bone); }
+  .xrow.refused .sig::before { color: var(--brass-ink); }
+  .xrow.refused .sig span { color: var(--ink-on-bone); }
+  .csvhead { margin-top: 8px; padding: 7px 10px; border: 1px dashed var(--hair); border-radius: 4px; font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--olive); line-height: 1.5; white-space: nowrap; overflow: hidden; }
+  .csvhead b { color: var(--bone-2); font-weight: 600; }
+  .limit { font-size: 13px; line-height: 1.45; color: var(--olive); margin-top: 10px; }
+  .limit b { color: var(--bone-2); font-weight: 600; }
+
+  /* Tab bar. Structure from the second proposal: icon over label, one clearly active.
+     Rendered in the base palette: bone on ink, nothing that reads as caution. */
   .tabs { margin: auto -20px 0; padding: 6px 8px 20px; border-top: 1px solid var(--hair); display: grid; grid-template-columns: repeat(3, 1fr); background: var(--ink); }
   .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-height: 52px; color: var(--olive); font-size: 12px; font-weight: 500; letter-spacing: 0.02em; position: relative; border-radius: 6px; }
   .tab svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
@@ -235,7 +280,7 @@
 
 <header class="sheet-head">
   <h1>Veto <em>&middot; the recorded no</em></h1>
-  <p>merged direction &middot; six screens at 390 &times; 844, not scaled &middot; three rules, three agents &middot; devnet, 20 Sep 2026</p>
+  <p>merged direction &middot; seven screens at 390 &times; 844, not scaled &middot; three rules, three agents &middot; one decision or the whole record &middot; devnet, 20 Sep 2026</p>
 </header>
 
 <!-- Tab icons, defined once -->
@@ -474,9 +519,9 @@
     </div>
   </section>
 
-  <!-- 06 SHARE SHEET -->
+  <!-- 06 SHARE: choose what to prove, then who reads it -->
   <section class="slot">
-    <div class="label"><b>06 &middot; Share sheet</b><span>the card they receive, then send it</span></div>
+    <div class="label"><b>06 &middot; Share</b><span>what to prove, then who reads it</span></div>
     <div class="phone">
       <div class="status"><span>18:04</span><span class="net">devnet</span></div>
       <div class="screen detail">
@@ -489,12 +534,24 @@
       <div class="dim"></div>
       <div class="sheet">
         <div class="grip"></div>
-        <div class="sheet-h"><h2>Give this decision <i>to someone</i></h2><span class="close">close</span></div>
+        <div class="sheet-h"><h2>What do you want <i>to prove?</i></h2><span class="close">close</span></div>
 
-        <div class="share-card">
+        <div class="opts">
+          <div class="opt on"><span class="dot"></span><span class="n">This decision<small>One answer, its rule and its proof.</small></span><span class="c">1 row</span></div>
+          <div class="opt"><span class="dot"></span><span class="n">A date range<small>A period under review. 1 to 20 Sep 2026.</small></span><span class="c">4 rows</span></div>
+          <div class="opt"><span class="dot"></span><span class="n">Everything under this rule<small>The complete record, since 19 Sep.</small></span><span class="c">4 rows</span></div>
+        </div>
+
+        <div class="ask"><div class="eyebrow"><span>Who reads it</span></div></div>
+        <div class="opts two">
+          <div class="opt on"><span class="n">A person<small>This card, or CSV for a spreadsheet.</small></span></div>
+          <div class="opt"><span class="n">A system<small>JSON, the documented record.</small></span></div>
+        </div>
+
+        <div class="share-card compact">
           <div class="who"><span>Veto &middot; 20 Sep 2026, 18:00</span><span class="stamp">Refused</span></div>
           <div class="say">Your rule held.<br>No payment made.</div>
-          <p class="sum">The agent for <b>SE3 home charging</b> asked to pay 6.2325 to <b>6i99&hellip;PdCG</b> for 50 kWh at 0.12465 SEK. The rule allows 0.5 per payment. The program refused, recorded the reason, and an override of <b>6.2325</b> would have cleared it.</p>
+          <p class="sum">The agent asked to pay <b>6.2325</b> to <b>6i99&hellip;PdCG</b>. The rule allows 0.5 per payment. An override of <b>6.2325</b> would have cleared it.</p>
           <div class="agreed">
             <div>
               <div class="k">Rule agreed in advance</div>
@@ -517,15 +574,57 @@
           <div class="check"><span>tx 4vR7&hellip;kD1a &middot; slot 344 018 271</span><span style="white-space:nowrap">check &#8599;</span></div>
         </div>
 
-        <div class="scope"><span class="on">This decision</span><span>A date range</span><span>Everything under this rule</span></div>
-        <p class="gets" style="margin-top:10px">They get <b>the summary</b>, <b>the rule agreed in advance</b>, and <b>proof</b> they can check against the chain. A range or everything goes out as <b>CSV</b> or <b>JSON</b>, one transaction signature per row.</p>
-
-        <div class="actions two" style="margin-top:12px">
-          <span class="btn">Copy link</span>
-          <span class="btn">Save image</span>
+        <div class="actions" style="margin-top:12px">
+          <span class="btn primary"><svg><use href="#i-share"/></svg>Share this decision</span>
         </div>
-        <div class="actions" style="margin-top:10px">
-          <span class="btn primary"><svg><use href="#i-share"/></svg>Share</span>
+      </div>
+      <div class="home"></div>
+    </div>
+  </section>
+
+  <!-- 07 EXPORT: everything under this rule, every row signed -->
+  <section class="slot">
+    <div class="label"><b>07 &middot; Export</b><span>the whole record, every row signed</span></div>
+    <div class="phone">
+      <div class="status"><span>18:04</span><span class="net">devnet</span></div>
+      <div class="screen">
+        <div class="top"><span class="back">Share</span><span class="meta">SE3 home charging</span></div>
+
+        <div class="eyebrow">Everything under this rule</div>
+        <h2 style="margin-top:8px">The whole record, <i>every answer.</i></h2>
+        <p class="sum-line"><b>4 decisions</b> since the rule was written on 19 Sep 2026. <b>3 paid, 1 refused</b>, 0.666 of 100 spent. Nothing sampled.</p>
+
+        <div class="ask"><div class="eyebrow"><span>Who reads it</span></div></div>
+        <div class="opts two">
+          <div class="opt on"><span class="n">A person &middot; CSV<small>Opens in a spreadsheet. Sort it, total it.</small></span></div>
+          <div class="opt"><span class="n">A system &middot; JSON<small>The documented record. verify.ts re-checks it.</small></span></div>
+        </div>
+
+        <div class="section" style="margin-top:14px"><span class="eyebrow">Every row is signed</span><a class="link" href="#">check all &#8599;</a></div>
+        <div class="xrows">
+          <div class="xrow refused">
+            <span class="t">18:00</span><span class="a">Refused, <i>rule held</i></span><span class="amt">6.2325</span>
+            <span class="sig">4vR7&hellip;kD1a<span>slot 344 018 271</span></span>
+          </div>
+          <div class="xrow">
+            <span class="t">12:00</span><span class="a">Paid <i>within rule</i></span><span class="amt">0.0055</span>
+            <span class="sig">9Qm2&hellip;b7Xe<span>slot 344 001 904</span></span>
+          </div>
+          <div class="xrow">
+            <span class="t">06:00</span><span class="a">Paid <i>within rule</i></span><span class="amt">0.2145</span>
+            <span class="sig">2Hs8&hellip;pR4n<span>slot 343 985 532</span></span>
+          </div>
+          <div class="xrow">
+            <span class="t">00:00</span><span class="a">Paid <i>within rule</i></span><span class="amt">0.446</span>
+            <span class="sig">7Lw3&hellip;cK9t<span>slot 343 969 160</span></span>
+          </div>
+        </div>
+        <div class="csvhead">when, answer, amount, override, <b>signature</b>, slot</div>
+
+        <p class="limit"><b>Complete over payments, never over attempts.</b> Any line can be taken back to the chain on its own. An attempt the agent never sent was never asked. Choose JSON above and the same rows go out as records.</p>
+
+        <div class="actions" style="margin-top:12px">
+          <span class="btn primary">Export 4 rows as CSV</span>
         </div>
       </div>
       <div class="home"></div>
