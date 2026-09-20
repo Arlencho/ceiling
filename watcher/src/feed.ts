@@ -17,8 +17,44 @@ export interface PriceFeed {
 
 export const FEED_ORIGIN = "https://www.elprisetjustnu.se";
 
+// The price is captured as raw text, never parsed into a float, because every
+// amount downstream is integer base units. EUR_per_kWh and EXR are captured
+// loosely on purpose: we do not use them, and the feed emits them in
+// scientific notation for very cheap windows ("EUR_per_kWh": 1e-05). A strict
+// numeric pattern on those fields silently dropped the whole entry, and
+// because scientific notation appears exactly when the price is tiny, the
+// windows lost were the cheapest ones, which are the ones that would have
+// paid. Four of ninety-six windows on 2026-09-20, including a cadence slot.
 const ENTRY_RE =
-  /"SEK_per_kWh"\s*:\s*(-?\d+(?:\.\d+)?)\s*,\s*"EUR_per_kWh"\s*:\s*(-?\d+(?:\.\d+)?)\s*,\s*"EXR"\s*:\s*(-?\d+(?:\.\d+)?)\s*,\s*"time_start"\s*:\s*"([^"]+)"\s*,\s*"time_end"\s*:\s*"([^"]+)"/g;
+  /"SEK_per_kWh"\s*:\s*([-+0-9.eE]+)\s*,\s*"EUR_per_kWh"\s*:\s*[^,]+,\s*"EXR"\s*:\s*[^,]+,\s*"time_start"\s*:\s*"([^"]+)"\s*,\s*"time_end"\s*:\s*"([^"]+)"/g;
+
+/** Expand scientific notation to a plain decimal string, textually.
+ *
+ * Never goes through a float: the digits are shifted as strings so the value
+ * handed to the integer money math is exact. The feed can emit a SEK price
+ * this way too, and the strict decimal parser in money.ts rejects scientific
+ * notation by design, so normalising here keeps that guard intact.
+ */
+export function plainDecimal(raw: string): string {
+  const t = raw.trim();
+  const m = /^([+-]?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/.exec(t);
+  if (!m) return t;
+  const sign = m[1] === "-" ? "-" : "";
+  const intPart = m[2] ?? "0";
+  const fracPart = m[3] ?? "";
+  const exp = Number.parseInt(m[4] ?? "0", 10);
+  const digits = intPart + fracPart;
+  let pointAt = intPart.length + exp;
+  let out: string;
+  if (pointAt <= 0) {
+    out = "0." + "0".repeat(-pointAt) + digits;
+  } else if (pointAt >= digits.length) {
+    out = digits + "0".repeat(pointAt - digits.length);
+  } else {
+    out = digits.slice(0, pointAt) + "." + digits.slice(pointAt);
+  }
+  return sign + out;
+}
 
 export function stockholmYmd(at: Date): { yyyy: string; mm: string; dd: string } {
   const fmt = new Intl.DateTimeFormat("en-CA", {
@@ -48,9 +84,9 @@ export function parseFeedBody(text: string): PriceWindow[] {
   for (;;) {
     const match = ENTRY_RE.exec(text);
     if (!match) break;
-    const sek = match[1];
-    const timeStart = match[4];
-    const timeEnd = match[5];
+    const sek = match[1] === undefined ? undefined : plainDecimal(match[1]);
+    const timeStart = match[2];
+    const timeEnd = match[3];
     if (sek === undefined || timeStart === undefined || timeEnd === undefined) {
       continue;
     }

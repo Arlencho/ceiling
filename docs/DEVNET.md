@@ -1,13 +1,13 @@
 # Veto on Solana devnet
 
-Recorded by `scripts/devnet-setup.sh` at 2026-09-20T06:46:22Z UTC.
+Recorded by `scripts/devnet-setup.sh` at 2026-09-20T20:57:14Z UTC.
 
 This file lists **public addresses only**. Keypairs live under gitignored `keys/` and must never be committed.
 
 ## Cluster
 
 - Name: `devnet`
-- RPC: `http://127.0.0.1:8999`
+- RPC: `https://api.devnet.solana.com`
 - Explorer cluster query: `cluster=devnet`
 
 ## Public addresses
@@ -69,7 +69,7 @@ Toolchain used when this file was written: anchor-cli 1.2.0, solana-cli 4.1.2.
 
 The script:
 
-1. Points the Solana CLI at `http://127.0.0.1:8999` and refuses to continue if the URL looks like mainnet.
+1. Points the Solana CLI at `https://api.devnet.solana.com` and refuses to continue if the URL looks like mainnet.
 2. Creates `keys/` and the keypairs above when they are missing.
 3. Airdrops SOL to the deployer, retrying on rate limits.
 4. Builds the program. It copies `keys/program.json` to `target/deploy/veto-keypair.json`, runs `anchor keys sync` so the bytecode ID check matches the deploy address, then restores `programs/veto/src` so program source is not left dirty and is not committed.
@@ -84,7 +84,7 @@ Re-running with the same `keys/` directory keeps these addresses and upgrades th
 Cluster and wallet:
 
 ```bash
-solana config set --url http://127.0.0.1:8999 --keypair keys/deployer.json --commitment confirmed
+solana config set --url https://api.devnet.solana.com --keypair keys/deployer.json --commitment confirmed
 solana config get
 ```
 
@@ -102,34 +102,34 @@ anchor deploy --no-idl --provider.cluster devnet --provider.wallet keys/deployer
 Demo fixtures:
 
 ```bash
-spl-token create-token --decimals 6 --mint-authority GYus8c91vyc7XDrgqfDaYcmVTERb4hQWcf6fLr2SyR1 --fee-payer keys/deployer.json -u http://127.0.0.1:8999 -- keys/mint.json
-spl-token create-account 2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU --owner EGQdANFMq6xVjKcSrij4gWiH91q8TvhdY5e87KjjF2yc --fee-payer keys/deployer.json -u http://127.0.0.1:8999
-spl-token create-account 2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU --owner 6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG --fee-payer keys/deployer.json -u http://127.0.0.1:8999
-spl-token mint 2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU 1000000 --mint-authority keys/deployer.json --fee-payer keys/deployer.json -u http://127.0.0.1:8999 -- FbhygYPyFk5PeiFppCezmMkqPqywTdAZxhkqxw79FBBE
-solana transfer --from keys/deployer.json --fee-payer keys/deployer.json --allow-unfunded-recipient -u http://127.0.0.1:8999 6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w 0.5
+spl-token create-token --decimals 6 --mint-authority GYus8c91vyc7XDrgqfDaYcmVTERb4hQWcf6fLr2SyR1 --fee-payer keys/deployer.json -u https://api.devnet.solana.com -- keys/mint.json
+spl-token create-account 2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU --owner EGQdANFMq6xVjKcSrij4gWiH91q8TvhdY5e87KjjF2yc --fee-payer keys/deployer.json -u https://api.devnet.solana.com
+spl-token create-account 2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU --owner 6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG --fee-payer keys/deployer.json -u https://api.devnet.solana.com
+spl-token mint 2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU 1000000 --mint-authority keys/deployer.json --fee-payer keys/deployer.json -u https://api.devnet.solana.com -- FbhygYPyFk5PeiFppCezmMkqPqywTdAZxhkqxw79FBBE
+solana transfer --from keys/deployer.json --fee-payer keys/deployer.json --allow-unfunded-recipient -u https://api.devnet.solana.com 6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w 0.5
 ```
 
 Verify:
 
 ```bash
-solana account 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV -u http://127.0.0.1:8999
-solana program show 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV -u http://127.0.0.1:8999 -k keys/deployer.json
-spl-token balance --address FbhygYPyFk5PeiFppCezmMkqPqywTdAZxhkqxw79FBBE -u http://127.0.0.1:8999
-spl-token balance --address 2bt9HMQbNy6t2J4hnw15QF8iUesPrgJoNDvf99HNay7F -u http://127.0.0.1:8999
-spl-token accounts --owner 6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w -u http://127.0.0.1:8999
-solana balance 6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w -u http://127.0.0.1:8999
+solana account 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV -u https://api.devnet.solana.com
+solana program show 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV -u https://api.devnet.solana.com -k keys/deployer.json
+spl-token balance --address FbhygYPyFk5PeiFppCezmMkqPqywTdAZxhkqxw79FBBE -u https://api.devnet.solana.com
+spl-token balance --address 2bt9HMQbNy6t2J4hnw15QF8iUesPrgJoNDvf99HNay7F -u https://api.devnet.solana.com
+spl-token accounts --owner 6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w -u https://api.devnet.solana.com
+solana balance 6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w -u https://api.devnet.solana.com
 ```
 
 ## Program account (verification)
 
 ```
-solana account 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV -u http://127.0.0.1:8999
+solana account 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV -u https://api.devnet.solana.com
 ```
 
 ```
 
 Public Key: 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV
-Balance: 0.00114144 SOL
+Balance: 0.00083312 SOL
 Owner: BPFLoaderUpgradeab1e11111111111111111111111
 Executable: true
 Rent Epoch: 18446744073709551615

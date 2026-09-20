@@ -55,13 +55,14 @@ export class JsonlJournal {
     return false;
   }
 
-  /// The highest nonce that actually settled on chain. Nonces are monotonic on
-  /// payment, so a window below this can never pay again and retrying it would
-  /// only produce a meaningless "nonce already settled" refusal.
+  /// The highest nonce that has actually PAID. Only a payment advances
+  /// last_nonce on chain, so only a payment can strand an earlier window. A
+  /// refusal is a confirmed transaction that moved nothing and left the nonce
+  /// where it was, so a window below a refusal is still perfectly payable.
   maxSettledNonce(): bigint {
     let max = 0n;
     for (const row of this.load()) {
-      if (row.signature !== null && (row.decision === "paid" || row.decision === "refused")) {
+      if (row.signature !== null && row.decision === "paid") {
         const n = BigInt(row.nonce);
         if (n > max) max = n;
       }

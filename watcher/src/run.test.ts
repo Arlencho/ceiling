@@ -164,3 +164,27 @@ test("a window overtaken by a later settled charge is not retried", () => {
   assert.equal(journal.maxSettledNonce(), 1789927200n);
   assert.ok(1789898400n <= journal.maxSettledNonce(), "the earlier window is overtaken");
 });
+
+// A refusal must not strand an earlier window. Only a payment advances
+// last_nonce on chain, so treating a refused row as settling the nonce would
+// have skipped a window that could still pay, which is exactly what happened
+// to the 12:00 slot on 2026-09-20.
+test("a refusal does not strand an earlier window", () => {
+  const dir = mkdtempSync(join(tmpdir(), "veto-refusal-"));
+  const journal = new JsonlJournal(join(dir, "decisions.jsonl"));
+  journal.append({
+    ts: new Date().toISOString(),
+    window_start: "2026-09-20T18:00:00+02:00",
+    window_end: "2026-09-20T18:15:00+02:00",
+    sek_per_kwh: "0.12465",
+    kwh_milli: "50000",
+    amount: "6232500",
+    nonce: "1789920000",
+    decision: "refused",
+    reason: "over per-payment maximum",
+    reason_code: 5,
+    signature: "sig",
+    suggested_override: "6232500",
+  });
+  assert.equal(journal.maxSettledNonce(), 0n, "a refusal settles no nonce");
+});
