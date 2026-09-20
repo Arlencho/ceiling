@@ -58,3 +58,25 @@ test('today lists paid and refused newest first and skips other kinds', () => {
   assert.equal(rows[1]?.nonce, 1n);
   assert.equal(isLocalDay(yesterday, noon.getTime()), false);
 });
+
+test('today keeps signatures already on the rows', () => {
+  const noon = new Date(2026, 8, 20, 12, 0, 0);
+  const ts = BigInt(Math.floor(noon.getTime() / 1000));
+  const peer = '11111111111111111111111111111111';
+  const row = (nonce: bigint, signature: string) => ({
+    ts,
+    amount: 1n,
+    counterparty: peer,
+    nonce,
+    suggestedOverride: 0n,
+    kind: KIND_REFUSED,
+    kindName: 'refused',
+    reason: 1,
+    reasonText: 'mandate not active',
+    signature,
+  });
+  const rows = todaysAgentDecisions([row(1n, 'sig-one'), row(1n, 'sig-two')], noon.getTime());
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0]?.signature, 'sig-two');
+  assert.equal(rows[1]?.signature, 'sig-one');
+});

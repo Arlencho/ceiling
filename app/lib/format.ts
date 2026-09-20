@@ -69,7 +69,7 @@ export function isLocalDay(unixSeconds: bigint, nowMs: number): boolean {
   );
 }
 
-export function todaysAgentDecisions(entries: RingEntry[], nowMs: number): RingEntry[] {
+export function todaysAgentDecisions<T extends RingEntry>(entries: readonly T[], nowMs: number): T[] {
   const todays = entries.filter(
     (entry) =>
       (entry.kind === KIND_PAID || entry.kind === KIND_REFUSED) && isLocalDay(entry.ts, nowMs),
@@ -102,10 +102,15 @@ export function formatStatusLabel(status: number): string {
   return statusName(status);
 }
 
+function pad2(value: number): string {
+  return value.toString().padStart(2, '0');
+}
+
 export function formatUnix(unixSeconds: bigint): string {
   const date = new Date(Number(unixSeconds) * 1000);
   if (Number.isNaN(date.getTime())) {
     return unixSeconds.toString();
   }
-  return date.toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
+  const year = date.getFullYear().toString().padStart(4, '0');
+  return `${year}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
 }

@@ -12,7 +12,6 @@ import { ScreenTitle, SectionTitle } from '../components/SectionTitle';
 import { colors } from '../components/theme';
 import { PURPOSE_MAX_LEN } from '../lib/constants';
 import { parseBaseUnits } from '../lib/format';
-import type { MandateAccount } from '../lib/mandate';
 import { applyTemplate, TEMPLATES, type MandateFields } from '../lib/templates';
 import { useChain } from '../lib/useChain';
 import { useWallet } from '../lib/useWallet';
@@ -31,7 +30,7 @@ export default function MandateScreen() {
   const [fields, setFields] = useState<MandateFields>(BLANK);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [committed, setCommitted] = useState<MandateAccount | null>(null);
+  const [committedAddress, setCommittedAddress] = useState<string | null>(null);
   const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
   const refresh = chain.refresh;
 
@@ -45,7 +44,6 @@ export default function MandateScreen() {
 
   const onSubmit = async () => {
     setFormError(null);
-    setCommitted(null);
     try {
       if (!chain.config) {
         throw new Error(chain.configError ?? 'Config is missing');
@@ -71,13 +69,11 @@ export default function MandateScreen() {
         expiresAt,
         purpose: fields.purpose.trim(),
       });
-      setCommitted(result.mandate);
+      setCommittedAddress(result.mandate.address);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Open failed');
     }
   };
-
-  const shown = committed ?? chain.mandate;
 
   return (
     <Screen refreshing={chain.loading} onRefresh={onRefresh}>
@@ -103,7 +99,7 @@ export default function MandateScreen() {
                 onPress={() => {
                   setSelectedTemplate(template.id);
                   setFields(applyTemplate(template));
-                  setCommitted(null);
+                  setCommittedAddress(null);
                 }}
                 style={[styles.chip, active && styles.chipActive]}
               >
@@ -155,20 +151,22 @@ export default function MandateScreen() {
           }}
         />
         {formError ? <Text style={styles.error}>{formError}</Text> : null}
-        {shown ? (
+        {chain.mandate ? (
           <MandateSummary
             heading={
-              committed
+              committedAddress
                 ? 'Committed on chain (read back after the signature)'
                 : 'Mandate already on chain (read from chain)'
             }
-            mandate={shown}
+            mandate={chain.mandate}
             decimals={chain.decimals}
             nowSec={nowSec}
           />
         ) : (
           <EmptyState>
-            Nothing committed yet for this owner. This screen does not invent a mandate.
+            {!chain.ready || chain.loading
+              ? 'Reading the chain for this owner.'
+              : 'Nothing committed yet for this owner. This screen does not invent a mandate.'}
           </EmptyState>
         )}
       </ConnectGate>

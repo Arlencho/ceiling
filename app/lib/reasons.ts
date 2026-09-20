@@ -1,4 +1,4 @@
-import { REASON_NOT_ACTIVE, REASON_OVER_PER_TX_MAX, reasonText } from './constants';
+import { REASON_NOT_ACTIVE, reasonText } from './constants';
 import { formatBaseUnits } from './format';
 
 export { reasonText };
@@ -23,13 +23,6 @@ export function renderReason(
       reason,
       text,
       overrideLine: `An override of ${formatBaseUnits(suggestedOverride, decimals)} would have cleared it.`,
-    };
-  }
-  if (reason === REASON_OVER_PER_TX_MAX) {
-    return {
-      reason,
-      text,
-      overrideLine: 'No override would have cleared this.',
     };
   }
   return {

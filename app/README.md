@@ -46,13 +46,18 @@ Four tabs, all Android:
 - **Today.** What the agent paid and declined today, newest first, plus
   remaining cap and time left. Real history only. If nothing has happened it
   says so.
-- **Ledger.** Every decision with the reason in plain language. A refusal
-  shows the override that would have cleared it, is styled as a first-class
-  outcome (not an error), and opens its transaction in an explorer when the
-  RPC returns a signature.
+- **Ledger.** The on-chain ring of 32 recent decisions, with the reason in
+  plain language. The indexer rebuilds the full trail. A refusal shows the
+  override that would have cleared it, is styled as a first-class outcome
+  (not an error), and opens its transaction in an explorer when the RPC
+  returns a signature.
 - **Revoke.** One owner signature sets status to revoked and drops the SPL
-  delegation. The UI states that the funds never moved and were not going to.
-  The agent's next charge is refused with reason 1 (`mandate not active`).
+  delegation. Nothing moved beyond what the ledger already records, and no
+  further spend is possible. Opening moved nothing, this revoke moves
+  nothing, and Remaining stays in the wallet. The agent's next charge is
+  refused with reason 1 (`mandate not active`) and that refusal is written
+  to the ledger. A second revoke is rejected by the program and records
+  nothing.
 
 Chain reads and writes live in `lib/`. RPC url and program id come from config
 (`EXPO_PUBLIC_VETO_*` via `app.config.js` extra). The app does not hardcode an

@@ -14,7 +14,7 @@ import { useChain } from '../lib/useChain';
 export default function TodayScreen() {
   const chain = useChain();
   const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
-  const today = todaysAgentDecisions(chain.snapshot?.entries ?? [], chain.nowMs);
+  const today = todaysAgentDecisions(chain.rows, chain.nowMs);
   const rpcUrl = chain.config?.rpcUrl ?? '';
   const cluster = chain.config?.explorerCluster ?? 'devnet';
   const refresh = chain.refresh;
@@ -31,8 +31,9 @@ export default function TodayScreen() {
         {chain.error ? <Text style={styles.error}>{chain.error}</Text> : null}
         {!chain.configError && !chain.mandate ? (
           <EmptyState>
-            No mandate on chain for this owner yet. Open one on the Mandate tab. This screen reads
-            real history only and never invents rows.
+            {!chain.ready || chain.loading
+              ? 'Reading the chain for this owner.'
+              : 'No mandate on chain for this owner yet. Open one on the Mandate tab. This screen reads real history only and never invents rows.'}
           </EmptyState>
         ) : null}
         {chain.mandate ? (
@@ -49,18 +50,10 @@ export default function TodayScreen() {
                 The agent has not paid or declined anything today. This screen never invents rows.
               </EmptyState>
             ) : (
-              today.map((entry, index) => (
+              today.map((row, index) => (
                 <DecisionRow
-                  key={`${entry.nonce.toString()}-${entry.kind}-${index}`}
-                  row={
-                    chain.rows.find(
-                      (row) =>
-                        row.kind === entry.kind &&
-                        row.nonce === entry.nonce &&
-                        row.ts === entry.ts &&
-                        row.amount === entry.amount,
-                    ) ?? { ...entry, signature: null }
-                  }
+                  key={`${row.nonce.toString()}-${row.kind}-${index}`}
+                  row={row}
                   decimals={chain.decimals}
                   cluster={cluster}
                   rpcUrl={rpcUrl}

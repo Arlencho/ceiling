@@ -331,21 +331,31 @@ export async function fetchLedgerRows(
   }
 
   const decoded: DecodedTxDecision[] = [];
-  for (const info of signatures) {
-    if (info.err) {
-      continue;
-    }
-    try {
-      const tx = await client.connection.getTransaction(info.signature, {
-        commitment: 'confirmed',
-        maxSupportedTransactionVersion: 0,
-      });
-      if (!tx) {
+  const ok = signatures.filter((info) => !info.err);
+  if (ok.length === 0) {
+    return { snapshot, rows: attachSignatures(snapshot.entries, decoded) };
+  }
+
+  const chunkSize = 10;
+  for (let i = 0; i < ok.length; i += chunkSize) {
+    const chunk = ok.slice(i, i + chunkSize);
+    const bodies = await Promise.all(
+      chunk.map((info) =>
+        client.connection
+          .getTransaction(info.signature, {
+            commitment: 'confirmed',
+            maxSupportedTransactionVersion: 0,
+          })
+          .catch(() => null),
+      ),
+    );
+    for (let j = 0; j < chunk.length; j++) {
+      const tx = bodies[j];
+      const info = chunk[j];
+      if (!tx || !info) {
         continue;
       }
       decoded.push(...decisionsFromTx(info.signature, tx, client.programId.toBase58()));
-    } catch {
-      // A missing body is a validator-config issue, not a reason to invent a row.
     }
   }
 

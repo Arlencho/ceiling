@@ -31,7 +31,7 @@ export default function RevokeScreen() {
     try {
       const result = await chain.revoke();
       setMessage(
-        `Status on chain is now ${result.mandate.status === STATUS_REVOKED ? 'revoked' : String(result.mandate.status)}. The SPL delegation is dropped. Funds never moved and were not going to.`,
+        `Status on chain is now ${result.mandate.status === STATUS_REVOKED ? 'revoked' : String(result.mandate.status)}. The SPL delegation is dropped. Nothing moved beyond what the ledger already records, and no further spend is possible. Opening moved nothing, this revoke moves nothing, and Remaining stays in the wallet.`,
       );
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Revoke failed');
@@ -48,8 +48,9 @@ export default function RevokeScreen() {
         {chain.error ? <Text style={styles.error}>{chain.error}</Text> : null}
         {!chain.mandate ? (
           <EmptyState>
-            No mandate on chain for this owner. There is nothing to revoke, and this screen does not
-            invent one.
+            {!chain.ready || chain.loading
+              ? 'Reading the chain for this owner.'
+              : 'No mandate on chain for this owner. There is nothing to revoke, and this screen does not invent one.'}
           </EmptyState>
         ) : (
           <View style={styles.block}>
@@ -68,7 +69,8 @@ export default function RevokeScreen() {
             <EmptyState>{notActiveHint()}</EmptyState>
             {alreadyRevoked ? (
               <EmptyState>
-                This mandate is already revoked on chain. A second revoke is refused.
+                This mandate is already revoked on chain. A second revoke is rejected by the program
+                and records nothing.
               </EmptyState>
             ) : (
               <Button

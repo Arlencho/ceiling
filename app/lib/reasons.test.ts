@@ -30,6 +30,8 @@ test('a refusal with no override says so in plain language', () => {
   const view = renderReason(REASON_OVER_CAP, 0n, 6);
   assert.equal(view.text, 'over remaining cap');
   assert.equal(view.overrideLine, 'No override would have cleared this.');
+  const overPer = renderReason(REASON_OVER_PER_TX_MAX, 0n, 6);
+  assert.equal(overPer.overrideLine, 'No override would have cleared this.');
 });
 
 test('reason 1 is the post-revoke refusal', () => {

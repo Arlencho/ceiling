@@ -1,7 +1,4 @@
 import { Buffer } from 'buffer';
-import { PublicKey } from '@solana/web3.js';
-
-export const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
 export const PURPOSE_MAX_LEN = 64;
 export const LEDGER_CAPACITY = 32;
