@@ -16,8 +16,10 @@ npx expo config
 npm test
 ```
 
-`npm test` runs the wallet module tests. They do not need a device. Mobile Wallet
-Adapter `authorize` against Seed Vault still has to be checked on a Seeker.
+`npm test` runs the pure module tests (wallet, templates, reason text, ring
+decode, amount formatting, config). They do not need a device. Mobile Wallet
+Adapter `authorize` and the Seed Vault signature for `open_mandate` /
+`revoke_mandate` still have to be checked on a Seeker.
 
 ## Sign-in
 
@@ -29,6 +31,59 @@ prompted again. Disconnect deauthorizes that token and clears it.
 The agent keypair is generated on the phone with `@solana/web3.js` and stored in
 `expo-secure-store`. It is a different key from the owner. It holds authority
 and no funds. The owner private key is never written to storage.
+
+## Owner screens
+
+Four tabs, all Android:
+
+- **Mandate.** Templates a Seeker owner recognises (cap a mint bot, cap a
+  quest-farm spend, cap an agent weekly outgoings, charge the car under a
+  price) prefill cap, per-payment maximum, expiry, merchant and purpose. Every
+  field stays editable. A template is an empty starting point and does not
+  ship example transactions or prices. One Seed Vault signature runs
+  `open_mandate`, which also delegates in the same transaction. The
+  confirmation is read back from chain, not from the form.
+- **Today.** What the agent paid and declined today, newest first, plus
+  remaining cap and time left. Real history only. If nothing has happened it
+  says so.
+- **Ledger.** The on-chain ring of 32 recent decisions, with the reason in
+  plain language. The indexer rebuilds the full trail. A refusal shows the
+  override that would have cleared it, is styled as a first-class outcome
+  (not an error), and opens its transaction in an explorer when the RPC
+  returns a signature.
+- **Revoke.** One owner signature sets status to revoked and drops the SPL
+  delegation. Nothing moved beyond what the ledger already records, and no
+  further spend is possible. Opening moved nothing, this revoke moves
+  nothing, and Remaining stays in the wallet. The agent's next charge is
+  refused with reason 1 (`mandate not active`) and that refusal is written
+  to the ledger. A second revoke is rejected by the program and records
+  nothing.
+
+Chain reads and writes live in `lib/`. RPC url and program id come from config
+(`EXPO_PUBLIC_VETO_*` via `app.config.js` extra). The app does not hardcode an
+RPC url.
+
+## Cluster config
+
+Copy `app/.env.example` to `app/.env` (gitignored) and fill the values from
+`docs/DEVNET.md` / `keys/devnet-addresses.env`. Restart Metro after changing
+them.
+
+```bash
+cd app
+cp .env.example .env
+```
+
+Required:
+
+- `EXPO_PUBLIC_VETO_RPC` (the cluster RPC, never committed as a default)
+- `EXPO_PUBLIC_VETO_PROGRAM_ID`
+- `EXPO_PUBLIC_VETO_MINT` (needed to open a mandate)
+
+Optional:
+
+- `EXPO_PUBLIC_VETO_EXPLORER_CLUSTER` (default `devnet`)
+- `EXPO_PUBLIC_VETO_MINT_DECIMALS` (fallback if the mint account cannot be read)
 
 ## One-time: Expo account
 

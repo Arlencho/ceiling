@@ -1,5 +1,5 @@
 import { Buffer } from 'buffer';
-import { Keypair, PublicKey } from '@solana/web3.js';
+import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
 
 export const APP_IDENTITY = {
   name: 'Veto',
@@ -28,12 +28,21 @@ export type AuthorizeParams = {
   auth_token?: string;
 };
 
+export type SignAndSendParams = {
+  transactions: Transaction[];
+  minContextSlot?: number;
+  commitment?: string;
+  skipPreflight?: boolean;
+  maxRetries?: number;
+};
+
 export type MwaWallet = {
   authorize(params: AuthorizeParams): Promise<{
     accounts: readonly MwaAccount[];
     auth_token: string;
   }>;
   deauthorize(params: { auth_token: string }): Promise<unknown>;
+  signAndSendTransactions?(params: SignAndSendParams): Promise<string[]>;
 };
 
 export type TransactFn = <T>(
@@ -208,4 +217,26 @@ export async function restore(
   const agentPublicKey = await loadOrCreateAgentPublicKey(store, generate);
   const session = await loadSession(store);
   return { session, agentPublicKey };
+}
+
+export async function signAndSendTransactions(
+  transact: TransactFn,
+  store: WalletStore,
+  transactions: Transaction[],
+): Promise<string[]> {
+  if (transactions.length === 0) {
+    throw new Error('no transactions to sign');
+  }
+  const stored = await loadSession(store);
+  return transact(async (wallet) => {
+    const session = await authorize(wallet, stored?.authToken);
+    await persistSession(store, session);
+    if (!wallet.signAndSendTransactions) {
+      throw new Error('Wallet cannot sign and send transactions');
+    }
+    return wallet.signAndSendTransactions({
+      transactions,
+      commitment: 'confirmed',
+    });
+  });
 }

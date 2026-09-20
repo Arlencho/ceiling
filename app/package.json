@@ -8,7 +8,7 @@
     "android": "expo start --dev-client --android",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test lib/wallet.test.ts"
+    "test": "tsx --test lib/wallet.test.ts lib/templates.test.ts lib/reasons.test.ts lib/ring.test.ts lib/format.test.ts lib/today.test.ts lib/appConfig.test.ts lib/signatures.test.ts lib/mandateRead.test.ts"
   },
   "dependencies": {
     "@solana-mobile/mobile-wallet-adapter-protocol": "^2.3.0",
