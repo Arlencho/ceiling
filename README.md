@@ -123,6 +123,8 @@ programs/veto/            the Anchor program: state, policy, zero-copy ledger
 app/                      the Android app: Expo, custom dev client, Seed Vault via MWA
 watcher/                  unattended agent: live SE3 feed, charge, JSONL diary
 scripts/devnet-setup.sh   recreate the chain deploy and demo fixtures from nothing
+tools/                    export one decision as JSON; verify it off the phone
+docs/DECISION_RECORD.md   stable schema for that JSON
 docs/PROBLEM.md           who this is for, and why a burner wallet is not enough
 docs/PLAN.md              build plan, milestones, verified event rules, prior art
 docs/PITCH.md             positioning, the sixty seconds, judge Q&A
@@ -148,6 +150,19 @@ SBPF v0. And `target/` is gitignored, so a fresh clone has no program keypair an
 
 To provision a chain and the demo fixtures, `make setup` for devnet or `make localnet` against a
 local validator.
+
+To take one decision off the phone and check it from a laptop:
+
+```bash
+cd tools
+npm ci
+npx tsx produce.ts
+npx tsx export.ts --signature <tx> --out refused.json
+npx tsx verify.ts refused.json
+```
+
+The JSON schema is [docs/DECISION_RECORD.md](docs/DECISION_RECORD.md). Verify re-reads the
+cluster; it does not trust the file.
 
 ## Threat model
 

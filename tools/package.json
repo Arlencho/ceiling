@@ -1,0 +1,26 @@
+{
+  "name": "veto-decision-record",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "produce": "tsx produce.ts",
+    "export": "tsx export.ts",
+    "verify": "tsx verify.ts",
+    "test": "tsx --test lib.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/spl-token": "^0.4.13",
+    "@solana/web3.js": "^1.98.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsx": "^4.19.4",
+    "typescript": "~5.8.3"
+  }
+}
