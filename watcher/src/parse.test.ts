@@ -20,3 +20,15 @@ test("parseChargeLogs reads a refused program log as a success path", () => {
   assert.equal(got.reasonCode, 5);
   assert.equal(got.suggestedOverride, 519500n);
 });
+
+// Regression for the round 2 review of #37: reason 10 existed in the program
+// before it existed in this package, so a frozen-account refusal logged on
+// chain parsed to "unknown" here.
+test("the REFUSED log line for a frozen account parses to reason 10", () => {
+  const parsed = parseChargeLogs([
+    "Program log: VETO REFUSED reason=10 (account frozen) amount=10000000 per_tx_max=60000000 remaining=500000000 override_to_clear=0",
+  ]);
+  assert.equal(parsed.decision, "refused");
+  assert.equal(parsed.reasonCode, 10);
+  assert.equal(parsed.reason, "account frozen");
+});

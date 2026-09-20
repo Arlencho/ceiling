@@ -15,6 +15,12 @@ export type Veto = {
   "instructions": [
     {
       "name": "charge",
+      "docs": [
+        "Submit a charge. Signed by the agent, decided by this program.",
+        "",
+        "Returns Ok whether the charge is paid or refused. See the module doc",
+        "for why a refusal must not be an error."
+      ],
       "discriminator": [
         26,
         55,
@@ -28,6 +34,10 @@ export type Veto = {
       "accounts": [
         {
           "name": "agent",
+          "docs": [
+            "The agent holds authority and nothing else. It is not the owner, it",
+            "pays only the transaction fee, and it cannot change any limit."
+          ],
           "signer": true,
           "relations": [
             "mandate"
@@ -94,6 +104,9 @@ export type Veto = {
     },
     {
       "name": "closeMandate",
+      "docs": [
+        "Reclaim rent once a mandate is finished. Only the owner, never while active."
+      ],
       "discriminator": [
         117,
         87,
@@ -145,6 +158,13 @@ export type Veto = {
     },
     {
       "name": "grantOverride",
+      "docs": [
+        "Let one specific charge through above the per-payment ceiling.",
+        "",
+        "The owner signs, so the override is explicit. It is written to the",
+        "ledger, so it is on the record. It raises the per-payment ceiling only:",
+        "the total cap stays absolute."
+      ],
       "discriminator": [
         225,
         146,
@@ -214,6 +234,10 @@ export type Veto = {
     },
     {
       "name": "openMandate",
+      "docs": [
+        "Open a mandate and delegate `cap` to it in the same transaction, so the",
+        "owner signs exactly once."
+      ],
       "discriminator": [
         116,
         145,
@@ -309,6 +333,13 @@ export type Veto = {
     },
     {
       "name": "revokeMandate",
+      "docs": [
+        "Withdraw the agent's authority immediately, in one owner signature.",
+        "",
+        "Allowed from any status except already REVOKED, so an EXPIRED or",
+        "EXHAUSTED mandate can still drop its SPL delegation. A second revoke",
+        "is refused."
+      ],
       "discriminator": [
         252,
         97,
@@ -524,11 +555,23 @@ export type Veto = {
       "code": 6019,
       "name": "mathOverflow",
       "msg": "arithmetic overflow"
+    },
+    {
+      "code": 6020,
+      "name": "nonceAlreadySettled",
+      "msg": "override nonce is at or below the last paid nonce"
     }
   ],
   "types": [
     {
       "name": "entry",
+      "docs": [
+        "One decision, paid or refused, exactly as the program made it.",
+        "",
+        "`repr(C)` with explicit padding, because the ledger is a zero-copy account:",
+        "the ring is larger than the BPF stack frame and must never be deserialized",
+        "onto it."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -554,6 +597,11 @@ export type Veto = {
           },
           {
             "name": "suggestedOverride",
+            "docs": [
+              "For a refusal, the one-shot override that would have cleared this exact",
+              "charge, or zero when no override could. A decline that tells you how to",
+              "proceed is the difference between a limit and an answer."
+            ],
             "type": "u64"
           },
           {
@@ -578,6 +626,14 @@ export type Veto = {
     },
     {
       "name": "ledger",
+      "docs": [
+        "A ring of the most recent decisions. Refusals are recorded here with the",
+        "same weight as payments, which is the point of the whole program.",
+        "",
+        "The ring is the authoritative recent window. Longer history is rebuilt by",
+        "indexing `Paid` and `Refused` events from transaction logs, so a busy week",
+        "wrapping the ring costs nothing."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -591,10 +647,16 @@ export type Veto = {
           },
           {
             "name": "total",
+            "docs": [
+              "Total entries ever written, including those the ring has overwritten."
+            ],
             "type": "u32"
           },
           {
             "name": "head",
+            "docs": [
+              "Index the next entry is written to."
+            ],
             "type": "u16"
           },
           {
@@ -628,63 +690,113 @@ export type Veto = {
     },
     {
       "name": "mandate",
+      "docs": [
+        "A permission to spend, owned by the human and enforced by this program.",
+        "",
+        "The owner key never leaves Seed Vault and signs only `open_mandate`,",
+        "`grant_override`, `revoke_mandate` and `close_mandate`. The agent key signs",
+        "`charge` and can do nothing else: it cannot widen any limit, change the",
+        "merchant, extend the expiry, or move funds outside this account's rules."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
           {
             "name": "owner",
+            "docs": [
+              "Human who owns the funds and the mandate."
+            ],
             "type": "pubkey"
           },
           {
             "name": "agent",
+            "docs": [
+              "Key allowed to submit charges. Holds authority, never ownership."
+            ],
             "type": "pubkey"
           },
           {
             "name": "mint",
+            "docs": [
+              "Asset this mandate governs."
+            ],
             "type": "pubkey"
           },
           {
             "name": "source",
+            "docs": [
+              "The owner's token account. Funds stay here until a charge is allowed."
+            ],
             "type": "pubkey"
           },
           {
             "name": "merchant",
+            "docs": [
+              "The only wallet that may receive funds under this mandate."
+            ],
             "type": "pubkey"
           },
           {
             "name": "mandateId",
+            "docs": [
+              "Distinguishes several mandates held by the same owner."
+            ],
             "type": "u64"
           },
           {
             "name": "cap",
+            "docs": [
+              "Total that may ever be spent, in base units."
+            ],
             "type": "u64"
           },
           {
             "name": "spent",
+            "docs": [
+              "Spent so far, in base units. Never exceeds `cap`."
+            ],
             "type": "u64"
           },
           {
             "name": "perTxMax",
+            "docs": [
+              "Largest single payment allowed, in base units."
+            ],
             "type": "u64"
           },
           {
             "name": "expiresAt",
+            "docs": [
+              "Unix seconds after which nothing may be spent."
+            ],
             "type": "i64"
           },
           {
             "name": "overrideAmount",
+            "docs": [
+              "One-shot allowance the owner granted for a specific charge."
+            ],
             "type": "u64"
           },
           {
             "name": "overrideNonce",
+            "docs": [
+              "Nonce the override applies to. Zero means no override is pending."
+            ],
             "type": "u64"
           },
           {
             "name": "lastNonce",
+            "docs": [
+              "Highest nonce that has been paid. Blocks replay of a settled charge."
+            ],
             "type": "u64"
           },
           {
             "name": "purpose",
+            "docs": [
+              "What the money is for, in the owner's own words, fixed at creation."
+            ],
             "type": "string"
           },
           {

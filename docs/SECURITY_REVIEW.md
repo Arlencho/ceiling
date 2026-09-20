@@ -42,6 +42,10 @@ class of decline that leaves no record.
 
 ### F1: MEDIUM, revoke is unreachable once status is EXPIRED or EXHAUSTED, so the SPL delegation outlives the mandate
 
+> **Status: fixed in #37.** The text below describes the defect as it stood at the time of the
+> review and is kept as the record of what was found. `revoke_mandate` now accepts any status
+> except REVOKED. See docs/DECISIONS.md.
+
 Issue: [#33](https://github.com/Arlencho/veto/issues/33). Category: Auth.
 File: `programs/veto/src/lib.rs:302` (precondition), `lib.rs:224` and `lib.rs:194` (the flips), `lib.rs:338-345` (close has no revoke CPI).
 
@@ -60,6 +64,10 @@ to `close_mandate` (with `has_one = source`). Either way a finished mandate ends
 Test: `finding_1_expired_status_still_allows_revoke_and_drops_the_delegation`.
 
 ### F2: MEDIUM, `grant_override` accepts a nonce that can never pay, and the shipped watcher never retries a refused nonce
+
+> **Status: fixed in #37.** The text below is the defect as found. `grant_override` now rejects a
+> nonce at or below `last_nonce`. The orphaned-override half is an accepted known limit, bounded by
+> assertions in `red_team.rs`. See docs/DECISIONS.md.
 
 Issue: [#34](https://github.com/Arlencho/veto/issues/34). Category: API.
 File: `programs/veto/src/lib.rs:267-282` (no `nonce > last_nonce` check), `lib.rs:190-193` (override
@@ -87,6 +95,10 @@ close it, but that is a design change to a frozen program and the impact is nil 
 Test: `finding_3_a_paid_charge_at_nonce_u64_max_strands_the_mandate`.
 
 ### F4: MEDIUM, a decline raised inside the token CPI is an error, not a recorded refusal
+
+> **Status: fixed in #37.** The text below is the defect as found. `evaluate` now checks the state
+> of both token accounts before the CPI and records reason 10, so a frozen account is a recorded
+> refusal like any other decline. See docs/DECISIONS.md.
 
 Issue: [#35](https://github.com/Arlencho/veto/issues/35). Category: Data.
 File: `programs/veto/src/lib.rs:351-393` (`evaluate` does not read `state`), `lib.rs:168-181` (CPI).
@@ -165,6 +177,9 @@ a multisig or a burned authority.
 - The `Refused` event carries no counterparty; the indexer recovers it from the instruction's accounts.
 
 ## Threat model in README.md against the code
+
+The table below is the audit as of commit 4b50a63, before the fixes in #37. Rows marked against
+F1, F2 and F4 describe behaviour that has since changed, and README.md has been corrected.
 
 | README statement | Verdict | Where it overstates |
 |---|---|---|

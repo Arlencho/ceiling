@@ -960,10 +960,12 @@ fn finding_2_grant_override_rejects_a_nonce_that_can_never_pay() {
     assert_eq!(read_mandate(&w.svm, &w.mandate).override_nonce, 9);
     assert_eq!(last_entry(&w.svm, &w.ledger).kind, KIND_OVERRIDE);
 
-    // Known limit, accepted: an override clears only when its nonce pays.
-    // Grant 7, then pay 8, and override_nonce stays 7 forever. A retry of 7
-    // is STALE_NONCE. Clearing the pending override when a higher nonce pays
-    // would be a program change beyond the three findings.
+    // Known limit, accepted: an override clears only when its own nonce pays.
+    // Grant 7, then pay 8, and override_nonce stays 7 until the owner grants
+    // another override or revokes. No charge can ever consume it, because a
+    // retry of 7 is STALE_NONCE. Clearing a pending override when a higher
+    // nonce pays would be a program change beyond the three findings, so the
+    // limit is bounded by the assertions below rather than by this comment.
     let mut w = setup();
     let owner = w.owner.insecure_clone();
     grant_override(&mut w, &owner, 180 * ONE, 7).expect("granted for nonce 7");
@@ -974,6 +976,21 @@ fn finding_2_grant_override_rejects_a_nonce_that_can_never_pay() {
         read_mandate(&w.svm, &w.mandate).override_nonce,
         7,
         "orphaned override still pending; accepted known limit"
+    );
+
+    // The limit is bounded, not open-ended: the owner has two ways out, and
+    // both are asserted here so the comment above cannot drift from the code.
+    grant_override(&mut w, &owner, 180 * ONE, 9).expect("a later grant is allowed");
+    assert_eq!(
+        read_mandate(&w.svm, &w.mandate).override_nonce,
+        9,
+        "granting again replaces the orphan"
+    );
+    revoke(&mut w, &owner).expect("revoke");
+    assert_eq!(
+        read_mandate(&w.svm, &w.mandate).override_nonce,
+        0,
+        "revoking clears any pending override"
     );
 }
 

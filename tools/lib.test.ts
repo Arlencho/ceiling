@@ -92,3 +92,20 @@ test("recordToJson round-trips integers as numbers", () => {
   assert.equal(again.amount, rec.amount);
   assert.equal(again.signature, rec.signature);
 });
+
+// Regression for the round 2 review of #37. Reason code 10 was added to the
+// program while the off-chain consumers still stopped at 9, and verify.ts
+// rejects a record whose code resolves to "unknown" as forged. A genuine
+// frozen-account refusal therefore failed its own verifier. This pins the
+// whole table rather than only the code that happened to be added, so the
+// next code cannot reintroduce the same gap.
+test("every reason code the program can emit resolves to text, not unknown", () => {
+  for (let code = 0; code <= 10; code += 1) {
+    assert.notEqual(
+      reasonText(code),
+      "unknown",
+      `reason code ${code} does not resolve; verify.ts would report a genuine record as forged`,
+    );
+  }
+  assert.equal(reasonText(10), "account frozen");
+});

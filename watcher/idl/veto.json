@@ -518,6 +518,11 @@
       "code": 6019,
       "name": "MathOverflow",
       "msg": "arithmetic overflow"
+    },
+    {
+      "code": 6020,
+      "name": "NonceAlreadySettled",
+      "msg": "override nonce is at or below the last paid nonce"
     }
   ],
   "types": [
