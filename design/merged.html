@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Veto: six screens at phone width, the recorded no</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Merged direction. Base: the Claude proposal (information design, writing, palette).
+     From Codex: the tab bar structure and the refusal line. Rendered at true phone width:
+     every phone is 390 CSS px and the type is the size it ships at. Where the base went thin
+     at this width the words and structure are kept and the weight or size is raised.
+     The refusal is the only bright object on any screen. No cards. No red anywhere. */
+  :root {
+    --ink: #0F1A16;        /* spruce ink, the screen */
+    --ink-2: #16231E;      /* one step up, rows and sheets */
+    --bone: #EDE6D6;       /* primary text, and the refusal block */
+    --bone-2: #D3CCBB;     /* body text on ink, raised from the base for phone width */
+    --olive: #93A097;      /* secondary text, raised from the base for phone width */
+    --hair: rgba(237, 230, 214, 0.16);
+    --brass: #C9A24D;      /* reserved for the override */
+    --brass-ink: #7E5E14;  /* brass on bone */
+    --ink-on-bone: #2B3530;
+    --page: #E4DED0;       /* the sheet the phones sit on */
+    --serif: "Instrument Serif", Georgia, serif;
+    --sans: "Instrument Sans", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--page); color: var(--ink); font-family: var(--sans); }
+  body { padding: 48px 56px 64px; min-width: 2680px; }
+
+  /* Page chrome around the six phones */
+  .sheet-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 36px; }
+  .sheet-head h1 { font-family: var(--serif); font-weight: 400; font-size: 40px; letter-spacing: -0.01em; }
+  .sheet-head h1 em { font-style: italic; }
+  .sheet-head p { font-family: var(--mono); font-size: 12px; color: #5B615A; letter-spacing: 0.02em; }
+
+  .row { display: grid; grid-template-columns: repeat(6, 390px); gap: 40px; align-items: start; }
+  .slot { display: flex; flex-direction: column; gap: 14px; }
+  .slot > .label { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #5B615A; display: flex; justify-content: space-between; gap: 12px; }
+  .slot > .label b { font-weight: 500; color: var(--ink); white-space: nowrap; }
+  .slot > .label span { text-align: right; }
+
+  /* The phone: 390 x 844, no scaling */
+  .phone {
+    width: 390px; height: 844px; background: var(--ink); color: var(--bone);
+    border-radius: 44px; padding: 14px 20px 0; position: relative; overflow: hidden;
+    box-shadow: 0 30px 60px rgba(15, 26, 22, 0.28), 0 0 0 6px #1C1E1C, 0 0 0 7px #3A3D3A;
+    display: flex; flex-direction: column;
+  }
+  .status { display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--olive); height: 30px; }
+  .status .net { letter-spacing: 0.08em; text-transform: uppercase; font-size: 11px; }
+  .status .net::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--olive); margin-right: 6px; vertical-align: 1px; }
+
+  .screen { flex: 1; display: flex; flex-direction: column; padding-top: 10px; overflow: hidden; }
+  .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; }
+  .top .brand { font-family: var(--serif); font-size: 22px; letter-spacing: 0.01em; }
+  .top .brand i { font-style: italic; color: var(--olive); }
+  .top .meta { font-family: var(--mono); font-size: 12px; color: var(--olive); }
+  .top .back { font-family: var(--sans); font-size: 15px; font-weight: 500; color: var(--bone-2); }
+  .top .back::before { content: "\2190\00a0"; }
+
+  /* Context: which rule the screen is about. A switch, not a filter. */
+  .context { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--hair); border-radius: 6px; margin-bottom: 12px; min-height: 48px; }
+  .context .r { font-family: var(--serif); font-size: 20px; line-height: 1; color: var(--bone); }
+  .context .r small { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--olive); margin-top: 5px; }
+  .context .sw { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--bone-2); }
+  .context .sw::after { content: " \2195"; color: var(--olive); }
+
+  h2 { font-family: var(--serif); font-weight: 400; font-size: 32px; line-height: 1; letter-spacing: -0.01em; }
+  h2 i { font-style: italic; color: var(--olive); }
+  .eyebrow { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--olive); }
+
+  .mono { font-family: var(--mono); }
+  .muted { color: var(--olive); }
+  .body { color: var(--bone-2); }
+  .link { color: var(--bone); text-decoration: none; border-bottom: 1px solid var(--hair); padding-bottom: 1px; }
+  .arrow::after { content: " \2197"; font-family: var(--mono); }
+
+  /* Overview: the state */
+  .state { margin-top: 2px; }
+  .state .big { font-family: var(--serif); font-size: 78px; line-height: 0.9; letter-spacing: -0.03em; }
+  .state .of { font-family: var(--serif); font-size: 26px; color: var(--olive); margin-left: 8px; }
+  .state .of b { color: var(--bone); font-weight: 400; }
+  .bar { height: 2px; background: var(--hair); margin: 16px 0 0; position: relative; }
+  .bar::after { content: ""; position: absolute; left: 0; top: 0; height: 2px; width: 3px; background: var(--bone); }
+  .bar .tick { position: absolute; left: 0; top: 7px; font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--olive); }
+  .bar .tick.end { left: auto; right: 0; }
+  .stats { display: grid; grid-template-columns: 1fr 1.25fr 1fr; margin-top: 24px; border-top: 1px solid var(--hair); }
+  .stats > div { padding: 12px 0 14px; border-right: 1px solid var(--hair); padding-left: 12px; }
+  .stats > div:first-child { padding-left: 0; }
+  .stats > div:last-child { border-right: 0; }
+  .stats .v { font-family: var(--serif); font-size: 34px; line-height: 1; }
+  .stats .k { margin-top: 6px; font-size: 13px; font-weight: 500; color: var(--olive); }
+  .stats .refused { background: var(--bone); color: var(--ink); margin: -1px -6px 0 -6px; padding-left: 12px; padding-right: 8px; border-right: 0; border-radius: 3px 3px 0 0; }
+  .stats .refused .k { color: var(--ink); font-weight: 600; }
+
+  .section { margin-top: 16px; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .section .link { font-family: var(--mono); font-size: 12px; font-weight: 500; }
+
+  /* Ledger rows: quiet on purpose. Every paid row says the rule held too. */
+  .ledger { display: flex; flex-direction: column; }
+  .rowl { display: grid; grid-template-columns: 44px 1fr auto; gap: 12px; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--hair); }
+  .rowl .t { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--olive); }
+  .rowl .what { font-size: 15px; font-weight: 500; color: var(--bone-2); }
+  .rowl .what i { font-style: italic; color: var(--olive); font-weight: 400; }
+  .rowl .what small { display: block; font-size: 12px; font-weight: 500; color: var(--olive); margin-top: 3px; font-family: var(--mono); }
+  .rowl .amt { font-family: var(--mono); font-size: 15px; font-weight: 500; color: var(--bone); }
+
+  /* THE REFUSAL. Inverted, brightest object on the screen. Never red, never small. */
+  .refusal { background: var(--bone); color: var(--ink); padding: 14px 18px 14px; border-radius: 6px; }
+  .refusal .eyebrow { color: var(--ink); display: flex; justify-content: space-between; }
+  .refusal .eyebrow .stamp { color: var(--brass-ink); }
+  .refusal .say { font-family: var(--serif); font-size: 34px; line-height: 1; letter-spacing: -0.02em; margin-top: 12px; }
+  .refusal .say.small { font-size: 30px; }
+  .refusal .why { margin-top: 10px; font-size: 15px; line-height: 1.4; color: var(--ink-on-bone); }
+  .refusal .why b { font-weight: 600; color: var(--ink); }
+  .refusal .override { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(15, 26, 22, 0.18); display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+  .refusal .override .k { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--brass-ink); }
+  .refusal .override .k span { display: block; font-family: var(--sans); text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 500; color: var(--ink-on-bone); margin-top: 4px; }
+  .refusal .override .v { flex-shrink: 0; font-family: var(--serif); font-size: 32px; line-height: 1; color: var(--brass-ink); }
+  .refusal .proof { margin-top: 10px; display: flex; justify-content: space-between; font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--ink-on-bone); }
+  .refusal .proof a { color: var(--ink); text-decoration: none; border-bottom: 1px solid rgba(15, 26, 22, 0.35); }
+
+  /* Buttons. Primary is the inverted fill of whatever ground it sits on. */
+  .btn { min-height: 48px; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 16px; font-weight: 600; border: 1px solid var(--hair); border-radius: 6px; color: var(--bone); padding: 0 16px; }
+  .btn.primary { background: var(--bone); color: var(--ink); border-color: var(--bone); }
+  .btn.quiet { color: var(--bone-2); font-weight: 500; }
+  .refusal .btn { margin-top: 14px; border-color: var(--ink); color: var(--ink); }
+  .refusal .btn.primary { background: var(--ink); color: var(--bone); }
+  .btn svg { width: 18px; height: 18px; }
+  .actions { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+  .actions.two { display: grid; grid-template-columns: 1fr 1fr; }
+
+  /* Rules */
+  .rule-sentence { font-family: var(--serif); font-size: 25px; line-height: 1.14; letter-spacing: -0.01em; margin-top: 14px; color: var(--bone); }
+  .rule-sentence b { font-weight: 400; color: var(--bone); border-bottom: 1px solid var(--hair); }
+  .rule-sentence i { font-style: italic; color: var(--olive); }
+  .defs { margin-top: 14px; }
+  .def { display: grid; grid-template-columns: 1fr auto; padding: 9px 0; border-top: 1px solid var(--hair); font-size: 14px; align-items: baseline; }
+  .def .k { color: var(--olive); font-weight: 500; }
+  .def .v { font-family: var(--mono); color: var(--bone); font-size: 14px; font-weight: 500; }
+  .def .v.edit::after { content: " \00B7 edit"; color: var(--olive); font-weight: 400; }
+  .keys { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hair); font-size: 14px; line-height: 1.45; color: var(--bone-2); }
+  .keys b { font-weight: 600; color: var(--bone); }
+  .keys .mono { font-size: 13px; font-weight: 500; }
+  .revoke-note { font-size: 13px; line-height: 1.45; color: var(--olive); margin-top: 10px; }
+
+  /* Rules list: each rule is a context you can step into */
+  .rules { margin-top: 12px; display: flex; flex-direction: column; }
+  .rule { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; padding: 13px 0 13px 14px; border-top: 1px solid var(--hair); border-left: 2px solid transparent; margin-left: -16px; padding-left: 14px; }
+  .rule.current { border-left-color: var(--bone); }
+  .rule .p { font-family: var(--serif); font-size: 24px; line-height: 1; color: var(--bone); grid-column: 1; }
+  .rule .p i { font-style: italic; color: var(--olive); }
+  .rule .st { grid-column: 2; grid-row: 1; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--olive); align-self: baseline; }
+  .rule.current .st { color: var(--bone); }
+  .rule .spent { grid-column: 1 / -1; font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--bone-2); display: flex; justify-content: space-between; }
+  .rule .spent i { font-style: normal; color: var(--olive); }
+  .rule .track { grid-column: 1 / -1; height: 2px; background: var(--hair); position: relative; }
+  .rule .track b { position: absolute; left: 0; top: 0; height: 2px; background: var(--bone); }
+  .rule .agent { grid-column: 1 / -1; font-size: 13px; color: var(--olive); font-weight: 500; display: flex; justify-content: space-between; }
+  .rule .agent .mono { color: var(--bone-2); }
+  .tpl { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 10px 0; border-top: 1px solid var(--hair); align-items: baseline; }
+  .tpl .n { font-size: 15px; font-weight: 500; color: var(--bone); }
+  .tpl .n small { display: block; color: var(--olive); font-size: 12.5px; font-weight: 500; margin-top: 3px; }
+  .tpl .use { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--bone-2); padding: 6px 0; }
+
+  /* Decisions */
+  .dec-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .dec-day { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--olive); }
+  .paid { display: grid; grid-template-columns: 44px 1fr auto; gap: 12px; padding: 10px 0; border-top: 1px solid var(--hair); align-items: baseline; }
+  .paid .t { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--olive); }
+  .paid .say { font-family: var(--serif); font-size: 22px; line-height: 1; color: var(--bone); }
+  .paid .say i { font-style: italic; color: var(--olive); }
+  .paid .why { font-size: 13px; font-weight: 500; color: var(--olive); margin-top: 4px; line-height: 1.35; }
+  .paid .why a { color: var(--bone-2); text-decoration: none; border-bottom: 1px solid var(--hair); white-space: nowrap; }
+  .paid .amt { font-family: var(--mono); font-size: 15px; font-weight: 500; color: var(--bone); text-align: right; }
+  .paid .amt small { display: block; font-size: 11px; font-weight: 500; color: var(--olive); margin-top: 3px; }
+
+  /* Decision detail */
+  .detail .refusal .say { font-size: 38px; }
+  .proofs { margin-top: 14px; }
+  .proofs .h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+  .proofs .h .eyebrow { color: var(--bone); }
+  .proofs .h small { font-size: 12px; font-weight: 500; color: var(--olive); }
+  .prow { display: grid; grid-template-columns: 96px 1fr; gap: 10px; padding: 8px 0; border-top: 1px solid var(--hair); font-family: var(--mono); font-size: 13px; font-weight: 500; }
+  .prow .k { color: var(--olive); }
+  .prow .v { color: var(--bone); word-break: break-all; }
+  .prow .v.ok::before { content: "\2713 "; color: var(--brass); }
+
+  /* Share sheet: a sheet over the decision, the card as the receiver will see it */
+  .dim { position: absolute; inset: 0; background: rgba(15, 26, 22, 0.72); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--ink-2); border-radius: 22px 22px 44px 44px; padding: 10px 20px 26px; border-top: 1px solid var(--hair); }
+  .sheet .grip { width: 40px; height: 4px; border-radius: 2px; background: var(--hair); margin: 0 auto 14px; }
+  .sheet-h { display: flex; justify-content: space-between; align-items: baseline; }
+  .sheet-h h2 { font-size: 28px; }
+  .sheet-h .close { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--olive); padding: 8px 0 8px 12px; }
+  .share-card { background: var(--bone); color: var(--ink); border-radius: 6px; padding: 14px 16px; margin-top: 14px; }
+  .share-card .who { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; display: flex; justify-content: space-between; }
+  .share-card .who .stamp { color: var(--brass-ink); }
+  .share-card .say { font-family: var(--serif); font-size: 30px; line-height: 1; letter-spacing: -0.02em; margin-top: 10px; }
+  .share-card .sum { margin-top: 10px; font-size: 14px; line-height: 1.42; color: var(--ink-on-bone); }
+  .share-card .sum b { font-weight: 600; color: var(--ink); }
+  .share-card .agreed { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(15, 26, 22, 0.18); display: grid; grid-template-columns: 1fr 64px; gap: 12px; align-items: end; }
+  .share-card .agreed .k { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--brass-ink); }
+  .share-card .agreed p { font-family: var(--serif); font-size: 19px; line-height: 1.18; margin-top: 6px; }
+  .share-card .agreed p i { font-style: italic; color: #5A6660; }
+  .share-card .check { margin-top: 10px; font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--ink-on-bone); display: flex; justify-content: space-between; gap: 12px; }
+  .qr { display: grid; grid-template-columns: repeat(11, 1fr); gap: 1px; width: 64px; height: 64px; padding: 4px; background: var(--ink); border-radius: 3px; }
+  .qr i { display: block; background: transparent; }
+  .qr i.on { background: var(--bone); }
+  .scope { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr 1fr; border: 1px solid var(--hair); border-radius: 6px; overflow: hidden; }
+  .scope span { min-height: 44px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 13px; font-weight: 500; color: var(--olive); padding: 4px 6px; border-right: 1px solid var(--hair); line-height: 1.2; }
+  .scope span:last-child { border-right: 0; }
+  .scope span.on { background: var(--bone); color: var(--ink); font-weight: 600; }
+  .gets { margin-top: 12px; font-size: 14px; line-height: 1.45; color: var(--bone-2); }
+  .gets b { font-weight: 600; color: var(--bone); }
+
+  /* Tab bar. Structure from the Codex proposal: icon over label, one clearly active.
+     Rendered in the Claude palette: bone on ink, nothing that reads as caution. */
+  .tabs { margin: auto -20px 0; padding: 6px 8px 20px; border-top: 1px solid var(--hair); display: grid; grid-template-columns: repeat(3, 1fr); background: var(--ink); }
+  .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-height: 52px; color: var(--olive); font-size: 12px; font-weight: 500; letter-spacing: 0.02em; position: relative; border-radius: 6px; }
+  .tab svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .tab.on { color: var(--bone); font-weight: 600; }
+  .tab.on svg { stroke-width: 2; }
+  .tab.on::before { content: ""; position: absolute; top: -9px; left: 22%; right: 22%; height: 2px; background: var(--bone); border-radius: 0 0 2px 2px; }
+  .home { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 120px; height: 4px; border-radius: 2px; background: rgba(237, 230, 214, 0.35); z-index: 2; }
+</style>
+</head>
+<body>
+
+<header class="sheet-head">
+  <h1>Veto <em>&middot; the recorded no</em></h1>
+  <p>merged direction &middot; six screens at 390 &times; 844, not scaled &middot; three rules, three agents &middot; devnet, 20 Sep 2026</p>
+</header>
+
+<!-- Tab icons, defined once -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-overview" viewBox="0 0 24 24"><path d="M4 19V10M10 19V5M16 19v-6M22 19H2"/></symbol>
+  <symbol id="i-rules" viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8.5 9h7M8.5 12.5h7M8.5 16h4"/></symbol>
+  <symbol id="i-decisions" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h9"/><path d="M17 15.5l2 2 3.5-3.5"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 12v7h14v-7"/></symbol>
+</svg>
+
+<div class="row">
+
+  <!-- 01 OVERVIEW -->
+  <section class="slot">
+    <div class="label"><b>01 &middot; Overview</b><span>which rule, then the state, then today</span></div>
+    <div class="phone">
+      <div class="status"><span>18:04</span><span class="net">devnet</span></div>
+      <div class="screen">
+        <div class="context">
+          <span class="r">SE3 home charging<small>rule 3 of 3 &middot; agent Se3c&hellip;7Vqn</small></span>
+          <span class="sw">switch</span>
+        </div>
+
+        <div class="state">
+          <div class="eyebrow">Spent under this rule</div>
+          <div style="margin-top:8px"><span class="big">0.666</span><span class="of">of <b>100</b></span></div>
+          <div class="bar"><span class="tick">0</span><span class="tick end">cap 100</span></div>
+        </div>
+
+        <div class="stats">
+          <div><div class="v">3</div><div class="k">paid</div></div>
+          <div class="refused"><div class="v">1</div><div class="k">refused, recorded</div></div>
+          <div><div class="v">90</div><div class="k">days left</div></div>
+        </div>
+
+        <div class="section"><span class="eyebrow">Today, 20 Sep</span><a class="link" href="#decisions">all decisions</a></div>
+        <div class="ledger">
+          <div class="refusal" style="margin-bottom:4px">
+            <div class="eyebrow"><span>18:00 &middot; Refused</span><span class="stamp">Recorded on chain</span></div>
+            <div class="say small">Your rule held.<br>No payment made.</div>
+            <div class="why">Asked for <b>6.2325</b>, over the <b>0.5</b> per-payment maximum. An override of <b>6.2325</b> would have cleared it.</div>
+            <a class="btn primary" href="#share"><svg><use href="#i-share"/></svg>Share this decision</a>
+          </div>
+          <div class="rowl"><span class="t">12:00</span><span class="what">Paid <i>within rule</i><small>50 kWh at 0.00011 SEK</small></span><span class="amt">0.0055</span></div>
+          <div class="rowl"><span class="t">06:00</span><span class="what">Paid <i>within rule</i><small>50 kWh at 0.00429 SEK</small></span><span class="amt">0.2145</span></div>
+        </div>
+
+        <nav class="tabs">
+          <span class="tab on"><svg><use href="#i-overview"/></svg>Overview</span>
+          <span class="tab"><svg><use href="#i-rules"/></svg>Rules</span>
+          <span class="tab"><svg><use href="#i-decisions"/></svg>Decisions</span>
+        </nav>
+      </div>
+      <div class="home"></div>
+    </div>
+  </section>
+
+  <!-- 02 RULES LIST -->
+  <section class="slot">
+    <div class="label"><b>02 &middot; Rules</b><span>one owner, three bounded agents</span></div>
+    <div class="phone">
+      <div class="status"><span>18:04</span><span class="net">devnet</span></div>
+      <div class="screen">
+        <div class="top"><span class="brand">Veto <i>rules</i></span><span class="meta">3 rules &middot; 3 agents</span></div>
+
+        <h2>Three rules, <i>three agents.</i></h2>
+        <p class="body" style="font-size:14px;line-height:1.45;margin-top:10px">Each rule has its own agent key and its own history. Pick one and Overview and Decisions are about it.</p>
+
+        <div class="rules">
+          <div class="rule">
+            <span class="p">Mint bot</span>
+            <span class="st">active &middot; 31 h left</span>
+            <span class="spent"><span>14 spent <i>of 40</i></span><span>2 per mint</span></span>
+            <span class="track"><b style="width:35%"></b></span>
+            <span class="agent"><span>agent <span class="mono">Ag7m&hellip;3xQp</span></span><span>pays LnCh&hellip;9Wq2</span></span>
+          </div>
+          <div class="rule">
+            <span class="p">Quest farm</span>
+            <span class="st">paused</span>
+            <span class="spent"><span>1.35 spent <i>of 5</i></span><span>0.05 per action</span></span>
+            <span class="track"><b style="width:27%"></b></span>
+            <span class="agent"><span>agent <span class="mono">Qf2k&hellip;8Hd1</span></span><span>until season end, 12 d</span></span>
+          </div>
+          <div class="rule current">
+            <span class="p">SE3 home charging</span>
+            <span class="st">current &middot; 90 d left</span>
+            <span class="spent"><span>0.666 spent <i>of 100</i></span><span>0.5 per payment</span></span>
+            <span class="track"><b style="width:1%;min-width:3px"></b></span>
+            <span class="agent"><span>agent <span class="mono">Se3c&hellip;7Vqn</span></span><span>pays 6i99&hellip;PdCG</span></span>
+          </div>
+        </div>
+
+        <div class="section"><span class="eyebrow">Start another rule from</span></div>
+        <div class="tpl"><span class="n">RPC top-up<small>10 per invoice, 120 total, monthly, one provider</small></span><span class="use">use</span></div>
+        <div class="tpl"><span class="n">Blank rule<small>cap, per payment, expiry, payee, purpose</small></span><span class="use">write</span></div>
+
+        <nav class="tabs">
+          <span class="tab"><svg><use href="#i-overview"/></svg>Overview</span>
+          <span class="tab on"><svg><use href="#i-rules"/></svg>Rules</span>
+          <span class="tab"><svg><use href="#i-decisions"/></svg>Decisions</span>
+        </nav>
+      </div>
+      <div class="home"></div>
+    </div>
+  </section>
+
+  <!-- 03 RULE DETAIL, with revoke inside the rule -->
+  <section class="slot">
+    <div class="label"><b>03 &middot; Rule</b><span>a sentence a person wrote; revoke lives here</span></div>
+    <div class="phone">
+      <div class="status"><span>18:04</span><span class="net">devnet</span></div>
+      <div class="screen">
+        <div class="top"><span class="back">Rules</span><span class="meta">active &middot; 3 of 3</span></div>
+
+        <h2>The rule</h2>
+        <p class="rule-sentence">Pay <b>6i99&hellip;PdCG</b> up to <b>0.5</b> at a time and <b>100</b> in total, until <b>19 Dec 2026</b>, <i>for SE3 home charging.</i></p>
+
+        <div class="defs">
+          <div class="def"><span class="k">Purpose</span><span class="v edit">SE3 home charging</span></div>
+          <div class="def"><span class="k">Total cap</span><span class="v edit">100</span></div>
+          <div class="def"><span class="k">Per payment, max</span><span class="v edit">0.5</span></div>
+          <div class="def"><span class="k">Expires</span><span class="v edit">19 Dec 2026</span></div>
+          <div class="def"><span class="k">Payee</span><span class="v">6i99&hellip;PdCG</span></div>
+          <div class="def"><span class="k">Spent so far</span><span class="v">0.666 of 100</span></div>
+        </div>
+
+        <div class="keys">
+          <b>Owner key</b> lives in Seed Vault and is the only key that can change this rule.<br>
+          <b>Agent key</b> <span class="mono">Se3c&hellip;7Vqn</span> holds authority and no funds. It can pay inside the rule, and nothing else.
+        </div>
+
+        <div class="actions">
+          <span class="btn">Edit the rule</span>
+          <span class="btn quiet">Revoke this rule</span>
+        </div>
+        <p class="revoke-note">Revoking ends the agent's authority now and is recorded on chain. Nothing already paid changes. The decisions stay readable.</p>
+
+        <nav class="tabs">
+          <span class="tab"><svg><use href="#i-overview"/></svg>Overview</span>
+          <span class="tab on"><svg><use href="#i-rules"/></svg>Rules</span>
+          <span class="tab"><svg><use href="#i-decisions"/></svg>Decisions</span>
+        </nav>
+      </div>
+      <div class="home"></div>
+    </div>
+  </section>
+
+  <!-- 04 DECISIONS: the screen the demo lingers on -->
+  <section class="slot" id="decisions">
+    <div class="label"><b>04 &middot; Decisions</b><span>the refusal is the hero</span></div>
+    <div class="phone">
+      <div class="status"><span>18:04</span><span class="net">devnet</span></div>
+      <div class="screen">
+        <div class="context">
+          <span class="r">SE3 home charging<small>decisions under this rule &middot; 4 today</small></span>
+          <span class="sw">switch</span>
+        </div>
+
+        <div class="dec-head"><h2>20 September</h2><span class="dec-day">3 paid &middot; 1 refused</span></div>
+
+        <div class="refusal" style="margin-top:10px">
+          <div class="eyebrow"><span>18:00 &middot; Refused</span><span class="stamp">Recorded on chain</span></div>
+          <div class="say">Your rule held.<br>No payment made.</div>
+          <div class="why">The agent asked for <b>6.2325</b> for 50 kWh at 0.12465 SEK. The rule allows <b>0.5</b> per payment. The program did not pay and wrote down why.</div>
+          <div class="override">
+            <div class="k">Override that would clear it<span>raise per-payment max to this</span></div>
+            <div class="v">6.2325</div>
+          </div>
+          <div class="proof"><span>slot 344 018 271</span><a href="#" class="arrow">tx 4vR7&hellip;kD1a</a></div>
+        </div>
+
+        <div class="paid" style="margin-top:10px">
+          <span class="t">12:00</span>
+          <span><div class="say">Paid <i>within rule</i></div><div class="why">50 kWh at 0.00011 SEK. Under 0.5, cap not reached. <a href="#">tx 9Qm2&hellip;b7Xe</a></div></span>
+          <span class="amt">0.0055<small>0.666 spent</small></span>
+        </div>
+        <div class="paid">
+          <span class="t">06:00</span>
+          <span><div class="say">Paid <i>within rule</i></div><div class="why">50 kWh at 0.00429 SEK. Under 0.5, cap not reached. <a href="#">tx 2Hs8&hellip;pR4n</a></div></span>
+          <span class="amt">0.2145<small>0.6605 spent</small></span>
+        </div>
+        <div class="paid">
+          <span class="t">00:00</span>
+          <span><div class="say">Paid <i>within rule</i></div><div class="why">50 kWh at 0.00892 SEK. Under 0.5, cap not reached. <a href="#">tx 7Lw3&hellip;cK9t</a></div></span>
+          <span class="amt">0.446<small>0.446 spent</small></span>
+        </div>
+
+        <nav class="tabs">
+          <span class="tab"><svg><use href="#i-overview"/></svg>Overview</span>
+          <span class="tab"><svg><use href="#i-rules"/></svg>Rules</span>
+          <span class="tab on"><svg><use href="#i-decisions"/></svg>Decisions</span>
+        </nav>
+      </div>
+      <div class="home"></div>
+    </div>
+  </section>
+
+  <!-- 05 DECISION DETAIL, share as the primary action -->
+  <section class="slot" id="share">
+    <div class="label"><b>05 &middot; Decision</b><span>one refusal, share is the primary action</span></div>
+    <div class="phone">
+      <div class="status"><span>18:04</span><span class="net">devnet</span></div>
+      <div class="screen detail">
+        <div class="top"><span class="back">Decisions</span><span class="meta">SE3 home charging</span></div>
+
+        <div class="refusal">
+          <div class="eyebrow"><span>20 Sep 2026 &middot; 18:00</span><span class="stamp">Refused &middot; recorded</span></div>
+          <div class="say">Your rule held.<br>No payment made.</div>
+          <div class="why">The agent asked to pay <b>6.2325</b> to <b>6i99&hellip;PdCG</b> for 50 kWh at 0.12465 SEK. The rule allows <b>0.5</b> per payment. The program refused and recorded the reason.</div>
+          <div class="override">
+            <div class="k">Override that would clear it<span>raise per-payment max to this</span></div>
+            <div class="v">6.2325</div>
+          </div>
+        </div>
+
+        <div class="proofs">
+          <div class="h"><span class="eyebrow">Proof</span><small>anyone can check this against the chain</small></div>
+          <div class="prow"><span class="k">program</span><span class="v">veto1&hellip;Zk4q</span></div>
+          <div class="prow"><span class="k">rule</span><span class="v">8Fq3&hellip;nV2w</span></div>
+          <div class="prow"><span class="k">transaction</span><span class="v ok">4vR7&hellip;kD1a</span></div>
+          <div class="prow"><span class="k">slot</span><span class="v">344 018 271</span></div>
+        </div>
+
+        <div class="actions">
+          <span class="btn primary"><svg><use href="#i-share"/></svg>Share this decision</span>
+          <span class="btn quiet arrow">Open in explorer</span>
+        </div>
+
+        <nav class="tabs">
+          <span class="tab"><svg><use href="#i-overview"/></svg>Overview</span>
+          <span class="tab"><svg><use href="#i-rules"/></svg>Rules</span>
+          <span class="tab on"><svg><use href="#i-decisions"/></svg>Decisions</span>
+        </nav>
+      </div>
+      <div class="home"></div>
+    </div>
+  </section>
+
+  <!-- 06 SHARE SHEET -->
+  <section class="slot">
+    <div class="label"><b>06 &middot; Share sheet</b><span>the card they receive, then send it</span></div>
+    <div class="phone">
+      <div class="status"><span>18:04</span><span class="net">devnet</span></div>
+      <div class="screen detail">
+        <div class="top"><span class="back">Decisions</span><span class="meta">SE3 home charging</span></div>
+        <div class="refusal">
+          <div class="eyebrow"><span>20 Sep 2026 &middot; 18:00</span><span class="stamp">Refused &middot; recorded</span></div>
+          <div class="say">Your rule held.<br>No payment made.</div>
+        </div>
+      </div>
+      <div class="dim"></div>
+      <div class="sheet">
+        <div class="grip"></div>
+        <div class="sheet-h"><h2>Give this decision <i>to someone</i></h2><span class="close">close</span></div>
+
+        <div class="share-card">
+          <div class="who"><span>Veto &middot; 20 Sep 2026, 18:00</span><span class="stamp">Refused</span></div>
+          <div class="say">Your rule held.<br>No payment made.</div>
+          <p class="sum">The agent for <b>SE3 home charging</b> asked to pay 6.2325 to <b>6i99&hellip;PdCG</b> for 50 kWh at 0.12465 SEK. The rule allows 0.5 per payment. The program refused, recorded the reason, and an override of <b>6.2325</b> would have cleared it.</p>
+          <div class="agreed">
+            <div>
+              <div class="k">Rule agreed in advance</div>
+              <p>Pay 6i99&hellip;PdCG up to 0.5 at a time and 100 in total, until 19 Dec 2026, <i>for SE3 home charging.</i></p>
+            </div>
+            <span class="qr" aria-label="QR to the transaction">
+              <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i></i><i class="on"></i>
+              <i class="on"></i><i></i><i></i><i></i><i></i><i></i><i class="on"></i><i></i><i></i><i class="on"></i><i></i>
+              <i class="on"></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i>
+              <i class="on"></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i></i><i></i><i class="on"></i>
+              <i class="on"></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i></i><i class="on"></i><i></i><i></i>
+              <i class="on"></i><i></i><i></i><i></i><i></i><i></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i>
+              <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i></i><i class="on"></i>
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="on"></i><i></i><i class="on"></i><i></i>
+              <i class="on"></i><i></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i>
+              <i></i><i class="on"></i><i></i><i class="on"></i><i></i><i></i><i></i><i class="on"></i><i></i><i></i><i class="on"></i>
+              <i class="on"></i><i></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i></i>
+            </span>
+          </div>
+          <div class="check"><span>tx 4vR7&hellip;kD1a &middot; slot 344 018 271</span><span style="white-space:nowrap">check &#8599;</span></div>
+        </div>
+
+        <div class="scope"><span class="on">This decision</span><span>A date range</span><span>Everything under this rule</span></div>
+        <p class="gets" style="margin-top:10px">They get <b>the summary</b>, <b>the rule agreed in advance</b>, and <b>proof</b> they can check against the chain. A range or everything goes out as <b>CSV</b> or <b>JSON</b>, one transaction signature per row.</p>
+
+        <div class="actions two" style="margin-top:12px">
+          <span class="btn">Copy link</span>
+          <span class="btn">Save image</span>
+        </div>
+        <div class="actions" style="margin-top:10px">
+          <span class="btn primary"><svg><use href="#i-share"/></svg>Share</span>
+        </div>
+      </div>
+      <div class="home"></div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
