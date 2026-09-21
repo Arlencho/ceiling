@@ -51,6 +51,7 @@ test: build-test ## Build and run the program test suite
 
 test-scripts: ## Run deploy-script checks that do not need a cluster
 	./scripts/devnet-setup.test.sh
+	./scripts/ci-covers-packages.test.sh
 
 # Provision a chain plus the demo fixtures. Devnet by default; localnet when
 # the devnet faucet is rate limiting.
