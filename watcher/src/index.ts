@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 import { existsSync, statSync } from "node:fs";
 import { dueSlots, msUntil, nextSlot, STALE_AFTER_MS } from "./cadence.js";
-import { loadKeypair, mandatePda, openMandate, submitCharge } from "./chain.js";
+import { connect, loadKeypair, mandatePda, openMandate, submitCharge } from "./chain.js";
 import { keyPath, loadConfig } from "./config.js";
 import { EnergySpotFeed } from "./feed.js";
-import { JsonlJournal } from "./journal.js";
+import { JsonlJournal, type JournalRow } from "./journal.js";
+import { fetchChainDecisions, repairJournalFromChain } from "./journalRepair.js";
 import {
   hydrateLocalJournal,
-  persistLocalJournal,
+  objectUpdatedAt,
+  persistRecordedDecision,
   storeFromGsUri,
   type JournalObjectStore,
 } from "./journalStore.js";
@@ -34,15 +36,12 @@ function command(): string {
   return first;
 }
 
-async function persistJournal(path: string, store: JournalObjectStore | null): Promise<void> {
-  if (store === null) return;
-  try {
-    await persistLocalJournal(path, store);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logError(`journal persist failed: ${message}`);
-    throw err;
-  }
+async function persistJournal(
+  path: string,
+  store: JournalObjectStore | null,
+  row: Pick<JournalRow, "decision" | "nonce" | "signature"> | null,
+): Promise<void> {
+  await persistRecordedDecision(path, store, row);
 }
 
 async function withJournalAndFeed() {
@@ -54,21 +53,49 @@ async function withJournalAndFeed() {
   const journal = new JsonlJournal(cfg.journalPath);
   const feed = new EnergySpotFeed();
   const agent = loadKeypair(keyPath(cfg, "agent"));
+  if (store !== null) {
+    const { connection, programId } = connect(cfg, agent);
+    const entries = await fetchChainDecisions({
+      connection,
+      programId,
+      owner: new PublicKey(cfg.owner),
+      mandateId: cfg.mandateId,
+    });
+    const repaired = repairJournalFromChain(journal, entries);
+    if (repaired > 0) {
+      logLine(`journal repaired ${repaired} row(s) from chain history`);
+      const rows = journal.load();
+      await persistJournal(cfg.journalPath, store, rows[rows.length - 1] ?? null);
+    }
+  }
   const submit = (amount: bigint, nonce: bigint) => submitCharge({ cfg, agent, amount, nonce });
   return { cfg, journal, feed, submit, agent, store };
 }
 
+async function lastAppendedAfter<T>(
+  journal: JsonlJournal,
+  fn: () => Promise<T>,
+): Promise<{ result: T; row: JournalRow | null }> {
+  const prior = journal.load().length;
+  const result = await fn();
+  const rows = journal.load();
+  const last = rows.length > prior ? rows[rows.length - 1] : undefined;
+  return { result, row: last === undefined ? null : last };
+}
+
 async function processAt(at: Date): Promise<void> {
   const { cfg, journal, feed, submit, store } = await withJournalAndFeed();
-  await processWindow({
-    at,
-    feed,
-    journal,
-    submit,
-    kwhMilli: cfg.kwhMilli,
-    mintDecimals: cfg.mintDecimals,
-  });
-  await persistJournal(cfg.journalPath, store);
+  const { row } = await lastAppendedAfter(journal, () =>
+    processWindow({
+      at,
+      feed,
+      journal,
+      submit,
+      kwhMilli: cfg.kwhMilli,
+      mintDecimals: cfg.mintDecimals,
+    }),
+  );
+  await persistJournal(cfg.journalPath, store, row);
 }
 
 async function processDue(now: Date, announceIdle = false): Promise<void> {
@@ -78,15 +105,17 @@ async function processDue(now: Date, announceIdle = false): Promise<void> {
     const nonce = nonceFromWindowStart(slot.toISOString());
     if (journal.hasNonce(nonce)) continue;
     acted = true;
-    await processWindow({
-      at: slot,
-      feed,
-      journal,
-      submit,
-      kwhMilli: cfg.kwhMilli,
-      mintDecimals: cfg.mintDecimals,
-    });
-    await persistJournal(cfg.journalPath, store);
+    const { row } = await lastAppendedAfter(journal, () =>
+      processWindow({
+        at: slot,
+        feed,
+        journal,
+        submit,
+        kwhMilli: cfg.kwhMilli,
+        mintDecimals: cfg.mintDecimals,
+      }),
+    );
+    await persistJournal(cfg.journalPath, store, row);
   }
   if (!acted && announceIdle) {
     logLine("caught up: no due cadence slots left to submit");
@@ -175,7 +204,12 @@ async function cmdStale(): Promise<void> {
   }
   const journal = new JsonlJournal(cfg.journalPath);
   const rows = journal.load();
-  const emptySince = existsSync(cfg.journalPath) ? statSync(cfg.journalPath).mtime : null;
+  const emptySince =
+    store !== null
+      ? await objectUpdatedAt(store)
+      : existsSync(cfg.journalPath)
+        ? statSync(cfg.journalPath).mtime
+        : null;
   const last = lastDecisionAt(rows);
   if (isJournalStale({ rows, now: new Date(), emptySince })) {
     logError(

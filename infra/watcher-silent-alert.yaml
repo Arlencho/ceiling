@@ -4,10 +4,16 @@ documentation:
     No watcher decision has been recorded for longer than a window and a half
     (9 hours). Cadence is 00:00, 06:00, 12:00, 18:00 Europe/Stockholm.
 
-    The stale job (`veto-watcher-stale`) reads the journal object and exits 1
-    when the last row (or, if the journal is empty, the object itself) is older
-    than 9 hours. A job that never starts produces no successful stale
-    executions, which is the absent condition.
+    The stale job (`veto-watcher-stale`) reads the journal object's own
+    `updated` time (not a local file the checker just wrote) and exits 1 when
+    the last row, or the empty object, is older than 9 hours.
+
+    When the watcher job has never once executed: the empty object still has
+    the `updated` time from deploy. After 9 hours the stale job fails, and
+    condition 1 (stale check failed) fires. If the stale job itself has also
+    never completed, condition 2 fires: PromQL `absent()` is true when the
+    completed_execution_count series has never written a point. A
+    metric-absence condition would not fire in that case.
 
     Point this policy at an email channel. See watcher/CLOUD.md.
   mimeType: text/markdown
@@ -29,16 +35,10 @@ conditions:
           crossSeriesReducer: REDUCE_SUM
       trigger:
         count: 1
-  - displayName: Stale check missing for 9 hours
-    conditionAbsent:
-      filter: |
-        resource.type = "cloud_run_job"
-        AND resource.labels.job_name = "veto-watcher-stale"
-        AND metric.type = "run.googleapis.com/job/completed_execution_count"
-      aggregations:
-        - alignmentPeriod: 3600s
-          perSeriesAligner: ALIGN_DELTA
-          crossSeriesReducer: REDUCE_SUM
+  - displayName: Stale check has never reported
+    conditionPrometheusQueryLanguage:
+      query: 'absent({"run.googleapis.com/job/completed_execution_count", monitored_resource="cloud_run_job", job_name="veto-watcher-stale"})'
       duration: 32400s
-      trigger:
-        count: 1
+      evaluationInterval: 3600s
+      disableMetricValidation: true
+      alertRule: VetoWatcherStaleNeverReported

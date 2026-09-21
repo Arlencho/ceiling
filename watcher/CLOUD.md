@@ -6,9 +6,11 @@ window cadence, with the journal stored in Cloud Storage.
 
 The journal is read from the object at the start of a run and written back as a
 whole file after each decision. A torn append would be worse than a rewrite.
-If that write fails after the chain already confirmed, the process exits 1 so
-the execution is failed and the stale alert can fire. A later retry may then
-see an on-chain nonce the journal does not yet have.
+The object is never treated as the truth: if that write fails after the chain
+already confirmed, the process exits 1 with a line naming the decision it
+could not record. The next start hydrates the object, then repairs any missing
+paid or refused row from the on-chain ledger ring before any window is
+processed, so `processWindow` can skip a nonce the chain already settled.
 
 Do not run these commands from an agent session. The owner runs them.
 
@@ -98,15 +100,25 @@ The failure that costs the demo is a job that stops quietly. The check is:
 - Cadence is six hours (00:00, 06:00, 12:00, 18:00 Stockholm).
 - A window and a half is **9 hours** (`STALE_AFTER_MS` in `watcher/src/cadence.ts`).
 - Job `veto-watcher-stale` hydrates the journal object and exits 1 when
-  `isJournalStale` is true: the latest row `ts` is older than 9 hours, or the
-  journal is empty and the object itself is older than 9 hours, or the object is
-  missing.
+  `isJournalStale` is true. Age comes from the latest row `ts`, or, when the
+  journal is empty, from the object's own server-side `updated` time. The
+  checker does not use the local file it just wrote, so an empty object from
+  deploy still ages.
 - Alert policy `Veto watcher silent` is OR of:
   1. `run.googleapis.com/job/completed_execution_count` with
      `resource.labels.job_name="veto-watcher-stale"` and
-     `metric.labels.result="failed"` greater than 0 for 60s.
-  2. The same metric **absent** for 32400s (9 hours). A job that never starts
-     produces no successful stale executions, so this condition trips.
+     `metric.labels.result="failed"` greater than 0 for 60s. This is the
+     record-too-old path.
+  2. PromQL `absent()` on that same metric for 32400s (9 hours), with
+     `disableMetricValidation: true`. This is the check-stopped-reporting
+     path, and it is true when the series has never written a point.
+
+When the watcher job has never once executed, condition 1 fires after 9 hours
+if the hourly stale job runs: the empty object still carries the `updated`
+time from deploy, the stale job exits 1, and the failed-execution threshold
+trips. If the stale job itself has also never completed, condition 2 fires:
+`absent()` is true for a metric that has never existed. A Cloud Monitoring
+metric-absence condition would not fire in that case.
 
 If `ALERT_EMAIL` was set on deploy, the channel is already attached. Otherwise:
 
@@ -178,8 +190,8 @@ The `stale` command locally, against a file journal:
 cd watcher && node dist/index.js stale
 ```
 
-Exit 1 means the last recorded decision (or the empty file's mtime) is older
-than nine hours.
+Exit 1 means the last recorded decision (or, if the journal is empty, the
+object's server-side `updated` time) is older than nine hours.
 
 ## 6. Tear it down
 

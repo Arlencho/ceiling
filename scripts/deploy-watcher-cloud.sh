@@ -45,6 +45,18 @@ IDENTITY_VARS=(
 log() { printf '%s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
+# Must not be `local` inside deploy: the EXIT trap runs after deploy returns,
+# and a function-local is already gone. With set -u that exits 1 after
+# printing deployed.
+env_file=""
+cleanup_env_file() {
+  if [[ -n "${env_file:-}" ]]; then
+    rm -f "$env_file"
+    env_file=""
+  fi
+}
+trap cleanup_env_file EXIT
+
 usage() {
   cat <<'EOF'
 usage: ./scripts/deploy-watcher-cloud.sh [--check] [--dry-run]
@@ -343,9 +355,7 @@ deploy() {
   local image="${REGION}-docker.pkg.dev/${PROJECT}/${AR_REPO}/${IMAGE_NAME}:latest"
   local once_uri="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT}/jobs/${JOB_NAME}:run"
   local stale_uri="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT}/jobs/${STALE_JOB_NAME}:run"
-  local env_file
   env_file="$(mktemp)"
-  trap 'rm -f "$env_file"' EXIT
   write_env_file "$env_file"
 
   ensure_sa "$sa_email"
@@ -423,7 +433,7 @@ deploy() {
     --command=node \
     --args=dist/index.js,stale
 
-  rm -f "$env_file"
+  cleanup_env_file
 
   run gcloud run jobs add-iam-policy-binding "$JOB_NAME" \
     --region="$REGION" \

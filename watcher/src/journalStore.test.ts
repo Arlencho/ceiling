@@ -9,6 +9,7 @@ import {
   memoryStore,
   parseGsUri,
   persistLocalJournal,
+  persistRecordedDecision,
 } from "./journalStore.js";
 
 function tmpDir(): string {
@@ -131,6 +132,51 @@ test("gcsStore download throws on a server error so a run cannot start from an e
     },
   );
   await assert.rejects(() => store.download(), /download failed status=503/);
+});
+
+test("gcsStore updatedAt reads the object updated field from metadata, not a local file", async () => {
+  const store = gcsStore(
+    { bucket: "b", object: "decisions.jsonl" },
+    {
+      token: async () => "tok",
+      fetch: async (input) => {
+        const url = String(input);
+        assert.equal(url.includes("alt=media"), false);
+        return new Response(JSON.stringify({ updated: "2026-09-21T00:00:00.000Z" }), { status: 200 });
+      },
+    },
+  );
+  const stamp = await store.updatedAt?.();
+  assert.equal(stamp?.toISOString(), "2026-09-21T00:00:00.000Z");
+});
+
+test("gcsStore updatedAt is null when the object is missing", async () => {
+  const store = gcsStore(
+    { bucket: "b", object: "missing.jsonl" },
+    {
+      token: async () => "tok",
+      fetch: async () => new Response("no", { status: 404, statusText: "Not Found" }),
+    },
+  );
+  assert.equal(await store.updatedAt?.(), null);
+});
+
+test("persistRecordedDecision throws a line that names the decision it could not record", async () => {
+  const dir = tmpDir();
+  const path = join(dir, "decisions.jsonl");
+  writeFileSync(path, '{"decision":"paid","nonce":"1","signature":"sig"}\n');
+  const store = {
+    async download(): Promise<string | null> {
+      return "";
+    },
+    async upload(): Promise<void> {
+      throw new Error("journal store: upload failed status=500");
+    },
+  };
+  await assert.rejects(
+    () => persistRecordedDecision(path, store, { decision: "paid", nonce: "1", signature: "sig" }),
+    /could not record paid nonce=1 sig=sig/,
+  );
 });
 
 test("gcsStore upload sends the whole body as a media insert", async () => {
