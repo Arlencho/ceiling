@@ -1,8 +1,9 @@
 # Pitch
 
-Rewritten 2026-09-20 after the competitive check. Aligned 2026-09-21 to the shipped app. The claim
-is legible refusal, not bounded authority. Bounded authority is crowded and partly commodity; do
-not claim it anywhere.
+The claim is the recorded refusal. Capped agent spending is not the claim. Squads, session
+keys, and AP2 already stop an overspend. Veto stops it the same way: when a rule fails, the
+transfer is never executed and no tokens move. The decline is a record, with a reason and the
+override that would clear it, on a phone, with the key in Seed Vault.
 
 ## Sixty seconds
 
@@ -10,127 +11,113 @@ not claim it anywhere.
 > why, on chain, in one line, with the override that would clear it.
 >
 > Limits like that already exist. Squads, AP2, session keys. Every one of them stops the overspend,
-> and so does this. The difference is what is left behind. Everywhere else a blocked overspend is a
-> failed transaction: no artifact, no reason, no trail, nothing to audit. Here the no is recorded.
+> and so does this. The difference is what is left behind. Elsewhere a blocked overspend is a
+> failed transaction: no artifact, no reason, no trail. Here the decline is recorded.
 >
 > Funds stay in your wallet under a delegate. The key never leaves Seed Vault. One human, several
-> agents, one rule each. A ruleset is written once and reused on the next agent. Every one of those
-> others is infrastructure. None of them is on a phone.
+> agents, one rule each. A ruleset is written once and reused on the next agent. Those other
+> designs are infrastructure. This one is on a phone.
 >
-> The demo: one fill under the rule. One refusal over it, on chain and readable. Seven days of
-> real history from a live price feed, not three rows from this morning. Then we take one refusal
-> off the phone and verify it against the chain from somewhere else.
+> The demo: one payment under the rule. One refusal over it, on chain and readable. Seven days of
+> history from a live price feed. Then one refusal taken off the phone and verified against the
+> chain from somewhere else.
 >
-> Because that record is the point. A worst case you fixed in advance, every payment made against
-> it, and every refusal the agent surfaced. AP2 standardised the record of a yes. This is the
-> missing half.
-
-Lead with the moment, then disarm. Naming competitors is the memorable move, but it should not
-spend the first ten seconds, which are the ones the judge is actually paying attention for.
+> That record is the point. A worst case fixed in advance, every payment made against it, and
+> every refusal the agent surfaced. AP2 standardised the record of a yes. This is the missing half.
 
 ## Words to keep out
 
-- **"Hard fail", "revert", "fail closed".** All of them imply a rolled-back transaction, which is
-  the competitor's design and the opposite of this one. Say "it declines before money moves, and
-  the decline is recorded."
-- **"First ever", "nobody has".** Unverifiable superlatives are where sharp judges start pulling.
-  Say what is defensible: "every one of those is infrastructure, none of them is on a phone."
-- **"Capped budgets", "spending limits" as the headline.** Commodity. An infrastructure vendor
-  publishes a tutorial on it.
-- **Anything that implies this does not prevent the spend.** "We make it legible rather than
-  impossible" is the trap: it reads as if the money moves and we merely write it down. It does not
-  move. Say "everyone stops it, only this one can prove it stopped" and the ambiguity is gone.
-- **"Credential".** It means W3C Verifiable Credentials to anyone who knows AP2, and we are not
-  building one. Say "export" or "on-chain decision record".
-- **"Proof of restraint" on its own.** Too easy to fake: a one million ceiling mints beautiful
-  restraint on a five dollar charge. Always pair it with the rule, which is the commitment made
-  in advance. See [PROBLEM.md](PROBLEM.md).
-- **"Every attempt".** Unprovable. The complete thing is every *payment*, because a spend has to
-  pass the program to happen.
+[VIDEO.md](VIDEO.md) points here for the words the entry does not use.
 
-## Judge Q&A
+- **"Hard fail", "revert", "fail closed".** Those names describe a rolled-back transaction. The line to use: it declines before money moves, and the decline is recorded.
+- **"First ever", "nobody has".** Say what is in front of you: the other designs are infrastructure, and this one is on a phone.
+- **"Capped budgets" or "spending limits" as the headline.** Capped agent spending is not new. An infrastructure vendor publishes a tutorial on it. The headline is the recorded refusal.
+- **Anything that implies the spend still happens.** "We make it legible rather than impossible" reads as if the money moves and the program only writes it down. The money does not move. The line is: everyone stops the overspend, and this record can prove it stopped.
+- **"Credential".** That word means a W3C verifiable credential. Say "export" or "on-chain decision record".
+- **"Proof of restraint" on its own.** A one million ceiling on a five dollar charge is a record of a five dollar charge. Pair the record with the rule agreed in advance. See [PROBLEM.md](PROBLEM.md).
+- **"Every attempt".** The complete record is every payment, because a spend has to pass the program to happen, and every refusal the agent submitted.
 
-**Isn't this just a spending limit? Isn't this Squads?**
-Squads and session keys stop the overspend, and so do we: when a rule fails the transfer is never
-executed and no tokens move. What they cannot do is prove it. Their block is a failed transaction
-that leaves no reason and no trail. Ours is a recorded decision with the rule it broke and the
-override that would clear it. Protection plus evidence, never evidence instead of protection.
+## Spending limits
 
-**Isn't AP2 already "mandates"?**
-AP2 mandates prove the user said yes to a merchant. They are the record of a yes, and they live off
-chain as the merchant's evidence. We record the no, on chain, when an agent cannot complete under
-the rules. Complementary, not a collision. We use their word on purpose.
+When a rule fails, the transfer is never executed and no tokens move. Squads and session keys
+stop the overspend the same way. Their block is a failed transaction with no reason and no
+trail. Veto writes a decision with the rule it broke and the override that would clear it.
 
-**SolAgent Pay already does ceilings.**
-Close on the numbers. Their README says an overspend "is not a policy violation logged after the
-fact, it is an impossible transaction." That is the opposite thesis, stated plainly, and it is the
-thing we disagree with. They also escrow into a vault PDA. We never move the funds: the rule is
-a delegate on the owner's own account. Cleaner custody, full stop.
+## AP2
 
-**Why not the Oculus approach, reimbursing a breach?**
-Insurance after the fact is a different product. We decline before money moves, then explain.
+AP2 mandates prove the user said yes to a merchant. They are the record of a yes, held off
+chain as the merchant's evidence. Veto records the no, on chain, when an agent cannot complete
+under the rules. The word mandate, in this repository, is that on-chain rule.
 
-**Why Solana Mobile?**
+## SolAgent Pay
+
+SolAgent Pay's README says an overspend "is not a policy violation logged after the fact, it is
+an impossible transaction." They escrow into a vault PDA. Veto leaves the funds in the owner's
+account under a delegate, and records the decline.
+
+## Oculus
+
+Oculus reimburses a breach from a USDC reserve after the fact. Veto declines before money
+moves, and the decline is recorded.
+
+## Solana Mobile
+
 Seed Vault is built so a human approves every signature. That is the right default, and it is
 exactly why unattended agent spend has nowhere to live on this platform. A rule is the Seed
-Vault-shaped answer: the key never leaves the vault, and the agent gets bounded authority beside it
-rather than a copy of the key. No general-purpose competitor can make that argument.
+Vault-shaped answer: the key never leaves the vault, and the agent gets bounded authority beside
+it rather than a copy of the key.
 
-**If the agent key leaks, what is the blast radius?**
-Bounded and stated up front. The SPL delegated amount is the hard ceiling underneath everything.
-The rule narrows it further by per-payment maximum, expiry and a single allowed payee. The
-owner revokes in one signature, and can also revoke the delegation directly without this program,
-which the program notices and reports rather than crashing on. The worst case is the number the
-owner already agreed to lose.
+## A leaked agent key
 
-**Where is the record if the agent simply never submits the charge?**
-There isn't one, and nothing on chain can provide one. Worth saying before someone finds it: the
-record is every decision the agent submits, not decisions it never attempted. What it
-guarantees is narrower and still worth having. No payment ever happens without a record, and no
-attempt is judged by the agent instead of by the chain. The merchant also sees the missing
-response, so a silently dropped charge is visible from the other side. The alternative design
-records nothing in either case.
+The SPL delegated amount is the ceiling underneath the rule. The rule narrows it by per-payment
+maximum, expiry, and a single allowed payee. The owner revokes in one signature, and can also
+revoke the delegation directly without this program. The program notices that revocation and
+reports it. The worst case is the number the owner already agreed to lose.
 
-**How is the daily loop real without a fake merchant?**
-The price feed is real: Nordic day-ahead electricity spot, public, no key, independently verifiable
-against the same URL. The counterparty is a terminal we run, because no charge point operator takes
-USDC, and we say so. What that buys is the thing that matters: the refusals happen because
-electricity got expensive, not because we pressed a button. The agent has been running for a week
-before the recording, so the Decisions screen is a diary rather than three rows made that morning.
+## A charge the agent never submits
 
-**Where does AI come in?**
-Thin, and above the program only. It turns a sentence into the four rule numbers and writes the
-plain-language why from a reason code. Hard caps never depend on a model. Semantic refusal,
-declining because a purchase does not match the stated purpose, ships only once the happy path is
-green.
+There is no record of a charge the agent never submits, and nothing on chain can provide one.
+The record is every decision the agent submits. No payment happens without a record, and no
+submitted attempt is judged by the agent instead of by the chain. The merchant also sees a
+missing response, so a dropped charge is visible from the other side.
 
-**What is the record actually good for?**
-A complete record of every payment made under this authority, a worst case fixed in advance by the
-rule, and every refusal the agent surfaced. The rule is the prior claim, the decisions are the
-evidence, and neither is worth anything alone. Eventually that is what lets someone underwrite
-agent spend, dispute a drained wallet with a trail, or compare agents by how they behave at a
-limit. Nobody is buying that in 2026 and we say so. It is the last thirty seconds of the pitch, not
-its spine.
+## The daily loop
 
-**Isn't a burner wallet with fifty dollars in it the same thing?**
-The honest competitor, and better than most of the prior art at this. It beats us on simplicity and
-loses on everything that needs a prior commitment: no payee restriction, no expiry, revocation
-means migrating funds, and a refused attempt is a silent error in a log nobody keeps. The row a
-burner cannot reproduce at any price is a third party being able to check the limits that were
-agreed in advance and every payment made against them.
+The price feed is the Nordic day-ahead electricity spot: public, no key, independently
+verifiable against the same URL. The counterparty is a terminal we run, because no charge point
+operator takes USDC. Refusals happen because electricity got expensive. The recording uses
+history the watcher has already produced.
 
-**What is out of scope for the deadline?**
-One rule type. Delegate, not vault. Several rules, one agent each. A ruleset written once and
-applied to the next agent. One pay path, one refusal path with a reason and an override hint, a
-Decisions screen, an export anyone can re-read from the chain, and a real week of history from
-the live feed. No DeFi zoo, no marketplace, no W3C VC profile, no signing ceremony, no verifier
-service.
+## Where a model sits
 
-## The prior art slide
+Above the program only. It turns a sentence into the four rule numbers and writes the
+plain-language why from a reason code. The caps do not depend on a model. Declining because a
+purchase does not match the stated purpose waits until the charge path is in place.
 
-Do not skip it. Two of the seven judges are security researchers from Ethelsec, and one is the CEO
-of Helius. They know Squads, they know x402, and they may well know the three agent-wallet repos
-that appeared this year. Naming the field yourself and saying exactly what is different is worth
-more than any claim of novelty, and it is the opposite of what almost every hackathon deck does.
+## What the record is for
 
-The table lives in [PLAN.md](PLAN.md).
+A complete record of every payment made under this authority, a worst case fixed in advance by
+the rule, and every refusal the agent surfaced. The rule is the prior claim. The decisions are
+the evidence. Neither is worth anything alone. That record is what would let someone underwrite
+agent spend, dispute a drained wallet, or compare agents by how they behave at a limit. Nobody
+is buying that record in 2026.
+
+## A burner wallet
+
+A burner wallet is simple. It has no payee restriction and no expiry, and revocation means
+moving the funds. A refused attempt is a silent error in a log. A third party cannot check the
+limits that were agreed in advance and every payment made against them. The comparison is in
+[PROBLEM.md](PROBLEM.md).
+
+## Scope through the deadline
+
+One rule type. A delegate on the owner's own account. Several rules, one agent each. A ruleset
+written once and applied to the next agent. One pay path. One refusal path with a reason and an
+override hint. A Decisions screen. An export anyone can re-read from the chain. A week of
+history from the live feed. No DeFi zoo, no marketplace, no W3C verifiable credential, no
+signing ceremony, no verifier service.
+
+## Prior art
+
+The table is in [PLAN.md](PLAN.md). It names Squads v4 spending limits, SPL `approve` /
+delegate, LazorKit, SolAgent Pay, Oculus, x402, AP2, and Seed Vault.
