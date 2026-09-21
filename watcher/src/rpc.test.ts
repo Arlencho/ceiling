@@ -6,7 +6,6 @@ import {
   isRateLimitError,
   makeFailoverFetch,
   parseRpcList,
-  withRpcFailover,
 } from "./rpc.js";
 
 test("parseRpcList keeps order, splits on commas and whitespace, and drops duplicates", () => {
@@ -70,39 +69,20 @@ test("a 429 is retried on the next endpoint rather than treated as a dead read",
   assert.doesNotMatch(lines.join("\n"), /failure/);
 });
 
-test("withRpcFailover walks the list on 429 and then succeeds", async () => {
-  const seen: string[] = [];
-  const lines: string[] = [];
-  const value = await withRpcFailover(
-    "charge",
-    ["http://primary.invalid", "http://fallback.invalid"],
-    async (endpoint) => {
-      seen.push(endpoint);
-      if (endpoint.includes("primary")) {
-        throw new Error("429 Too Many Requests");
-      }
-      return "ok";
-    },
-    { log: (line) => lines.push(line), sleep: async () => {}, initialDelayMs: 0 },
-  );
-  assert.equal(value, "ok");
-  assert.deepEqual(seen, ["http://primary.invalid", "http://fallback.invalid"]);
-  assert.match(lines.join("\n"), /rate limited/);
-  assert.doesNotMatch(lines.join("\n"), /failure/);
-});
-
 test("when every endpoint rate limits, the error names the rate limit", async () => {
   const lines: string[] = [];
+  const failover = makeFailoverFetch(
+    ["http://a.invalid", "http://b.invalid"],
+    (line) => lines.push(line),
+    {
+      fetch: async () => new Response("Too Many Requests", { status: 429, statusText: "Too Many Requests" }),
+      sleep: async () => {},
+      initialDelayMs: 0,
+      maxPasses: 1,
+    },
+  );
   await assert.rejects(
-    () =>
-      withRpcFailover(
-        "charge",
-        ["http://a.invalid", "http://b.invalid"],
-        async () => {
-          throw new Error("Server responded with 429 Too Many Requests");
-        },
-        { log: (line) => lines.push(line), sleep: async () => {}, initialDelayMs: 0 },
-      ),
+    () => failover("http://a.invalid", { method: "POST" }),
     (err: unknown) => {
       assert.equal(err instanceof RateLimitedError, true);
       assert.match(err instanceof Error ? err.message : "", /rate limited/);

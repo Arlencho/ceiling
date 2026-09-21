@@ -3,7 +3,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PublicKey } from "@solana/web3.js";
 import type { Connection } from "@solana/web3.js";
-import { createFailoverConnection, parseRpcList } from "./rpc.js";
+import { createFailoverConnection, parseRpcList } from "../indexer/src/rpc.js";
 
 export const TOOLS_DIR = dirname(fileURLToPath(import.meta.url));
 export const REPO_DIR = join(TOOLS_DIR, "..");
@@ -209,18 +209,21 @@ export function addressesFile(repoRoot = REPO_DIR): Map<string, string> {
 
 export function resolveRpcList(cli?: Cli, repoRoot = REPO_DIR): string[] {
   const fromFlag = cli ? flagString(cli, "rpc") : undefined;
-  if (fromFlag) {
+  if (fromFlag !== undefined) {
     const listed = parseRpcList(fromFlag);
-    if (listed.length > 0) return listed;
+    if (listed.length === 0) throw new Error("no rpc endpoints configured");
+    return listed;
   }
   if (process.env.VETO_RPC && process.env.VETO_RPC.length > 0) {
     const listed = parseRpcList(process.env.VETO_RPC);
-    if (listed.length > 0) return listed;
+    if (listed.length === 0) throw new Error("no rpc endpoints configured");
+    return listed;
   }
   const fromFile = addressesFile(repoRoot).get("RPC");
   if (fromFile && fromFile.length > 0) {
     const listed = parseRpcList(fromFile);
-    if (listed.length > 0) return listed;
+    if (listed.length === 0) throw new Error("no rpc endpoints configured");
+    return listed;
   }
   return [DEFAULT_PUBLIC_RPC];
 }
@@ -253,8 +256,8 @@ export function keysDir(repoRoot = REPO_DIR): string {
 
 export function connection(rpc: string | readonly string[]): Connection {
   const list = typeof rpc === "string" ? parseRpcList(rpc) : [...rpc];
-  const endpoints = list.length > 0 ? list : [DEFAULT_PUBLIC_RPC];
-  return createFailoverConnection(endpoints);
+  if (list.length === 0) throw new Error("no rpc endpoints configured");
+  return createFailoverConnection(list);
 }
 
 export function u64Le(value: bigint): Buffer {

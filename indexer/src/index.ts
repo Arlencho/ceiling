@@ -10,7 +10,6 @@ export {
   parseRpcList,
   isRateLimitError,
   createFailoverConnection,
-  withRpcFailover,
 } from "./rpc.js";
 export {
   DEFAULT_PROGRAM_ID,

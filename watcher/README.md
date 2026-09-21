@@ -27,8 +27,11 @@ Four times per Stockholm day (00:00, 06:00, 12:00, 18:00) the process:
 A down feed is a gap: the row is recorded, nothing is submitted, no synthetic
 price is invented. An RPC failure backs off and retries the same window. The
 thread is not dropped. A rate limit is not a failure: the process logs that it
-was throttled, tries the next configured endpoint, and leaves the cadence slot
-due so the next cycle can still submit it. It is not written as a gap.
+was throttled, tries the next configured endpoint (and re-walks a single
+endpoint with bounded doubling), and leaves the cadence slot due so the next
+cycle can still submit it. The outage is written as a gap with a reason that
+names the rate limit, so it stays visible after midnight and `status` can
+count it. A gap is not terminal.
 
 The `PriceFeed` interface exists because the feed may be revisited
 (`docs/DECISIONS.md`, 2026-09-20). The only implementation is `EnergySpotFeed`.
