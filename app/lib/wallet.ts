@@ -74,8 +74,22 @@ export function truncateAddress(address: string, chars = 4): string {
 }
 
 export function publicKeyFromMwaAddress(address: string): PublicKey {
+  // Mobile Wallet Adapter sends the address base64 encoded, but a base58
+  // address has to be accepted too, and the two are not safely told apart by
+  // length alone. Buffer.from(s, 'base64') never fails: it drops characters
+  // outside the alphabet and decodes whatever is left. Every base58 character
+  // is also a base64 character, so a 43 character base58 address decodes to
+  // exactly 32 bytes of nonsense, and the old 32-byte check accepted it and
+  // returned a different wallet with no error at all.
+  //
+  // A public key encodes to 43 characters when its first byte is zero, so this
+  // reached roughly one owner in 256, silently, and every rule and decision
+  // would then be read for a wallet nobody holds.
+  //
+  // The decode is trusted only when re-encoding reproduces the input, which is
+  // what makes the guess checkable rather than merely plausible.
   const bytes = Buffer.from(address, 'base64');
-  if (bytes.length === 32) {
+  if (bytes.length === 32 && bytes.toString('base64') === address) {
     return new PublicKey(bytes);
   }
   return new PublicKey(address);

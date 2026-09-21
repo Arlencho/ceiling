@@ -65,6 +65,11 @@ jobs:
       - run: npm install -g npm@11
       - run: npm ci
       - run: npx tsc --noEmit
+      # The suite ran only on developer machines until now: the job stopped at
+      # the typecheck, so 100 tests across 17 files had never once been run by
+      # CI. A typecheck does not execute anything, which is how a module that
+      # could not even load on the Node version this job pins stayed green.
+      - run: npm test
 
   watcher:
     runs-on: ubuntu-latest

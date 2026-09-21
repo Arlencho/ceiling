@@ -97,6 +97,32 @@ test('publicKeyFromMwaAddress accepts a base58 address', () => {
   assert.equal(publicKeyFromMwaAddress(base58).toBase58(), base58);
 });
 
+// A generated key gives a 43 character address only when its first byte is
+// zero, about one time in 256, so the case below reached CI as a test decided
+// by chance rather than by correctness. It is pinned here.
+//
+// Buffer.from(s, 'base64') accepts this string and yields exactly 32 bytes of
+// a different key, which the old length check could not tell from a real
+// base64 address.
+test('publicKeyFromMwaAddress does not mistake a 43 character base58 address for base64', () => {
+  const base58 = '1Cj3uPiwcL88sBQ3P4b2a7vAGADa8ULgCtVeUoNNix7';
+  assert.equal(base58.length, 43, 'the case under test is the short address');
+  assert.equal(Buffer.from(base58, 'base64').length, 32, 'base64 decoding it does yield 32 bytes');
+  assert.equal(publicKeyFromMwaAddress(base58).toBase58(), base58);
+});
+
+// Every public key whose first byte is zero, checked rather than sampled.
+test('publicKeyFromMwaAddress round trips every short base58 address it is given', () => {
+  let checked = 0;
+  for (let i = 0; i < 4000 && checked < 12; i += 1) {
+    const base58 = Keypair.generate().publicKey.toBase58();
+    if (base58.length !== 43) continue;
+    checked += 1;
+    assert.equal(publicKeyFromMwaAddress(base58).toBase58(), base58, base58);
+  }
+  assert.ok(checked > 0, 'generated at least one 43 character address to check');
+});
+
 test('publicKeyFromAccount prefers 32-byte publicKey bytes', () => {
   const owner = Keypair.generate();
   const other = Keypair.generate();
