@@ -17,14 +17,18 @@ import {
   fetchLedgerRows,
   fetchMintDecimals,
   fetchOwnerMandates,
+  grantOverride,
   openMandate,
   pickMandate,
+  probeOverride,
   revokeMandate,
   type ChainClient,
+  type GrantOverrideResult,
   type OpenMandateInput,
   type OpenMandateResult,
   type RevokeResult,
 } from './chain';
+import type { OverrideAssessment } from './override';
 import {
   mandateReadStatus,
   RATE_LIMIT_GAVE_UP,
@@ -60,6 +64,8 @@ export type ChainState = {
   selectMandate: (address: string) => Promise<void>;
   open: (input: Omit<OpenMandateInput, 'owner' | 'agent'> & { agent?: PublicKey }) => Promise<OpenMandateResult>;
   revoke: (address?: string) => Promise<RevokeResult>;
+  probeOverride: (mandateAddress: string, row: LedgerRow) => Promise<OverrideAssessment>;
+  grantOverride: (mandateAddress: string, row: LedgerRow) => Promise<GrantOverrideResult>;
 };
 
 async function loadSelected(store: WalletStore): Promise<string | null> {
@@ -274,6 +280,48 @@ function useChainState(): ChainState {
     [mandate, mandates, refresh, wallet],
   );
 
+  const probeLiveOverride = useCallback(
+    async (mandateAddress: string, row: LedgerRow) => {
+      const loaded = tryLoadConfig();
+      if (!loaded.ok) {
+        throw new Error(loaded.error);
+      }
+      const client = createClient(loaded.config);
+      return probeOverride(client, new PublicKey(mandateAddress), row, decimals);
+    },
+    [decimals],
+  );
+
+  const grantLiveOverride = useCallback(
+    async (mandateAddress: string, row: LedgerRow) => {
+      const loaded = tryLoadConfig();
+      if (!loaded.ok) {
+        throw new Error(loaded.error);
+      }
+      if (!wallet.ownerPublicKey) {
+        throw new Error('Connect with Seed Vault first');
+      }
+      const target =
+        mandates.find((item) => item.address === mandateAddress) ??
+        (mandate?.address === mandateAddress ? mandate : null);
+      if (!target) {
+        throw new Error('This rule is not loaded for this owner. Pull to retry.');
+      }
+      const client = createClient(loaded.config);
+      const result = await grantOverride(
+        client,
+        wallet.signAndSend,
+        new PublicKey(wallet.ownerPublicKey),
+        target,
+        row,
+        decimals,
+      );
+      await refresh();
+      return result;
+    },
+    [decimals, mandate, mandates, refresh, wallet],
+  );
+
   const mandateStatus = mandateReadStatus({
     checkedOwner,
     ownerPublicKey: wallet.ownerPublicKey,
@@ -304,6 +352,8 @@ function useChainState(): ChainState {
       selectMandate,
       open,
       revoke,
+      probeOverride: probeLiveOverride,
+      grantOverride: grantLiveOverride,
     }),
     [
       ready,
@@ -325,6 +375,8 @@ function useChainState(): ChainState {
       selectMandate,
       open,
       revoke,
+      probeLiveOverride,
+      grantLiveOverride,
     ],
   );
 }

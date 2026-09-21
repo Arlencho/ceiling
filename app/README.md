@@ -20,7 +20,7 @@ npm test
 decode, amount formatting, config, ruleset apply, purpose stamping, export
 scope, read states). They do not need a device. Mobile Wallet Adapter
 `authorize` and the Seed Vault signature for `open_mandate` /
-`revoke_mandate` still have to be checked on a Seeker.
+`grant_override` / `revoke_mandate` still have to be checked on a Seeker.
 
 ## Sign-in
 
@@ -47,12 +47,17 @@ action on a rule. Neither is a tab. Help is reachable from every tab.
   and never ship history or prices. A ruleset is authored on the phone;
   applying one to a new agent is one action. The ruleset itself is not on
   chain. Its name and version are written into the purpose, which is.
-- **Decisions.** Every paid and refused row under the selected rule, with
-  the reason in plain language. Ordinary rows say "Paid within rule". A
-  refusal carries the override that would have cleared it. The payee lives
-  on the rule, not as an unlabelled address on the row. A transaction
-  signature, when present, is labelled as a transaction. Share is the
-  full-width primary action on the decision, never an overflow menu.
+- **Decisions.** Every paid, refused, and override row under the selected
+  rule, with the reason in plain language. Ordinary rows say "Paid within
+  rule". A refusal that names a suggested override offers granting it as
+  one action, after a live check that the rule is still active and the
+  nonce still unsettled. The owner sees what they are about to sign. The
+  result is read back from chain as its own kind of decision, never as a
+  settings change. A charge blocked by the total cap offers nothing and
+  says an override cannot raise the cap. The payee lives on the rule, not
+  as an unlabelled address on the row. A transaction signature, when
+  present, is labelled as a transaction. Share is the full-width primary
+  action on a paid or refused decision, never an overflow menu.
 
 Export offers three scopes (this decision, a date range, everything under
 this rule) and two shapes (CSV with the documented columns, JSON as in

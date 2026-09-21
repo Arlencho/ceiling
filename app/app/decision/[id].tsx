@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../../components/Button';
@@ -9,19 +10,33 @@ import { RefusalCard } from '../../components/RefusalCard';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
-import { KIND_PAID, KIND_REFUSED } from '../../lib/constants';
+import { KIND_OVERRIDE, KIND_REFUSED } from '../../lib/constants';
 import { findLedgerDecision, parseDecisionId } from '../../lib/exportRecord';
-import { explorerTxUrl, formatBaseUnits, formatClock, formatUnix } from '../../lib/format';
+import { explorerTxUrl, formatBaseUnits, formatClock, formatUnix, isListedDecision } from '../../lib/format';
 import { mayClaimAbsence } from '../../lib/mandateRead';
+import {
+  nonceSequence,
+  overrideOfferForReason,
+  overrideRowView,
+  sequenceLine,
+  type OverrideAssessment,
+} from '../../lib/override';
 import { displayPurpose } from '../../lib/ruleView';
 import { useChain } from '../../lib/useChain';
+import type { LedgerRow } from '../../lib/ring';
 import { truncateAddress } from '../../lib/wallet';
+
+function rowProbeKey(row: LedgerRow): string {
+  return `${row.ts.toString()}:${row.kind}:${row.nonce.toString()}:${row.reason}:${row.suggestedOverride.toString()}`;
+}
 
 export default function DecisionDetailScreen() {
   const { id: rawId } = useLocalSearchParams<{ id: string }>();
   const id = rawId ? decodeURIComponent(rawId) : '';
   const parsed = id ? parseDecisionId(id) : null;
   const chain = useChain();
+  const probeOverride = chain.probeOverride;
+  const grantOverride = chain.grantOverride;
   const router = useRouter();
   const rpcUrl = chain.config?.rpcUrl ?? '';
   const cluster = chain.config?.explorerCluster ?? 'devnet';
@@ -31,6 +46,54 @@ export default function DecisionDetailScreen() {
       ? chain.mandates.find((item) => item.address === parsed.mandate) ??
         (chain.mandate?.address === parsed.mandate ? chain.mandate : null)
       : chain.mandate;
+  const probeKey = row ? rowProbeKey(row) : '';
+  const liveKey = mandate
+    ? `${mandate.address}:${mandate.status}:${mandate.lastNonce.toString()}:${mandate.overrideNonce.toString()}:${mandate.spent.toString()}`
+    : '';
+
+  const [probed, setProbed] = useState<{ key: string; assessment: OverrideAssessment } | null>(null);
+  const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  const [signing, setSigning] = useState(false);
+  const [grantError, setGrantError] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState<{ key: string; row: LedgerRow } | null>(null);
+
+  const onRefresh = useCallback(() => {
+    void chain.refresh();
+  }, [chain]);
+
+  const offer =
+    row && row.kind === KIND_REFUSED
+      ? overrideOfferForReason(row.reason, row.suggestedOverride)
+      : null;
+  const needsProbe = Boolean(row && mandate && offer?.offer);
+
+  useEffect(() => {
+    if (!row || !mandate || !offer?.offer) {
+      return;
+    }
+    const key = `${probeKey}|${liveKey}`;
+    let cancelled = false;
+    void probeOverride(mandate.address, row)
+      .then((next) => {
+        if (!cancelled) {
+          setProbed({ key, assessment: next });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProbed({
+            key,
+            assessment: {
+              status: 'blocked',
+              why: 'The chain could not be re-read for this rule. This screen will not offer an override from a stale row. Pull to retry.',
+            },
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [row, mandate, offer?.offer, probeKey, liveKey, probeOverride]);
 
   const onShare = () => {
     if (!parsed) {
@@ -46,8 +109,42 @@ export default function DecisionDetailScreen() {
     void Linking.openURL(explorerTxUrl(row.signature, cluster, rpcUrl));
   };
 
+  const onSign = async () => {
+    if (!row || !mandate) {
+      return;
+    }
+    setGrantError(null);
+    setSigning(true);
+    try {
+      const result = await grantOverride(mandate.address, row);
+      setConfirmed({ key: probeKey, row: result.row });
+      setConfirmKey(null);
+    } catch (err) {
+      setGrantError(err instanceof Error ? err.message : 'Override failed');
+    } finally {
+      setSigning(false);
+    }
+  };
+
+  const seq = row ? nonceSequence(chain.rows, row.nonce) : null;
+  const seqText = seq ? sequenceLine(seq, chain.decimals) : null;
+  const overrideView = row && row.kind === KIND_OVERRIDE ? overrideRowView(row, chain.decimals) : null;
+  const confirming = confirmKey === probeKey;
+  const confirmedRow = confirmed?.key === probeKey ? confirmed.row : null;
+
+  let assessment: OverrideAssessment | { status: 'checking' } | null = null;
+  if (row && row.kind === KIND_REFUSED) {
+    if (offer && !offer.offer) {
+      assessment = { status: 'none', why: offer.why };
+    } else if (probed && probed.key === `${probeKey}|${liveKey}`) {
+      assessment = probed.assessment;
+    } else if (needsProbe) {
+      assessment = { status: 'checking' };
+    }
+  }
+
   return (
-    <Screen>
+    <Screen refreshing={chain.loading} onRefresh={onRefresh}>
       <TopBar back="Decisions" meta={mandate ? displayPurpose(mandate.purpose) : undefined} />
       <ConnectGate>
         {!mayClaimAbsence(chain.mandateStatus) ? (
@@ -55,7 +152,7 @@ export default function DecisionDetailScreen() {
             status={chain.mandateStatus}
             empty="This decision is not on the ring for the selected rule. The app does not invent one."
           />
-        ) : !row || (row.kind !== KIND_PAID && row.kind !== KIND_REFUSED) ? (
+        ) : !row || !isListedDecision(row.kind) ? (
           <EmptyState>
             This decision is not on the ring for the selected rule. The app does not invent one.
           </EmptyState>
@@ -72,6 +169,16 @@ export default function DecisionDetailScreen() {
                     : undefined
                 }
               />
+            ) : row.kind === KIND_OVERRIDE && overrideView ? (
+              <View style={styles.paid}>
+                <Text style={styles.eyebrow}>
+                  {formatUnix(row.ts)} · {formatClock(row.ts)}
+                </Text>
+                <Text style={styles.say}>
+                  {overrideView.say} <Text style={styles.italic}>{overrideView.italic}</Text>
+                </Text>
+                <Text style={styles.body}>{overrideView.why}</Text>
+              </View>
             ) : (
               <View style={styles.paid}>
                 <Text style={styles.eyebrow}>
@@ -89,6 +196,35 @@ export default function DecisionDetailScreen() {
                 </Text>
               </View>
             )}
+
+            {seqText ? (
+              <View style={styles.sequence}>
+                <Text style={styles.eyebrow}>The record of this nonce</Text>
+                <Text style={styles.seqBody}>{seqText}</Text>
+              </View>
+            ) : null}
+
+            {row.kind === KIND_REFUSED ? (
+              <OverrideGrant
+                assessment={assessment}
+                confirming={confirming}
+                signing={signing}
+                error={grantError}
+                confirmed={confirmedRow}
+                decimals={chain.decimals}
+                onOffer={() => {
+                  setGrantError(null);
+                  setConfirmKey(probeKey);
+                }}
+                onCancel={() => {
+                  setConfirmKey(null);
+                  setGrantError(null);
+                }}
+                onSign={() => {
+                  void onSign();
+                }}
+              />
+            ) : null}
 
             <View style={styles.proofs}>
               <View style={styles.proofH}>
@@ -127,6 +263,104 @@ export default function DecisionDetailScreen() {
         )}
       </ConnectGate>
     </Screen>
+  );
+}
+
+function OverrideGrant({
+  assessment,
+  confirming,
+  signing,
+  error,
+  confirmed,
+  decimals,
+  onOffer,
+  onCancel,
+  onSign,
+}: {
+  assessment: OverrideAssessment | { status: 'checking' } | null;
+  confirming: boolean;
+  signing: boolean;
+  error: string | null;
+  confirmed: LedgerRow | null;
+  decimals: number;
+  onOffer: () => void;
+  onCancel: () => void;
+  onSign: () => void;
+}) {
+  if (confirmed) {
+    return (
+      <View style={styles.grant}>
+        <Text style={styles.eyebrow}>Read back from chain</Text>
+        <Text style={styles.seqBody}>
+          Override of {formatBaseUnits(confirmed.amount, decimals)} for nonce{' '}
+          {confirmed.nonce.toString()} is on the ledger as a recorded decision. The agent can retry
+          this nonce.
+        </Text>
+      </View>
+    );
+  }
+  if (!assessment) {
+    return null;
+  }
+  if (assessment.status === 'checking') {
+    return (
+      <View style={styles.grant}>
+        <EmptyState>
+          Checking this rule and nonce on chain before offering an override.
+        </EmptyState>
+      </View>
+    );
+  }
+  if (assessment.status === 'none' || assessment.status === 'blocked' || assessment.status === 'already') {
+    return (
+      <View style={styles.grant}>
+        <Text style={styles.eyebrow}>Override</Text>
+        <Text style={styles.seqBody}>{assessment.why}</Text>
+      </View>
+    );
+  }
+  if (confirming) {
+    return (
+      <View style={styles.grant}>
+        <Text style={styles.eyebrow}>What you are about to sign</Text>
+        {assessment.commit.paragraphs.map((paragraph) => (
+          <Text key={paragraph} style={styles.seqBody}>
+            {paragraph}
+          </Text>
+        ))}
+        <View style={styles.actions}>
+          <Button
+            label="Sign and record this override"
+            accessibilityLabel="Sign and record this override"
+            busy={signing}
+            onPress={onSign}
+          />
+          <Button
+            label="Cancel"
+            invert={false}
+            quiet
+            disabled={signing}
+            onPress={onCancel}
+          />
+        </View>
+        {error ? <Text style={styles.seqBody}>{error}</Text> : null}
+      </View>
+    );
+  }
+  return (
+    <View style={styles.grant}>
+      <Text style={styles.eyebrow}>Override</Text>
+      <Text style={styles.seqBody}>
+        {assessment.commit.paragraphs[0]} The owner signs once. This is recorded as an override, not
+        a settings change.
+      </Text>
+      <Button
+        label="Grant this override"
+        accessibilityLabel="Grant this override"
+        onPress={onOffer}
+      />
+      {error ? <Text style={styles.seqBody}>{error}</Text> : null}
+    </View>
   );
 }
 
@@ -171,6 +405,17 @@ const styles = StyleSheet.create({
     color: colors.body,
     fontSize: 15,
     lineHeight: 21,
+  },
+  sequence: {
+    gap: 6,
+  },
+  seqBody: {
+    color: colors.body,
+    fontSize: 15,
+    lineHeight: 21,
+  },
+  grant: {
+    gap: 10,
   },
   proofs: {
     gap: 0,

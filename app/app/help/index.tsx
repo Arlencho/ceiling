@@ -19,9 +19,10 @@ export default function HelpRuleScreen() {
         inside that rule with nobody present.
       </Text>
       <Text style={styles.body}>
-        The numbers are fixed once the rule is opened. They cannot be widened later. Revoke ends
-        authority for the agent. It does not move anything already paid, and the decisions stay
-        readable.
+        The numbers are fixed once the rule is opened. They cannot be edited afterwards. An override
+        does not change those numbers. It is a recorded waiver of the per-payment ceiling for one
+        nonce. Revoke ends authority for the agent. It does not move anything already paid, and the
+        decisions stay readable.
       </Text>
       <Text style={styles.body}>
         One owner can hold several rules at once. Each rule has its own agent key, its own limits,

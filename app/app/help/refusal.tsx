@@ -23,12 +23,14 @@ export default function HelpRefusalScreen() {
       </Text>
       <Text style={styles.h2}>The two keys</Text>
       <Text style={styles.body}>
-        The owner key lives in Seed Vault and never leaves it. It is the only key that can open or
-        revoke a rule.
+        The owner key lives in Seed Vault and never leaves it. It is the only key that can open a
+        rule, grant an override, or revoke.
       </Text>
       <Text style={styles.body}>
         The agent key holds authority and no funds. It can pay inside the rule, and nothing else.
-        It cannot widen any limit. Each rule has its own agent.
+        It cannot widen any limit. Each rule has its own agent. An override the owner grants is a
+        recorded decision for one nonce, not a settings change. The per-payment ceiling rises for
+        that charge only. The total cap does not.
       </Text>
       <View style={styles.actions}>
         <Button label="Next" onPress={() => router.push('/help/export')} />

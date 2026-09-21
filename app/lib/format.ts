@@ -1,4 +1,4 @@
-import { KIND_PAID, KIND_REFUSED, kindName, statusName } from './constants';
+import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, kindName, statusName } from './constants';
 import type { RingEntry } from './ring';
 
 export function formatBaseUnits(amount: bigint, decimals: number): string {
@@ -69,11 +69,12 @@ export function isLocalDay(unixSeconds: bigint, nowMs: number): boolean {
   );
 }
 
+export function isListedDecision(kind: number): boolean {
+  return kind === KIND_PAID || kind === KIND_REFUSED || kind === KIND_OVERRIDE;
+}
+
 export function todaysAgentDecisions<T extends RingEntry>(entries: readonly T[], nowMs: number): T[] {
-  const todays = entries.filter(
-    (entry) =>
-      (entry.kind === KIND_PAID || entry.kind === KIND_REFUSED) && isLocalDay(entry.ts, nowMs),
-  );
+  const todays = entries.filter((entry) => isListedDecision(entry.kind) && isLocalDay(entry.ts, nowMs));
   return todays.slice().reverse();
 }
 

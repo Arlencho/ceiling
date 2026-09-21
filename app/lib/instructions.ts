@@ -5,7 +5,14 @@ import {
   TransactionInstruction,
 } from '@solana/web3.js';
 
-import { OPEN_MANDATE_DISC, REVOKE_MANDATE_DISC, writeI64Le, writeU32Le, writeU64Le } from './constants';
+import {
+  GRANT_OVERRIDE_DISC,
+  OPEN_MANDATE_DISC,
+  REVOKE_MANDATE_DISC,
+  writeI64Le,
+  writeU32Le,
+  writeU64Le,
+} from './constants';
 import { ledgerPda, mandatePda } from './ring';
 
 export type OpenMandateIxArgs = {
@@ -85,16 +92,50 @@ export function revokeMandateInstruction(args: {
   source: PublicKey;
   tokenProgram: PublicKey;
 }): TransactionInstruction {
-  const ledger = ledgerPda(args.programId, args.mandate);
   return new TransactionInstruction({
     programId: args.programId,
     data: Buffer.from(REVOKE_MANDATE_DISC),
-    keys: [
-      { pubkey: args.owner, isSigner: true, isWritable: false },
-      { pubkey: args.mandate, isSigner: false, isWritable: true },
-      { pubkey: ledger, isSigner: false, isWritable: true },
-      { pubkey: args.source, isSigner: false, isWritable: true },
-      { pubkey: args.tokenProgram, isSigner: false, isWritable: false },
-    ],
+    keys: ownerActionKeys(args),
   });
+}
+
+export function encodeGrantOverrideData(amount: bigint, nonce: bigint): Buffer {
+  const buf = Buffer.alloc(24);
+  GRANT_OVERRIDE_DISC.copy(buf, 0);
+  writeU64Le(buf, 8, amount);
+  writeU64Le(buf, 16, nonce);
+  return buf;
+}
+
+export function grantOverrideInstruction(args: {
+  programId: PublicKey;
+  owner: PublicKey;
+  mandate: PublicKey;
+  source: PublicKey;
+  tokenProgram: PublicKey;
+  amount: bigint;
+  nonce: bigint;
+}): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: args.programId,
+    data: encodeGrantOverrideData(args.amount, args.nonce),
+    keys: ownerActionKeys(args),
+  });
+}
+
+function ownerActionKeys(args: {
+  owner: PublicKey;
+  mandate: PublicKey;
+  source: PublicKey;
+  tokenProgram: PublicKey;
+  programId: PublicKey;
+}): { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] {
+  const ledger = ledgerPda(args.programId, args.mandate);
+  return [
+    { pubkey: args.owner, isSigner: true, isWritable: false },
+    { pubkey: args.mandate, isSigner: false, isWritable: true },
+    { pubkey: ledger, isSigner: false, isWritable: true },
+    { pubkey: args.source, isSigner: false, isWritable: true },
+    { pubkey: args.tokenProgram, isSigner: false, isWritable: false },
+  ];
 }

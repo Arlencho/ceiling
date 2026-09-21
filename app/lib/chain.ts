@@ -12,7 +12,8 @@ import type { AppConfig } from './appConfig';
 import { loadConfig } from './config';
 import { KIND_OPENED, KIND_OVERRIDE, KIND_REVOKED, PURPOSE_MAX_LEN } from './constants';
 import { decodeEventsFromLogs, decodeInstructionKind } from './events';
-import { openMandateInstruction, revokeMandateInstruction } from './instructions';
+import { grantOverrideInstruction, openMandateInstruction, revokeMandateInstruction } from './instructions';
+import { assessOverride, type OverrideAssessment } from './override';
 import { decodeMandateAccount, type MandateAccount } from './mandate';
 import {
   attachSignatures,
@@ -46,6 +47,12 @@ export type OpenMandateResult = {
 export type RevokeResult = {
   signature: string;
   mandate: MandateAccount;
+};
+
+export type GrantOverrideResult = {
+  signature: string;
+  mandate: MandateAccount;
+  row: LedgerRow;
 };
 
 export type ChainClient = {
@@ -267,6 +274,72 @@ export async function revokeMandate(
   await confirmSignature(client.connection, signature, latest.blockhash, latest.lastValidBlockHeight);
   const next = await fetchMandate(client, new PublicKey(mandate.address));
   return { signature, mandate: next };
+}
+
+export async function probeOverride(
+  client: ChainClient,
+  mandateAddress: PublicKey,
+  row: LedgerRow,
+  decimals: number,
+): Promise<OverrideAssessment> {
+  const live = await fetchMandate(client, mandateAddress);
+  return assessOverride({ row, mandate: live, decimals });
+}
+
+export async function grantOverride(
+  client: ChainClient,
+  signAndSend: SignAndSend,
+  owner: PublicKey,
+  mandate: MandateAccount,
+  row: LedgerRow,
+  decimals: number,
+): Promise<GrantOverrideResult> {
+  const live = await fetchMandate(client, new PublicKey(mandate.address));
+  const assessment = assessOverride({ row, mandate: live, decimals });
+  if (assessment.status !== 'ready') {
+    throw new Error(assessment.why);
+  }
+
+  const tokenProgram = await tokenProgramOfMint(client, new PublicKey(live.mint));
+  const ix = grantOverrideInstruction({
+    programId: client.programId,
+    owner,
+    mandate: new PublicKey(live.address),
+    source: new PublicKey(live.source),
+    tokenProgram,
+    amount: assessment.amount,
+    nonce: assessment.nonce,
+  });
+  const latest = await client.connection.getLatestBlockhash('confirmed');
+  const tx = new Transaction();
+  tx.feePayer = owner;
+  tx.recentBlockhash = latest.blockhash;
+  tx.add(ix);
+
+  const [signature] = await signAndSend([tx]);
+  if (!signature) {
+    throw new Error('wallet returned no signature');
+  }
+  await confirmSignature(client.connection, signature, latest.blockhash, latest.lastValidBlockHeight);
+
+  const next = await fetchMandate(client, new PublicKey(live.address));
+  const ledger = await fetchLedgerRows(client, new PublicKey(live.address));
+  const confirmed =
+    ledger.rows.find((item) => item.kind === KIND_OVERRIDE && item.signature === signature) ??
+    ledger.rows
+      .filter(
+        (item) =>
+          item.kind === KIND_OVERRIDE &&
+          item.nonce === assessment.nonce &&
+          item.amount === assessment.amount,
+      )
+      .at(-1);
+  if (!confirmed) {
+    throw new Error(
+      'The transaction confirmed, but the ledger does not yet show an override row. Pull to retry. This screen will not invent one.',
+    );
+  }
+  return { signature, mandate: next, row: confirmed };
 }
 
 function instructionData(data: string | Uint8Array | number[] | Buffer): Uint8Array {

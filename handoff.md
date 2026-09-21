@@ -1,61 +1,51 @@
 ## Built
 
-Closed the five review findings on PR 62. Branch `feat/app-fleet-console`. Nothing else.
+Override flow for issue 16 on `feat/app-override`, on top of the fleet console now on `main`.
 
-- F1. Refusal copy follows `row.reason`. The per-payment sentence is only for reason 5. An override line and the raise-per-payment block appear only for that reason.
-- F2. The Decisions tab no longer puts one date over the whole list. Rows group by local day, each group under its own heading.
-- F3. After three rate-limit retries the app stops claiming it is still trying. `rateLimited` is cleared, the error is "The RPC rate limited this read three times. Pull to retry.", and the read lands in `failed`.
-- F4. Rule detail, decision detail, and share wait for a completed chain read before claiming a rule or decision is absent. A decision is only taken from the ring of the rule named in its id.
-- F5. Rule detail compares a purpose stamp to the ruleset on this phone: matches, limits differ, or no ruleset with this stamp. Opening a rule rejects a typed stamp suffix unless the owner is applying a saved ruleset. Copy still does not claim the ruleset file is on chain.
+A refused decision that names a suggested override offers granting it as one action. The owner sees what they are about to sign, signs once through Seed Vault, and the result is read back from the ledger as `kind = override`. That row is listed and styled with the same weight as a payment and a refusal. It is never hidden and never rendered as a settings change.
+
+A refusal for any reason the program records no override for offers no action and says why. An exhausted total cap (reason 6, or a per-payment refusal whose suggested amount is 0) says an override cannot raise the cap because the program will not accept one.
+
+Before the action is offered, the mandate is re-read on chain. A revoked rule and a settled nonce each block the grant and say so. Success is claimed only after the override row is present on the ledger.
+
+The record of one nonce can be read afterwards: asked, refused, waived by the owner, then paid.
 
 ## Decisions
 
-- Extracted `refusalWhyLine` so the card and the tests share one sentence.
-- Override copy is withheld for every reason that an override cannot clear, even if `suggestedOverride` is nonzero.
-- Rate-limit exhaustion reuses `failed` rather than adding a sixth read state.
-- Stamp check is phone-local (cap, per-payment max, payee). A reader without this phone cannot check that match, and the detail screen says so.
+- Eligibility follows `suggested_override` in `programs/veto/src/lib.rs`: only reason 5 (over per-payment maximum) with a positive suggestion. Amount and nonce for `grant_override` are that suggestion and the refused nonce. No second reason or kind table.
+- Live guards match the program: status must be active, `nonce > last_nonce`, amount `<= remaining`. Revoked is called out. Exhausted and a remaining cap below the amount reuse the cap sentence.
+- Override rows are listed decisions (`isListedDecision`), not exportable charges. Export stays complete over paid and refused only.
+- Confirmation is a second step on the decision, not a settings screen. After sign, `fetchMandate` + `fetchLedgerRows` must produce an override row or the app reports that it will not invent one.
 
 ## Do not repeat
 
+- Do not touch `programs/veto/src`.
+- Do not offer a grant for a reason the program writes `suggested_override = 0` for, even if a stale UI still shows an amount.
+- Do not claim success from the wallet signature alone. The ledger row is the proof.
+- Do not render an override as a rule edit, a limit change, or a settings row.
 - Do not reorder `app/index.js` polyfill imports.
 - Do not hardcode an RPC url or program id.
-- Do not invent rows, prices, or kWh.
-- Do not claim a ruleset is on chain. Only the purpose stamp is.
-- Do not touch `programs/veto/src`.
-- Do not style a refusal as an error.
-- `lib/wallet.test.ts` `publicKeyFromMwaAddress accepts a base58 address` can fail on a random keypair whose base58 also decodes as 32-byte base64. Pre-existing. Not part of these five findings.
+- `lib/wallet.test.ts` `publicKeyFromMwaAddress accepts a base58 address` can fail on a random keypair whose base58 also decodes as 32-byte base64. Pre-existing.
 
 ## Evidence
 
-F1, unfixed why-line (perTxMax in hand, amount 50, limit 60):
-
-```
-reason 1 "Asked for 50, over the 60 per-payment maximum. No override would have cleared this."
-reason 2 same
-reason 5 same
-reason 6 same
-```
-
-F1, after the fix:
-
-```
-reason 1 "mandate not active."
-reason 5 "Asked for 50, over the 60 per-payment maximum. No override would have cleared this."
-reason 6 "over remaining cap."
-```
+`grant_override` in `programs/veto/src/lib.rs` takes `(amount, nonce)`, requires active status, `nonce > last_nonce`, `amount <= remaining`, writes `KIND_OVERRIDE` with `REASON_OK`.
 
 From `app/`:
 
 - `npx tsc --noEmit`: exit 0
-- `npm test`: 71 pass, 0 fail (one earlier full run hit the pre-existing wallet base58 flake, then 71/71)
 - `npx expo lint`: exit 0
-- `npx expo config --type public`: `platforms: ['android']`, `android.package: com.veto.app`, `extra.vetoRpc: ''`, `extra.vetoProgramId: ''`, splash and adaptive icon `#0F1A16`
+- `npm test`: 85 pass, 0 fail
+- `npx expo config --type public`: `platforms: ['android']`, `android.package: com.veto.app`, `extra.vetoRpc: ''`, `extra.vetoProgramId: ''`
+
+Pure tests covering reasons, revoked rule, settled nonce, override row copy, and asked/refused/waived/paid sequence: `lib/override.test.ts`.
+
+No Seeker run. `grant_override` via MWA still has to be signed on device.
 
 ## Open questions
 
-- Live Seeker / MWA open-mandate and share sheet still need a device.
-- The wallet base58 address test is flaky. Out of scope for this round.
+- Live Seeker path: grant from a per-payment refusal, then watcher retry of the same nonce, then the four-step record on Decisions.
 
 ## Next hint
 
-PR 62 against `main` on `feat/app-fleet-console`. Issues 47, 51, 52, 55, 56, 59 stay open for QA.
+Branch `feat/app-override`. PR against `main` for issue 16. Leave 16 open for QA.

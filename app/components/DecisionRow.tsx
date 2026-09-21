@@ -1,9 +1,10 @@
 import { useRouter } from 'expo-router';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { KIND_PAID, KIND_REFUSED } from '../lib/constants';
+import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED } from '../lib/constants';
 import { encodeDecisionId } from '../lib/exportRecord';
 import { explorerTxUrl, formatBaseUnits, formatClock } from '../lib/format';
+import { overrideRowView } from '../lib/override';
 import { renderReason } from '../lib/reasons';
 import type { LedgerRow } from '../lib/ring';
 import { RefusalCard } from './RefusalCard';
@@ -29,6 +30,7 @@ export function DecisionRow({
   const router = useRouter();
   const refused = row.kind === KIND_REFUSED;
   const paid = row.kind === KIND_PAID;
+  const waived = row.kind === KIND_OVERRIDE;
   const amount = formatBaseUnits(row.amount, decimals);
   const clock = formatClock(row.ts);
   const id = encodeDecisionId(mandateAddress, row);
@@ -60,6 +62,45 @@ export function DecisionRow({
     return (
       <Pressable accessibilityRole="button" accessibilityLabel="Refused, recorded" onPress={openDetail}>
         <RefusalCard row={row} decimals={decimals} perTxMax={perTxMax} />
+      </Pressable>
+    );
+  }
+
+  if (waived) {
+    const view = overrideRowView(row, decimals);
+    const txLabel = row.signature
+      ? `transaction ${row.signature.slice(0, 4)}...${row.signature.slice(-4)}`
+      : null;
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Waived by the owner ${view.amount}`}
+        onPress={openDetail}
+        style={styles.paid}
+      >
+        <Text style={styles.time}>{clock}</Text>
+        <View style={styles.body}>
+          <Text style={styles.say}>
+            {view.say} <Text style={styles.italic}>{view.italic}</Text>
+          </Text>
+          <Text style={styles.why}>{view.why}</Text>
+          {txLabel ? (
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={txLabel}
+              onPress={openTx}
+              hitSlop={6}
+            >
+              <Text style={styles.tx}>{txLabel}</Text>
+            </Pressable>
+          ) : (
+            <Text style={styles.why}>
+              This RPC did not return a transaction signature for this row. The row itself is from the
+              on-chain ledger, not invented.
+            </Text>
+          )}
+        </View>
+        <Text style={styles.amt}>{view.amount}</Text>
       </Pressable>
     );
   }
