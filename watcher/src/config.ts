@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseGsUri } from "./journalStore.js";
 import { DEFAULT_KWH_MILLI, DEFAULT_MINT_DECIMALS } from "./money.js";
 import { parseRpcList } from "./rpc.js";
 
@@ -27,6 +28,7 @@ export type WatcherConfig = {
   rpcs: string[];
   keysDir: string;
   journalPath: string;
+  journalGcsUri: string | null;
   idlPath: string;
   programId: string;
   mint: string;
@@ -136,6 +138,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts?: LoadConf
   const files = loadMergedEnvFiles(env, opts?.envFiles ?? defaultEnvFiles(keysDir));
 
   const journalPath = resolvePath(env.VETO_JOURNAL ?? join(WATCHER_DIR, "data", "decisions.jsonl"), WATCHER_DIR);
+  const gcsRaw = lookupFrom(env, files, "VETO_JOURNAL_GCS");
+  if (gcsRaw !== undefined) parseGsUri(gcsRaw);
+  const journalGcsUri = gcsRaw ?? null;
   const targetIdl = join(REPO_DIR, "target", "idl", "veto.json");
   const bundledIdl = join(WATCHER_DIR, "idl", "veto.json");
   const idlPath = env.VETO_IDL
@@ -164,6 +169,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts?: LoadConf
     rpcs,
     keysDir,
     journalPath,
+    journalGcsUri,
     idlPath,
     programId: required(env, files, "VETO_PROGRAM_ID"),
     mint: required(env, files, "VETO_MINT"),

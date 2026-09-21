@@ -94,3 +94,49 @@ test("lookupConfigString reads VETO_TERMINAL_PORT from a file", () => {
   const port = lookupConfigString({ VETO_KEYS_DIR: dir }, "VETO_TERMINAL_PORT", { envFiles: [file] });
   assert.equal(port, "9999");
 });
+
+test("loadConfig defaults to a local journal file and no Cloud Storage URI", () => {
+  const dir = tmpDir();
+  const file = join(dir, ".env");
+  writeFileSync(
+    file,
+    Object.entries(IDENTITIES)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\n"),
+  );
+  const cfg = loadConfig({ VETO_KEYS_DIR: dir }, { envFiles: [file] });
+  assert.equal(cfg.journalGcsUri, null);
+  assert.match(cfg.journalPath, /decisions\.jsonl$/);
+});
+
+test("loadConfig accepts VETO_JOURNAL_GCS and keeps the local path", () => {
+  const dir = tmpDir();
+  const file = join(dir, ".env");
+  writeFileSync(
+    file,
+    Object.entries(IDENTITIES)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\n"),
+  );
+  const cfg = loadConfig(
+    { VETO_KEYS_DIR: dir, VETO_JOURNAL_GCS: "gs://veto-journal/decisions.jsonl" },
+    { envFiles: [file] },
+  );
+  assert.equal(cfg.journalGcsUri, "gs://veto-journal/decisions.jsonl");
+  assert.match(cfg.journalPath, /decisions\.jsonl$/);
+});
+
+test("loadConfig refuses a bad VETO_JOURNAL_GCS URI", () => {
+  const dir = tmpDir();
+  const file = join(dir, ".env");
+  writeFileSync(
+    file,
+    Object.entries(IDENTITIES)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\n"),
+  );
+  assert.throws(
+    () => loadConfig({ VETO_KEYS_DIR: dir, VETO_JOURNAL_GCS: "gs://bucketonly" }, { envFiles: [file] }),
+    /gs:\/\/bucket\/object/,
+  );
+});

@@ -156,6 +156,9 @@ launchd, user agent, macOS. Save as
 </plist>
 ```
 
+Cloud Run, if the laptop cannot stay up: [CLOUD.md](CLOUD.md). That path
+persists the journal in Cloud Storage and runs `once` on the cadence.
+
 If the window of recorded days breaks, say the true number in the pitch. Do not
 round up to seven.
 
