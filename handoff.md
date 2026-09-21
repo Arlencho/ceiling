@@ -1,61 +1,53 @@
 ## Built
 
-Closed the five review findings on PR 62. Branch `feat/app-fleet-console`. Nothing else.
+Closed the remaining round 2 finding on PR 69 (`feat/app-override`) without touching `programs/veto/src` and without editing the critic fixture in `f4a2d0a`.
 
-- F1. Refusal copy follows `row.reason`. The per-payment sentence is only for reason 5. An override line and the raise-per-payment block appear only for that reason.
-- F2. The Decisions tab no longer puts one date over the whole list. Rows group by local day, each group under its own heading.
-- F3. After three rate-limit retries the app stops claiming it is still trying. `rateLimited` is cleared, the error is "The RPC rate limited this read three times. Pull to retry.", and the read lands in `failed`.
-- F4. Rule detail, decision detail, and share wait for a completed chain read before claiming a rule or decision is absent. A decision is only taken from the ring of the rule named in its id.
-- F5. Rule detail compares a purpose stamp to the ruleset on this phone: matches, limits differ, or no ruleset with this stamp. Opening a rule rejects a typed stamp suffix unless the owner is applying a saved ruleset. Copy still does not claim the ruleset file is on chain.
+- A failed override probe is no longer stored under the live probe key. The skip that avoids a second chain read on a same-state refresh only applies to a probe that returned a result.
+- The blocked copy ("Pull to retry") still shows after a failed read. A later refresh with the same row and mandate fields issues the read the copy promises.
+- The two F3 regression checks still pass: a successful probe is not re-read on a same-state refresh, and a moved `last_nonce` still re-probes.
 
 ## Decisions
 
-- Extracted `refusalWhyLine` so the card and the tests share one sentence.
-- Override copy is withheld for every reason that an override cannot clear, even if `suggestedOverride` is nonzero.
-- Rate-limit exhaustion reuses `failed` rather than adding a sixth read state.
-- Stamp check is phone-local (cap, per-payment max, payee). A reader without this phone cannot check that match, and the detail screen says so.
+- Keep the field-keyed skip for results. That is the F3 close the previous review confirmed.
+- Hold a failed read in separate state so the screen can show the blocked copy without making `overrideProbeIsCurrent` true.
 
 ## Do not repeat
 
-- Do not reorder `app/index.js` polyfill imports.
-- Do not hardcode an RPC url or program id.
-- Do not invent rows, prices, or kWh.
-- Do not claim a ruleset is on chain. Only the purpose stamp is.
+- Do not cache a thrown probe under the live key. The owner was told to pull to retry.
+- Do not edit `app/lib/useOverrideGrant.test.ts` or `app/lib/overrideGrant.test.ts`.
+- Do not undo the guard-before-already order, the `isActive` clock path, or the field-keyed success skip.
 - Do not touch `programs/veto/src`.
-- Do not style a refusal as an error.
-- `lib/wallet.test.ts` `publicKeyFromMwaAddress accepts a base58 address` can fail on a random keypair whose base58 also decodes as 32-byte base64. Pre-existing. Not part of these five findings.
+- `react-test-renderer` is a devDependency in `app/package.json` and in `app/package-lock.json`. `npm ci` in `app/` must keep installing it or the app job and the hook fixture break.
 
 ## Evidence
 
-F1, unfixed why-line (perTxMax in hand, amount 50, limit 60):
+Red on unfixed `f4a2d0a`, from `app/`:
 
 ```
-reason 1 "Asked for 50, over the 60 per-payment maximum. No override would have cleared this."
-reason 2 same
-reason 5 same
-reason 6 same
+npx tsx --experimental-test-module-mocks --test lib/useOverrideGrant.test.ts
 ```
 
-F1, after the fix:
+- `CRITIC F3: after a failed probe, a refresh that reads the same state back must re-probe, because the copy says "Pull to retry"`
+  `AssertionError: the pull the owner was told to do must issue the read it promised` (`1 !== 2`)
+- `regression F3: after a successful probe, a refresh that reads the same state back does not re-probe`: pass
+- `regression F3: a refresh that shows the chain moved on does re-probe`: pass
 
-```
-reason 1 "mandate not active."
-reason 5 "Asked for 50, over the 60 per-payment maximum. No override would have cleared this."
-reason 6 "over remaining cap."
-```
+After the product change, from `app/`:
 
-From `app/`:
-
+- same file: 3 pass, 0 fail
 - `npx tsc --noEmit`: exit 0
-- `npm test`: 71 pass, 0 fail (one earlier full run hit the pre-existing wallet base58 flake, then 71/71)
 - `npx expo lint`: exit 0
-- `npx expo config --type public`: `platforms: ['android']`, `android.package: com.veto.app`, `extra.vetoRpc: ''`, `extra.vetoProgramId: ''`, splash and adaptive icon `#0F1A16`
+- `npm test`: 95 pass, 0 fail
+- `npx expo config --type public`: `platforms: ['android']`, `android.package: com.veto.app`, `extra.vetoRpc: ''`, `extra.vetoProgramId: ''`
+- `npm ci`: exit 0
+- `npm ls react-test-renderer --depth=0`: `react-test-renderer@19.2.3`
+
+No Seeker run. `grant_override` via Mobile Wallet Adapter still has to be signed on device.
 
 ## Open questions
 
-- Live Seeker / MWA open-mandate and share sheet still need a device.
-- The wallet base58 address test is flaky. Out of scope for this round.
+- Live Seeker path: grant from a per-payment refusal, then watcher retry of the same nonce, then the four-step record on Decisions.
 
 ## Next hint
 
-PR 62 against `main` on `feat/app-fleet-console`. Issues 47, 51, 52, 55, 56, 59 stay open for QA.
+Branch `feat/app-override`. PR 69 against `main` for issue 16. Leave 16 open for QA.

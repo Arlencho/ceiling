@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { KIND_OPENED, KIND_PAID, KIND_REFUSED } from './constants';
+import { KIND_OPENED, KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, KIND_REVOKED } from './constants';
 import {
   formatBaseUnits,
   formatDayHeading,
   formatTimeLeft,
   groupByLocalDay,
+  isListedDecision,
   isLocalDay,
   parseBaseUnits,
   remainingCap,
@@ -29,7 +30,7 @@ test('formatTimeLeft names remaining time or expired', () => {
   assert.equal(formatTimeLeft(100n + 3600n + 60n, 100n), '1h 1m left');
 });
 
-test('today lists paid and refused newest first and skips other kinds', () => {
+test('today lists paid, refused and override newest first and skips opened and revoked', () => {
   const noon = new Date(2026, 8, 20, 12, 0, 0);
   const prior = new Date(2026, 8, 19, 12, 0, 0);
   const ts = BigInt(Math.floor(noon.getTime() / 1000));
@@ -51,14 +52,22 @@ test('today lists paid and refused newest first and skips other kinds', () => {
       entry(KIND_OPENED, 0n, ts),
       entry(KIND_PAID, 1n, ts),
       entry(KIND_REFUSED, 2n, ts),
+      entry(KIND_OVERRIDE, 2n, ts),
+      entry(KIND_REVOKED, 0n, ts),
       entry(KIND_PAID, 3n, yesterday),
     ],
     noon.getTime(),
   );
-  assert.equal(rows.length, 2);
-  assert.equal(rows[0]?.nonce, 2n);
-  assert.equal(rows[1]?.nonce, 1n);
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0]?.kind, KIND_OVERRIDE);
+  assert.equal(rows[1]?.nonce, 2n);
+  assert.equal(rows[2]?.nonce, 1n);
   assert.equal(isLocalDay(yesterday, noon.getTime()), false);
+  assert.equal(isListedDecision(KIND_PAID), true);
+  assert.equal(isListedDecision(KIND_REFUSED), true);
+  assert.equal(isListedDecision(KIND_OVERRIDE), true);
+  assert.equal(isListedDecision(KIND_OPENED), false);
+  assert.equal(isListedDecision(KIND_REVOKED), false);
 });
 
 test('decision rows from several days sit under the heading for their own day', () => {

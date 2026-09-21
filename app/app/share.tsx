@@ -44,7 +44,9 @@ export default function ShareScreen() {
   const parsed = id ? parseDecisionId(id) : null;
   const chain = useChain();
   const mandate = chain.mandate;
-  const [choice, setChoice] = useState<ScopeChoice>('decision');
+  const kind: ChargeKind | null =
+    parsed?.kind === KIND_PAID ? 'paid' : parsed?.kind === KIND_REFUSED ? 'refused' : null;
+  const [choice, setChoice] = useState<ScopeChoice>(kind ? 'decision' : 'rule');
   const [shape, setShape] = useState<Shape>('csv');
   const [fromDay, setFromDay] = useState(() => utcDay(Date.now()));
   const [toDay, setToDay] = useState(() => utcDay(Date.now()));
@@ -61,9 +63,6 @@ export default function ShareScreen() {
       .map((row) => rowToExportable(row, mandate.address))
       .filter((row): row is NonNullable<typeof row> => row != null);
   }, [chain.rows, mandate, parsed]);
-
-  const kind: ChargeKind | null =
-    parsed?.kind === KIND_PAID ? 'paid' : parsed?.kind === KIND_REFUSED ? 'refused' : null;
 
   const scope: ShareScope | null = useMemo(() => {
     if (choice === 'decision') {
@@ -140,9 +139,17 @@ export default function ShareScreen() {
               <Opt
                 on={choice === 'decision'}
                 title="This decision"
-                hint="One answer, its rule and its proof."
+                hint={
+                  kind
+                    ? 'One answer, its rule and its proof.'
+                    : 'Export is complete over paid and refused charges. An override is listed in the app and is not this file.'
+                }
                 count={choice === 'decision' ? `${count} row` : '1 row'}
-                onPress={() => setChoice('decision')}
+                onPress={() => {
+                  if (kind) {
+                    setChoice('decision');
+                  }
+                }}
               />
               <Opt
                 on={choice === 'date_range'}
