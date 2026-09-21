@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!--
+    Adaptive icon foreground, transparent ground.
+    All artwork sits inside the safe circle (radius ~313 of 1024), so it
+    survives circle, squircle and rounded-square masks.
+  -->
+  <rect x="322" y="284" width="380" height="456" rx="16" fill="#EDE6D6"/>
+  <rect x="382" y="404" width="260" height="30" fill="#0F1A16"/>
+  <rect x="382" y="512" width="206" height="56" fill="#0F1A16"/>
+  <rect x="588" y="478" width="27" height="124" fill="#0F1A16"/>
+</svg>
