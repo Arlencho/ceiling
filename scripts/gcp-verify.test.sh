@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Critic round 2 fixtures for scripts/gcp-verify.sh.
+# Critic fixtures for scripts/gcp-verify.sh (round 2 absences, round 3
+# budget-name re-point and table contract).
 #
 # No live GCP, no credentials, no network. A fake gcloud on PATH is the
 # only cloud the script is allowed to see. These checks encode the
@@ -55,7 +56,7 @@ happy_budget() {
     if [[ "$mute" == 1 ]]; then
         notify='{"disableDefaultIamRecipients": true, "monitoringNotificationChannels": []}'
     fi
-    printf '{"displayName":"veto-watcher cap","amount":{"specifiedAmount":{%s,"currencyCode":"SEK"}},"budgetFilter":{"projects":["projects/472736420070"]},"thresholdRules":[{"thresholdPercent":0.5},{"thresholdPercent":0.9},{"thresholdPercent":1.0}],"notificationsRule":%s}\n' "$units" "$notify"
+    printf '{"displayName":"veto-watcher spend alert (does not stop spend)","amount":{"specifiedAmount":{%s,"currencyCode":"SEK"}},"budgetFilter":{"projects":["projects/472736420070"]},"thresholdRules":[{"thresholdPercent":0.5},{"thresholdPercent":0.9},{"thresholdPercent":1.0}],"notificationsRule":%s}\n' "$units" "$notify"
 }
 
 if [[ "$mode" == lists-fail ]]; then
@@ -278,7 +279,9 @@ if grep -q 'asserts every claim in the table above' "$DOC" || grep -q 'every cla
     table_missing=0
     grep -q 'Veto Watcher' "$VERIFY" || { bad "docs/GCP_SETUP.md:16 display name Veto Watcher is not asserted"; table_missing=1; }
     grep -q '2026-09-21T11:36:55Z' "$VERIFY" || { bad "docs/GCP_SETUP.md:17 created timestamp is not asserted"; table_missing=1; }
-    grep -q 'veto-watcher cap' "$VERIFY" || { bad "docs/GCP_SETUP.md:20 budget name is not asserted"; table_missing=1; }
+    grep -F -q 'veto-watcher spend alert (does not stop spend)' "$VERIFY" || { bad "docs/GCP_SETUP.md:20 budget name is not asserted"; table_missing=1; }
+    grep -F -q 'DATA_READ' "$VERIFY" || { bad "docs/GCP_SETUP.md:21 Secret Manager DATA_READ is not asserted"; table_missing=1; }
+    grep -F -q 'DATA_WRITE' "$VERIFY" || { bad "docs/GCP_SETUP.md:21 Secret Manager DATA_WRITE is not asserted"; table_missing=1; }
     if grep -q 'storage-api.googleapis.com' "$VERIFY" && ! grep -q 'storage.googleapis.com' "$VERIFY"; then
         bad "docs/GCP_SETUP.md:21 says storage; scripts/gcp-verify.sh:84 asserts storage-api.googleapis.com"
         table_missing=1
