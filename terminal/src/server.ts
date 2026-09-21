@@ -36,6 +36,7 @@ export function viewFromState(state: TerminalState, snap: PaymentsSnapshot, cfg:
     generatedAt: state.fetchedAt,
     sourceUrl: state.sourceUrl,
     feed: state.feed,
+    httpStatus: state.httpStatus,
     windowStart: state.window?.timeStart ?? null,
     windowEnd: state.window?.timeEnd ?? null,
     sekPerKwh: state.window?.sekPerKwh ?? null,

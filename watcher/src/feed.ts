@@ -11,16 +11,18 @@ export type PriceWindow = {
   sekPerKwh: string;
 };
 
-export type FeedStatus = "ok" | "unreachable" | "malformed" | "missing_window";
+export type FeedStatus = "ok" | "unreachable" | "http_error" | "malformed" | "missing_window";
 
 /** One classified read of the day file. */
 export type FeedRead = {
   status: FeedStatus;
   sourceUrl: string;
-  /** Time of the last successful day-file read, or of this attempt if none. */
-  readAt: Date;
+  /** Time of the last successful price read. Null when no price was read. */
+  readAt: Date | null;
   refreshFailed: boolean;
   window: PriceWindow | null;
+  /** Set when the feed answered with a non-2xx status. */
+  httpStatus: number | null;
 };
 
 export interface PriceFeed {
@@ -120,14 +122,36 @@ export function windowContaining(windows: PriceWindow[], at: Date): PriceWindow 
   return null;
 }
 
-/** True when the body is not a JSON array (HTML, an object, truncated JSON). */
+/** True when the body is not a day file the parser can read.
+ *
+ * HTML, an object, truncated JSON, and a JSON array whose entries are not in
+ * the expected shape are all unreadable. An empty array is understood: it has
+ * no windows, including none for this hour.
+ */
 export function isMalformedDayBody(text: string): boolean {
   try {
     const parsed: unknown = JSON.parse(text);
-    return !Array.isArray(parsed);
+    if (!Array.isArray(parsed)) return true;
+    if (parsed.length === 0) return false;
+    return parseFeedBody(text).length === 0;
   } catch {
     return true;
   }
+}
+
+function noPrice(
+  status: Exclude<FeedStatus, "ok">,
+  sourceUrl: string,
+  extra: { refreshFailed?: boolean; httpStatus?: number | null } = {},
+): FeedRead {
+  return {
+    status,
+    sourceUrl,
+    readAt: null,
+    refreshFailed: extra.refreshFailed ?? false,
+    window: null,
+    httpStatus: extra.httpStatus ?? null,
+  };
 }
 
 function classifyDayBody(
@@ -139,19 +163,15 @@ function classifyDayBody(
 ): FeedRead {
   const windows = parseFeedBody(text);
   if (windows.length === 0) {
-    return {
-      status: isMalformedDayBody(text) ? "malformed" : "missing_window",
-      sourceUrl,
-      readAt,
+    return noPrice(isMalformedDayBody(text) ? "malformed" : "missing_window", sourceUrl, {
       refreshFailed,
-      window: null,
-    };
+    });
   }
   const window = windowContaining(windows, at);
   if (window === null) {
-    return { status: "missing_window", sourceUrl, readAt, refreshFailed, window: null };
+    return noPrice("missing_window", sourceUrl, { refreshFailed });
   }
-  return { status: "ok", sourceUrl, readAt, refreshFailed, window };
+  return { status: "ok", sourceUrl, readAt, refreshFailed, window, httpStatus: null };
 }
 
 type CachedDay = { text: string; readAt: Date };
@@ -176,7 +196,7 @@ export class EnergySpotFeed implements PriceFeed {
       if (!res.ok) {
         refreshFailed = true;
         if (cached === undefined) {
-          return { status: "unreachable", sourceUrl, readAt: at, refreshFailed: true, window: null };
+          return noPrice("http_error", sourceUrl, { refreshFailed: true, httpStatus: res.status });
         }
         text = cached.text;
         readAt = cached.readAt;
@@ -187,7 +207,7 @@ export class EnergySpotFeed implements PriceFeed {
     } catch {
       refreshFailed = true;
       if (cached === undefined) {
-        return { status: "unreachable", sourceUrl, readAt: at, refreshFailed: true, window: null };
+        return noPrice("unreachable", sourceUrl, { refreshFailed: true });
       }
       text = cached.text;
       readAt = cached.readAt;

@@ -15,9 +15,10 @@ export type PagePayment = {
 };
 
 export type PageView = {
-  generatedAt: string;
+  generatedAt: string | null;
   sourceUrl: string;
   feed: FeedStatus;
+  httpStatus?: number | null;
   windowStart: string | null;
   windowEnd: string | null;
   sekPerKwh: string | null;
@@ -52,6 +53,10 @@ function row(label: string, value: string): string {
 function feedBanner(view: PageView): string {
   if (view.feed === "unreachable") {
     return `<p class="down">The price feed could not be reached. No price is shown and no quote is offered. This terminal never falls back to a stored or invented price.</p>`;
+  }
+  if (view.feed === "http_error") {
+    const code = view.httpStatus !== null && view.httpStatus !== undefined ? String(view.httpStatus) : "";
+    return `<p class="down">The price feed answered with HTTP ${esc(code)}. No price is shown and no quote is offered.</p>`;
   }
   if (view.feed === "malformed") {
     return `<p class="down">The price feed answered, but the body could not be read. No price is shown and no quote is offered.</p>`;
@@ -150,7 +155,7 @@ ${noteLine}
 <table>
 ${priceRows}
 ${row("Price source", `<a href="${esc(view.sourceUrl)}">${esc(view.sourceUrl)}</a>`)}
-${row("Price last read at", esc(view.generatedAt))}
+${view.feed === "ok" && view.generatedAt !== null ? row("Price last read at", esc(view.generatedAt)) : ""}
 </table>
 
 <h2>Received payments</h2>

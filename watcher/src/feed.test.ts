@@ -113,6 +113,7 @@ test("a later failed fetch keeps the cached day file and reports the failed refr
   assert.equal(second.status, "ok");
   assert.equal(second.refreshFailed, true);
   assert.equal(second.window?.sekPerKwh, "0.00892");
+  assert.ok(first.readAt !== null && second.readAt !== null);
   assert.equal(second.readAt.getTime(), first.readAt.getTime());
 });
 

@@ -18,11 +18,12 @@ export type StateWindow = {
 export type TerminalState = {
   feed: FeedStatus;
   sourceUrl: string;
-  fetchedAt: string;
+  fetchedAt: string | null;
   refreshFailed: boolean;
   window: StateWindow | null;
   quote: Quote | null;
   note: string | null;
+  httpStatus: number | null;
 };
 
 function noteFor(read: FeedRead, quote: Quote | null, unreadable: boolean): string | null {
@@ -32,6 +33,9 @@ function noteFor(read: FeedRead, quote: Quote | null, unreadable: boolean): stri
   if (read.status === "unreachable") {
     return "The price feed could not be reached, so there is no price and no quote.";
   }
+  if (read.status === "http_error") {
+    return `The price feed answered with HTTP ${String(read.httpStatus)}, so there is no price and no quote.`;
+  }
   if (read.status === "malformed") {
     return "The price feed answered, but the body could not be read, so there is no price and no quote.";
   }
@@ -39,7 +43,7 @@ function noteFor(read: FeedRead, quote: Quote | null, unreadable: boolean): stri
     return "The price feed has no entry for this hour, so there is no price and no quote.";
   }
   const parts: string[] = [];
-  if (read.refreshFailed) {
+  if (read.refreshFailed && read.readAt !== null) {
     parts.push(
       `A later read of the source failed. The price is from the last successful read at ${read.readAt.toISOString()}.`,
     );
@@ -66,11 +70,32 @@ export async function buildState(args: {
       const window = await args.feed.getWindow(args.at);
       read =
         window === null
-          ? { status: "unreachable", sourceUrl, readAt: args.at, refreshFailed: false, window: null }
-          : { status: "ok", sourceUrl, readAt: args.at, refreshFailed: false, window };
+          ? {
+              status: "unreachable",
+              sourceUrl,
+              readAt: null,
+              refreshFailed: false,
+              window: null,
+              httpStatus: null,
+            }
+          : {
+              status: "ok",
+              sourceUrl,
+              readAt: args.at,
+              refreshFailed: false,
+              window,
+              httpStatus: null,
+            };
     }
   } catch {
-    read = { status: "unreachable", sourceUrl, readAt: args.at, refreshFailed: true, window: null };
+    read = {
+      status: "unreachable",
+      sourceUrl,
+      readAt: null,
+      refreshFailed: true,
+      window: null,
+      httpStatus: null,
+    };
   }
 
   let quote: Quote | null = null;
@@ -94,11 +119,12 @@ export async function buildState(args: {
   return {
     feed,
     sourceUrl: read.sourceUrl,
-    fetchedAt: read.readAt.toISOString(),
+    fetchedAt: feed === "ok" && read.readAt !== null ? read.readAt.toISOString() : null,
     refreshFailed: read.refreshFailed,
     window,
     quote: unreadable ? null : quote,
     note: noteFor(read, quote, unreadable),
+    httpStatus: read.httpStatus,
   };
 }
 
