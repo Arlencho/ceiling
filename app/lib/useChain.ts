@@ -25,7 +25,12 @@ import {
   type OpenMandateResult,
   type RevokeResult,
 } from './chain';
-import { mandateReadStatus, type MandateReadStatus } from './mandateRead';
+import {
+  mandateReadStatus,
+  RATE_LIMIT_GAVE_UP,
+  RATE_LIMIT_RETRY_MS,
+  type MandateReadStatus,
+} from './mandateRead';
 import type { MandateAccount } from './mandate';
 import type { LedgerRow, LedgerSnapshot } from './ring';
 import { isRateLimitError } from './rpcError';
@@ -34,8 +39,6 @@ import { useWallet } from './useWallet';
 import type { WalletStore } from './wallet';
 
 export const SELECTED_MANDATE_KEY = 'veto.mandate.selected';
-
-const RETRY_MS = [500, 1000, 2000];
 
 export type ChainState = {
   ready: boolean;
@@ -171,7 +174,7 @@ function useChainState(): ChainState {
       if (isRateLimitError(err)) {
         setRateLimited(true);
         let last: unknown = err;
-        for (const delay of RETRY_MS) {
+        for (const delay of RATE_LIMIT_RETRY_MS) {
           await wait(delay);
           try {
             await run();
@@ -187,8 +190,8 @@ function useChainState(): ChainState {
         }
         if (last) {
           if (isRateLimitError(last)) {
-            setError(last instanceof Error ? last.message : 'The RPC is rate limiting this read.');
-            setRateLimited(true);
+            setError(RATE_LIMIT_GAVE_UP);
+            setRateLimited(false);
           } else {
             setError(last instanceof Error ? last.message : 'Chain read failed');
             setRateLimited(false);

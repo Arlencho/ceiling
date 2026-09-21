@@ -16,6 +16,7 @@ import type { MandateAccount } from '../../lib/mandate';
 import { displayPurpose } from '../../lib/ruleView';
 import {
   applyRuleset,
+  assertPurposeMayOpen,
   rulesetSlug,
   stampPurpose,
   type Ruleset,
@@ -145,6 +146,7 @@ function RuleCompose({
     if (purpose.trim().length > PURPOSE_MAX_LEN) {
       throw new Error(`purpose is longer than ${PURPOSE_MAX_LEN} characters`);
     }
+    assertPurposeMayOpen(purpose, applying);
     const merchant = new PublicKey(fields.merchant.trim());
     const expiresAt = BigInt(Math.floor(Date.now() / 1000) + days * 86400);
     return chain.open({

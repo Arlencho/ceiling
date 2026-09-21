@@ -1,4 +1,5 @@
 import { PURPOSE_MAX_LEN } from './constants';
+import { parseBaseUnits } from './format';
 import type { MandateFields } from './templates';
 
 export type Ruleset = {
@@ -54,6 +55,65 @@ export function parsePurposeStamp(purpose: string): PurposeStamp {
     rulesetId: match[2] ?? null,
     version: match[3] ? Number.parseInt(match[3], 10) : null,
   };
+}
+
+export function purposeHasStampSuffix(purpose: string): boolean {
+  return STAMP_RE.test(purpose.trim());
+}
+
+export function assertPurposeMayOpen(purpose: string, applying: boolean): void {
+  if (!applying && purposeHasStampSuffix(purpose)) {
+    throw new Error(
+      'Do not type a ruleset stamp into purpose. Apply a saved ruleset to stamp identity and version. The ruleset file itself is not on chain.',
+    );
+  }
+}
+
+export type StampAlignment = 'match' | 'limits-differ' | 'missing';
+
+export function stampAlignment(args: {
+  purpose: string;
+  cap: bigint;
+  perTxMax: bigint;
+  merchant: string;
+  decimals: number;
+  rulesets: readonly Ruleset[];
+}): { id: string; version: number; alignment: StampAlignment } | null {
+  const parsed = parsePurposeStamp(args.purpose);
+  if (!parsed.rulesetId || parsed.version == null) {
+    return null;
+  }
+  const found = args.rulesets.find(
+    (row) => row.id === parsed.rulesetId && row.version === parsed.version,
+  );
+  if (!found) {
+    return { id: parsed.rulesetId, version: parsed.version, alignment: 'missing' };
+  }
+  let cap: bigint;
+  let perTxMax: bigint;
+  try {
+    cap = parseBaseUnits(found.cap, args.decimals);
+    perTxMax = parseBaseUnits(found.perTxMax, args.decimals);
+  } catch {
+    return { id: parsed.rulesetId, version: parsed.version, alignment: 'limits-differ' };
+  }
+  const same =
+    cap === args.cap && perTxMax === args.perTxMax && found.merchant === args.merchant;
+  return {
+    id: parsed.rulesetId,
+    version: parsed.version,
+    alignment: same ? 'match' : 'limits-differ',
+  };
+}
+
+export function stampAlignmentLine(alignment: StampAlignment, version: number): string {
+  if (alignment === 'match') {
+    return `matches ruleset v${version} on this phone`;
+  }
+  if (alignment === 'limits-differ') {
+    return `limits differ from ruleset v${version} on this phone`;
+  }
+  return 'no ruleset with this stamp on this phone';
 }
 
 export function applyRuleset(ruleset: Ruleset): AppliedRule {

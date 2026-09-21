@@ -146,6 +146,32 @@ export function formatDayHeading(unixSeconds: bigint): string {
   return `${date.getDate()} ${DAY_MONTHS[date.getMonth()] ?? ''}`;
 }
 
+export function localDayKey(unixSeconds: bigint): string {
+  const date = new Date(Number(unixSeconds) * 1000);
+  if (Number.isNaN(date.getTime())) {
+    return unixSeconds.toString();
+  }
+  return `${date.getFullYear().toString().padStart(4, '0')}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+export function groupByLocalDay<T extends { ts: bigint }>(
+  rows: readonly T[],
+): { key: string; heading: string; rows: T[] }[] {
+  const groups: { key: string; heading: string; rows: T[] }[] = [];
+  const indexByKey = new Map<string, number>();
+  for (const row of rows) {
+    const key = localDayKey(row.ts);
+    const existing = indexByKey.get(key);
+    if (existing != null) {
+      groups[existing]!.rows.push(row);
+      continue;
+    }
+    indexByKey.set(key, groups.length);
+    groups.push({ key, heading: formatDayHeading(row.ts), rows: [row] });
+  }
+  return groups;
+}
+
 export function timeLeftParts(
   expiresAt: bigint,
   nowSec: bigint,

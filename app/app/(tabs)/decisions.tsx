@@ -11,7 +11,7 @@ import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
 import { KIND_PAID, KIND_REFUSED, LEDGER_CAPACITY } from '../../lib/constants';
-import { formatDayHeading, newestFirst } from '../../lib/format';
+import { groupByLocalDay, newestFirst } from '../../lib/format';
 import { displayPurpose } from '../../lib/ruleView';
 import { useChain } from '../../lib/useChain';
 import { truncateAddress } from '../../lib/wallet';
@@ -31,7 +31,7 @@ export default function DecisionsScreen() {
   );
   const paid = charges.filter((row) => row.kind === KIND_PAID).length;
   const refused = charges.filter((row) => row.kind === KIND_REFUSED).length;
-  const headingTs = charges[0]?.ts ?? null;
+  const days = useMemo(() => groupByLocalDay(charges), [charges]);
 
   const onRefresh = useCallback(() => {
     void chain.refresh();
@@ -62,9 +62,7 @@ export default function DecisionsScreen() {
               onSwitch={() => router.push('/(tabs)/rules')}
             />
             <View style={styles.head}>
-              <Text style={styles.h2}>
-                {headingTs != null ? formatDayHeading(headingTs) : 'Decisions'}
-              </Text>
+              <Text style={styles.h2}>Decisions</Text>
               <Text style={styles.meta}>
                 {paid} paid · {refused} refused
               </Text>
@@ -75,16 +73,21 @@ export default function DecisionsScreen() {
                 rows.
               </EmptyState>
             ) : (
-              charges.map((row, index) => (
-                <DecisionRow
-                  key={`${row.ts.toString()}-${row.kind}-${row.nonce.toString()}-${index}`}
-                  row={row}
-                  decimals={chain.decimals}
-                  cluster={cluster}
-                  rpcUrl={rpcUrl}
-                  mandateAddress={mandate.address}
-                  perTxMax={mandate.perTxMax}
-                />
+              days.map((day) => (
+                <View key={day.key} style={styles.dayBlock}>
+                  <Text style={styles.day}>{day.heading}</Text>
+                  {day.rows.map((row, index) => (
+                    <DecisionRow
+                      key={`${row.ts.toString()}-${row.kind}-${row.nonce.toString()}-${index}`}
+                      row={row}
+                      decimals={chain.decimals}
+                      cluster={cluster}
+                      rpcUrl={rpcUrl}
+                      mandateAddress={mandate.address}
+                      perTxMax={mandate.perTxMax}
+                    />
+                  ))}
+                </View>
               ))
             )}
           </View>
@@ -115,5 +118,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     fontFamily: fonts.mono,
+  },
+  dayBlock: {
+    gap: 4,
+    alignSelf: 'stretch',
+  },
+  day: {
+    color: colors.text,
+    fontSize: 22,
+    fontFamily: fonts.serif,
+    marginTop: 6,
   },
 });

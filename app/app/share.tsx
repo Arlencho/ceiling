@@ -6,6 +6,7 @@ import { Button } from '../components/Button';
 import { ConnectGate } from '../components/ConnectGate';
 import { EmptyState } from '../components/EmptyState';
 import { Field } from '../components/Field';
+import { ReadState } from '../components/ReadState';
 import { Screen } from '../components/Screen';
 import { TopBar } from '../components/TopBar';
 import { colors, fonts } from '../components/theme';
@@ -13,6 +14,7 @@ import { KIND_PAID, KIND_REFUSED } from '../lib/constants';
 import {
   COMPLETENESS_NOTE,
   formatExport,
+  loadedRuleMatchesDecision,
   parseDayBound,
   parseDecisionId,
   rowToExportable,
@@ -21,6 +23,7 @@ import {
   type ChargeKind,
   type ShareScope,
 } from '../lib/exportRecord';
+import { mayClaimAbsence } from '../lib/mandateRead';
 import { displayPurpose } from '../lib/ruleView';
 import { useChain } from '../lib/useChain';
 
@@ -51,10 +54,13 @@ export default function ShareScreen() {
     if (!mandate) {
       return [];
     }
+    if (!loadedRuleMatchesDecision(mandate.address, parsed?.mandate ?? null)) {
+      return [];
+    }
     return chain.rows
       .map((row) => rowToExportable(row, mandate.address))
       .filter((row): row is NonNullable<typeof row> => row != null);
-  }, [chain.rows, mandate]);
+  }, [chain.rows, mandate, parsed]);
 
   const kind: ChargeKind | null =
     parsed?.kind === KIND_PAID ? 'paid' : parsed?.kind === KIND_REFUSED ? 'refused' : null;
@@ -120,7 +126,12 @@ export default function ShareScreen() {
     <Screen>
       <TopBar back="Decisions" meta={mandate ? displayPurpose(mandate.purpose) : undefined} />
       <ConnectGate>
-        {!mandate ? (
+        {!mayClaimAbsence(chain.mandateStatus) ? (
+          <ReadState
+            status={chain.mandateStatus}
+            empty="No rule is selected. Switch on the Rules tab first."
+          />
+        ) : !mandate ? (
           <EmptyState>No rule is selected. Switch on the Rules tab first.</EmptyState>
         ) : (
           <View style={styles.block}>

@@ -4,13 +4,15 @@ import { Linking, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../../components/Button';
 import { ConnectGate } from '../../components/ConnectGate';
 import { EmptyState } from '../../components/EmptyState';
+import { ReadState } from '../../components/ReadState';
 import { RefusalCard } from '../../components/RefusalCard';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
 import { KIND_PAID, KIND_REFUSED } from '../../lib/constants';
-import { parseDecisionId } from '../../lib/exportRecord';
+import { findLedgerDecision, parseDecisionId } from '../../lib/exportRecord';
 import { explorerTxUrl, formatBaseUnits, formatClock, formatUnix } from '../../lib/format';
+import { mayClaimAbsence } from '../../lib/mandateRead';
 import { displayPurpose } from '../../lib/ruleView';
 import { useChain } from '../../lib/useChain';
 import { truncateAddress } from '../../lib/wallet';
@@ -23,21 +25,11 @@ export default function DecisionDetailScreen() {
   const router = useRouter();
   const rpcUrl = chain.config?.rpcUrl ?? '';
   const cluster = chain.config?.explorerCluster ?? 'devnet';
-  const row =
-    parsed && chain.mandate?.address === parsed.mandate
-      ? chain.rows.find(
-          (item) =>
-            item.ts === parsed.ts && item.kind === parsed.kind && item.nonce === parsed.nonce,
-        )
-      : parsed
-        ? chain.rows.find(
-            (item) =>
-              item.ts === parsed.ts && item.kind === parsed.kind && item.nonce === parsed.nonce,
-          )
-        : undefined;
+  const row = findLedgerDecision(chain.rows, parsed, chain.mandate?.address);
   const mandate =
     parsed != null
-      ? chain.mandates.find((item) => item.address === parsed.mandate) ?? chain.mandate
+      ? chain.mandates.find((item) => item.address === parsed.mandate) ??
+        (chain.mandate?.address === parsed.mandate ? chain.mandate : null)
       : chain.mandate;
 
   const onShare = () => {
@@ -58,7 +50,12 @@ export default function DecisionDetailScreen() {
     <Screen>
       <TopBar back="Decisions" meta={mandate ? displayPurpose(mandate.purpose) : undefined} />
       <ConnectGate>
-        {!row || (row.kind !== KIND_PAID && row.kind !== KIND_REFUSED) ? (
+        {!mayClaimAbsence(chain.mandateStatus) ? (
+          <ReadState
+            status={chain.mandateStatus}
+            empty="This decision is not on the ring for the selected rule. The app does not invent one."
+          />
+        ) : !row || (row.kind !== KIND_PAID && row.kind !== KIND_REFUSED) ? (
           <EmptyState>
             This decision is not on the ring for the selected rule. The app does not invent one.
           </EmptyState>

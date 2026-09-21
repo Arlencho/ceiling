@@ -343,3 +343,29 @@ export function parseDecisionId(
     nonce: BigInt(nonceRaw),
   };
 }
+
+export function loadedRuleMatchesDecision(
+  loadedMandate: string | null | undefined,
+  parsedMandate: string | null,
+): boolean {
+  if (!loadedMandate) {
+    return false;
+  }
+  if (parsedMandate == null) {
+    return true;
+  }
+  return loadedMandate === parsedMandate;
+}
+
+export function findLedgerDecision(
+  rows: readonly LedgerRow[],
+  parsed: { mandate: string; ts: bigint; kind: number; nonce: bigint } | null,
+  loadedMandate: string | null | undefined,
+): LedgerRow | undefined {
+  if (!parsed || !loadedRuleMatchesDecision(loadedMandate, parsed.mandate)) {
+    return undefined;
+  }
+  return rows.find(
+    (item) => item.ts === parsed.ts && item.kind === parsed.kind && item.nonce === parsed.nonce,
+  );
+}

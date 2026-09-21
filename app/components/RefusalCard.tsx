@@ -1,7 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
 
+import { REASON_OVER_PER_TX_MAX } from '../lib/constants';
 import { formatBaseUnits } from '../lib/format';
-import { renderReason } from '../lib/reasons';
+import { refusalWhyLine } from '../lib/reasons';
 import type { LedgerRow } from '../lib/ring';
 import { Button } from './Button';
 import { colors, fonts } from './theme';
@@ -21,13 +22,13 @@ export function RefusalCard({
   onShare?: () => void;
   proof?: string;
 }) {
-  const amount = formatBaseUnits(row.amount, decimals);
-  const reason = renderReason(row.reason, row.suggestedOverride, decimals);
-  const limit = perTxMax != null ? formatBaseUnits(perTxMax, decimals) : null;
-  const why =
-    limit != null
-      ? `Asked for ${amount}, over the ${limit} per-payment maximum. ${reason.overrideLine ?? ''}`
-      : `${reason.text}. ${reason.overrideLine ?? ''}`.trim();
+  const why = refusalWhyLine({
+    reason: row.reason,
+    amount: row.amount,
+    suggestedOverride: row.suggestedOverride,
+    decimals,
+    perTxMax,
+  });
 
   return (
     <View style={styles.card} accessibilityLabel="Refused, recorded on chain">
@@ -39,7 +40,7 @@ export function RefusalCard({
         {`Your rule held.\nNo payment made.`}
       </Text>
       <Text style={styles.why}>{why}</Text>
-      {row.suggestedOverride > 0n ? (
+      {row.reason === REASON_OVER_PER_TX_MAX && row.suggestedOverride > 0n ? (
         <View style={styles.override}>
           <View style={styles.overrideText}>
             <Text style={styles.overrideK}>Override that would clear it</Text>

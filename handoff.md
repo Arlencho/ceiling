@@ -1,47 +1,61 @@
 ## Built
 
-Rebuilt the Expo app as a console for one owner governing several agents.
+Closed the five review findings on PR 62. Branch `feat/app-fleet-console`. Nothing else.
 
-- Three tabs only: Overview, Rules, Decisions. Icon plus label, 12px labels, spruce/bone palette from `design/merged.html`. Share is an action on a decision. Revoke is an action on a rule.
-- Overview answers which rule, then spent/paid/refused/time left, then today. Rules lists every on-chain mandate with purpose, spent against cap, time left, agent key, payee, and state. Switching one changes Overview and Decisions.
-- Rule detail: the rule as a sentence, fields, two-key copy, revoke. Limits cannot change on chain; "edit" saves a new ruleset version on the phone.
-- Decisions: "Paid within rule" on ordinary rows. Refusal is inverted bone on ink: "Your rule held. No payment made." plus the override. Payee lives on the rule, not as an unlabelled address on the row. A signature is labelled as a transaction.
-- Decision detail: Share is the full-width primary action.
-- Rulesets (issue 59): authored on the phone, name plus version, apply to a new agent is one action. Identity and version are stamped into purpose (`[slug vN]`), which is on chain and immutable. Copy never claims the ruleset file is on chain.
-- Export (phone half of 51): this decision, a date range, or everything under this rule; CSV columns identical to `tools/bulk.ts`; JSON is the documented record or bulk envelope with `completeness=payments`.
-- Help from every tab, three screens: what a rule is, why a refusal is recorded and the two keys, what export proves including the honest limit.
-- Rate-limited RPC read is its own state (`rate-limited`) and says so.
+- F1. Refusal copy follows `row.reason`. The per-payment sentence is only for reason 5. An override line and the raise-per-payment block appear only for that reason.
+- F2. The Decisions tab no longer puts one date over the whole list. Rows group by local day, each group under its own heading.
+- F3. After three rate-limit retries the app stops claiming it is still trying. `rateLimited` is cleared, the error is "The RPC rate limited this read three times. Pull to retry.", and the read lands in `failed`.
+- F4. Rule detail, decision detail, and share wait for a completed chain read before claiming a rule or decision is absent. A decision is only taken from the ring of the rule named in its id.
+- F5. Rule detail compares a purpose stamp to the ruleset on this phone: matches, limits differ, or no ruleset with this stamp. Opening a rule rejects a typed stamp suffix unless the owner is applying a saved ruleset. Copy still does not claim the ruleset file is on chain.
 
 ## Decisions
 
-- Consume export shape from `tools/bulk.ts` (CSV columns, completeness note, JSON envelope) rather than importing Node indexer into Expo. Rows come from the on-chain ring plus paginated ledger signatures. Unsigned rows are omitted, not invented.
-- Payee belongs on the rule (issue 56). Decision rows never show an unlabelled address.
-- App half of 55 only: detect 429, surface `rate-limited`, retry 500/1000/2000ms. Watcher endpoint is out of charter.
-- New mandate always mints a fresh agent keypair so each rule has its own agent.
-- No red in the theme. Form and RPC errors use bone/olive.
+- Extracted `refusalWhyLine` so the card and the tests share one sentence.
+- Override copy is withheld for every reason that an override cannot clear, even if `suggestedOverride` is nonzero.
+- Rate-limit exhaustion reuses `failed` rather than adding a sixth read state.
+- Stamp check is phone-local (cap, per-payment max, payee). A reader without this phone cannot check that match, and the detail screen says so.
 
 ## Do not repeat
 
 - Do not reorder `app/index.js` polyfill imports.
 - Do not hardcode an RPC url or program id.
-- Do not invent rows, prices, or kWh on decision copy. The design HTML numbers are a visual spec, not fixtures.
+- Do not invent rows, prices, or kWh.
 - Do not claim a ruleset is on chain. Only the purpose stamp is.
-- Do not add an iOS or web target, or run EAS / interactive login.
 - Do not touch `programs/veto/src`.
-- `npm ci` and checks must run from `app/` (lockfile lives there).
+- Do not style a refusal as an error.
+- `lib/wallet.test.ts` `publicKeyFromMwaAddress accepts a base58 address` can fail on a random keypair whose base58 also decodes as 32-byte base64. Pre-existing. Not part of these five findings.
 
 ## Evidence
 
-- `cd app && npx tsc --noEmit` : clean
-- `cd app && npm test` : 63 pass, 0 fail
-- `cd app && npx expo lint` : clean
-- `cd app && npx expo config --type public` : Android only, `com.veto.app`, extra RPC/program id empty (from env, not hardcoded), splash/icon `#0F1A16`
+F1, unfixed why-line (perTxMax in hand, amount 50, limit 60):
+
+```
+reason 1 "Asked for 50, over the 60 per-payment maximum. No override would have cleared this."
+reason 2 same
+reason 5 same
+reason 6 same
+```
+
+F1, after the fix:
+
+```
+reason 1 "mandate not active."
+reason 5 "Asked for 50, over the 60 per-payment maximum. No override would have cleared this."
+reason 6 "over remaining cap."
+```
+
+From `app/`:
+
+- `npx tsc --noEmit`: exit 0
+- `npm test`: 71 pass, 0 fail (one earlier full run hit the pre-existing wallet base58 flake, then 71/71)
+- `npx expo lint`: exit 0
+- `npx expo config --type public`: `platforms: ['android']`, `android.package: com.veto.app`, `extra.vetoRpc: ''`, `extra.vetoProgramId: ''`, splash and adaptive icon `#0F1A16`
 
 ## Open questions
 
-- Live Seeker / MWA open-mandate and share sheet still need a device. Headless checks do not replace that.
-- Bulk export beyond the ring depends on `getSignaturesForAddress` on this RPC. A wrapped week on a history-poor cluster will be incomplete, and the file still says completeness=payments.
+- Live Seeker / MWA open-mandate and share sheet still need a device.
+- The wallet base58 address test is flaky. Out of scope for this round.
 
 ## Next hint
 
-PR against `main` on `feat/app-fleet-console`. Issues 47, 51, 52, 55, 56, 59 stay open for QA.
+PR 62 against `main` on `feat/app-fleet-console`. Issues 47, 51, 52, 55, 56, 59 stay open for QA.

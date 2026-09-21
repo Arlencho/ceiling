@@ -1,5 +1,14 @@
 export type MandateReadStatus = 'not-read' | 'failed' | 'empty' | 'present' | 'rate-limited';
 
+export const RATE_LIMIT_RETRY_MS = [500, 1000, 2000] as const;
+
+export const RATE_LIMIT_GAVE_UP =
+  'The RPC rate limited this read three times. Pull to retry.';
+
+export function mayClaimAbsence(status: MandateReadStatus): boolean {
+  return status === 'empty' || status === 'present';
+}
+
 export function mandateReadStatus(args: {
   checkedOwner: string | null;
   ownerPublicKey: string | null;

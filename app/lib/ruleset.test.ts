@@ -2,12 +2,17 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { PURPOSE_MAX_LEN } from './constants';
+import { parseBaseUnits } from './format';
 import {
   addRuleset,
   applyRuleset,
+  assertPurposeMayOpen,
   nextRulesetVersion,
   parsePurposeStamp,
+  purposeHasStampSuffix,
   rulesetSlug,
+  stampAlignment,
+  stampAlignmentLine,
   stampPurpose,
   type Ruleset,
 } from './ruleset';
@@ -64,6 +69,57 @@ test('a long purpose is truncated so the stamp still fits the on-chain limit', (
 test('a ruleset slug is the identity written into purpose', () => {
   assert.equal(rulesetSlug('Mint budget'), 'mint-budget');
   assert.equal(rulesetSlug('  SE3 Home Charging  '), 'se3-home-charging');
+});
+
+test('a typed stamp suffix is rejected unless the owner is applying a saved ruleset', () => {
+  assert.equal(purposeHasStampSuffix('x [mint-budget v1]'), true);
+  assert.equal(purposeHasStampSuffix('cap a mint bot'), false);
+  assert.doesNotThrow(() => assertPurposeMayOpen('cap a mint bot [mint-budget v2]', true));
+  assert.throws(
+    () => assertPurposeMayOpen('x [mint-budget v1]', false),
+    /Do not type a ruleset stamp into purpose/,
+  );
+});
+
+test('a purpose stamp is checked against the ruleset on this phone', () => {
+  const stored = mintBudget();
+  const cap = parseBaseUnits(stored.cap, 6);
+  const perTxMax = parseBaseUnits(stored.perTxMax, 6);
+  const match = stampAlignment({
+    purpose: 'cap a mint bot [mint-budget v2]',
+    cap,
+    perTxMax,
+    merchant: stored.merchant,
+    decimals: 6,
+    rulesets: [stored],
+  });
+  assert.equal(match?.alignment, 'match');
+  assert.equal(stampAlignmentLine('match', 2), 'matches ruleset v2 on this phone');
+
+  const differ = stampAlignment({
+    purpose: 'cap a mint bot [mint-budget v2]',
+    cap: 999_000_000n,
+    perTxMax,
+    merchant: stored.merchant,
+    decimals: 6,
+    rulesets: [stored],
+  });
+  assert.equal(differ?.alignment, 'limits-differ');
+  assert.equal(
+    stampAlignmentLine('limits-differ', 2),
+    'limits differ from ruleset v2 on this phone',
+  );
+
+  const missing = stampAlignment({
+    purpose: 'x [mint-budget v1]',
+    cap,
+    perTxMax,
+    merchant: stored.merchant,
+    decimals: 6,
+    rulesets: [stored],
+  });
+  assert.equal(missing?.alignment, 'missing');
+  assert.equal(stampAlignmentLine('missing', 1), 'no ruleset with this stamp on this phone');
 });
 
 test('saving a ruleset publishes a new version and never overwrites an existing one', () => {

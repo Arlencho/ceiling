@@ -7,8 +7,11 @@ import {
   COMPLETENESS,
   COMPLETENESS_NOTE,
   bundleToCsv,
+  findLedgerDecision,
   formatExport,
+  loadedRuleMatchesDecision,
   parseDayBound,
+  parseDecisionId,
   rowToExportable,
   selectExportRows,
   type ExportContext,
@@ -197,6 +200,28 @@ test('a CSV with zero data rows still states completeness and scope', () => {
 test('YYYY-MM-DD bounds are UTC calendar days, inclusive', () => {
   assert.equal(parseDayBound('2026-09-20', false), Math.floor(Date.UTC(2026, 8, 20) / 1000));
   assert.equal(parseDayBound('2026-09-20', true), Math.floor(Date.UTC(2026, 8, 20, 23, 59, 59) / 1000));
+});
+
+test('a decision is only read from the ring of the rule named in its id', () => {
+  const paid: LedgerRow = {
+    ts: 1_000n,
+    amount: 1n,
+    counterparty: 'x',
+    nonce: 1n,
+    suggestedOverride: 0n,
+    kind: KIND_PAID,
+    kindName: 'paid',
+    reason: 0,
+    reasonText: 'ok',
+    signature: 'sig',
+  };
+  const parsed = parseDecisionId(`${mandate().address}:1000:1:1`);
+  assert.ok(parsed);
+  assert.equal(findLedgerDecision([paid], parsed, mandate().address)?.nonce, 1n);
+  assert.equal(findLedgerDecision([paid], parsed, 'OtherMandate1111111111111111111111111111111'), undefined);
+  assert.equal(loadedRuleMatchesDecision(mandate().address, parsed.mandate), true);
+  assert.equal(loadedRuleMatchesDecision(mandate().address, 'OtherMandate1111111111111111111111111111111'), false);
+  assert.equal(loadedRuleMatchesDecision(undefined, parsed.mandate), false);
 });
 
 test('opened and override ring rows are not exportable charges', () => {

@@ -5,19 +5,24 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Button } from '../../components/Button';
 import { ConnectGate } from '../../components/ConnectGate';
 import { EmptyState } from '../../components/EmptyState';
+import { ReadState } from '../../components/ReadState';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
 import { STATUS_REVOKED } from '../../lib/constants';
 import { formatBaseUnits, formatTimeLeft } from '../../lib/format';
+import { mayClaimAbsence } from '../../lib/mandateRead';
 import { notActiveHint } from '../../lib/reasons';
 import { displayPurpose, formatExpiryDate, ruleSentence, stampedRulesetLine } from '../../lib/ruleView';
+import { stampAlignment, stampAlignmentLine } from '../../lib/ruleset';
 import { useChain } from '../../lib/useChain';
+import { useRulesets } from '../../lib/useRulesets';
 import { truncateAddress } from '../../lib/wallet';
 
 export default function RuleDetailScreen() {
   const { address } = useLocalSearchParams<{ address: string }>();
   const chain = useChain();
+  const stored = useRulesets();
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -25,6 +30,23 @@ export default function RuleDetailScreen() {
   const mandate = chain.mandates.find((row) => row.address === address) ?? null;
   const index = mandate ? chain.mandates.findIndex((row) => row.address === mandate.address) : -1;
   const stamp = mandate ? stampedRulesetLine(mandate.purpose) : null;
+  const alignment =
+    mandate && stored.ready
+      ? stampAlignment({
+          purpose: mandate.purpose,
+          cap: mandate.cap,
+          perTxMax: mandate.perTxMax,
+          merchant: mandate.merchant,
+          decimals: chain.decimals,
+          rulesets: stored.rulesets,
+        })
+      : null;
+  const stampNote =
+    stamp && alignment
+      ? `${stamp} is written into the purpose on chain. The ruleset file itself is not on chain. ${stampAlignmentLine(alignment.alignment, alignment.version)}. A reader without this phone cannot check that match. These numbers cannot be edited afterwards.`
+      : stamp
+        ? `${stamp} is written into the purpose on chain. The ruleset file itself is not on chain. These numbers cannot be edited afterwards.`
+        : null;
 
   const onRefresh = useCallback(() => {
     void chain.refresh();
@@ -50,7 +72,12 @@ export default function RuleDetailScreen() {
         meta={mandate ? `${index + 1} of ${chain.mandates.length}` : undefined}
       />
       <ConnectGate>
-        {!mandate ? (
+        {!mayClaimAbsence(chain.mandateStatus) ? (
+          <ReadState
+            status={chain.mandateStatus}
+            empty="This rule is not on chain for this owner. The app does not invent one."
+          />
+        ) : !mandate ? (
           <EmptyState>
             This rule is not on chain for this owner. The app does not invent one.
           </EmptyState>
@@ -81,10 +108,8 @@ export default function RuleDetailScreen() {
               <Text style={styles.mono}>{truncateAddress(mandate.agent)}</Text> holds authority and no
               funds. It can pay inside the rule, and nothing else.
             </Text>
-            {stamp ? (
-              <EmptyState>
-                {`${stamp} is written into the purpose on chain. The ruleset file itself is not on chain. These numbers cannot be edited afterwards.`}
-              </EmptyState>
+            {stampNote ? (
+              <EmptyState>{stampNote}</EmptyState>
             ) : (
               <EmptyState>
                 Limits are fixed once the rule is opened. They cannot be widened later.
