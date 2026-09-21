@@ -65,7 +65,9 @@ function rowBase(args: {
 }
 
 const RATE_LIMIT_GAP_REASON = "rpc rate limited on all endpoints";
+const FEED_GAP_REASON = "feed unavailable";
 const PAID_UNRECOVERED_REASON = "chain shows this window paid; signature could not be recovered";
+const STALE_UNCONFIRMED_REASON = "stale nonce; chain did not confirm this window paid";
 
 function journalSignature(signature: string | null | undefined): string | null {
   if (signature === null || signature === undefined || signature.length === 0) return null;
@@ -105,7 +107,7 @@ export async function processWindow(args: {
   }
 
   const deferRateLimit = (): ProcessResult => {
-    if (!args.journal.hasGap(nonce)) {
+    if (!args.journal.hasGap(nonce, RATE_LIMIT_GAP_REASON)) {
       args.journal.append({
         ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: 0n }),
         ...(window === null ? { window_start: args.at.toISOString() } : {}),
@@ -152,12 +154,20 @@ export async function processWindow(args: {
     return "submitted";
   };
 
+  const readSettled = async (): Promise<bigint> => {
+    if (!args.chainLastNonce) return args.journal.maxSettledNonce();
+    return withRpcBackoff("chain last_nonce", () => args.chainLastNonce!(), log);
+  };
+
+  const recoverPaid = async (): Promise<RecoveredCharge | null> => {
+    if (!args.recoverSettled) return null;
+    return withRpcBackoff("recover settled", () => args.recoverSettled!(nonce), log);
+  };
+
   const closeAlreadySettled = async (settled: bigint, amount: bigint): Promise<ProcessResult> => {
-    if (args.recoverSettled) {
-      const recovered = await args.recoverSettled(nonce);
-      if (recovered !== null && recovered.decision === "paid") {
-        return writeRecoveredPaid(recovered);
-      }
+    const recovered = await recoverPaid();
+    if (recovered !== null && recovered.decision === "paid") {
+      return writeRecoveredPaid(recovered);
     }
     if (nonce < settled) {
       args.journal.append({
@@ -172,22 +182,37 @@ export async function processWindow(args: {
       log(`skipped overtaken window at=${args.at.toISOString()}`);
       return "skipped";
     }
-    return writePaidUnrecovered(amount);
+    if (nonce <= settled) {
+      return writePaidUnrecovered(amount);
+    }
+    // The program refused a stale nonce, but a chain re-read did not show
+    // this window as settled. Do not invent paid.
+    if (!args.journal.hasGap(nonce, STALE_UNCONFIRMED_REASON)) {
+      args.journal.append({
+        ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: 0n }),
+        ...(window === null ? { window_start: args.at.toISOString() } : {}),
+        decision: "gap",
+        reason: STALE_UNCONFIRMED_REASON,
+        reason_code: null,
+        signature: null,
+        suggested_override: null,
+      });
+    }
+    log(`gap ${STALE_UNCONFIRMED_REASON} nonce=${nonce.toString()}`);
+    return "gap";
   };
 
   // Settlement is read from the chain when a reader is provided. The journal
   // is only a cache: a rate limit after send leaves it empty, and using it
-  // here would resubmit a nonce the program has already paid.
+  // here would resubmit a nonce the program has already paid. The read sits
+  // inside the same backoff as submit: a transient failure retries this
+  // window instead of ending the run loop.
   let settled: bigint;
-  if (args.chainLastNonce) {
-    try {
-      settled = await args.chainLastNonce();
-    } catch (err) {
-      if (isRateLimitError(err)) return deferRateLimit();
-      throw err;
-    }
-  } else {
-    settled = args.journal.maxSettledNonce();
+  try {
+    settled = await readSettled();
+  } catch (err) {
+    if (isRateLimitError(err)) return deferRateLimit();
+    throw err;
   }
 
   if (nonce <= settled) {
@@ -202,7 +227,7 @@ export async function processWindow(args: {
   if (window === null) {
     // Record the outage once, then leave the window retryable so a later cycle
     // can still submit it when the feed comes back.
-    if (args.journal.hasGap(nonce)) {
+    if (args.journal.hasGap(nonce, FEED_GAP_REASON)) {
       log(`gap feed still unavailable at=${args.at.toISOString()}, window stays due`);
       return "gap";
     }
@@ -210,7 +235,7 @@ export async function processWindow(args: {
       ...rowBase({ window: null, nonce, kwhMilli: args.kwhMilli, amount: 0n }),
       window_start: args.at.toISOString(),
       decision: "gap",
-      reason: "feed unavailable",
+      reason: FEED_GAP_REASON,
       reason_code: null,
       signature: null,
       suggested_override: null,
@@ -224,7 +249,8 @@ export async function processWindow(args: {
     scaled = sekPerKwhToScaled(window.sekPerKwh);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    if (args.journal.hasGap(nonce)) {
+    const reason = `unreadable price: ${message}`;
+    if (args.journal.hasGap(nonce, reason)) {
       log(
         `gap unreadable price still at window=${window.timeStart} sek=${window.sekPerKwh}, window stays due`,
       );
@@ -233,7 +259,7 @@ export async function processWindow(args: {
     args.journal.append({
       ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: 0n }),
       decision: "gap",
-      reason: `unreadable price: ${message}`,
+      reason,
       reason_code: null,
       signature: null,
       suggested_override: null,
@@ -283,18 +309,16 @@ export async function processWindow(args: {
   }
 
   if (receipt.decision === "refused" && receipt.reasonCode === REASON_STALE_NONCE) {
+    // Re-read last_nonce. A later payment may have overtaken this window
+    // between the pre-submit read and the send. Do not journal paid unless
+    // the chain confirms it.
     try {
-      if (args.recoverSettled) {
-        const recovered = await args.recoverSettled(nonce);
-        if (recovered !== null && recovered.decision === "paid") {
-          return writeRecoveredPaid(recovered);
-        }
-      }
+      const latest = await readSettled();
+      return await closeAlreadySettled(latest, 0n);
     } catch (err) {
       if (isRateLimitError(err)) return deferRateLimit();
       throw err;
     }
-    return writePaidUnrecovered(amount);
   }
 
   args.journal.append({
