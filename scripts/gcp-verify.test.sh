@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Critic round 1 fixtures for scripts/gcp-verify.sh.
+# Critic round 2 fixtures for scripts/gcp-verify.sh.
 #
 # No live GCP, no credentials, no network. A fake gcloud on PATH is the
 # only cloud the script is allowed to see. These checks encode the
@@ -27,11 +27,11 @@ OUT="${WORKDIR}/verify.out"
 
 # Fake gcloud. Modes:
 #   lists-fail: authenticated, every describe/list fails empty
-#   happy: every check the current script makes can pass; scheduler, Artifact
-#          Registry and Cloud Run services would return resources if asked
+#   happy: project/billing/budget/API/identity calls succeed; scheduler,
+#          Artifact Registry and Cloud Run services return resources if asked
 #   happy-nanos: happy budget of 200 SEK plus 500000000 nanos
 #   happy-mute: happy thresholds, default IAM recipients disabled, no channels
-#   happy-wide-labels: labels that substring-match the documented ones
+#   happy-wide-labels: two labels widened, purpose=veto-watcher left exact
 cat >"$FAKE" <<'FAKE'
 #!/usr/bin/env bash
 set -u
@@ -55,15 +55,15 @@ happy_budget() {
     if [[ "$mute" == 1 ]]; then
         notify='{"disableDefaultIamRecipients": true, "monitoringNotificationChannels": []}'
     fi
-    printf '{"displayName":"not-the-documented-name","amount":{"specifiedAmount":{%s,"currencyCode":"SEK"}},"budgetFilter":{"projects":["projects/472736420070"]},"thresholdRules":[{"thresholdPercent":0.5},{"thresholdPercent":0.9},{"thresholdPercent":1.0}],"notificationsRule":%s}\n' "$units" "$notify"
+    printf '{"displayName":"veto-watcher cap","amount":{"specifiedAmount":{%s,"currencyCode":"SEK"}},"budgetFilter":{"projects":["projects/472736420070"]},"thresholdRules":[{"thresholdPercent":0.5},{"thresholdPercent":0.9},{"thresholdPercent":1.0}],"notificationsRule":%s}\n' "$units" "$notify"
 }
 
 if [[ "$mode" == lists-fail ]]; then
     exit 1
 fi
 
-if [[ "$args" == *'projectId,projectNumber,lifecycleState'* ]]; then
-    printf 'veto-watcher-260921\t472736420070\tACTIVE\n'
+if [[ "$args" == *'projectId,projectNumber,name,lifecycleState,createTime'* ]]; then
+    printf 'veto-watcher-260921\t472736420070\tVeto Watcher\tACTIVE\t2026-09-21T11:36:55.000Z\n'
     exit 0
 fi
 if [[ "$args" == *'value(labels)'* || "$args" == *'format=value(labels)'* || "$args" == *'--format=value(labels)'* ]]; then
@@ -86,6 +86,12 @@ if [[ "$args" == *'billing budgets describe'* ]]; then
     esac
     exit 0
 fi
+# `run services list` contains the substring `services list`. Match the
+# Cloud Run call first or the API list is returned as if it were a service.
+if [[ "$args" == *'run services list'* ]]; then
+    printf '%s\n' 'accidentally-public'
+    exit 0
+fi
 if [[ "$args" == *'services list'* ]]; then
     printf '%s\n' \
         run.googleapis.com \
@@ -94,6 +100,7 @@ if [[ "$args" == *'services list'* ]]; then
         artifactregistry.googleapis.com \
         cloudbuild.googleapis.com \
         storage-api.googleapis.com \
+        storage.googleapis.com \
         monitoring.googleapis.com \
         billingbudgets.googleapis.com
     exit 0
@@ -105,6 +112,10 @@ fi
 if [[ "$args" == *'get-iam-policy'* ]]; then
     exit 0
 fi
+if [[ "$args" == *'get-ancestors'* ]]; then
+    printf '%s\n' $'472736420070\tproject' $'example.org\torganization'
+    exit 0
+fi
 if [[ "$args" == *'storage buckets list'* ]]; then
     exit 0
 fi
@@ -112,10 +123,6 @@ if [[ "$args" == *'secrets list'* ]]; then
     exit 0
 fi
 if [[ "$args" == *'run jobs list'* ]]; then
-    exit 0
-fi
-if [[ "$args" == *'run services list'* ]]; then
-    printf '%s\n' 'accidentally-public'
     exit 0
 fi
 if [[ "$args" == *'scheduler jobs list'* ]]; then
@@ -144,26 +151,38 @@ run_verify() {
 # ----------------------------------------------------------------------
 run_verify lists-fail
 for claim in \
-    "no bucket has been created yet" \
-    "no secret has been created yet" \
-    "no Cloud Run job has been created yet" \
+    "no bucket yet" \
+    "no secret yet" \
+    "no Cloud Run job yet" \
+    "no Cloud Run service yet" \
+    "no Cloud Scheduler job yet" \
+    "no Artifact Registry repo yet" \
     "no service account beyond the one GCP created by itself" \
     "the default compute account holds no project role"
 do
     if grep -F -q "  ok   ${claim}" "$OUT"; then
-        bad "absence '${claim}' reports ok when gcloud failed (scripts/gcp-verify.sh absences, 2>/dev/null)"
+        bad "absence '${claim}' reports ok when gcloud failed (scripts/gcp-verify.sh absences)"
     else
         pass "absence '${claim}' does not report ok on gcloud failure"
     fi
 done
+ok_lines="$(grep -c '^  ok' "$OUT" || true)"
+if [[ "$ok_lines" -eq 0 ]]; then
+    pass "lists-fail prints zero ok lines"
+else
+    bad "lists-fail printed ${ok_lines} ok lines (fail-open regression)"
+fi
 
 # ----------------------------------------------------------------------
-# F2. docs/GCP_SETUP.md:49 names no Artifact Registry repository and no
-# scheduler. The script never lists either. The happy fake would return
-# both if asked.
+# F2. docs/GCP_SETUP.md:49 names no Artifact Registry repository, no
+# scheduler, and no job. Round 1 grepped a retired claim string
+# (`no Cloud Run job has been created yet`). The rewrite prints
+# `no Cloud Run job yet`, continues after get-ancestors, and lists
+# scheduler / Artifact Registry / Cloud Run services. The happy fake
+# returns resources for those three if asked.
 # ----------------------------------------------------------------------
 run_verify happy
-if grep -F -q "  ok   no Cloud Run job has been created yet" "$OUT"; then
+if grep -F -q "  ok   no Cloud Run job yet" "$OUT"; then
     if grep -q 'scheduler jobs list' "$LOG"; then
         pass "script listed scheduler jobs"
     else
@@ -174,46 +193,65 @@ if grep -F -q "  ok   no Cloud Run job has been created yet" "$OUT"; then
     else
         bad "docs/GCP_SETUP.md:49 claims no Artifact Registry repository; scripts/gcp-verify.sh never ran gcloud artifacts repositories list"
     fi
+    if grep -q 'run services list' "$LOG"; then
+        pass "script listed Cloud Run services"
+    else
+        bad "docs/GCP_SETUP.md:49 claims no job; scripts/gcp-verify.sh never ran gcloud run services list"
+    fi
+    if grep -F -q "  FAIL no Cloud Run service yet" "$OUT" \
+        && grep -F -q "  FAIL no Cloud Scheduler job yet" "$OUT" \
+        && grep -F -q "  FAIL no Artifact Registry repo yet" "$OUT"; then
+        pass "happy fake resources fail the matching absence claims"
+    else
+        bad "happy fake returned a service, scheduler job and registry repo; those absences did not FAIL"
+    fi
 else
     bad "happy fake did not reach the absence checks (see ${OUT})"
 fi
 
 # ----------------------------------------------------------------------
-# F3. Budget "alerts" pass with default IAM recipients disabled and no
-# notification channels. docs/GCP_SETUP.md:64 says the budget alerts by
+# F3. Budget notifications pass with default IAM recipients disabled
+# and no channels. docs/GCP_SETUP.md:70 says the budget alerts by
 # email to the billing account administrators.
 # ----------------------------------------------------------------------
 run_verify happy-mute
-if grep -F -q "  ok   budget alerts at 50, 90 and 100 percent" "$OUT"; then
-    bad "docs/GCP_SETUP.md:64 email-alert claim: scripts/gcp-verify.sh:76 passed thresholds with disableDefaultIamRecipients and no channels"
+if grep -F -q "  ok   budget notifications actually reach someone" "$OUT"; then
+    bad "docs/GCP_SETUP.md:70 email-alert claim: scripts/gcp-verify.sh passed notifications with disableDefaultIamRecipients and no channels"
 else
-    pass "budget alerts do not pass on a muted notificationsRule"
+    pass "budget notifications do not pass on a muted notificationsRule"
 fi
 
 # ----------------------------------------------------------------------
 # F4. 200 SEK plus 500000000 nanos still prints as 200 SEK.
 # ----------------------------------------------------------------------
 run_verify happy-nanos
-if grep -F -q "  ok   budget amount is 200 SEK" "$OUT"; then
-    bad "scripts/gcp-verify.sh:70 treats units and ignores nanos (200 SEK + 500000000 nanos passed)"
+if grep -F -q "  ok   budget amount is exactly 200 SEK, nanos included" "$OUT"; then
+    bad "scripts/gcp-verify.sh treats units and ignores nanos (200 SEK + 500000000 nanos passed)"
 else
     pass "budget amount does not ignore nanos"
 fi
 
 # ----------------------------------------------------------------------
-# F5. Label contains() is a substring match.
+# F5. Label membership is exact. The fake widens environment and owner
+# and leaves purpose=veto-watcher correct. Only the widened labels are
+# required to fail; accepting the exact one is the right behaviour.
 # ----------------------------------------------------------------------
 run_verify happy-wide-labels
 wide_fail=0
-for l in "environment=development" "owner=arlen" "purpose=veto-watcher"; do
+for l in "environment=development" "owner=arlen"; do
     if grep -F -q "  ok   label ${l}" "$OUT"; then
         wide_fail=1
     fi
 done
 if [[ "$wide_fail" -eq 1 ]]; then
-    bad "scripts/gcp-verify.sh:35 contains() passed environment=development-staging and owner=arlenx as the documented labels"
+    bad "scripts/gcp-verify.sh member() passed environment=development-staging or owner=arlenx as the documented labels"
 else
-    pass "label checks require an exact label, not a substring"
+    pass "widened labels environment=development-staging and owner=arlenx do not pass"
+fi
+if grep -F -q "  ok   label purpose=veto-watcher" "$OUT"; then
+    pass "exact remaining label purpose=veto-watcher is accepted"
+else
+    bad "exact remaining label purpose=veto-watcher was rejected"
 fi
 
 # ----------------------------------------------------------------------
