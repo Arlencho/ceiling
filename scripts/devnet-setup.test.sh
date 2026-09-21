@@ -60,7 +60,23 @@ else
 fi
 PROGRAM_KP="$saved_kp"
 
+# make localnet sets VETO_CLUSTER=localnet. The generated files must say so.
+# A hardcoded devnet label points explorer links at public devnet for
+# addresses that exist only on the local validator.
+if grep -q '^CLUSTER=${CLUSTER_NAME}$' "${ROOT}/scripts/devnet-setup.sh"; then
+  pass "addresses file writes CLUSTER from VETO_CLUSTER"
+else
+  bad "addresses file writes CLUSTER from VETO_CLUSTER"
+fi
+
+if grep -q 'cluster={cluster}' "${ROOT}/scripts/devnet-setup.sh" \
+  && ! grep -q '?cluster=devnet' "${ROOT}/scripts/devnet-setup.sh"; then
+  pass "docs template uses the cluster name in explorer links"
+else
+  bad "docs template uses the cluster name in explorer links"
+fi
+
 if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
-printf 'devnet-setup checks: 4 passed\n'
+printf 'devnet-setup checks: 6 passed\n'

@@ -237,12 +237,12 @@ write_docs() {
   local deployer="$8"
   local when
   when="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  python3 - "$when" "$RPC" "$program_id" "$mint" "$owner" "$owner_ata" "$merchant" "$merchant_ata" "$agent" "$deployer" "$ACCOUNT_DUMP" "$OWNER_FUND_TOKENS" "$MINT_DECIMALS" "$AGENT_SOL" <<'PY'
+  python3 - "$when" "$RPC" "$program_id" "$mint" "$owner" "$owner_ata" "$merchant" "$merchant_ata" "$agent" "$deployer" "$ACCOUNT_DUMP" "$OWNER_FUND_TOKENS" "$MINT_DECIMALS" "$AGENT_SOL" "$CLUSTER_NAME" <<'PY'
 import sys
 from pathlib import Path
-when, rpc, program_id, mint, owner, owner_ata, merchant, merchant_ata, agent, deployer, dump_path, fund, decimals, agent_sol = sys.argv[1:]
+when, rpc, program_id, mint, owner, owner_ata, merchant, merchant_ata, agent, deployer, dump_path, fund, decimals, agent_sol, cluster = sys.argv[1:]
 dump = Path(dump_path).read_text().rstrip() if Path(dump_path).exists() else "(program account dump missing)"
-md = f"""# Veto on Solana devnet
+md = f"""# Veto on Solana {cluster}
 
 Recorded by `scripts/devnet-setup.sh` at {when} UTC.
 
@@ -250,9 +250,9 @@ This file lists **public addresses only**. Keypairs live under gitignored `keys/
 
 ## Cluster
 
-- Name: `devnet`
+- Name: `{cluster}`
 - RPC: `{rpc}`
-- Explorer cluster query: `cluster=devnet`
+- Explorer cluster query: `cluster={cluster}`
 
 ## Public addresses
 
@@ -269,11 +269,11 @@ This file lists **public addresses only**. Keypairs live under gitignored `keys/
 
 Explorer:
 
-- Program: https://explorer.solana.com/address/{program_id}?cluster=devnet
-- Mint: https://explorer.solana.com/address/{mint}?cluster=devnet
-- Owner token account: https://explorer.solana.com/address/{owner_ata}?cluster=devnet
-- Merchant token account: https://explorer.solana.com/address/{merchant_ata}?cluster=devnet
-- Agent: https://explorer.solana.com/address/{agent}?cluster=devnet
+- Program: https://explorer.solana.com/address/{program_id}?cluster={cluster}
+- Mint: https://explorer.solana.com/address/{mint}?cluster={cluster}
+- Owner token account: https://explorer.solana.com/address/{owner_ata}?cluster={cluster}
+- Merchant token account: https://explorer.solana.com/address/{merchant_ata}?cluster={cluster}
+- Agent: https://explorer.solana.com/address/{agent}?cluster={cluster}
 
 ## Fixtures
 
@@ -317,7 +317,7 @@ The script:
 2. Creates `keys/` and the keypairs above when they are missing.
 3. Airdrops SOL to the deployer, retrying on rate limits.
 4. Builds the program. It copies `keys/program.json` to `target/deploy/veto-keypair.json`, runs `anchor keys sync` so the bytecode ID check matches the deploy address, then restores `programs/veto/src` so program source is not left dirty and is not committed.
-5. Runs `anchor deploy --provider.cluster devnet`.
+5. Runs `anchor deploy --provider.cluster {cluster}`.
 6. Creates the mint, owner token account, merchant token account, funds the owner, and funds the agent with SOL only.
 7. Fetches the program account and rewrites this file.
 
@@ -340,7 +340,7 @@ cp keys/program.json target/deploy/veto-keypair.json
 anchor keys sync --program-name veto
 anchor build --no-idl
 git checkout -- programs/veto/src
-anchor deploy --no-idl --provider.cluster devnet --provider.wallet keys/deployer.json --program-name veto --program-keypair keys/program.json
+anchor deploy --no-idl --provider.cluster {cluster} --provider.wallet keys/deployer.json --program-name veto --program-keypair keys/program.json
 ```
 
 Demo fixtures:
@@ -586,7 +586,7 @@ if total > 0:
   grep -qi 'Executable: *true' "$ACCOUNT_DUMP" || die "deployed program account is not executable"
 
   cat > "$ADDRESSES_FILE" <<EOF
-CLUSTER=devnet
+CLUSTER=${CLUSTER_NAME}
 RPC=${RPC}
 PROGRAM_ID=${program_id}
 MINT=${mint}
