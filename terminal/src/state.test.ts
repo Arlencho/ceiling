@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { PriceFeed, PriceWindow } from "../../watcher/src/feed.js";
+import { EnergySpotFeed, type PriceFeed, type PriceWindow } from "../../watcher/src/feed.js";
 import { buildState, quoteResponse } from "./state.js";
+import { formatBaseUnits } from "./quote.js";
 
 const AT = new Date("2026-09-20T00:05:00+02:00");
 const WINDOW: PriceWindow = {
@@ -79,4 +80,71 @@ test("quoteResponse refuses with 503 and no price at all when the feed is down",
   assert.ok(!body.includes("amount"), "a down feed must not offer an amount");
   assert.ok(!body.includes("nonce"), "a down feed must not offer a nonce");
   assert.ok(!body.includes("0.00892"), "a down feed must not show a stale price");
+});
+
+// Round 1 critic fixtures for #72 and #74: the amount is integer math from the
+// source text for every price shape, and the agent can render it from the
+// response alone.
+
+const AT_10_05 = new Date("2026-09-20T10:05:00+02:00");
+const W10 = { start: "2026-09-20T10:00:00+02:00", end: "2026-09-20T10:15:00+02:00" };
+
+test("amount is exact bigint math from the source text for every price shape", async () => {
+  const rows: Array<{ name: string; body: string; sek: string; amount: string; rendered: string }> = [
+    {
+      name: "documented order",
+      body: `[{"SEK_per_kWh":0.30722,"EUR_per_kWh":0.027,"EXR":11.17,"time_start":"${W10.start}","time_end":"${W10.end}"}]`,
+      sek: "0.30722",
+      amount: "15361000",
+      rendered: "15.361",
+    },
+    {
+      name: "reordered body",
+      body: `[{"time_start":"${W10.start}","time_end":"${W10.end}","SEK_per_kWh":0.30722,"EUR_per_kWh":0.027,"EXR":11.17}]`,
+      sek: "0.30722",
+      amount: "15361000",
+      rendered: "15.361",
+    },
+    {
+      name: "quoted price",
+      body: `[{"SEK_per_kWh":"0.30722","time_start":"${W10.start}","time_end":"${W10.end}"}]`,
+      sek: "0.30722",
+      amount: "15361000",
+      rendered: "15.361",
+    },
+    {
+      name: "scientific price, unquoted",
+      body: `[{"SEK_per_kWh":1e-05,"EUR_per_kWh":1e-06,"EXR":11.17,"time_start":"${W10.start}","time_end":"${W10.end}"}]`,
+      sek: "1e-05",
+      amount: "500",
+      rendered: "0.0005",
+    },
+    {
+      name: "integer price",
+      body: `[{"SEK_per_kWh":1,"time_start":"${W10.start}","time_end":"${W10.end}"}]`,
+      sek: "1",
+      amount: "50000000",
+      rendered: "50",
+    },
+    {
+      name: "price with more digits than a double keeps",
+      body: `[{"SEK_per_kWh":0.123456789012345678901234,"time_start":"${W10.start}","time_end":"${W10.end}"}]`,
+      sek: "0.123456789012345678901234",
+      amount: "6172839",
+      rendered: "6.172839",
+    },
+  ];
+  for (const row of rows) {
+    const feed = new EnergySpotFeed(async () => new Response(row.body, { status: 200 }));
+    const state = await buildState({ feed, at: AT_10_05, kwhMilli: 50_000n, mintDecimals: 6 });
+    const res = quoteResponse(state, ENDPOINTS);
+    assert.equal(res.status, 200, row.name);
+    assert.equal(res.body.sek_per_kwh, row.sek, row.name);
+    assert.equal(res.body.amount, row.amount, row.name);
+    // The agent has only the body. Render from it and nothing else.
+    const body = JSON.parse(JSON.stringify(res.body)) as Record<string, unknown>;
+    assert.equal(typeof body.amount, "string", row.name);
+    assert.equal(typeof body.mint_decimals, "number", row.name);
+    assert.equal(formatBaseUnits(BigInt(body.amount as string), body.mint_decimals as number), row.rendered, row.name);
+  }
 });

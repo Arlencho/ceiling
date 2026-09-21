@@ -207,3 +207,98 @@ test("every window in a real feed body is read, not most of them", () => {
   }
   assert.equal(parseFeedBody(JSON.stringify(rows)).length, 96);
 });
+
+// Round 1 critic fixtures for #72: every shape a third party might send, and
+// what the classifier must say about each. The terminal screen keys off the
+// status word, so the rows below pin that the outcomes stay distinguishable.
+
+const AT_10_05 = new Date("2026-09-20T10:05:00+02:00");
+const W10 = { start: "2026-09-20T10:00:00+02:00", end: "2026-09-20T10:15:00+02:00" };
+
+test("every body shape a third party might send classifies as documented", async () => {
+  const rows: Array<{ name: string; body: string; status: string; sek: string | null }> = [
+    {
+      name: "documented order",
+      body: `[{"SEK_per_kWh":0.30722,"EUR_per_kWh":0.027,"EXR":11.17,"time_start":"${W10.start}","time_end":"${W10.end}"}]`,
+      status: "ok",
+      sek: "0.30722",
+    },
+    {
+      name: "reordered body",
+      body: `[{"time_end":"${W10.end}","EXR":11.17,"time_start":"${W10.start}","EUR_per_kWh":0.027,"SEK_per_kWh":0.30722}]`,
+      status: "ok",
+      sek: "0.30722",
+    },
+    {
+      name: "quoted price",
+      body: `[{"SEK_per_kWh":"0.30722","EUR_per_kWh":0.027,"EXR":11.17,"time_start":"${W10.start}","time_end":"${W10.end}"}]`,
+      status: "ok",
+      sek: "0.30722",
+    },
+    {
+      name: "scientific price, unquoted",
+      body: `[{"SEK_per_kWh":1e-05,"EUR_per_kWh":1e-06,"EXR":11.17,"time_start":"${W10.start}","time_end":"${W10.end}"}]`,
+      status: "ok",
+      sek: "1e-05",
+    },
+    {
+      name: "integer price",
+      body: `[{"SEK_per_kWh":1,"EUR_per_kWh":0.09,"EXR":11.17,"time_start":"${W10.start}","time_end":"${W10.end}"}]`,
+      status: "ok",
+      sek: "1",
+    },
+    { name: "body that is not JSON", body: "<html>rate limited</html>", status: "malformed", sek: null },
+    { name: "JSON of the wrong shape, object", body: '{"prices":[]}', status: "malformed", sek: null },
+    {
+      name: "JSON of the wrong shape, other keys",
+      body: `[{"price_sek":0.30722,"from":"${W10.start}","to":"${W10.end}"}]`,
+      status: "malformed",
+      sek: null,
+    },
+    { name: "empty array", body: "[]", status: "missing_window", sek: null },
+    {
+      name: "valid day, no window for this hour",
+      body: `[{"SEK_per_kWh":0.30722,"EUR_per_kWh":0.027,"EXR":11.17,"time_start":"2026-09-20T00:00:00+02:00","time_end":"2026-09-20T00:15:00+02:00"}]`,
+      status: "missing_window",
+      sek: null,
+    },
+  ];
+  for (const row of rows) {
+    const feed = new EnergySpotFeed(async () => new Response(row.body, { status: 200 }));
+    const read = await feed.readWindow(AT_10_05);
+    assert.equal(read.status, row.status, row.name);
+    assert.equal(read.window?.sekPerKwh ?? null, row.sek, row.name);
+    if (row.sek !== null) {
+      assert.equal(read.window?.timeStart, W10.start, row.name);
+    }
+  }
+  const seen = new Set(rows.map((r) => r.status));
+  assert.deepEqual([...seen].sort(), ["malformed", "missing_window", "ok"]);
+});
+
+test("a skipped or nested entry cannot hand its price to a neighbouring window", () => {
+  const rows: Array<{ name: string; body: string; expect: Array<{ start: string; sek: string }> }> = [
+    {
+      name: "entry without time_end before the real window",
+      body: `[{"SEK_per_kWh":0.5,"time_start":"2026-09-20T09:45:00+02:00","time_end":null},{"SEK_per_kWh":0.30722,"EUR_per_kWh":0.027,"EXR":11.17,"time_start":"${W10.start}","time_end":"${W10.end}"}]`,
+      expect: [{ start: W10.start, sek: "0.30722" }],
+    },
+    {
+      name: "entry with a null price before the real window",
+      body: `[{"SEK_per_kWh":null,"time_start":"2026-09-20T09:45:00+02:00","time_end":"${W10.start}"},{"SEK_per_kWh":0.30722,"time_start":"${W10.start}","time_end":"${W10.end}"}]`,
+      expect: [{ start: W10.start, sek: "0.30722" }],
+    },
+    {
+      name: "entry repeating the key in a nested object",
+      body: `[{"SEK_per_kWh":0.30722,"meta":{"SEK_per_kWh":9.9},"time_start":"${W10.start}","time_end":"${W10.end}"},{"SEK_per_kWh":0.4,"time_start":"${W10.end}","time_end":"2026-09-20T10:30:00+02:00"}]`,
+      expect: [
+        { start: W10.start, sek: "0.30722" },
+        { start: W10.end, sek: "0.4" },
+      ],
+    },
+  ];
+  for (const row of rows) {
+    const got = parseFeedBody(row.body).map((w) => ({ start: w.timeStart, sek: w.sekPerKwh }));
+    assert.deepEqual(got, row.expect, row.name);
+  }
+});
