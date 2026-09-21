@@ -1,12 +1,20 @@
 #!/usr/bin/env node
-import { dueSlots, msUntil, nextSlot } from "./cadence.js";
+import { existsSync, statSync } from "node:fs";
+import { dueSlots, msUntil, nextSlot, STALE_AFTER_MS } from "./cadence.js";
 import { loadKeypair, mandatePda, openMandate, submitCharge } from "./chain.js";
 import { keyPath, loadConfig } from "./config.js";
 import { EnergySpotFeed } from "./feed.js";
 import { JsonlJournal } from "./journal.js";
+import {
+  hydrateLocalJournal,
+  persistLocalJournal,
+  storeFromGsUri,
+  type JournalObjectStore,
+} from "./journalStore.js";
 import { logError, logLine } from "./log.js";
 import { nonceFromWindowStart } from "./nonce.js";
 import { processWindow, sleep } from "./run.js";
+import { isJournalStale, lastDecisionAt } from "./stale.js";
 import { PublicKey } from "@solana/web3.js";
 
 function flag(name: string): string | undefined {
@@ -26,17 +34,32 @@ function command(): string {
   return first;
 }
 
+async function persistJournal(path: string, store: JournalObjectStore | null): Promise<void> {
+  if (store === null) return;
+  try {
+    await persistLocalJournal(path, store);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logError(`journal persist failed: ${message}`);
+    throw err;
+  }
+}
+
 async function withJournalAndFeed() {
   const cfg = loadConfig();
+  const store = storeFromGsUri(cfg.journalGcsUri);
+  if (store !== null) {
+    await hydrateLocalJournal(cfg.journalPath, store);
+  }
   const journal = new JsonlJournal(cfg.journalPath);
   const feed = new EnergySpotFeed();
   const agent = loadKeypair(keyPath(cfg, "agent"));
   const submit = (amount: bigint, nonce: bigint) => submitCharge({ cfg, agent, amount, nonce });
-  return { cfg, journal, feed, submit, agent };
+  return { cfg, journal, feed, submit, agent, store };
 }
 
 async function processAt(at: Date): Promise<void> {
-  const { cfg, journal, feed, submit } = await withJournalAndFeed();
+  const { cfg, journal, feed, submit, store } = await withJournalAndFeed();
   await processWindow({
     at,
     feed,
@@ -45,10 +68,11 @@ async function processAt(at: Date): Promise<void> {
     kwhMilli: cfg.kwhMilli,
     mintDecimals: cfg.mintDecimals,
   });
+  await persistJournal(cfg.journalPath, store);
 }
 
 async function processDue(now: Date, announceIdle = false): Promise<void> {
-  const { cfg, journal, feed, submit } = await withJournalAndFeed();
+  const { cfg, journal, feed, submit, store } = await withJournalAndFeed();
   let acted = false;
   for (const slot of dueSlots(now)) {
     const nonce = nonceFromWindowStart(slot.toISOString());
@@ -62,6 +86,7 @@ async function processDue(now: Date, announceIdle = false): Promise<void> {
       kwhMilli: cfg.kwhMilli,
       mintDecimals: cfg.mintDecimals,
     });
+    await persistJournal(cfg.journalPath, store);
   }
   if (!acted && announceIdle) {
     logLine("caught up: no due cadence slots left to submit");
@@ -125,23 +150,48 @@ async function cmdOpenMandate(): Promise<void> {
 
 async function cmdStatus(): Promise<void> {
   const cfg = loadConfig();
+  const store = storeFromGsUri(cfg.journalGcsUri);
+  if (store !== null) {
+    await hydrateLocalJournal(cfg.journalPath, store);
+  }
   const journal = new JsonlJournal(cfg.journalPath);
   const counts = journal.counts();
   const rows = journal.load();
   const last = rows[rows.length - 1];
+  const backend = cfg.journalGcsUri ?? cfg.journalPath;
   logLine(
-    `journal ${cfg.journalPath} total=${counts.total} paid=${counts.paid} refused=${counts.refused} gap=${counts.gap} skipped=${counts.skipped}`,
+    `journal ${backend} total=${counts.total} paid=${counts.paid} refused=${counts.refused} gap=${counts.gap} skipped=${counts.skipped}`,
   );
   if (last !== undefined) {
     logLine(`last decision=${last.decision} reason=${last.reason} nonce=${last.nonce} sig=${last.signature ?? "-"}`);
   }
 }
 
+async function cmdStale(): Promise<void> {
+  const cfg = loadConfig();
+  const store = storeFromGsUri(cfg.journalGcsUri);
+  if (store !== null) {
+    await hydrateLocalJournal(cfg.journalPath, store);
+  }
+  const journal = new JsonlJournal(cfg.journalPath);
+  const rows = journal.load();
+  const emptySince = existsSync(cfg.journalPath) ? statSync(cfg.journalPath).mtime : null;
+  const last = lastDecisionAt(rows);
+  if (isJournalStale({ rows, now: new Date(), emptySince })) {
+    logError(
+      `journal stale last=${last?.toISOString() ?? "none"} empty_since=${emptySince?.toISOString() ?? "none"} threshold_ms=${STALE_AFTER_MS}`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  logLine(`journal fresh last=${last?.toISOString() ?? "none"} threshold_ms=${STALE_AFTER_MS}`);
+}
+
 async function main(): Promise<void> {
   const cmd = command();
   if (hasFlag("help") || cmd === "help") {
     process.stdout.write(
-      "veto-watcher <run|once|open-mandate|status> [--window ISO]\n",
+      "veto-watcher <run|once|open-mandate|status|stale> [--window ISO]\n",
     );
     return;
   }
@@ -159,6 +209,10 @@ async function main(): Promise<void> {
   }
   if (cmd === "run") {
     await cmdRun();
+    return;
+  }
+  if (cmd === "stale") {
+    await cmdStale();
     return;
   }
   throw new Error(`unknown command: ${cmd}`);

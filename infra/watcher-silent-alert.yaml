@@ -1,0 +1,44 @@
+displayName: Veto watcher silent
+documentation:
+  content: |
+    No watcher decision has been recorded for longer than a window and a half
+    (9 hours). Cadence is 00:00, 06:00, 12:00, 18:00 Europe/Stockholm.
+
+    The stale job (`veto-watcher-stale`) reads the journal object and exits 1
+    when the last row (or, if the journal is empty, the object itself) is older
+    than 9 hours. A job that never starts produces no successful stale
+    executions, which is the absent condition.
+
+    Point this policy at an email channel. See watcher/CLOUD.md.
+  mimeType: text/markdown
+combiner: OR
+conditions:
+  - displayName: Stale check failed
+    conditionThreshold:
+      filter: |
+        resource.type = "cloud_run_job"
+        AND resource.labels.job_name = "veto-watcher-stale"
+        AND metric.type = "run.googleapis.com/job/completed_execution_count"
+        AND metric.labels.result = "failed"
+      comparison: COMPARISON_GT
+      thresholdValue: 0
+      duration: 60s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_DELTA
+          crossSeriesReducer: REDUCE_SUM
+      trigger:
+        count: 1
+  - displayName: Stale check missing for 9 hours
+    conditionAbsent:
+      filter: |
+        resource.type = "cloud_run_job"
+        AND resource.labels.job_name = "veto-watcher-stale"
+        AND metric.type = "run.googleapis.com/job/completed_execution_count"
+      aggregations:
+        - alignmentPeriod: 3600s
+          perSeriesAligner: ALIGN_DELTA
+          crossSeriesReducer: REDUCE_SUM
+      duration: 32400s
+      trigger:
+        count: 1

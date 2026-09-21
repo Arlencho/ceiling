@@ -12,6 +12,7 @@
     "once": "node dist/index.js once",
     "open-mandate": "node dist/index.js open-mandate",
     "status": "node dist/index.js status",
+    "stale": "node dist/index.js stale",
     "test": "tsx --test src/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
