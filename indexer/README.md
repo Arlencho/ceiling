@@ -39,8 +39,9 @@ npm run typecheck
 RPC and program id must be set (environment, `indexer/.env`,
 `keys/devnet-addresses.env`, or `--rpc` / `--program`). There is no built-in
 endpoint or program. Addresses come from `keys/devnet-addresses.env` (public
-only). Keypairs for the seed script stay under gitignored `keys/`. See
-`.env.example`.
+only). Keypairs for the seed script stay under gitignored `keys/`. Copy
+`.env.example` to `indexer/.env` and uncomment the identity lines with values
+you supply. The placeholders do not resolve.
 
 ## Seed a mandate when the watcher is not running
 

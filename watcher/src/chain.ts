@@ -62,7 +62,10 @@ export function connect(cfg: WatcherConfig, payer: Keypair): {
     commitment: "confirmed",
     skipPreflight: false,
   });
-  const idl = loadIdl(cfg.idlPath);
+  const idl = loadIdl(cfg.idlPath) as unknown as Idl;
+  if (idl.address && idl.address !== cfg.programId) {
+    idl.address = cfg.programId;
+  }
   const program = new Program<Veto>(idl as unknown as Veto & Idl, provider);
   return { connection, program, programId: new PublicKey(cfg.programId) };
 }

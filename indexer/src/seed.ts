@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import anchorPkg, { AnchorProvider, Program, Wallet } from "@coral-xyz/anchor";
@@ -43,14 +43,16 @@ function loadKeypair(path: string): Keypair {
 
 function loadAddresses(keysDir: string, rpcOverride?: string): Addresses {
   const envPath = resolve(keysDir, "devnet-addresses.env");
-  const text = readFileSync(envPath, "utf8");
   const map = new Map<string, string>();
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq <= 0) continue;
-    map.set(trimmed.slice(0, eq), trimmed.slice(eq + 1));
+  if (existsSync(envPath)) {
+    const text = readFileSync(envPath, "utf8");
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq <= 0) continue;
+      map.set(trimmed.slice(0, eq), trimmed.slice(eq + 1));
+    }
   }
   const need = (key: string) => {
     const value = map.get(key);

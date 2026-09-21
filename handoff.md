@@ -1,62 +1,64 @@
 ## Built
 
-Removed defaulted chain identities from watcher, indexer and tools, and closed the two app defects named in the plan.
+Closed the four round-1 findings on PR 76. Nothing else.
 
-- Watcher `loadConfig` throws `missing VETO_RPC` (and the other identity keys) when the environment and documented env files are silent. Volume, cap, per-payment max, mandate id, decimals and purpose stay as process defaults; they cannot select an endpoint, program, mint or account.
-- Indexer CLI, seed and `fetchDecisionHistory` require a program id. `DEFAULT_RPC` and `DEFAULT_PROGRAM_ID` are gone.
-- Tools `resolveRpc` and `resolveProgramId` throw naming `VETO_RPC` / `VETO_PROGRAM_ID`. Cluster label still defaults to `devnet` (a label, not an identity). SPL Token program id stays as the well-known constant.
-- `app/lib/wallet.ts`: an unreadable agent secret or agents map is reported (`could not read the stored agent identity`) and is not overwritten or replaced by a newly minted key.
-- `app/lib/chain.ts`: a failed signature listing throws (`Failed to list ledger signatures`) instead of becoming `[]`, so override confirmation cannot fall through to nonce and amount matching on a list it never read.
+- F1: `watcher/src/chain.ts` `connect` copies the indexer seed shape. If `idl.address` differs from `cfg.programId`, the IDL is rewritten before `new Program`. The critic fixture `watcher/src/chain.critic.test.ts` is unchanged and green.
+- F2: `watcher/.env.example` and `indexer/.env.example` carry commented placeholders that name each identity and show its shape. Copying them into a searched `.env` does not resolve an endpoint, program id, mint or account. READMEs say to uncomment and supply values.
+- F3: `docs/DECISION_RECORD.md` documents tools RPC as `--rpc`, then `VETO_RPC`, then `keys/devnet-addresses.env` `RPC=`, then exit naming `VETO_RPC`. No public endpoint in that order.
+- F4: `indexer/src/seed.ts` skips a missing addresses file (same as the other loaders) and lets `required` name `VETO_RPC`.
 
-No shared directory, no branded type, no lint allowlist, `programs/veto/src` untouched.
+No shared directory, no branded type, `programs/veto/src` untouched, critic fixture not edited.
 
 ## Decisions
 
-- Port the throwing `required(env, files, key)` shape from `c41c088` into each package, not a shared module. The two critics on `assess/invariant` rejected branded `Configured<N>` and a vendored `shared/` directory.
-- Keep last-write-wins file merge. Do not add the volume-disagreement check from the terminal branch; that would change how config is combined.
-- Keep the nonce/amount fallback in `grantOverride` for a listing that actually returned. The defect is treating a failed listing as empty.
+- Mutate `idl.address` the way `indexer/src/seed.ts` already does, rather than a second Program constructor.
+- Leave process defaults in the watcher example (journal path, mandate id, volume, decimals, keys dir). They cannot select a chain identity.
 
 ## Do not repeat
 
-- Do not restore `DEFAULT_RPC`, `DEFAULT_PROGRAM_ID`, or the watcher `DEFAULTS` block.
-- Do not introduce `shared/`, `Configured<N>`, or an allowlist.
-- Do not treat a failed store parse as an empty store. Absent is mintable; unreadable is not.
-- Do not catch `listSignatures` into `[]`. Empty and unread are different.
-- Tests that need an identity must pass one. Do not put the old constants back to make a test green.
+- Do not restore `http://127.0.0.1:8999`, `https://api.devnet.solana.com`, or `3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV` as active example values or as a tools fallback.
+- Do not edit `watcher/src/chain.critic.test.ts`.
+- Do not `readFileSync` the addresses file in seed before `required` has a chance to name the variable.
 
 ## Evidence
 
-Red on unfixed code, from `app/`:
+Critic fixture red on unfixed `connect` (b718877):
 
 ```
-npx tsx --experimental-test-module-mocks --test lib/wallet.test.ts lib/chain.listing.test.ts
+cd watcher && npm test -- src/chain.critic.test.ts
 ```
 
-- `an unreadable agent secret is reported and is not replaced by a newly minted identity`: `Missing expected rejection`
-- `an unreadable agents map is reported and is not overwritten`: `Missing expected rejection`
-- `a failed signature listing is not treated as an empty list, so override confirmation does not name a row by nonce and amount`: `Missing expected rejection`
+- `the program the watcher signs against is the configured VETO_PROGRAM_ID, not the bundled IDL address`
+- actual `3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV`, expected `11111111111111111111111111111111`
 
-After the product change, same file pair: 18 pass, 0 fail.
+After the product change, same file: 37 pass, 0 fail.
 
-Package suites and typecheck:
+Seed with `env -i PATH=... VETO_KEYS_DIR=/nonexistent/keys`:
+
+- before: `ENOENT: no such file or directory, open '/nonexistent/keys/devnet-addresses.env'`
+- after: `config.loadConfig: missing VETO_RPC; set it in the environment, keys/devnet-addresses.env, indexer/.env` exit 1
+
+Copy of each `.env.example` into a searched env file, empty keys dir:
+
+- watcher `loadConfig`: `missing VETO_RPC`
+- indexer `requiredIdentity('VETO_RPC')`: `missing VETO_RPC`
+- indexer `requiredIdentity('VETO_PROGRAM_ID')`: `missing VETO_PROGRAM_ID`
+- watcher example active lines: `VETO_KEYS_DIR`, `VETO_JOURNAL`, `VETO_MANDATE_ID`, `VETO_KWH_MILLI`, `VETO_MINT_DECIMALS`
+- indexer example active lines: none
+
+Suites after the four fixes:
 
 | Package | `npm test` | typecheck |
 |---|---|---|
-| watcher | 36 pass, 0 fail | `tsc --noEmit` exit 0 |
+| watcher | 37 pass, 0 fail | `tsc --noEmit` exit 0 |
 | indexer | 22 pass, 0 fail | `tsc --noEmit` exit 0 |
 | tools | 34 pass, 0 fail | `tsc --noEmit` exit 0 |
 | app | 103 pass, 0 fail | `npx tsc --noEmit` exit 0 |
 
-Entry points with no identity configured (`VETO_KEYS_DIR` pointing at a missing dir, identity vars unset):
-
-- watcher `status`: `config.loadConfig: missing VETO_RPC; set it in the environment, keys/devnet-addresses.env, watcher/.env` exit 1
-- indexer CLI: `config.loadConfig: missing VETO_RPC; set it in the environment, keys/devnet-addresses.env, indexer/.env` exit 1
-- tools `export.ts --signature x`: `lib.resolveRpc: missing VETO_RPC; set it in the environment, keys/devnet-addresses.env, or pass --rpc` exit 1
-
 ## Open questions
 
-- Cluster label `devnet` in `resolveClusterName` is still a default. It is a label, not an endpoint or account. T3 in the audit is a separate genesis-hash check.
+None for this round.
 
 ## Next hint
 
-Branch `fix/no-defaulted-identities`. PR against `main`. Leave the issue open for QA if one is filed.
+PR 76 on `fix/no-defaulted-identities`. Four findings closed. Leave the issue open for QA if one is filed.

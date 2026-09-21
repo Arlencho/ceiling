@@ -52,8 +52,9 @@ npm run open-mandate
 
 RPC, program id, mint, and the owner / merchant / agent accounts must be set
 in the environment, `watcher/.env`, or `keys/devnet-addresses.env`. There is
-no built-in endpoint or account. Copy `.env.example` and fill those in. See
-also `docs/DEVNET.md`.
+no built-in endpoint or account. Copy `.env.example` to `watcher/.env` and
+uncomment the identity lines with values you supply. The placeholders do not
+resolve. See also `docs/DEVNET.md`.
 
 Process defaults that cannot select a chain identity (overridable with env):
 
