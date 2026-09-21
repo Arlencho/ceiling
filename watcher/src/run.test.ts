@@ -851,7 +851,7 @@ const r3TransientCases: {
     submit: () => R3_STALE,
     expectResult: "skipped",
     expectDecision: "skipped",
-    expectSignature: null,
+    expectSignature: "stale-sig",
     expectSubmits: 1,
   },
   {
@@ -934,7 +934,7 @@ test("critic r3: stale refusal, recovery empty, re-read still below the window: 
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.decision, "gap");
   assert.equal(rows[0]?.reason, "stale nonce; chain did not confirm this window paid");
-  assert.equal(rows[0]?.signature, null);
+  assert.equal(rows[0]?.signature, "stale-sig");
   assert.equal(rows[0]?.amount, "0");
   assert.equal(journal.hasNonce(R3_NONCE), false, "the window is still owed");
   // A second cycle under the same lag records nothing new for this window.

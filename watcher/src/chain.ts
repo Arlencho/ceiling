@@ -13,8 +13,8 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
-  sendAndConfirmTransaction,
 } from "@solana/web3.js";
+import { sendAndConfirm } from "./confirm.js";
 import type { WatcherConfig } from "./config.js";
 import type { Veto } from "./idl.js";
 import { logLine } from "./log.js";
@@ -122,7 +122,7 @@ export async function submitCharge(args: {
     .instruction();
 
   const tx = new Transaction().add(ix);
-  const signature = await sendAndConfirmTransaction(connection, tx, [args.agent], {
+  const signature = await sendAndConfirm(connection, tx, [args.agent], {
     commitment: "confirmed",
   });
   const parsed = await connection.getTransaction(signature, {
@@ -171,7 +171,7 @@ export async function openMandate(args: {
     .instruction();
 
   const tx = new Transaction().add(ix);
-  const signature = await sendAndConfirmTransaction(connection, tx, [args.owner], {
+  const signature = await sendAndConfirm(connection, tx, [args.owner], {
     commitment: "confirmed",
   });
   return { signature, mandate: mandate.toBase58(), ledger: ledger.toBase58() };
