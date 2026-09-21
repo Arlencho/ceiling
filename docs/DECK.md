@@ -14,8 +14,13 @@ Ten slides. Nothing here needs a screenshot that does not exist yet, except wher
 > **The agent tried to pay. It didn't.**
 
 One screenshot, full bleed: the refusal card on the phone. It says "Your rule held. No payment
-made." Then the amount asked, the per-payment maximum it broke, and the override that would have
-cleared it. Never styled as an error.
+made." Then the why line from the 18:00 SE3 refusal the [README](../README.md) already links:
+
+> Asked for 6.2325, over the 0.5 per-payment maximum. An override of 6.2325 would have cleared
+> it.
+
+Never styled as an error. That card, the explorer log on slide 6, and the verify beat in the
+video are the same recorded decision. Not a second rule.
 
 No logo slide, no team slide, no agenda. The first thing a judge sees is the product doing the one
 thing nothing else does.
@@ -88,9 +93,13 @@ in their own words is far more persuasive than asserting our side of it.
 Screenshot of an explorer showing a confirmed transaction, with the program log visible:
 
 ```
-VETO REFUSED reason=5 (over per-payment maximum) amount=180000000
-per_tx_max=60000000 remaining=450000000 override_to_clear=180000000
+VETO REFUSED reason=5 (over per-payment maximum) amount=6232500
+per_tx_max=500000 remaining=99339500 override_to_clear=6232500
 ```
+
+That line is the program log on the 18:00 refusal the [README](../README.md) already links.
+Amount 6.2325, per-payment maximum 0.5, remaining 99.3395 of a 100 cap, override 6.2325.
+Same decision as slide 1.
 
 > The transaction succeeded at deciding no. The payment did not happen. The balance is unchanged,
 > and neither party can edit the record.

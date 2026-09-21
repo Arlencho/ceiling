@@ -47,10 +47,11 @@ from nothing having happened.
 Instead the instruction transfers nothing, writes a refusal to an on-chain ledger with a reason
 code and the override that would have cleared it, logs a readable line, and returns `Ok`.
 
-So a refusal has a signature you can open in an explorer:
+So a refusal has a signature you can open in an explorer. This is the 18:00 SE3 refusal linked
+below, not a second mandate:
 
 ```
-VETO REFUSED reason=5 (over per-payment maximum) amount=180000000 per_tx_max=60000000 remaining=450000000 override_to_clear=180000000
+VETO REFUSED reason=5 (over per-payment maximum) amount=6232500 per_tx_max=500000 remaining=99339500 override_to_clear=6232500
 ```
 
 Read those two lines together, because they are the whole idea. The **transaction** succeeded: it
@@ -94,12 +95,19 @@ To take one off chain and check it independently:
 
 ```bash
 cd tools && npm ci
-VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --signature <tx> --out refusal.json
+VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --signature 3rTpyrHEScEPhjHL3cUDYSGwGAxU6JVzbdWVZbr4YMHt3wAM7ad9JGPC26R8aQMH9aqYVzrFqbEogX1CquNcWqib --out refusal.json
 VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts refusal.json
 # Mandate limits, ledger entry, and charge transaction agree.
 ```
 
-Change one number in that file and run verify again; it reports REJECTED and names the field.
+Change the amount in that file to 1 and run verify again. While the ring still holds this row:
+
+```
+VERDICT: REJECTED
+
+- amount (instruction): record has 1, chain has 6232500
+- amount (ledger): record has 1, chain has 6232500
+```
 
 ## Why Solana Mobile
 
