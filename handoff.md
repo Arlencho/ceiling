@@ -1,61 +1,45 @@
 ## Built
 
-Closed the five review findings on PR 62. Branch `feat/app-fleet-console`. Nothing else.
+Merchant terminal for issue 5, PR 68 against `main`, branch `feat/merchant-terminal`, commit 9125081. New top-level package `terminal/` next to `watcher/` and `indexer/`, plus a `terminal-test` Makefile target.
 
-- F1. Refusal copy follows `row.reason`. The per-payment sentence is only for reason 5. An override line and the raise-per-payment block appear only for that reason.
-- F2. The Decisions tab no longer puts one date over the whole list. Rows group by local day, each group under its own heading.
-- F3. After three rate-limit retries the app stops claiming it is still trying. `rateLimited` is cleared, the error is "The RPC rate limited this read three times. Pull to retry.", and the read lands in `failed`.
-- F4. Rule detail, decision detail, and share wait for a completed chain read before claiming a rule or decision is absent. A decision is only taken from the ring of the rule named in its id.
-- F5. Rule detail compares a purpose stamp to the ruleset on this phone: matches, limits differ, or no ruleset with this stamp. Opening a rule rejects a typed stamp suffix unless the owner is applying a saved ruleset. Copy still does not claim the ruleset file is on chain.
+- `src/quote.ts`: prices a fixed kWh volume per feed window as bigint base units. Imports `feed.ts`, `money.ts`, `nonce.ts` from `watcher/src` directly (relative ESM import, resolved by tsx and tsc). No second copies.
+- `src/state.ts`: `buildState` turns a feed read into a state where a down feed carries no window, no price, no quote. `quoteResponse` is the agent-facing JSON: 200 with amount + nonce, or 503 with no amount, no nonce, no price.
+- `src/page.ts`: the screen. Window, fetched price, quote, nonce, source URL link, payments, and the honesty block (price public and independently verifiable; demo counterparty, not a real charge point). Price rows are not rendered at all when the feed is down.
+- `src/payments.ts`: reads the merchant token account. Per-payment amount is the account's token balance delta inside the parsed transaction, matched by account address via message account keys (not owner+mint, which could double count).
+- `src/server.ts`: node:http, no framework. `GET /` page (5s meta refresh), `GET /api/quote`, `GET /api/state`. 20s state cache, 15s payments cache; RPC failure shows the error plus the last good list with its timestamp.
+- `src/config.ts`: reuses the watcher's `loadConfig`, so RPC, program id, mint and merchant token account come from env, `keys/devnet-addresses.env`, or package `.env`, exactly like the other packages.
 
 ## Decisions
 
-- Extracted `refusalWhyLine` so the card and the tests share one sentence.
-- Override copy is withheld for every reason that an override cannot clear, even if `suggestedOverride` is nonzero.
-- Rate-limit exhaustion reuses `failed` rather than adding a sixth read state.
-- Stamp check is phone-local (cap, per-payment max, payee). A reader without this phone cannot check that match, and the detail screen says so.
+- Plain Node + tsx package, mirroring watcher/indexer, not a Next.js app: the task says "alongside watcher and indexer", both are minimal tsx packages, and a Next.js toolchain would be the only one of its kind in the repo.
+- Ran with `tsx` at runtime (`npm start` = `tsx src/index.ts serve`) instead of `tsc` emit, because the terminal imports watcher sources and a dist build would need a shared rootDir spanning two packages. Tests in the repo already run under tsx.
+- The agent contract is `GET /api/quote` returning JSON; the page is for humans. A down feed is 503, so an agent cannot mistake an outage for a quote.
+- `terminal/.env.example` ships the public devnet RPC URL. It is public infrastructure already committed in `docs/DEVNET.md`, and indexer ships its program id the same way. No key or private endpoint is committed.
+- Zero or negative fetched price yields no quote (matches the watcher's skip rule), with an on-screen note that is distinct from the feed-down message.
 
 ## Do not repeat
 
-- Do not reorder `app/index.js` polyfill imports.
-- Do not hardcode an RPC url or program id.
-- Do not invent rows, prices, or kWh.
-- Do not claim a ruleset is on chain. Only the purpose stamp is.
-- Do not touch `programs/veto/src`.
-- Do not style a refusal as an error.
-- `lib/wallet.test.ts` `publicKeyFromMwaAddress accepts a base58 address` can fail on a random keypair whose base58 also decodes as 32-byte base64. Pre-existing. Not part of these five findings.
+- Do not copy `feed.ts` / `money.ts` / `nonce.ts` into the terminal. The relative import across packages works; the tests prove it.
+- Do not cache a failed feed read into anything that renders a price. The feed-down state has no price fields by construction; `state.test.ts` asserts the serialized state contains no `sekPerKwh`.
+- Do not match received payments by owner+mint in parsed token balances; match the account address through `accountKeys[accountIndex]`.
+- Do not add a fallback or placeholder price. The task and the plan both treat that as disqualifying.
 
 ## Evidence
 
-F1, unfixed why-line (perTxMax in hand, amount 50, limit 60):
+From `terminal/`:
 
-```
-reason 1 "Asked for 50, over the 60 per-payment maximum. No override would have cleared this."
-reason 2 same
-reason 5 same
-reason 6 same
-```
-
-F1, after the fix:
-
-```
-reason 1 "mandate not active."
-reason 5 "Asked for 50, over the 60 per-payment maximum. No override would have cleared this."
-reason 6 "over remaining cap."
-```
-
-From `app/`:
-
-- `npx tsc --noEmit`: exit 0
-- `npm test`: 71 pass, 0 fail (one earlier full run hit the pre-existing wallet base58 flake, then 71/71)
-- `npx expo lint`: exit 0
-- `npx expo config --type public`: `platforms: ['android']`, `android.package: com.veto.app`, `extra.vetoRpc: ''`, `extra.vetoProgramId: ''`, splash and adaptive icon `#0F1A16`
+- Red before implementation: `npx tsx --test src/*.test.ts` -> all 4 suites failed (modules absent).
+- After: `npm run typecheck` exit 0; `npm test` 21 pass, 0 fail.
+- Live: `VETO_RPC=https://api.devnet.solana.com npx tsx src/index.ts quote` returned amount `15361000` for window `2026-09-21T10:15:00+02:00` at `0.30722` SEK/kWh (50 kWh), nonce `1789978500`, source `https://www.elprisetjustnu.se/api/v1/prices/2026/09-21_SE3.json`.
+- Live server: page rendered the same quote, read the real merchant token account balance `0.666 tokens`, and listed received payments with `explorer.solana.com/tx/...?cluster=devnet` links.
+- `grep` sweep for em/en dashes over `terminal/` and the Makefile: clean.
+- Issue 5 labeled `status:in-progress` at start, `status:in-review` after PR 68 opened.
 
 ## Open questions
 
-- Live Seeker / MWA open-mandate and share sheet still need a device.
-- The wallet base58 address test is flaky. Out of scope for this round.
+- The watcher does not yet call the terminal's `/api/quote`; it computes the same quote itself from the same modules, so the numbers agree by construction. Wiring the watcher to consume the endpoint is a product decision, not a correctness gap.
+- The terminal only reads the chain. Nothing triggers a charge from the screen; `docs/VIDEO.md` mused about an on-demand trigger for the video, and it does not exist here.
 
 ## Next hint
 
-PR 62 against `main` on `feat/app-fleet-console`. Issues 47, 51, 52, 55, 56, 59 stay open for QA.
+For the critic: check the feed-down path first (`state.test.ts`, the 503 body, and the page render asserting no stale `0.00892`), then that `quote.ts` and `state.ts` really import from `watcher/src` rather than vendoring, then that no float literal touches an amount.
