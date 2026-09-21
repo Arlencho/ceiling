@@ -54,13 +54,19 @@ export async function fetchPayments(args: {
   const limit = args.limit ?? 10;
   const account = new PublicKey(args.tokenAccount);
   const signatures = await args.connection.getSignaturesForAddress(account, { limit }, "confirmed");
-  const payments: Payment[] = [];
-  for (const sig of signatures) {
-    const tx = await args.connection.getParsedTransaction(sig.signature, {
+  if (signatures.length === 0) return [];
+  const txs = await args.connection.getParsedTransactions(
+    signatures.map((sig) => sig.signature),
+    {
       commitment: "confirmed",
       maxSupportedTransactionVersion: 0,
-    });
-    if (tx === null) continue;
+    },
+  );
+  const payments: Payment[] = [];
+  for (let i = 0; i < signatures.length; i += 1) {
+    const sig = signatures[i];
+    const tx = txs[i];
+    if (sig === undefined || tx === null || tx === undefined) continue;
     const amount = receivedForAccount(tx, args.tokenAccount);
     if (amount === 0n) continue;
     payments.push({

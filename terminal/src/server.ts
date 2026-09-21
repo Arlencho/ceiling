@@ -69,9 +69,20 @@ export function createTerminalServer(deps: TerminalDeps): Server {
   let stateCache: { fetchedMs: number; state: TerminalState } | null = null;
   let paymentsCache: PaymentsSnapshot | null = null;
 
+  function cacheValidUntil(fetchedMs: number, windowEnd: string | null | undefined): number {
+    const ttlEnd = fetchedMs + STATE_TTL_MS;
+    if (windowEnd === undefined || windowEnd === null) return ttlEnd;
+    const boundary = Date.parse(windowEnd);
+    if (!Number.isFinite(boundary)) return ttlEnd;
+    return Math.min(ttlEnd, boundary);
+  }
+
   async function currentState(): Promise<TerminalState> {
     const nowMs = Date.now();
-    if (stateCache !== null && nowMs - stateCache.fetchedMs < STATE_TTL_MS) {
+    if (
+      stateCache !== null &&
+      nowMs < cacheValidUntil(stateCache.fetchedMs, stateCache.state.window?.timeEnd)
+    ) {
       return stateCache.state;
     }
     const state = await buildState({
@@ -116,32 +127,42 @@ export function createTerminalServer(deps: TerminalDeps): Server {
 
   return createServer((req, res) => {
     const path = new URL(req.url ?? "/", "http://localhost").pathname;
+    const jsonApi = path === "/api/quote" || path === "/api/state";
     void (async () => {
       if (req.method === "GET" && path === "/api/quote") {
         const state = await currentState();
         const { status, body } = quoteResponse(state, cfg);
+        const payload = JSON.stringify(body, null, 2);
         res.writeHead(status, { "content-type": "application/json" });
-        res.end(JSON.stringify(body, null, 2));
+        res.end(payload);
         return;
       }
       if (req.method === "GET" && path === "/api/state") {
         const [state, snap] = await Promise.all([currentState(), currentPayments()]);
+        const payload = JSON.stringify(viewFromState(state, snap, cfg), null, 2);
         res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify(viewFromState(state, snap, cfg), null, 2));
+        res.end(payload);
         return;
       }
       if (req.method === "GET" && path === "/") {
         const [state, snap] = await Promise.all([currentState(), currentPayments()]);
+        const html = renderPage(viewFromState(state, snap, cfg));
         res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-        res.end(renderPage(viewFromState(state, snap, cfg)));
+        res.end(html);
         return;
       }
       res.writeHead(404, { "content-type": "text/plain" });
       res.end("not found");
     })().catch((err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err);
+      console.error(err);
+      if (res.headersSent) return;
+      if (jsonApi) {
+        res.writeHead(500, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "internal error" }));
+        return;
+      }
       res.writeHead(500, { "content-type": "text/plain" });
-      res.end(`terminal error: ${message}`);
+      res.end("terminal error");
     });
   });
 }

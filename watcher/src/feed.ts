@@ -32,16 +32,13 @@ export interface PriceFeed {
 
 export const FEED_ORIGIN = "https://www.elprisetjustnu.se";
 
-// The price is captured as raw text, never parsed into a float, because every
-// amount downstream is integer base units. EUR_per_kWh and EXR are captured
-// loosely on purpose: we do not use them, and the feed emits them in
-// scientific notation for very cheap windows ("EUR_per_kWh": 1e-05). A strict
-// numeric pattern on those fields silently dropped the whole entry, and
-// because scientific notation appears exactly when the price is tiny, the
-// windows lost were the cheapest ones, which are the ones that would have
-// paid. Four of ninety-six windows on 2026-09-20, including a cadence slot.
-const ENTRY_RE =
-  /"SEK_per_kWh"\s*:\s*([-+0-9.eE]+)\s*,\s*"EUR_per_kWh"\s*:\s*[^,]+,\s*"EXR"\s*:\s*[^,]+,\s*"time_start"\s*:\s*"([^"]+)"\s*,\s*"time_end"\s*:\s*"([^"]+)"/g;
+// The price is captured as raw text from the same object it belongs to, never
+// parsed into a float, because every amount downstream is integer base units.
+// JSON.parse would turn 1e-05 into a float and the cheap windows would be the
+// ones lost. The token is read by field name so key order and a quoted value
+// still yield a window. A nested object repeating the key cannot shift a
+// neighbour: the source token is taken from that entry's own text.
+const SEK_VALUE_RE = /"SEK_per_kWh"\s*:\s*(?:"([^"]*)"|([-+0-9.eE]+))/;
 
 /** Expand scientific notation to a plain decimal string, textually.
  *
@@ -94,19 +91,201 @@ export function feedUrlFor(at: Date): string {
   return `${FEED_ORIGIN}/api/v1/prices/${yyyy}/${mm}-${dd}_SE3.json`;
 }
 
-export function parseFeedBody(text: string): PriceWindow[] {
-  const windows: PriceWindow[] = [];
-  ENTRY_RE.lastIndex = 0;
-  for (;;) {
-    const match = ENTRY_RE.exec(text);
-    if (!match) break;
-    const sek = match[1];
-    const timeStart = match[2];
-    const timeEnd = match[3];
-    if (sek === undefined || timeStart === undefined || timeEnd === undefined) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function skipWs(text: string, i: number): number {
+  while (i < text.length) {
+    const c = text[i];
+    if (c !== " " && c !== "\t" && c !== "\n" && c !== "\r") break;
+    i += 1;
+  }
+  return i;
+}
+
+function indexAfterJsonString(text: string, quoteAt: number): number {
+  let escape = false;
+  for (let i = quoteAt + 1; i < text.length; i += 1) {
+    const c = text[i];
+    if (escape) {
+      escape = false;
       continue;
     }
-    windows.push({ timeStart, timeEnd, sekPerKwh: sek });
+    if (c === "\\") {
+      escape = true;
+      continue;
+    }
+    if (c === '"') return i + 1;
+  }
+  return -1;
+}
+
+function indexAfterJsonValue(text: string, start: number): number {
+  const i = skipWs(text, start);
+  if (i >= text.length) return -1;
+  const c = text[i];
+  if (c === '"') return indexAfterJsonString(text, i);
+  if (c === "{" || c === "[") {
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let j = i; j < text.length; j += 1) {
+      const ch = text[j];
+      if (inString) {
+        if (escape) {
+          escape = false;
+          continue;
+        }
+        if (ch === "\\") {
+          escape = true;
+          continue;
+        }
+        if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+      if (ch === "{" || ch === "[") depth += 1;
+      else if (ch === "}" || ch === "]") {
+        depth -= 1;
+        if (depth === 0) return j + 1;
+      }
+    }
+    return -1;
+  }
+  const rest = text.slice(i);
+  const literal = /^(?:true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/.exec(rest);
+  if (literal === null) return -1;
+  return i + literal[0].length;
+}
+
+/** Source text of each top-level array value, in order. Null when the walk
+ * cannot follow a document JSON.parse already accepted. */
+function topLevelArraySpans(text: string): string[] | null {
+  let i = 0;
+  if (text.charCodeAt(0) === 0xfeff) i = 1;
+  i = skipWs(text, i);
+  if (text[i] !== "[") return null;
+  i += 1;
+  const spans: string[] = [];
+  let expectValue = true;
+  while (i < text.length) {
+    i = skipWs(text, i);
+    if (i >= text.length) return null;
+    const c = text[i];
+    if (c === "]") return spans;
+    if (c === ",") {
+      if (expectValue) return null;
+      expectValue = true;
+      i += 1;
+      continue;
+    }
+    if (!expectValue) return null;
+    const end = indexAfterJsonValue(text, i);
+    if (end < 0) return null;
+    spans.push(text.slice(i, end));
+    i = end;
+    expectValue = false;
+  }
+  return null;
+}
+
+/** Raw SEK_per_kWh token at object depth 1. Nested copies of the key are ignored. */
+function topLevelSekToken(objectSrc: string): string | undefined {
+  let i = skipWs(objectSrc, 0);
+  if (objectSrc[i] !== "{") return undefined;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  let found: string | undefined;
+  while (i < objectSrc.length) {
+    const c = objectSrc[i];
+    if (inString) {
+      if (escape) {
+        escape = false;
+        i += 1;
+        continue;
+      }
+      if (c === "\\") {
+        escape = true;
+        i += 1;
+        continue;
+      }
+      if (c === '"') inString = false;
+      i += 1;
+      continue;
+    }
+    if (c === '"') {
+      if (depth === 1) {
+        const slice = objectSrc.slice(i);
+        const match = SEK_VALUE_RE.exec(slice);
+        if (match !== null && match.index === 0) {
+          const quoted = match[1];
+          const unquoted = match[2];
+          if (quoted !== undefined) found = quoted;
+          else if (unquoted !== undefined) found = unquoted;
+        }
+      }
+      inString = true;
+      i += 1;
+      continue;
+    }
+    if (c === "{" || c === "[") {
+      depth += 1;
+      i += 1;
+      continue;
+    }
+    if (c === "}" || c === "]") {
+      depth -= 1;
+      i += 1;
+      continue;
+    }
+    i += 1;
+  }
+  return found;
+}
+
+function sekFromParsed(value: unknown, raw: string | undefined): string | null {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (raw === undefined || raw.length === 0) return null;
+    return raw;
+  }
+  return null;
+}
+
+export function parseFeedBody(text: string): PriceWindow[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+
+  const spans = topLevelArraySpans(text);
+  const windows: PriceWindow[] = [];
+  for (let i = 0; i < parsed.length; i += 1) {
+    const item = parsed[i];
+    if (!isRecord(item)) continue;
+    const timeStart = item.time_start;
+    const timeEnd = item.time_end;
+    if (typeof timeStart !== "string" || typeof timeEnd !== "string") continue;
+    if (timeStart.length === 0 || timeEnd.length === 0) continue;
+
+    const sekValue = item.SEK_per_kWh;
+    const readable =
+      typeof sekValue === "string" || (typeof sekValue === "number" && Number.isFinite(sekValue));
+    if (!readable) continue;
+
+    const span = spans?.[i];
+    const raw = span === undefined ? undefined : topLevelSekToken(span);
+    const sekPerKwh = sekFromParsed(sekValue, raw);
+    if (sekPerKwh === null || sekPerKwh.length === 0) continue;
+    windows.push({ timeStart, timeEnd, sekPerKwh });
   }
   return windows;
 }
