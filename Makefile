@@ -52,6 +52,13 @@ test: build-test ## Build and run the program test suite
 test-scripts: ## Run deploy-script checks that do not need a cluster
 	./scripts/devnet-setup.test.sh
 	./scripts/ci-covers-packages.test.sh
+	./scripts/ci-covers-packages-round2.test.sh
+	# ci-covers-packages-round3.test.sh is committed but not wired yet: it covers
+	# a job level layer of the guard that came out of a review finding rather than
+	# out of this branch's issues, and it is tracked as its own follow up. Wiring it
+	# in now would make this target red for something nobody is fixing today.
+	./scripts/ci-runs-typecheck.test.sh
+	./scripts/docs-one-genesis.test.sh
 	./scripts/gcp-verify.test.sh
 	./scripts/gcp-verify-secrets.test.sh
 	./scripts/deploy-watcher-cloud.test.sh
@@ -59,10 +66,12 @@ test-scripts: ## Run deploy-script checks that do not need a cluster
 	./scripts/watcher-silent-alert.test.sh
 	./scripts/watcher-alert-round3.test.sh
 
-# Provision a chain plus the demo fixtures. Devnet by default; localnet when
-# the devnet faucet is rate limiting.
+# Provision a chain plus the demo fixtures. `make setup` names public devnet
+# (the recorded cluster). `make localnet` names a local validator. The script
+# still refuses if VETO_RPC is unset, so a direct invocation must name it.
+VETO_RPC ?= https://api.devnet.solana.com
 setup: ## Provision the demo cluster and token fixtures
-	./scripts/devnet-setup.sh
+	VETO_RPC=$(VETO_RPC) ./scripts/devnet-setup.sh
 
 LOCALNET_RPC ?= http://127.0.0.1:8899
 

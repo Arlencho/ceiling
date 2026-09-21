@@ -13,11 +13,10 @@ unset ANCHOR_BUILD_SBF_ARCH
 
 export PATH="${HOME}/.cargo/bin:${HOME}/.avm/bin:${HOME}/.local/share/solana/install/active_release/bin:${PATH}"
 
-# Endpoint is overridable so the same script provisions a local validator.
-# Devnet is the default because the demo needs explorer links a judge can open;
-# localnet exists so work is not blocked when the devnet faucet rate-limits.
-#   VETO_RPC=http://127.0.0.1:8899 VETO_CLUSTER=localnet ./scripts/devnet-setup.sh
-RPC="${VETO_RPC:-https://api.devnet.solana.com}"
+# Endpoint must be set. The script does not choose an RPC for the operator.
+# Public devnet: VETO_RPC=https://api.devnet.solana.com ./scripts/devnet-setup.sh
+# Localnet:      VETO_RPC=http://127.0.0.1:8899 VETO_CLUSTER=localnet ./scripts/devnet-setup.sh
+RPC=""
 CLUSTER_NAME="${VETO_CLUSTER:-devnet}"
 KEYS="${ROOT}/keys"
 DEPLOYER_KP="${KEYS}/deployer.json"
@@ -39,6 +38,13 @@ MINT_DECIMALS=6
 
 log() { printf '%s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+require_rpc() {
+  if [[ -z "${VETO_RPC:-}" ]]; then
+    die "missing VETO_RPC"
+  fi
+  RPC="$VETO_RPC"
+}
 
 # The committed program id. Bundled consumers (watcher, indexer, tools, app)
 # point at this value. A deploy under any other id looks like it succeeded
@@ -308,8 +314,10 @@ git status --ignored -- keys
 Toolchain used when this file was written: anchor-cli 1.2.0, solana-cli 4.1.2.
 
 ```bash
-./scripts/devnet-setup.sh
+VETO_RPC={rpc} ./scripts/devnet-setup.sh
 ```
+
+The script does not choose an RPC. It refuses and names `VETO_RPC` if that variable is unset.
 
 The script:
 
@@ -390,6 +398,7 @@ restore_after_build() {
 }
 
 main() {
+  require_rpc
   need_cmd solana
   need_cmd solana-keygen
   need_cmd spl-token

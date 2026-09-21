@@ -64,7 +64,7 @@ jobs:
       # Regenerating under npm 10 would drift on the next local npm 11 install.
       - run: npm install -g npm@11
       - run: npm ci
-      - run: npx tsc --noEmit
+      - run: npm run typecheck
       # The suite ran only on developer machines until now: the job stopped at
       # the typecheck, so 100 tests across 17 files had never once been run by
       # CI. A typecheck does not execute anything, which is how a module that

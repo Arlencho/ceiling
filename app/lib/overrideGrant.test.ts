@@ -155,10 +155,8 @@ test('CRITIC F2: a rule expired by the clock with a waiver pending is blocked an
   const client = clientFor(live);
   const probe = await probeOverride(client, MANDATE_KEY, row(), 0);
   assert.equal(probe.status, 'blocked', `expected blocked, got ${probe.status}`);
-  if (probe.status !== 'ready') {
-    assert.match(probe.why, /expired/i);
-    assert.doesNotMatch(probe.why, /can retry/);
-  }
+  assert.match(probe.why, /expired/i);
+  assert.doesNotMatch(probe.why, /can retry/);
   const wallet = signer();
   await assert.rejects(grantOverride(client, wallet.fn, OWNER, live, row(), 0), /expired/i);
   assert.equal(wallet.calls(), 0, 'no signature may be requested for a waiver that can never clear');
@@ -172,10 +170,8 @@ test('CRITIC F1: a rule exhausted by a later paid charge with a waiver still pen
   const client = clientFor(live);
   const probe = await probeOverride(client, MANDATE_KEY, row(), 0);
   assert.equal(probe.status, 'blocked', `expected blocked, got ${probe.status}`);
-  if (probe.status !== 'ready') {
-    assert.match(probe.why, /exhausted/i);
-    assert.doesNotMatch(probe.why, /can retry/);
-  }
+  assert.match(probe.why, /exhausted/i);
+  assert.doesNotMatch(probe.why, /can retry/);
   const wallet = signer();
   await assert.rejects(grantOverride(client, wallet.fn, OWNER, live, row(), 0), /exhausted/i);
   assert.equal(wallet.calls(), 0);
