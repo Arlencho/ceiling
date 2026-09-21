@@ -87,7 +87,7 @@ async function cmdOnce(): Promise<void> {
 async function cmdRun(): Promise<void> {
   const cfg = loadConfig();
   logLine(
-    `watcher start rpc=${cfg.rpc} mandate_id=${cfg.mandateId.toString()} kwh_milli=${cfg.kwhMilli.toString()} journal=${cfg.journalPath}`,
+    `watcher start rpc=${cfg.rpcs.join(",")} mandate_id=${cfg.mandateId.toString()} kwh_milli=${cfg.kwhMilli.toString()} journal=${cfg.journalPath}`,
   );
   let stopping = false;
   const stop = (): void => {

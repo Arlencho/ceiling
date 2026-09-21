@@ -4,8 +4,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AnchorProvider, BN, Program, Wallet } from "@coral-xyz/anchor";
 import type { Idl } from "@coral-xyz/anchor";
+import type { Connection } from "@solana/web3.js";
 import {
-  Connection,
   Keypair,
   PublicKey,
   SystemProgram,
@@ -13,10 +13,12 @@ import {
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import { DEFAULT_PROGRAM_ID, DEFAULT_RPC, TOKEN_PROGRAM_ID } from "./constants.js";
+import { createFailoverConnection, parseRpcList } from "./rpc.js";
 import { ledgerPda, mandatePda } from "./ring.js";
 
 type Addresses = {
   rpc: string;
+  rpcs: string[];
   programId: string;
   mint: string;
   owner: string;
@@ -50,8 +52,11 @@ function loadAddresses(keysDir: string, rpcOverride?: string): Addresses {
     if (!value) throw new Error(`missing ${key} in ${envPath}`);
     return value;
   };
+  const rpcs = parseRpcList(rpcOverride ?? process.env.VETO_RPC ?? map.get("RPC") ?? DEFAULT_RPC);
+  if (rpcs.length === 0) throw new Error("no rpc endpoints configured");
   return {
-    rpc: rpcOverride ?? process.env.VETO_RPC ?? map.get("RPC") ?? DEFAULT_RPC,
+    rpc: rpcs[0]!,
+    rpcs,
     programId: process.env.VETO_PROGRAM_ID ?? map.get("PROGRAM_ID") ?? DEFAULT_PROGRAM_ID,
     mint: need("MINT"),
     owner: need("OWNER"),
@@ -87,7 +92,7 @@ async function main(): Promise<void> {
     throw new Error("keys/agent.json does not match AGENT in addresses env");
   }
 
-  const connection = new Connection(addrs.rpc, "confirmed");
+  const connection = createFailoverConnection(addrs.rpcs);
   const programId = new PublicKey(addrs.programId);
   const idl = loadIdl();
   if (idl.address && idl.address !== addrs.programId) {
@@ -163,7 +168,7 @@ async function main(): Promise<void> {
   extra.push(await charge(refusedAmount, 4n));
 
   const report = {
-    rpc: addrs.rpc,
+    rpc: addrs.rpcs.join(","),
     program: addrs.programId,
     mandate_id: mandateId.toString(),
     mandate: mandate.toBase58(),

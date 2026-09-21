@@ -6,11 +6,21 @@ import {
   KIND_REFUSED,
   decodeBase58,
   kindName,
+  parseArgs,
   parseRecord,
   reasonText,
   recordToJson,
+  resolveRpcList,
   u64Le,
 } from "./lib.js";
+
+test("resolveRpcList honours a comma-separated --rpc list, first URL first", () => {
+  const cli = parseArgs(["--rpc", "http://dedicated.invalid, http://127.0.0.1:8999"]);
+  assert.deepEqual(resolveRpcList(cli, "/tmp/veto-tools-rpc-missing"), [
+    "http://dedicated.invalid",
+    "http://127.0.0.1:8999",
+  ]);
+});
 
 test("reasonText matches the program table", () => {
   assert.equal(reasonText(0), "ok");
