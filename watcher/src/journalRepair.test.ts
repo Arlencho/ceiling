@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { PublicKey } from "@solana/web3.js";
+import { mandatePda } from "./chain.js";
 import { STALE_AFTER_MS } from "./cadence.js";
 import type { PriceFeed } from "./feed.js";
 import { JsonlJournal } from "./journal.js";
@@ -221,6 +222,199 @@ test("decodeLedgerDecisions keeps paid and refused ring rows and drops opened", 
   assert.equal(rows[0]?.nonce, PAID_NONCE);
   assert.equal(rows[1]?.decision, "refused");
   assert.equal(rows[1]?.reason, 5);
+});
+
+const CHARGE_DISC = Buffer.from([26, 55, 197, 209, 93, 77, 242, 15]);
+
+function u64(value: bigint): Buffer {
+  const buf = Buffer.alloc(8);
+  buf.writeBigUInt64LE(value);
+  return buf;
+}
+
+function chargeTx(args: {
+  programId: PublicKey;
+  amount: bigint;
+  nonce: bigint;
+  logs: string[];
+  blockTime: number;
+}) {
+  return {
+    slot: 1,
+    blockTime: args.blockTime,
+    transaction: {
+      message: {
+        staticAccountKeys: [PublicKey.default, PublicKey.default, args.programId],
+        compiledInstructions: [
+          {
+            programIdIndex: 2,
+            accountKeyIndexes: [] as number[],
+            data: Buffer.concat([CHARGE_DISC, u64(args.amount), u64(args.nonce)]),
+          },
+        ],
+      },
+    },
+    meta: {
+      err: null,
+      logMessages: args.logs,
+      loadedAddresses: { writable: [] as PublicKey[], readonly: [] as PublicKey[] },
+    },
+  };
+}
+
+test("a rebuilt row names the signature of the transaction the walk found", async () => {
+  const programId = new PublicKey(Buffer.alloc(32, 1));
+  const owner = new PublicKey(Buffer.alloc(32, 2));
+  const mandate = mandatePda(programId, owner, 1n);
+  const paidSig = "paid-sig-from-history";
+  const asked: string[] = [];
+  const data = ledgerBytes([
+    { kind: 1, nonce: PAID_NONCE, amount: 446000n, ts: 1789855205n, reason: 0 },
+  ]);
+  const entries = await fetchChainDecisions({
+    connection: {
+      async getAccountInfo() {
+        return { data };
+      },
+      async getSignaturesForAddress(address: PublicKey) {
+        asked.push(address.toBase58());
+        return [{ signature: paidSig, err: null, blockTime: 1789855205 }];
+      },
+      async getTransaction() {
+        return chargeTx({
+          programId,
+          amount: 446000n,
+          nonce: PAID_NONCE,
+          logs: ["Program log: VETO PAID amount=446000"],
+          blockTime: 1789855205,
+        });
+      },
+    },
+    programId,
+    owner,
+    mandateId: 1n,
+  });
+  assert.deepEqual(asked, [mandate.toBase58()]);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0]?.decision, "paid");
+  assert.equal(entries[0]?.amount, 446000n);
+  assert.equal(entries[0]?.signature, paidSig);
+
+  const journal = new JsonlJournal(join(tmpDir(), "decisions.jsonl"));
+  assert.equal(repairJournalFromChain(journal, entries), 1);
+  const row = journal.load()[0];
+  assert.equal(row?.signature, paidSig);
+  assert.equal(row?.decision, "paid");
+  assert.equal(row?.amount, "446000");
+});
+
+test("a rebuilt row keeps recovered-from-chain when the walk cannot find the transaction", async () => {
+  const programId = new PublicKey(Buffer.alloc(32, 3));
+  const owner = new PublicKey(Buffer.alloc(32, 4));
+  const data = ledgerBytes([
+    { kind: 1, nonce: PAID_NONCE, amount: 446000n, ts: 1789855205n, reason: 0 },
+  ]);
+  const entries = await fetchChainDecisions({
+    connection: {
+      async getAccountInfo() {
+        return { data };
+      },
+      async getSignaturesForAddress() {
+        return [];
+      },
+      async getTransaction() {
+        throw new Error("the walk found no signature, so no transaction is read");
+      },
+    },
+    programId,
+    owner,
+    mandateId: 1n,
+  });
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0]?.signature, undefined);
+  assert.equal(entries[0]?.decision, "paid");
+  assert.equal(entries[0]?.amount, 446000n);
+  const journal = new JsonlJournal(join(tmpDir(), "decisions.jsonl"));
+  repairJournalFromChain(journal, entries);
+  const row = journal.load()[0];
+  assert.equal(row?.signature, RECOVERED_SIGNATURE);
+  assert.equal(row?.decision, "paid");
+  assert.equal(row?.amount, "446000");
+});
+
+test("a refused charge the ring has lost is rebuilt from the transaction, signature included", async () => {
+  const programId = new PublicKey(Buffer.alloc(32, 5));
+  const owner = new PublicKey(Buffer.alloc(32, 6));
+  const nonce = 1789860600n;
+  const refusedSig = "refused-sig-from-history";
+  const entries = await fetchChainDecisions({
+    connection: {
+      async getAccountInfo() {
+        return null;
+      },
+      async getSignaturesForAddress() {
+        return [{ signature: refusedSig, err: null, blockTime: 1789860605 }];
+      },
+      async getTransaction() {
+        return chargeTx({
+          programId,
+          amount: 6232500n,
+          nonce,
+          logs: [
+            "Program log: VETO REFUSED reason=5 (over per-payment maximum) amount=6232500 per_tx_max=500000 remaining=1 override_to_clear=100",
+          ],
+          blockTime: 1789860605,
+        });
+      },
+    },
+    programId,
+    owner,
+    mandateId: 1n,
+  });
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0]?.decision, "refused");
+  assert.equal(entries[0]?.amount, 6232500n);
+  assert.equal(entries[0]?.reason, 5);
+  assert.equal(entries[0]?.suggestedOverride, 100n);
+  assert.equal(entries[0]?.signature, refusedSig);
+  const journal = new JsonlJournal(join(tmpDir(), "decisions.jsonl"));
+  repairJournalFromChain(journal, entries);
+  const row = journal.load()[0];
+  assert.equal(row?.signature, refusedSig);
+  assert.equal(row?.decision, "refused");
+  assert.equal(row?.amount, "6232500");
+  assert.equal(row?.suggested_override, "100");
+});
+
+test("a history walk that throws still repairs from the ring with the placeholder signature", async () => {
+  const programId = new PublicKey(Buffer.alloc(32, 7));
+  const owner = new PublicKey(Buffer.alloc(32, 8));
+  const data = ledgerBytes([
+    { kind: 2, nonce: PAID_NONCE, amount: 519500n, ts: 1789855205n, reason: 5 },
+  ]);
+  const entries = await fetchChainDecisions({
+    connection: {
+      async getAccountInfo() {
+        return { data };
+      },
+      async getSignaturesForAddress() {
+        throw new Error("rpc down");
+      },
+      async getTransaction() {
+        throw new Error("rpc down");
+      },
+    },
+    programId,
+    owner,
+    mandateId: 1n,
+  });
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0]?.signature, undefined);
+  assert.equal(entries[0]?.decision, "refused");
+  const journal = new JsonlJournal(join(tmpDir(), "decisions.jsonl"));
+  repairJournalFromChain(journal, entries);
+  assert.equal(journal.load()[0]?.signature, RECOVERED_SIGNATURE);
+  assert.equal(journal.load()[0]?.decision, "refused");
 });
 
 test("fetchChainDecisions returns empty when the ledger account is missing", async () => {

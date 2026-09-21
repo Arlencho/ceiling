@@ -1,7 +1,9 @@
-import { PublicKey } from "@solana/web3.js";
-import { ledgerPda, mandatePda } from "./chain.js";
+import { PublicKey, type VersionedTransactionResponse } from "@solana/web3.js";
+import { chargeFromTx, ledgerPda, mandatePda } from "./chain.js";
 import type { JournalRow } from "./journal.js";
 import { JsonlJournal } from "./journal.js";
+import { logError } from "./log.js";
+import { parseChargeLogs } from "./parse.js";
 import { reasonText } from "./reasons.js";
 
 /** Marker so maxSettledNonce counts a paid row rebuilt from the ring. */
@@ -21,6 +23,25 @@ export type ChainDecision = {
   ts: Date;
   reason: number;
   suggestedOverride: bigint;
+  /** Set when the history walk read this decision from its transaction. */
+  signature?: string;
+};
+
+type SignaturePage = {
+  signature: string;
+  err: unknown;
+  blockTime?: number | null;
+};
+
+type HistoryConnection = AccountReader & {
+  getSignaturesForAddress(
+    address: PublicKey,
+    config?: { limit?: number; before?: string },
+  ): Promise<readonly SignaturePage[]>;
+  getTransaction(
+    signature: string,
+    config?: { commitment?: "confirmed"; maxSupportedTransactionVersion?: number },
+  ): Promise<VersionedTransactionResponse | null>;
 };
 
 export type AccountReader = {
@@ -88,6 +109,92 @@ export function decodeLedgerDecisions(data: Uint8Array): ChainDecision[] {
   return out;
 }
 
+function canWalk(connection: AccountReader): connection is HistoryConnection {
+  const candidate = connection as HistoryConnection;
+  return (
+    typeof candidate.getSignaturesForAddress === "function" &&
+    typeof candidate.getTransaction === "function"
+  );
+}
+
+function walkError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/** Decisions whose transaction the mandate walk could read. A signature here
+ * is the transaction's own. If listing signatures fails, the walk stops and
+ * returns what it already read. One transaction that cannot be fetched is
+ * skipped. The caller fills every gap from the ring. */
+async function decisionsFromMandateHistory(
+  connection: HistoryConnection,
+  programId: PublicKey,
+  mandate: PublicKey,
+): Promise<ChainDecision[]> {
+  const found = new Map<string, ChainDecision>();
+  let before: string | undefined;
+  const pageSize = 200;
+  for (let page = 0; page < 50; page += 1) {
+    let sigs: readonly SignaturePage[];
+    try {
+      sigs = await connection.getSignaturesForAddress(mandate, { limit: pageSize, before });
+    } catch (err) {
+      logError(`journal repair: history walk stopped, remaining rows keep the ring: ${walkError(err)}`);
+      break;
+    }
+    if (sigs.length === 0) break;
+    for (const info of sigs) {
+      if (info.err) continue;
+      let tx: VersionedTransactionResponse | null;
+      try {
+        tx = await connection.getTransaction(info.signature, {
+          commitment: "confirmed",
+          maxSupportedTransactionVersion: 0,
+        });
+      } catch (err) {
+        logError(
+          `journal repair: could not read transaction ${info.signature}, that row keeps the ring: ${walkError(err)}`,
+        );
+        continue;
+      }
+      if (!tx) continue;
+      const charge = chargeFromTx(tx, programId);
+      if (charge === null) continue;
+      const key = charge.nonce.toString();
+      if (found.has(key)) continue;
+      let outcome;
+      try {
+        outcome = parseChargeLogs(tx.meta?.logMessages ?? []);
+      } catch {
+        continue;
+      }
+      const blockTime = tx.blockTime ?? info.blockTime ?? null;
+      const ts =
+        blockTime !== null ? new Date(blockTime * 1000) : new Date(Number(charge.nonce) * 1000);
+      found.set(key, {
+        nonce: charge.nonce,
+        decision: outcome.decision,
+        amount: charge.amount,
+        ts,
+        reason: outcome.reasonCode,
+        suggestedOverride: outcome.suggestedOverride ?? 0n,
+        signature: info.signature,
+      });
+    }
+    if (sigs.length < pageSize) break;
+    const last = sigs[sigs.length - 1];
+    if (last === undefined) break;
+    before = last.signature;
+  }
+  return [...found.values()];
+}
+
+function mergeChainDecisions(ring: ChainDecision[], walked: ChainDecision[]): ChainDecision[] {
+  const byNonce = new Map<string, ChainDecision>();
+  for (const row of ring) byNonce.set(row.nonce.toString(), row);
+  for (const row of walked) byNonce.set(row.nonce.toString(), row);
+  return [...byNonce.values()].sort((a, b) => (a.nonce < b.nonce ? -1 : a.nonce > b.nonce ? 1 : 0));
+}
+
 export async function fetchChainDecisions(args: {
   connection: AccountReader;
   programId: PublicKey;
@@ -97,8 +204,10 @@ export async function fetchChainDecisions(args: {
   const mandate = mandatePda(args.programId, args.owner, args.mandateId);
   const ledger = ledgerPda(args.programId, mandate);
   const info = await args.connection.getAccountInfo(ledger, "confirmed");
-  if (info === null) return [];
-  return decodeLedgerDecisions(info.data);
+  const ring = info === null ? [] : decodeLedgerDecisions(info.data);
+  if (!canWalk(args.connection)) return mergeChainDecisions(ring, []);
+  const walked = await decisionsFromMandateHistory(args.connection, args.programId, mandate);
+  return mergeChainDecisions(ring, walked);
 }
 
 export function chainDecisionToRow(entry: ChainDecision): JournalRow {
@@ -114,7 +223,10 @@ export function chainDecisionToRow(entry: ChainDecision): JournalRow {
     decision: entry.decision,
     reason: reasonText(entry.reason),
     reason_code: entry.reason,
-    signature: RECOVERED_SIGNATURE,
+    signature:
+      entry.signature !== undefined && entry.signature.length > 0
+        ? entry.signature
+        : RECOVERED_SIGNATURE,
     suggested_override: entry.suggestedOverride === 0n ? null : entry.suggestedOverride.toString(),
   };
 }
