@@ -1,6 +1,6 @@
 import { StyleSheet, Text } from 'react-native';
 
-import { colors } from './theme';
+import { colors, fonts } from './theme';
 
 export function EmptyState({ children }: { children: string }) {
   return <Text style={styles.text}>{children}</Text>;
@@ -8,8 +8,9 @@ export function EmptyState({ children }: { children: string }) {
 
 const styles = StyleSheet.create({
   text: {
-    color: colors.muted,
-    fontSize: 15,
-    lineHeight: 22,
+    color: colors.body,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: fonts.sans,
   },
 });

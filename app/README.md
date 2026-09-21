@@ -17,8 +17,9 @@ npm test
 ```
 
 `npm test` runs the pure module tests (wallet, templates, reason text, ring
-decode, amount formatting, config). They do not need a device. Mobile Wallet
-Adapter `authorize` and the Seed Vault signature for `open_mandate` /
+decode, amount formatting, config, ruleset apply, purpose stamping, export
+scope, read states). They do not need a device. Mobile Wallet Adapter
+`authorize` and the Seed Vault signature for `open_mandate` /
 `revoke_mandate` still have to be checked on a Seeker.
 
 ## Sign-in
@@ -34,30 +35,32 @@ and no funds. The owner private key is never written to storage.
 
 ## Owner screens
 
-Four tabs, all Android:
+Three tabs, all Android. Share is an action on a decision. Revoke is an
+action on a rule. Neither is a tab. Help is reachable from every tab.
 
-- **Mandate.** Templates a Seeker owner recognises (cap a mint bot, cap a
-  quest-farm spend, cap an agent weekly outgoings, charge the car under a
-  price) prefill cap, per-payment maximum, expiry, merchant and purpose. Every
-  field stays editable. A template is an empty starting point and does not
-  ship example transactions or prices. One Seed Vault signature runs
-  `open_mandate`, which also delegates in the same transaction. The
-  confirmation is read back from chain, not from the form.
-- **Today.** What the agent paid and declined today, newest first, plus
-  remaining cap and time left. Real history only. If nothing has happened it
-  says so.
-- **Ledger.** The on-chain ring of 32 recent decisions, with the reason in
-  plain language. The indexer rebuilds the full trail. A refusal shows the
-  override that would have cleared it, is styled as a first-class outcome
-  (not an error), and opens its transaction in an explorer when the RPC
-  returns a signature.
-- **Revoke.** One owner signature sets status to revoked and drops the SPL
-  delegation. Nothing moved beyond what the ledger already records, and no
-  further spend is possible. Opening moved nothing, this revoke moves
-  nothing, and Remaining stays in the wallet. The agent's next charge is
-  refused with reason 1 (`mandate not active`) and that refusal is written
-  to the ledger. A second revoke is rejected by the program and records
-  nothing.
+- **Overview.** Which rule first, then spent against cap, paid and refused
+  counts, time left, then today. A refusal is the inverted block: "Your
+  rule held. No payment made." Never styled as an error.
+- **Rules.** Every rule the owner holds, each with purpose, spent against
+  cap, time left, its own agent key, and its state. Switching one makes
+  Overview and Decisions about it. Templates still prefill a blank form
+  and never ship history or prices. A ruleset is authored on the phone;
+  applying one to a new agent is one action. The ruleset itself is not on
+  chain. Its name and version are written into the purpose, which is.
+- **Decisions.** Every paid and refused row under the selected rule, with
+  the reason in plain language. Ordinary rows say "Paid within rule". A
+  refusal carries the override that would have cleared it. The payee lives
+  on the rule, not as an unlabelled address on the row. A transaction
+  signature, when present, is labelled as a transaction. Share is the
+  full-width primary action on the decision, never an overflow menu.
+
+Export offers three scopes (this decision, a date range, everything under
+this rule) and two shapes (CSV with the documented columns, JSON as in
+`docs/DECISION_RECORD.md`). The file states the honest limit: complete
+over payments, never over attempts.
+
+A rate-limited RPC read is its own state and says so. It is not a stalled
+fetch and it is not an absence of a rule.
 
 Chain reads and writes live in `lib/`. RPC url and program id come from config
 (`EXPO_PUBLIC_VETO_*` via `app.config.js` extra). The app does not hardcode an

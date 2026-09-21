@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 
-import { colors } from './theme';
+import { colors, fonts } from './theme';
 
 export function Button({
   label,
@@ -9,6 +9,8 @@ export function Button({
   busy = false,
   disabled = false,
   invert = true,
+  quiet = false,
+  onBone = false,
 }: {
   label: string;
   accessibilityLabel?: string;
@@ -16,8 +18,11 @@ export function Button({
   busy?: boolean;
   disabled?: boolean;
   invert?: boolean;
+  quiet?: boolean;
+  onBone?: boolean;
 }) {
   const isDisabled = busy || disabled;
+  const inverted = invert && !quiet && !onBone;
   return (
     <Pressable
       accessibilityRole="button"
@@ -26,32 +31,46 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
-        invert ? styles.invert : styles.outline,
+        inverted ? styles.invert : styles.outline,
+        onBone && styles.onBone,
+        quiet && styles.quiet,
         pressed && styles.pressed,
         isDisabled && styles.busy,
       ]}
     >
-      <Text style={invert ? styles.invertLabel : styles.outlineLabel}>{label}</Text>
+      <Text
+        style={
+          onBone ? styles.onBoneLabel : inverted ? styles.invertLabel : styles.outlineLabel
+        }
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: 12,
-    minWidth: 200,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
+    borderRadius: 6,
+    minHeight: 48,
+    paddingHorizontal: 16,
     alignItems: 'center',
+    justifyContent: 'center',
     alignSelf: 'stretch',
+    borderWidth: 1,
+    borderColor: colors.line,
   },
   invert: {
     backgroundColor: colors.invert,
+    borderColor: colors.invert,
   },
   outline: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.invert,
+    borderColor: colors.line,
+  },
+  quiet: {
+    backgroundColor: 'transparent',
+    borderColor: colors.line,
   },
   pressed: {
     opacity: 0.7,
@@ -61,12 +80,24 @@ const styles = StyleSheet.create({
   },
   invertLabel: {
     color: colors.invertText,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.sans,
   },
   outlineLabel: {
+    color: colors.body,
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: fonts.sans,
+  },
+  onBone: {
+    backgroundColor: colors.bg,
+    borderColor: colors.bg,
+  },
+  onBoneLabel: {
     color: colors.text,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.sans,
   },
 });

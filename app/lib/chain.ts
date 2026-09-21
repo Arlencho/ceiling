@@ -325,7 +325,7 @@ export async function fetchLedgerRows(
   const ledgerAddress = new PublicKey(snapshot.address);
   let signatures: ConfirmedSignatureInfo[] = [];
   try {
-    signatures = await client.connection.getSignaturesForAddress(ledgerAddress, { limit: 50 }, 'confirmed');
+    signatures = await listSignatures(client, ledgerAddress, 4);
   } catch {
     signatures = [];
   }
@@ -360,10 +360,45 @@ export async function fetchLedgerRows(
         ...decisionsFromTx(info.signature, tx, client.programId.toBase58()).map((decision) => ({
           ...decision,
           blockTime,
+          slot: info.slot,
         })),
       );
     }
   }
 
   return { snapshot, rows: attachSignatures(snapshot.entries, decoded) };
+}
+
+export async function listSignatures(
+  client: ChainClient,
+  address: PublicKey,
+  maxPages = 4,
+): Promise<ConfirmedSignatureInfo[]> {
+  const out: ConfirmedSignatureInfo[] = [];
+  let before: string | undefined;
+  const pages = Math.max(1, maxPages);
+  for (let page = 0; page < pages; page++) {
+    const batch = await client.connection.getSignaturesForAddress(
+      address,
+      { limit: 50, before },
+      'confirmed',
+    );
+    if (batch.length === 0) {
+      break;
+    }
+    out.push(...batch);
+    if (batch.length < 50) {
+      break;
+    }
+    const last = batch[batch.length - 1];
+    if (!last) {
+      break;
+    }
+    before = last.signature;
+  }
+  return out;
+}
+
+export async function fetchGenesisHash(client: ChainClient): Promise<string> {
+  return client.connection.getGenesisHash();
 }

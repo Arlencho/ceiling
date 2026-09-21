@@ -1,6 +1,6 @@
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { colors } from './theme';
+import { colors, fonts } from './theme';
 
 export function Field({
   label,
@@ -45,20 +45,22 @@ const styles = StyleSheet.create({
   },
   label: {
     color: colors.muted,
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.4,
+    fontSize: 11,
+    fontWeight: '500',
+    letterSpacing: 1,
     textTransform: 'uppercase',
+    fontFamily: fonts.mono,
   },
   input: {
-    backgroundColor: colors.card,
+    backgroundColor: 'transparent',
     borderColor: colors.line,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 6,
     color: colors.text,
     fontSize: 16,
     paddingHorizontal: 12,
     paddingVertical: 12,
+    fontFamily: fonts.sans,
   },
   multiline: {
     minHeight: 72,

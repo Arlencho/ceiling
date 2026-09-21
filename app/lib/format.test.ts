@@ -4,7 +4,9 @@ import test from 'node:test';
 import { KIND_OPENED, KIND_PAID, KIND_REFUSED } from './constants';
 import {
   formatBaseUnits,
+  formatDayHeading,
   formatTimeLeft,
+  groupByLocalDay,
   isLocalDay,
   parseBaseUnits,
   remainingCap,
@@ -57,6 +59,18 @@ test('today lists paid and refused newest first and skips other kinds', () => {
   assert.equal(rows[0]?.nonce, 2n);
   assert.equal(rows[1]?.nonce, 1n);
   assert.equal(isLocalDay(yesterday, noon.getTime()), false);
+});
+
+test('decision rows from several days sit under the heading for their own day', () => {
+  const eighteenth = BigInt(Math.floor(new Date(2026, 8, 18, 15, 0, 0).getTime() / 1000));
+  const twentieth = BigInt(Math.floor(new Date(2026, 8, 20, 9, 0, 0).getTime() / 1000));
+  const groups = groupByLocalDay([{ ts: twentieth, nonce: 2n }, { ts: eighteenth, nonce: 1n }]);
+  assert.equal(groups.length, 2);
+  assert.equal(groups[0]?.heading, formatDayHeading(twentieth));
+  assert.equal(groups[0]?.rows.map((row) => row.nonce).join(','), '2');
+  assert.equal(groups[1]?.heading, formatDayHeading(eighteenth));
+  assert.equal(groups[1]?.rows.map((row) => row.nonce).join(','), '1');
+  assert.notEqual(groups[0]?.heading, groups[1]?.heading);
 });
 
 test('today keeps signatures already on the rows', () => {

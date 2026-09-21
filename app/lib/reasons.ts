@@ -1,4 +1,4 @@
-import { REASON_NOT_ACTIVE, reasonText } from './constants';
+import { REASON_NOT_ACTIVE, REASON_OVER_PER_TX_MAX, reasonText } from './constants';
 import { formatBaseUnits } from './format';
 
 export { reasonText };
@@ -15,7 +15,7 @@ export function renderReason(
   decimals: number,
 ): ReasonView {
   const text = reasonText(reason);
-  if (reason === 0) {
+  if (reason !== REASON_OVER_PER_TX_MAX) {
     return { reason, text, overrideLine: null };
   }
   if (suggestedOverride > 0n) {
@@ -30,6 +30,24 @@ export function renderReason(
     text,
     overrideLine: 'No override would have cleared this.',
   };
+}
+
+export function refusalWhyLine(args: {
+  reason: number;
+  amount: bigint;
+  suggestedOverride: bigint;
+  decimals: number;
+  perTxMax?: bigint;
+}): string {
+  const view = renderReason(args.reason, args.suggestedOverride, args.decimals);
+  if (args.reason === REASON_OVER_PER_TX_MAX && args.perTxMax != null) {
+    const amount = formatBaseUnits(args.amount, args.decimals);
+    const limit = formatBaseUnits(args.perTxMax, args.decimals);
+    const extra = view.overrideLine ? ` ${view.overrideLine}` : '';
+    return `Asked for ${amount}, over the ${limit} per-payment maximum.${extra}`;
+  }
+  const extra = view.overrideLine ? ` ${view.overrideLine}` : '';
+  return `${view.text}.${extra}`.trim();
 }
 
 export function notActiveHint(): string {

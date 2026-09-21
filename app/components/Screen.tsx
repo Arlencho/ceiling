@@ -16,7 +16,7 @@ export function Screen({
   onRefresh?: () => void;
 }) {
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       {scroll ? (
         <ScrollView
           contentContainerStyle={styles.content}
@@ -46,8 +46,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   content: {
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    gap: 16,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 24,
+    gap: 12,
+    flexGrow: 1,
   },
 });

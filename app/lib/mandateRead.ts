@@ -1,4 +1,13 @@
-export type MandateReadStatus = 'not-read' | 'failed' | 'empty' | 'present';
+export type MandateReadStatus = 'not-read' | 'failed' | 'empty' | 'present' | 'rate-limited';
+
+export const RATE_LIMIT_RETRY_MS = [500, 1000, 2000] as const;
+
+export const RATE_LIMIT_GAVE_UP =
+  'The RPC rate limited this read three times. Pull to retry.';
+
+export function mayClaimAbsence(status: MandateReadStatus): boolean {
+  return status === 'empty' || status === 'present';
+}
 
 export function mandateReadStatus(args: {
   checkedOwner: string | null;
@@ -6,11 +15,15 @@ export function mandateReadStatus(args: {
   loading: boolean;
   error: string | null;
   hasMandate: boolean;
+  rateLimited?: boolean;
 }): MandateReadStatus {
   const forThisOwner =
     args.ownerPublicKey != null && args.checkedOwner === args.ownerPublicKey;
   if (args.hasMandate && forThisOwner) {
     return 'present';
+  }
+  if (args.rateLimited) {
+    return 'rate-limited';
   }
   if (!forThisOwner || args.loading) {
     return 'not-read';
@@ -27,6 +40,9 @@ export function mandateAbsenceCopy(status: MandateReadStatus, empty: string): st
   }
   if (status === 'not-read') {
     return 'Reading the chain for this owner.';
+  }
+  if (status === 'rate-limited') {
+    return 'The RPC is rate limiting this read. Still trying. This is not a stalled fetch.';
   }
   if (status === 'failed') {
     return 'The chain read failed. Pull to retry. This screen does not assume there is no mandate.';

@@ -5,11 +5,13 @@ import { Keypair } from '@solana/web3.js';
 
 import {
   AGENT_SECRET_STORE_KEY,
+  AGENTS_STORE_KEY,
   APP_IDENTITY,
   MWA_CHAIN,
   SESSION_STORE_KEY,
   authorize,
   connect,
+  createAgentKeypair,
   disconnect,
   loadAgentKeypair,
   loadOrCreateAgentPublicKey,
@@ -224,6 +226,23 @@ test('disconnect deauthorizes, clears the session, and keeps the agent key', asy
   const loaded = await loadAgentKeypair(store);
   assert.ok(loaded);
   assert.equal(loaded.publicKey.toBase58(), agent.publicKey.toBase58());
+});
+
+test('createAgentKeypair stores a second agent without dropping the first', async () => {
+  const first = Keypair.generate();
+  const second = Keypair.generate();
+  const store = memoryStore();
+  await loadOrCreateAgentPublicKey(store, () => first);
+  const created = await createAgentKeypair(store, () => second);
+  assert.equal(created.publicKey.toBase58(), second.publicKey.toBase58());
+  assert.notEqual(first.publicKey.toBase58(), second.publicKey.toBase58());
+  const latest = await loadAgentKeypair(store);
+  assert.equal(latest?.publicKey.toBase58(), second.publicKey.toBase58());
+  const mapRaw = store.data[AGENTS_STORE_KEY];
+  assert.ok(mapRaw);
+  const map = JSON.parse(mapRaw) as Record<string, string>;
+  assert.ok(map[first.publicKey.toBase58()]);
+  assert.ok(map[second.publicKey.toBase58()]);
 });
 
 test('disconnect still clears the session if deauthorize throws', async () => {

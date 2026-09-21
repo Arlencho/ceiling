@@ -1,134 +1,169 @@
+import { useRouter } from 'expo-router';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { KIND_PAID, KIND_REFUSED } from '../lib/constants';
-import { explorerTxUrl, formatBaseUnits, formatKindLabel, formatUnix } from '../lib/format';
+import { encodeDecisionId } from '../lib/exportRecord';
+import { explorerTxUrl, formatBaseUnits, formatClock } from '../lib/format';
 import { renderReason } from '../lib/reasons';
 import type { LedgerRow } from '../lib/ring';
-import { truncateAddress } from '../lib/wallet';
-import { colors } from './theme';
+import { RefusalCard } from './RefusalCard';
+import { colors, fonts } from './theme';
 
 export function DecisionRow({
   row,
   decimals,
   cluster,
   rpcUrl,
+  mandateAddress,
+  perTxMax,
+  variant = 'list',
 }: {
   row: LedgerRow;
   decimals: number;
   cluster: string;
   rpcUrl: string;
+  mandateAddress: string;
+  perTxMax?: bigint;
+  variant?: 'list' | 'today';
 }) {
+  const router = useRouter();
   const refused = row.kind === KIND_REFUSED;
   const paid = row.kind === KIND_PAID;
-  const reason = refused ? renderReason(row.reason, row.suggestedOverride, decimals) : null;
   const amount = formatBaseUnits(row.amount, decimals);
-  const kind = formatKindLabel(row.kind);
+  const clock = formatClock(row.ts);
+  const id = encodeDecisionId(mandateAddress, row);
 
-  const onOpen = () => {
+  const openDetail = () => {
+    router.push(`/decision/${encodeURIComponent(id)}`);
+  };
+
+  const openTx = () => {
     if (!row.signature) {
       return;
     }
     void Linking.openURL(explorerTxUrl(row.signature, cluster, rpcUrl));
   };
 
+  if (refused && variant === 'today') {
+    return (
+      <RefusalCard
+        row={row}
+        decimals={decimals}
+        perTxMax={perTxMax}
+        compact
+        onShare={openDetail}
+      />
+    );
+  }
+
+  if (refused) {
+    return (
+      <Pressable accessibilityRole="button" accessibilityLabel="Refused, recorded" onPress={openDetail}>
+        <RefusalCard row={row} decimals={decimals} perTxMax={perTxMax} />
+      </Pressable>
+    );
+  }
+
+  if (!paid) {
+    return null;
+  }
+
+  const reason = renderReason(row.reason, row.suggestedOverride, decimals);
+  const txLabel = row.signature
+    ? `transaction ${row.signature.slice(0, 4)}...${row.signature.slice(-4)}`
+    : null;
+
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${kind} ${amount}`}
-      onPress={onOpen}
-      disabled={!row.signature}
-      style={styles.card}
+      accessibilityLabel={`Paid within rule ${amount}`}
+      onPress={openDetail}
+      style={styles.paid}
     >
-      <View style={styles.top}>
-        <View style={[styles.kind, paid && styles.kindFilled, refused && styles.kindOutline]}>
-          <Text style={paid ? styles.kindFilledText : styles.kindOutlineText}>{kind}</Text>
-        </View>
-        <Text style={styles.amount}>{amount}</Text>
-      </View>
-      <Text style={styles.meta}>{formatUnix(row.ts)}</Text>
-      {reason ? (
-        <Text style={styles.reason}>{reason.text}</Text>
-      ) : null}
-      {reason?.overrideLine ? (
-        <Text style={styles.reason}>{reason.overrideLine}</Text>
-      ) : null}
-      <Text style={styles.meta}>
-        {truncateAddress(row.counterparty)}
-      </Text>
-      {row.signature ? (
-        <Text style={styles.link}>Open transaction in explorer</Text>
-      ) : (
-        <Text style={styles.meta}>
-          This RPC did not return a transaction signature for this row. The row itself is from the
-          on-chain ledger, not invented.
+      <Text style={styles.time}>{clock}</Text>
+      <View style={styles.body}>
+        <Text style={styles.say}>
+          Paid <Text style={styles.italic}>within rule</Text>
         </Text>
-      )}
+        <Text style={styles.why}>
+          {perTxMax != null
+            ? `Under ${formatBaseUnits(perTxMax, decimals)}, cap not reached.`
+            : reason.text === 'ok'
+              ? 'Inside the rule.'
+              : reason.text}
+          {txLabel ? ' ' : ''}
+        </Text>
+        {txLabel ? (
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel={txLabel}
+            onPress={openTx}
+            hitSlop={6}
+          >
+            <Text style={styles.tx}>{txLabel}</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.why}>
+            This RPC did not return a transaction signature for this row. The row itself is from the
+            on-chain ledger, not invented.
+          </Text>
+        )}
+      </View>
+      <Text style={styles.amt}>{amount}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    gap: 8,
-    alignSelf: 'stretch',
-  },
-  top: {
+  paid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     gap: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
   },
-  kind: {
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    minWidth: 84,
-    alignItems: 'center',
+  time: {
+    width: 44,
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: fonts.mono,
+    paddingTop: 4,
   },
-  kindFilled: {
-    backgroundColor: colors.invert,
+  body: {
+    flex: 1,
+    gap: 4,
   },
-  kindOutline: {
-    borderWidth: 1,
-    borderColor: colors.invert,
-    backgroundColor: 'transparent',
-  },
-  kindFilledText: {
-    color: colors.invertText,
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-  kindOutlineText: {
+  say: {
     color: colors.text,
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    fontSize: 22,
+    fontFamily: fonts.serif,
+    lineHeight: 24,
   },
-  amount: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '600',
-    fontFamily: 'monospace',
+  italic: {
+    fontStyle: 'italic',
+    color: colors.muted,
+    fontFamily: fonts.serif,
   },
-  reason: {
-    color: colors.text,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  meta: {
+  why: {
     color: colors.muted,
     fontSize: 13,
+    fontWeight: '500',
     lineHeight: 18,
   },
-  link: {
-    color: colors.text,
+  tx: {
+    color: colors.body,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '500',
+    textDecorationLine: 'underline',
+    fontFamily: fonts.mono,
+  },
+  amt: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '500',
+    fontFamily: fonts.mono,
+    paddingTop: 4,
   },
 });

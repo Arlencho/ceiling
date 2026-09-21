@@ -65,6 +65,7 @@ export function decodeEventBytes(signature: string, raw: Uint8Array): DecodedTxD
       amount: readU64Le(raw, 40),
       nonce: readU64Le(raw, 48),
       reason: raw[56] ?? 0,
+      suggestedOverride: raw.length >= 73 ? readU64Le(raw, 57) : 0n,
     };
   }
   return null;
