@@ -102,6 +102,7 @@ scripts/gcp-verify.sh
 ```
 
 Read only. It asserts every claim in the table above against the live project and changes nothing.
+The narrative below the table is reasoning and is not asserted; only the table is.
 Every check runs and every failure prints, so one broken claim cannot hide the next; the exit code
 is non-zero if any check failed.
 

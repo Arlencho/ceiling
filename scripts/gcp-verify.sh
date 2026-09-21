@@ -245,6 +245,24 @@ if capture enabled "enabled services can be listed" \
 fi
 
 echo
+echo "Audit"
+# The document claims every read of the agent key leaves a trail. A paste of a
+# live command proves that was true once; this proves it is true now. Without
+# it, audit logging could be turned off and nothing here would notice.
+if capture pol "the project IAM policy can be read for audit configuration" \
+        gcloud projects get-iam-policy "$PROJECT" --format=json; then
+    audit=$(printf '%s' "$pol" | python3 -c '
+import json,sys
+d=json.load(sys.stdin)
+for a in d.get("auditConfigs",[]):
+    if a.get("service")=="secretmanager.googleapis.com":
+        print(",".join(sorted(c["logType"] for c in a.get("auditLogConfigs",[]))))
+        break
+' 2>/dev/null || true)
+    equal "Secret Manager logs DATA_READ and DATA_WRITE" "DATA_READ,DATA_WRITE" "$audit"
+fi
+
+echo
 echo "Identity: who can act, and who could read the key once it exists"
 if capture sas "service accounts can be listed" \
         gcloud iam service-accounts list --project="$PROJECT" --format=value'(email)'; then
