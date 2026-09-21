@@ -73,18 +73,23 @@ The agent tried to pay 6.2325 tokens for electricity at an evening spike price. 
 0.5 per payment. It did not pay, it said why, and it said what would have cleared it. That
 transaction is the record.
 
-The same mandate paid three times earlier the same day, when power was cheap:
+Four later decisions on the same mandate confirmed on the six-hour cadence. Each was refused.
+The per-payment maximum is 0.5, and each charge was over it. Token balances are unchanged on
+all four.
 
-| Window | Spot price | Decision |
-|---|---|---|
-| 00:00 | 0.00892 SEK/kWh | [paid](https://explorer.solana.com/tx/4N13AokSVj2A9fJyCZiypzhG9P6mdpMvpjcnDvzVUi2Qp6jUx1Ud34tHUDt1TQENzXu7TFWTfrKHHCLfrpKTBJ9a?cluster=devnet) |
-| 06:00 | 0.00429 SEK/kWh | [paid](https://explorer.solana.com/tx/5heSaH7LCYKAUXcPo9M2167oxLPvJSuTDmtyRboPv4pbif2ndNqgNJ9DagWeT2T2XKa5BU9erjfw7wjS6wyxM7xb?cluster=devnet) |
-| 12:00 | 0.00011 SEK/kWh | [paid](https://explorer.solana.com/tx/289RQXJW2vkvXxiVM13vwSEWb1SuRAxPKTHCgkF5kqPYWPQ2hFGsq13PUrDTMZ8ibApq9BBJz2u2zpzjkRV92swU?cluster=devnet) |
-| 18:00 | 0.12465 SEK/kWh | [refused](https://explorer.solana.com/tx/3rTpyrHEScEPhjHL3cUDYSGwGAxU6JVzbdWVZbr4YMHt3wAM7ad9JGPC26R8aQMH9aqYVzrFqbEogX1CquNcWqib?cluster=devnet) |
+| Recorded (UTC) | Stockholm hour on 2026-09-21 | Spot price | Charge | Decision |
+|---|---|---|---|---|
+| 2026-09-20 22:00:00 | 00:00 | 0.16326 SEK/kWh | 8.163 | [refused](https://explorer.solana.com/tx/5MJLtM92foysaWgfqs6x6oBYxyES2Ra2st8UK47dRX8h1F2wo43qQxJt4GFycEWiLSKJQjWbUBhotHMhkHymLoBU?cluster=devnet) |
+| 2026-09-21 04:00:08 | 06:00 | 0.43085 SEK/kWh | 21.5425 | [refused](https://explorer.solana.com/tx/47PZmcRp85U5s3S9GjKekJ7BYcfLeCvY3MKhcDyhyn8Rt5YRdLL5MviymKfFKBeiswn3owx8P6VianW4MRLfU97N?cluster=devnet) |
+| 2026-09-21 10:00:00 | 12:00 | 0.15807 SEK/kWh | 7.9035 | [refused](https://explorer.solana.com/tx/5HTd7nhtGvz2zpxxbszgVBhRAjcv52MTBRLvVoxRt98LXJvaVsEDRcLSbsAzx1SMdRoxekzhTBtmx6T6xTfDVMdr?cluster=devnet) |
+| 2026-09-21 16:00:09 | 18:00 | 1.27877 SEK/kWh | 63.9385 | [refused](https://explorer.solana.com/tx/59ePBRRBGdu51J7aURacABWNtzqhvpWLFzsSfEcFA5eJd4Zn2y2gtY9MtG6fF6dgG8CdFKbWDzvnKGJRSmZKngyq?cluster=devnet) |
 
-Those prices are the real Nordic day-ahead spot for SE3 on 2026-09-20 and you can check them at
-the [same public URL the agent reads](https://www.elprisetjustnu.se/). Electricity got twenty nine
-times more expensive in the evening and the rule did the rest.
+The recorded time is the block time. The Stockholm hour is the SE3 window the price belongs to,
+the 15-minute window that starts at that hour. Those prices are the Nordic day-ahead spot for
+SE3 on 2026-09-21, on the [same public URL the agent reads](https://www.elprisetjustnu.se/).
+Each charge is that price times 50 kWh. The program log on each transaction is `reason=5 (over
+per-payment maximum)` with `per_tx_max=500000` and these base-unit amounts: 8163000, 21542500,
+7903500, 63938500.
 
 To take one off chain and check it independently:
 
@@ -178,7 +183,7 @@ scripts/devnet-setup.sh   recreate the chain deploy and demo fixtures from nothi
 docs/DECISION_RECORD.md   stable schema for that JSON
 docs/PROBLEM.md           the problem, who has it, what they do today, what Veto does
 docs/PLAN.md              build plan, milestones, and prior art
-docs/PITCH.md             positioning and the sixty seconds
+docs/PITCH.md             the pitch: position and the sixty seconds
 docs/DECK.md              the deck, slide by slide
 docs/GCP_SETUP.md         the watcher GCP project, checked by scripts/gcp-verify.sh
 docs/internal/            working notes: decisions, self-review, design brief, design decision

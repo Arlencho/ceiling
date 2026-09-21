@@ -70,3 +70,14 @@ Capped agent spending on chain is not new. The prior art is named in the [README
 Insurers, agent platforms, compliance functions, and counterparties are the people who would
 use a record like this to underwrite agent spend, to dispute a drained wallet, or to compare
 agents at a limit. Nobody is buying that record in 2026.
+
+## How we would know this was wrong
+
+Three outcomes would show the claim does not hold.
+
+- If the person using this on a Tuesday is still a hypothetical, the consumer framing is wrong
+  and the product is developer infrastructure wearing an app.
+- If the export lands as a curiosity, the record is not the wedge and the differentiator is only
+  mobile UX on limits, which is a much weaker position.
+- If someone else ships a recorded on-chain refusal on mobile before 2026-10-09, that wedge is
+  gone and the entry needs a different one.

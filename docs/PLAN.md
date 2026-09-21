@@ -136,9 +136,9 @@ hackathon calendar.
 | Criterion | Where the repo stands |
 |---|---|
 | Innovation 25% | The program records a refusal with a reason and the override that would have cleared it |
-| Presentation 25% | The deck, the video script, and the devnet transactions are in the repo |
-| UX 25% | The Android app is in `app/` |
-| Stickiness 25% | The watcher decides on a cadence against the live feed. The ledger is that history |
+| Presentation 25% | The deck and the video script are in the repo. The week of history they are written for is not on chain yet |
+| UX 25% | The Android app is in `app/`. Mobile Wallet Adapter and Seed Vault have not been checked on a Seeker. This is the largest open risk |
+| Stickiness 25% | The weakest criterion. The watcher decides on a cadence against the live feed, and the ledger is that history. It holds only if that history is real |
 
 ## Risks
 

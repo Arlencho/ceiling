@@ -8,9 +8,10 @@ not been run, so those resources are not in the project yet.
 
 `scripts/gcp-verify.sh` checks the table against the live project and changes nothing.
 
-The watcher has been running from a laptop. The deck and the video are built on a week of
-decisions against real electricity prices. An hour the watcher is not running is an hour missing
-from that week on the 8th of October, and it cannot be recreated.
+The watcher has been running from a laptop. The deck and the video are written for a week of
+decisions against real electricity prices. That week is not on chain yet. An hour the watcher
+is not running is an hour missing from that week on the 8th of October, and it cannot be
+recreated.
 
 ## What was created
 
@@ -51,7 +52,9 @@ scripts above.
   that GCP creates by itself when the APIs are enabled. It holds no project level role binding
   today. A Cloud Run job deployed without `--service-account` picks that account up. The deploy
   script passes `veto-watcher@veto-watcher-260921.iam.gserviceaccount.com` and refuses to store the
-  agent key if the default account can already read a secret version.
+  agent key if the default account can already read a secret version. This bullet was wrong when
+  first written. It said no service account existed at all. `scripts/gcp-verify.sh` failed on it
+  the first time it ran, which is why that script asserts the absences as well as the presences.
 - **No secret yet.** The agent key goes in at deployment time from a path the operator gives, and
   it has never been in this repository or in an image. The deploy script will not create it until
   the default compute account check above has passed.
