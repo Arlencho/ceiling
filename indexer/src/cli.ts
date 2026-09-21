@@ -2,6 +2,7 @@
 import { PublicKey } from "@solana/web3.js";
 import { compareRingToHistory } from "./compare.js";
 import { requiredIdentity } from "./config.js";
+import { parseRpcList } from "./rpc.js";
 import { formatComparison, formatTable, decisionToJson } from "./format.js";
 import { fetchDecisionHistory } from "./history.js";
 import { fetchLedgerRing } from "./ring.js";
@@ -17,9 +18,13 @@ type Args = {
 };
 
 function parseArgs(argv: string[]): Args {
+  const fromEnv = parseRpcList(process.env.VETO_RPC);
   const out: Args = {
-    rpc: undefined,
-    program: undefined,
+    rpc: fromEnv.length > 0 ? fromEnv.join(",") : undefined,
+    program:
+      process.env.VETO_PROGRAM_ID && process.env.VETO_PROGRAM_ID.length > 0
+        ? process.env.VETO_PROGRAM_ID
+        : undefined,
     mandate: process.env.VETO_MANDATE || undefined,
     format: "table",
     pageSize: process.env.VETO_PAGE_SIZE ? Number(process.env.VETO_PAGE_SIZE) : undefined,
@@ -30,7 +35,11 @@ function parseArgs(argv: string[]): Args {
     const arg = argv[i] ?? "";
     const next = () => argv[++i] ?? "";
     if (arg === "--help" || arg === "-h") out.help = true;
-    else if (arg === "--rpc") out.rpc = next();
+    else if (arg === "--rpc") {
+      const value = next();
+      const listed = parseRpcList(value);
+      out.rpc = listed.length > 0 ? listed.join(",") : value;
+    }
     else if (arg === "--program") out.program = next();
     else if (arg === "--mandate") out.mandate = next();
     else if (arg === "--page-size") out.pageSize = Number(next());
@@ -53,7 +62,7 @@ function usage(): string {
   return `veto-history: rebuild Paid and Refused decisions from program logs
 
 Usage:
-  veto-history [--rpc URL] [--program ID] [--mandate PDA] [--format table|json]
+  veto-history [--rpc URL[,URL...]] [--program ID] [--mandate PDA] [--format table|json]
                [--page-size N] [--compare]
 
 The on-chain ledger is a 32-entry ring. This command walks program signatures

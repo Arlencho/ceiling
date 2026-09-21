@@ -28,3 +28,8 @@ keys/
 
 # os
 .DS_Store
+
+# Per-seat scratch note. Every seat writes this same root file, so leaving it
+# tracked makes every pair of branches conflict on it. The dispatcher collects it
+# from the worktree, not from git.
+handoff.md

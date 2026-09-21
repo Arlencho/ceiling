@@ -26,6 +26,10 @@ test("parseDecimalToScaled rejects scientific notation", () => {
   assert.throws(() => parseDecimalToScaled("1e-3", 8));
 });
 
+test("sekPerKwhToScaled accepts a scientific source string via textual expansion", () => {
+  assert.equal(sekPerKwhToScaled("1e-05"), parseDecimalToScaled("0.00001", PRICE_SCALE));
+});
+
 test("amountBaseUnits converts 50 kWh at live SE3 prices into 6-decimal base units", () => {
   const kwhMilli = 50_000n;
   const cases: Array<[string, bigint]> = [

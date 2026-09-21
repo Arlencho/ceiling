@@ -1,7 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
+import type { Connection } from "@solana/web3.js";
+import { createFailoverConnection, parseRpcList } from "../indexer/src/rpc.js";
 
 export const TOOLS_DIR = dirname(fileURLToPath(import.meta.url));
 export const REPO_DIR = join(TOOLS_DIR, "..");
@@ -204,20 +206,40 @@ export function addressesFile(repoRoot = REPO_DIR): Map<string, string> {
   return parseEnvFile(join(repoRoot, "keys", "devnet-addresses.env"));
 }
 
+export function resolveRpcList(
+  cli?: Cli,
+  repoRoot = REPO_DIR,
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const fromFlag = cli ? flagString(cli, "rpc") : undefined;
+  if (fromFlag !== undefined) {
+    const listed = parseRpcList(fromFlag);
+    if (listed.length === 0) throw new Error("no rpc endpoints configured");
+    return listed;
+  }
+  if (env.VETO_RPC && env.VETO_RPC.length > 0) {
+    const listed = parseRpcList(env.VETO_RPC);
+    if (listed.length === 0) throw new Error("no rpc endpoints configured");
+    return listed;
+  }
+  const file = addressesFile(repoRoot);
+  const fromFile = file.get("RPC") ?? file.get("VETO_RPC");
+  if (fromFile && fromFile.length > 0) {
+    const listed = parseRpcList(fromFile);
+    if (listed.length === 0) throw new Error("no rpc endpoints configured");
+    return listed;
+  }
+  throw new Error(
+    "lib.resolveRpc: missing VETO_RPC; set it in the environment, keys/devnet-addresses.env, or pass --rpc",
+  );
+}
+
 export function resolveRpc(
   cli?: Cli,
   repoRoot = REPO_DIR,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  const fromFlag = cli ? flagString(cli, "rpc") : undefined;
-  if (fromFlag) return fromFlag;
-  if (env.VETO_RPC && env.VETO_RPC.length > 0) return env.VETO_RPC;
-  const file = addressesFile(repoRoot);
-  const fromFile = file.get("RPC") ?? file.get("VETO_RPC");
-  if (fromFile && fromFile.length > 0) return fromFile;
-  throw new Error(
-    "lib.resolveRpc: missing VETO_RPC; set it in the environment, keys/devnet-addresses.env, or pass --rpc",
-  );
+  return resolveRpcList(cli, repoRoot, env)[0]!;
 }
 
 export function resolveProgramId(
@@ -251,8 +273,10 @@ export function keysDir(repoRoot = REPO_DIR): string {
   return join(repoRoot, "keys");
 }
 
-export function connection(rpc: string): Connection {
-  return new Connection(rpc, "confirmed");
+export function connection(rpc: string | readonly string[]): Connection {
+  const list = typeof rpc === "string" ? parseRpcList(rpc) : [...rpc];
+  if (list.length === 0) throw new Error("no rpc endpoints configured");
+  return createFailoverConnection(list);
 }
 
 export function u64Le(value: bigint): Buffer {

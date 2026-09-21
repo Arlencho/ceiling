@@ -30,7 +30,7 @@ import {
   recordToJson,
   resolveClusterName,
   resolveProgramId,
-  resolveRpc,
+  resolveRpcList,
   type DecisionRecord,
   type LedgerAccount,
   type LedgerEntry,
@@ -41,9 +41,9 @@ function usage(): never {
   console.error(`export a Veto decision as JSON, or a population as JSON or CSV
 
 Usage:
-  npx tsx export.ts --signature <tx> [--out file] [--rpc url]
-  npx tsx export.ts --mandate <addr> [--kind paid|refused] [--format json|csv] [--out file] [--rpc url]
-  npx tsx export.ts --from <when> --to <when> [--mandate <addr>] [--format json|csv] [--out file] [--rpc url]
+  npx tsx export.ts --signature <tx> [--out file] [--rpc url[,url...]]
+  npx tsx export.ts --mandate <addr> [--kind paid|refused] [--format json|csv] [--out file] [--rpc url[,url...]]
+  npx tsx export.ts --from <when> --to <when> [--mandate <addr>] [--format json|csv] [--out file] [--rpc url[,url...]]
 
 --signature writes one version-1 record (the demo beat).
 --mandate writes everything under that rule.
@@ -224,10 +224,11 @@ function writeOutput(text: string, out: string | undefined): void {
 async function main(): Promise<void> {
   const cli = parseArgs(process.argv.slice(2));
   if (cli.flags.help || cli.flags.h) usage();
-  const rpc = resolveRpc(cli);
+  const rpcs = resolveRpcList(cli);
+  const rpc = rpcs.join(",");
   const programId = resolveProgramId();
   const cluster = resolveClusterName();
-  const conn = connection(rpc);
+  const conn = connection(rpcs);
   const genesisHash = await conn.getGenesisHash();
 
   const signature = flagString(cli, "signature");

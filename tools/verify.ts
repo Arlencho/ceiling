@@ -12,7 +12,7 @@ import {
   parseChargeFromTx,
   parseChargeLogs,
   reasonText,
-  resolveRpc,
+  resolveRpcList,
   tokenAccountOwner,
   type DecisionRecord,
 } from "./lib.js";
@@ -21,7 +21,7 @@ function usage(): never {
   console.error(`verify a Veto decision record against the chain
 
 Usage:
-  npx tsx verify.ts <file.json|file.csv> [--rpc url]
+  npx tsx verify.ts <file.json|file.csv> [--rpc url[,url...]]
   npx tsx export.ts --signature <tx> | npx tsx verify.ts
   npx tsx export.ts --mandate <addr> | npx tsx verify.ts
 
@@ -275,7 +275,8 @@ async function main(): Promise<void> {
   if (cli.flags.help || cli.flags.h) usage();
   const path = cli.positional[0];
   if (!path && process.stdin.isTTY) usage();
-  const rpc = resolveRpc(cli);
+  const rpcs = resolveRpcList(cli);
+  const rpc = rpcs.join(",");
   let parsed;
   try {
     parsed = parseExportText(readInput(path));
@@ -284,7 +285,7 @@ async function main(): Promise<void> {
     fail([`record is not valid schema version 1 JSON or CSV: ${message}`]);
   }
   const cache: CheckCache = {
-    conn: connection(rpc),
+    conn: connection(rpcs),
     mandates: new Map(),
     ledgers: new Map(),
     destOwners: new Map(),

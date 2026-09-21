@@ -13,7 +13,7 @@
 # One command per thing a judge or a contributor needs. `make test` from a
 # fresh clone is the contract.
 
-.PHONY: help build test test-scripts tools-test localnet setup fmt clean indexer indexer-test indexer-seed require-anchor
+.PHONY: help build test test-scripts tools-test localnet setup fmt clean indexer indexer-test indexer-seed terminal-test require-anchor
 
 # Two flags that are not obvious and both are required from a clean checkout.
 #
@@ -82,6 +82,9 @@ clean: ## Remove Rust build artifacts
 
 indexer-test: ## Typecheck and test the history indexer
 	cd indexer && npm ci && npm run typecheck && npm test
+
+terminal-test: ## Typecheck and test the merchant terminal
+	cd terminal && npm ci && npm run typecheck && npm test
 
 indexer-seed: ## Open a mandate and submit paid plus refused charges
 	cd indexer && npm run seed

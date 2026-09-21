@@ -9,13 +9,23 @@ import {
   KIND_REFUSED,
   decodeBase58,
   kindName,
+  parseArgs,
   parseRecord,
   reasonText,
   recordToJson,
   resolveProgramId,
   resolveRpc,
+  resolveRpcList,
   u64Le,
 } from "./lib.js";
+
+test("resolveRpcList honours a comma-separated --rpc list, first URL first", () => {
+  const cli = parseArgs(["--rpc", "http://dedicated.invalid, http://127.0.0.1:8999"]);
+  assert.deepEqual(resolveRpcList(cli, "/tmp/veto-tools-rpc-missing"), [
+    "http://dedicated.invalid",
+    "http://127.0.0.1:8999",
+  ]);
+});
 
 test("reasonText matches the program table", () => {
   assert.equal(reasonText(0), "ok");
@@ -150,4 +160,17 @@ test("resolveProgramId reads PROGRAM_ID from keys/devnet-addresses.env", () => {
     "PROGRAM_ID=11111111111111111111111111111111\n",
   );
   assert.equal(resolveProgramId(repo, {}).toBase58(), "11111111111111111111111111111111");
+});
+
+// Critic fixture, round 1. Goes RED on b23b9d3.
+
+test("critic: an empty --rpc list does not silently become the public default endpoint", () => {
+  const saved = process.env.VETO_RPC;
+  delete process.env.VETO_RPC;
+  try {
+    const cli = parseArgs(["--rpc", ","]);
+    assert.throws(() => resolveRpcList(cli, "/tmp/veto-tools-rpc-missing"));
+  } finally {
+    if (saved !== undefined) process.env.VETO_RPC = saved;
+  }
 });

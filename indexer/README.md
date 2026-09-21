@@ -43,6 +43,12 @@ only). Keypairs for the seed script stay under gitignored `keys/`. Copy
 `.env.example` to `indexer/.env` and uncomment the identity lines with values
 you supply. The placeholders do not resolve.
 
+`VETO_RPC` (and `--rpc`) is one URL or a comma-separated list. First is tried
+first. A dedicated endpoint belongs first; the public cluster URL from
+`docs/DEVNET.md` can sit after it as fallback. On HTTP 429 the indexer backs
+off, tries the next URL, and logs that it was rate limited rather than that
+the read failed.
+
 ## Seed a mandate when the watcher is not running
 
 Opens a fresh mandate and submits one paid charge and several refused charges

@@ -5,6 +5,8 @@
  * matching the test SPL mint in docs/DEVNET.md, so 1 token is treated as 1 SEK.
  */
 
+import { plainDecimal } from "./feed.js";
+
 export const PRICE_SCALE = 8;
 export const KWH_MILLI_SCALE = 3;
 export const DEFAULT_KWH_MILLI = 50_000n;
@@ -82,5 +84,5 @@ export function amountBaseUnits(args: {
 }
 
 export function sekPerKwhToScaled(sekPerKwh: string): bigint {
-  return parseDecimalToScaled(sekPerKwh, PRICE_SCALE);
+  return parseDecimalToScaled(plainDecimal(sekPerKwh), PRICE_SCALE);
 }

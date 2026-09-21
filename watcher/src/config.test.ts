@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { loadConfig } from "./config.js";
+import { loadConfig, lookupConfigString } from "./config.js";
 
 const IDENTITIES = {
   VETO_RPC: "http://rpc.test",
@@ -33,6 +33,22 @@ test("loadConfig reads VETO_ keys from the environment", () => {
   assert.equal(cfg.rpc, "http://rpc.test");
   assert.equal(cfg.merchantTokenAccount, "MerchantToken");
   assert.equal(cfg.programId, "Prog");
+  assert.deepEqual(cfg.rpcs, ["http://rpc.test"]);
+});
+
+test("loadConfig reads VETO_ keys from an env file, including volume", () => {
+  const dir = tmpDir();
+  const file = join(dir, ".env");
+  writeFileSync(
+    file,
+    Object.entries({ ...IDENTITIES, VETO_KWH_MILLI: "1000" })
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\n"),
+  );
+  const cfg = loadConfig({ VETO_KEYS_DIR: dir }, { envFiles: [file] });
+  assert.equal(cfg.rpc, "http://rpc.test");
+  assert.equal(cfg.merchantTokenAccount, "MerchantToken");
+  assert.equal(cfg.kwhMilli, 1000n);
 });
 
 test("loadConfig reads short keys from keys/devnet-addresses.env style files", () => {
@@ -54,4 +70,27 @@ test("loadConfig reads short keys from keys/devnet-addresses.env style files", (
   const cfg = loadConfig({ VETO_KEYS_DIR: dir }, { envFiles: [file] });
   assert.equal(cfg.rpc, "http://from-short.test");
   assert.equal(cfg.merchantTokenAccount, "MerchantToken");
+});
+
+test("loadConfig throws when two env files disagree on volume", () => {
+  const dir = tmpDir();
+  const a = join(dir, "a.env");
+  const b = join(dir, "b.env");
+  const body = Object.entries(IDENTITIES)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("\n");
+  writeFileSync(a, `${body}\nVETO_KWH_MILLI=50000\n`);
+  writeFileSync(b, `${body}\nVETO_KWH_MILLI=1000\n`);
+  assert.throws(
+    () => loadConfig({ VETO_KEYS_DIR: dir }, { envFiles: [a, b] }),
+    /VETO_KWH_MILLI disagrees/,
+  );
+});
+
+test("lookupConfigString reads VETO_TERMINAL_PORT from a file", () => {
+  const dir = tmpDir();
+  const file = join(dir, ".env");
+  writeFileSync(file, "VETO_TERMINAL_PORT=9999\n");
+  const port = lookupConfigString({ VETO_KEYS_DIR: dir }, "VETO_TERMINAL_PORT", { envFiles: [file] });
+  assert.equal(port, "9999");
 });
