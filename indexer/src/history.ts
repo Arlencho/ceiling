@@ -4,7 +4,6 @@ import {
   type ConfirmedSignatureInfo,
   type VersionedTransactionResponse,
 } from "@solana/web3.js";
-import { DEFAULT_PROGRAM_ID } from "./constants.js";
 import { decodeEventsFromLogs, decodeIxData, decisionsFromTx } from "./events.js";
 import { clampPageSize, isSkippableSlot, paginateNewestFirst, withRetry } from "./rpc.js";
 import type { CompiledIx, Decision, FetchHistoryOptions, SignaturePage, TxView } from "./types.js";
@@ -36,7 +35,12 @@ type MetaLike = {
 
 export async function fetchDecisionHistory(opts: FetchHistoryOptions): Promise<HistoryResult> {
   const connection = new Connection(opts.rpcUrl, "confirmed");
-  const programId = new PublicKey(opts.programId ?? DEFAULT_PROGRAM_ID);
+  if (!opts.programId || opts.programId.length === 0) {
+    throw new Error(
+      "history.fetchDecisionHistory: missing programId; set VETO_PROGRAM_ID in the environment, keys/devnet-addresses.env, or indexer/.env",
+    );
+  }
+  const programId = new PublicKey(opts.programId);
   const pageSize = clampPageSize(opts.pageSize);
   const allowBlockScan = opts.allowBlockScan !== false;
 

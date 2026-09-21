@@ -50,11 +50,15 @@ Open a mandate once (owner signature, rent paid by the owner key):
 npm run open-mandate
 ```
 
-Defaults, overridable with env (see `.env.example`):
+RPC, program id, mint, and the owner / merchant / agent accounts must be set
+in the environment, `watcher/.env`, or `keys/devnet-addresses.env`. There is
+no built-in endpoint or account. Copy `.env.example` and fill those in. See
+also `docs/DEVNET.md`.
+
+Process defaults that cannot select a chain identity (overridable with env):
 
 | | |
 |---|---|
-| RPC | `http://127.0.0.1:8999` (the cluster recorded in `docs/DEVNET.md`) |
 | Volume | 50 kWh (`VETO_KWH_MILLI=50000`) |
 | Cap | 100 tokens |
 | Per-payment max | 0.5 tokens |

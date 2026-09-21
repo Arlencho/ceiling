@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import {
   CHARGE_DISCRIMINATOR,
@@ -9,6 +12,8 @@ import {
   parseRecord,
   reasonText,
   recordToJson,
+  resolveProgramId,
+  resolveRpc,
   u64Le,
 } from "./lib.js";
 
@@ -108,4 +113,41 @@ test("every reason code the program can emit resolves to text, not unknown", () 
     );
   }
   assert.equal(reasonText(10), "account frozen");
+});
+
+function tmpRepo(): string {
+  const dir = mkdtempSync(join(tmpdir(), "veto-tools-config-"));
+  mkdirSync(join(dir, "keys"));
+  return dir;
+}
+
+test("resolveRpc refuses to invent an endpoint", () => {
+  const repo = tmpRepo();
+  assert.throws(
+    () => resolveRpc(undefined, repo, {}),
+    /missing VETO_RPC/,
+  );
+});
+
+test("resolveProgramId refuses to invent a program id", () => {
+  const repo = tmpRepo();
+  assert.throws(
+    () => resolveProgramId(repo, {}),
+    /missing VETO_PROGRAM_ID/,
+  );
+});
+
+test("resolveRpc reads RPC from keys/devnet-addresses.env", () => {
+  const repo = tmpRepo();
+  writeFileSync(join(repo, "keys", "devnet-addresses.env"), "RPC=http://from-file.test\n");
+  assert.equal(resolveRpc(undefined, repo, {}), "http://from-file.test");
+});
+
+test("resolveProgramId reads PROGRAM_ID from keys/devnet-addresses.env", () => {
+  const repo = tmpRepo();
+  writeFileSync(
+    join(repo, "keys", "devnet-addresses.env"),
+    "PROGRAM_ID=11111111111111111111111111111111\n",
+  );
+  assert.equal(resolveProgramId(repo, {}).toBase58(), "11111111111111111111111111111111");
 });

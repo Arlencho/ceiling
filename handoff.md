@@ -1,53 +1,62 @@
 ## Built
 
-Closed the remaining round 2 finding on PR 69 (`feat/app-override`) without touching `programs/veto/src` and without editing the critic fixture in `f4a2d0a`.
+Removed defaulted chain identities from watcher, indexer and tools, and closed the two app defects named in the plan.
 
-- A failed override probe is no longer stored under the live probe key. The skip that avoids a second chain read on a same-state refresh only applies to a probe that returned a result.
-- The blocked copy ("Pull to retry") still shows after a failed read. A later refresh with the same row and mandate fields issues the read the copy promises.
-- The two F3 regression checks still pass: a successful probe is not re-read on a same-state refresh, and a moved `last_nonce` still re-probes.
+- Watcher `loadConfig` throws `missing VETO_RPC` (and the other identity keys) when the environment and documented env files are silent. Volume, cap, per-payment max, mandate id, decimals and purpose stay as process defaults; they cannot select an endpoint, program, mint or account.
+- Indexer CLI, seed and `fetchDecisionHistory` require a program id. `DEFAULT_RPC` and `DEFAULT_PROGRAM_ID` are gone.
+- Tools `resolveRpc` and `resolveProgramId` throw naming `VETO_RPC` / `VETO_PROGRAM_ID`. Cluster label still defaults to `devnet` (a label, not an identity). SPL Token program id stays as the well-known constant.
+- `app/lib/wallet.ts`: an unreadable agent secret or agents map is reported (`could not read the stored agent identity`) and is not overwritten or replaced by a newly minted key.
+- `app/lib/chain.ts`: a failed signature listing throws (`Failed to list ledger signatures`) instead of becoming `[]`, so override confirmation cannot fall through to nonce and amount matching on a list it never read.
+
+No shared directory, no branded type, no lint allowlist, `programs/veto/src` untouched.
 
 ## Decisions
 
-- Keep the field-keyed skip for results. That is the F3 close the previous review confirmed.
-- Hold a failed read in separate state so the screen can show the blocked copy without making `overrideProbeIsCurrent` true.
+- Port the throwing `required(env, files, key)` shape from `c41c088` into each package, not a shared module. The two critics on `assess/invariant` rejected branded `Configured<N>` and a vendored `shared/` directory.
+- Keep last-write-wins file merge. Do not add the volume-disagreement check from the terminal branch; that would change how config is combined.
+- Keep the nonce/amount fallback in `grantOverride` for a listing that actually returned. The defect is treating a failed listing as empty.
 
 ## Do not repeat
 
-- Do not cache a thrown probe under the live key. The owner was told to pull to retry.
-- Do not edit `app/lib/useOverrideGrant.test.ts` or `app/lib/overrideGrant.test.ts`.
-- Do not undo the guard-before-already order, the `isActive` clock path, or the field-keyed success skip.
-- Do not touch `programs/veto/src`.
-- `react-test-renderer` is a devDependency in `app/package.json` and in `app/package-lock.json`. `npm ci` in `app/` must keep installing it or the app job and the hook fixture break.
+- Do not restore `DEFAULT_RPC`, `DEFAULT_PROGRAM_ID`, or the watcher `DEFAULTS` block.
+- Do not introduce `shared/`, `Configured<N>`, or an allowlist.
+- Do not treat a failed store parse as an empty store. Absent is mintable; unreadable is not.
+- Do not catch `listSignatures` into `[]`. Empty and unread are different.
+- Tests that need an identity must pass one. Do not put the old constants back to make a test green.
 
 ## Evidence
 
-Red on unfixed `f4a2d0a`, from `app/`:
+Red on unfixed code, from `app/`:
 
 ```
-npx tsx --experimental-test-module-mocks --test lib/useOverrideGrant.test.ts
+npx tsx --experimental-test-module-mocks --test lib/wallet.test.ts lib/chain.listing.test.ts
 ```
 
-- `CRITIC F3: after a failed probe, a refresh that reads the same state back must re-probe, because the copy says "Pull to retry"`
-  `AssertionError: the pull the owner was told to do must issue the read it promised` (`1 !== 2`)
-- `regression F3: after a successful probe, a refresh that reads the same state back does not re-probe`: pass
-- `regression F3: a refresh that shows the chain moved on does re-probe`: pass
+- `an unreadable agent secret is reported and is not replaced by a newly minted identity`: `Missing expected rejection`
+- `an unreadable agents map is reported and is not overwritten`: `Missing expected rejection`
+- `a failed signature listing is not treated as an empty list, so override confirmation does not name a row by nonce and amount`: `Missing expected rejection`
 
-After the product change, from `app/`:
+After the product change, same file pair: 18 pass, 0 fail.
 
-- same file: 3 pass, 0 fail
-- `npx tsc --noEmit`: exit 0
-- `npx expo lint`: exit 0
-- `npm test`: 95 pass, 0 fail
-- `npx expo config --type public`: `platforms: ['android']`, `android.package: com.veto.app`, `extra.vetoRpc: ''`, `extra.vetoProgramId: ''`
-- `npm ci`: exit 0
-- `npm ls react-test-renderer --depth=0`: `react-test-renderer@19.2.3`
+Package suites and typecheck:
 
-No Seeker run. `grant_override` via Mobile Wallet Adapter still has to be signed on device.
+| Package | `npm test` | typecheck |
+|---|---|---|
+| watcher | 36 pass, 0 fail | `tsc --noEmit` exit 0 |
+| indexer | 22 pass, 0 fail | `tsc --noEmit` exit 0 |
+| tools | 34 pass, 0 fail | `tsc --noEmit` exit 0 |
+| app | 103 pass, 0 fail | `npx tsc --noEmit` exit 0 |
+
+Entry points with no identity configured (`VETO_KEYS_DIR` pointing at a missing dir, identity vars unset):
+
+- watcher `status`: `config.loadConfig: missing VETO_RPC; set it in the environment, keys/devnet-addresses.env, watcher/.env` exit 1
+- indexer CLI: `config.loadConfig: missing VETO_RPC; set it in the environment, keys/devnet-addresses.env, indexer/.env` exit 1
+- tools `export.ts --signature x`: `lib.resolveRpc: missing VETO_RPC; set it in the environment, keys/devnet-addresses.env, or pass --rpc` exit 1
 
 ## Open questions
 
-- Live Seeker path: grant from a per-payment refusal, then watcher retry of the same nonce, then the four-step record on Decisions.
+- Cluster label `devnet` in `resolveClusterName` is still a default. It is a label, not an endpoint or account. T3 in the audit is a separate genesis-hash check.
 
 ## Next hint
 
-Branch `feat/app-override`. PR 69 against `main` for issue 16. Leave 16 open for QA.
+Branch `fix/no-defaulted-identities`. PR against `main`. Leave the issue open for QA if one is filed.

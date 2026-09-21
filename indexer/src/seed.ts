@@ -18,7 +18,8 @@ import {
   Transaction,
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
-import { DEFAULT_PROGRAM_ID, DEFAULT_RPC, TOKEN_PROGRAM_ID } from "./constants.js";
+import { required } from "./config.js";
+import { TOKEN_PROGRAM_ID } from "./constants.js";
 import { ledgerPda, mandatePda } from "./ring.js";
 
 type Addresses = {
@@ -56,9 +57,16 @@ function loadAddresses(keysDir: string, rpcOverride?: string): Addresses {
     if (!value) throw new Error(`missing ${key} in ${envPath}`);
     return value;
   };
+  const files = new Map<string, string>();
+  for (const [k, v] of map) {
+    files.set(k.startsWith("VETO_") ? k : k === "RPC" ? "VETO_RPC" : k === "PROGRAM_ID" ? "VETO_PROGRAM_ID" : k, v);
+  }
+  const env: NodeJS.ProcessEnv = rpcOverride
+    ? { ...process.env, VETO_RPC: rpcOverride }
+    : process.env;
   return {
-    rpc: rpcOverride ?? process.env.VETO_RPC ?? map.get("RPC") ?? DEFAULT_RPC,
-    programId: process.env.VETO_PROGRAM_ID ?? map.get("PROGRAM_ID") ?? DEFAULT_PROGRAM_ID,
+    rpc: required(env, files, "VETO_RPC"),
+    programId: required(env, files, "VETO_PROGRAM_ID"),
     mint: need("MINT"),
     owner: need("OWNER"),
     ownerTokenAccount: need("OWNER_TOKEN_ACCOUNT"),
