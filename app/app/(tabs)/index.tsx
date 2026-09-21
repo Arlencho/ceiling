@@ -10,8 +10,7 @@ import { ReadState } from '../../components/ReadState';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
-import { KIND_PAID, KIND_REFUSED } from '../../lib/constants';
-import { formatBaseUnits, timeLeftParts, todaysAgentDecisions } from '../../lib/format';
+import { formatBaseUnits, isListedDecision, timeLeftParts, todaysAgentDecisions } from '../../lib/format';
 import { displayPurpose, spendRatio } from '../../lib/ruleView';
 import { useChain } from '../../lib/useChain';
 import { truncateAddress } from '../../lib/wallet';
@@ -97,11 +96,12 @@ export default function OverviewScreen() {
             </View>
             {today.length === 0 ? (
               <EmptyState>
-                The agent has not paid or declined anything today. This screen never invents rows.
+                No payments, refusals, or overrides on this rule today. This screen never invents
+                rows.
               </EmptyState>
             ) : (
               today
-                .filter((row) => row.kind === KIND_PAID || row.kind === KIND_REFUSED)
+                .filter((row) => isListedDecision(row.kind))
                 .map((row, i) => (
                   <DecisionRow
                     key={`${row.nonce.toString()}-${row.kind}-${i}`}

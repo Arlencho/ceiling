@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600">
+  <!--
+    dApp Store banner, 1200x600. Spruce ground, the decision slip on the left,
+    serif wordmark and one line of mono. Georgia and Menlo are system serif and
+    mono; rsvg-convert resolves them through fontconfig.
+  -->
+  <rect width="1200" height="600" fill="#0F1A16"/>
+  <svg x="72" y="78" width="444" height="444" viewBox="192 192 640 640">
+    <rect x="322" y="284" width="380" height="456" rx="16" fill="#EDE6D6"/>
+    <rect x="356" y="484" width="156" height="56" fill="#0F1A16"/>
+    <rect x="600" y="408" width="56" height="208" fill="#0F1A16"/>
+  </svg>
+  <text x="596" y="312" font-family="Georgia" font-size="120" fill="#EDE6D6">Veto</text>
+  <text x="600" y="386" font-family="Menlo" font-size="24" letter-spacing="2" fill="#7F8C82">YOUR RULE HELD. NO PAYMENT MADE.</text>
+</svg>

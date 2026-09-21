@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!--
+    Themed icon, single colour. Android tints the alpha channel, so the slip is
+    one solid shape and the ledger entry is knocked out of it: the stopped
+    stroke and the cap rule read as negative space.
+  -->
+  <defs>
+    <mask id="knockout">
+      <rect x="322" y="284" width="380" height="456" rx="16" fill="#FFFFFF"/>
+      <rect x="356" y="484" width="156" height="56" fill="#000000"/>
+      <rect x="600" y="408" width="56" height="208" fill="#000000"/>
+    </mask>
+  </defs>
+  <rect x="322" y="284" width="380" height="456" rx="16" fill="#0F1A16" mask="url(#knockout)"/>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="192 192 640 640">
+  <!--
+    Launch screen mark, transparent ground. Same 1024 coordinate space as the
+    master icon, cropped tight around the slip; app.json sets the display width.
+  -->
+  <rect x="322" y="284" width="380" height="456" rx="16" fill="#EDE6D6"/>
+  <rect x="356" y="484" width="156" height="56" fill="#0F1A16"/>
+  <rect x="600" y="408" width="56" height="208" fill="#0F1A16"/>
+</svg>
