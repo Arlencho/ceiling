@@ -7,6 +7,8 @@
 
 export const CADENCE_HOURS = [0, 6, 12, 18] as const;
 export const STOCKHOLM = "Europe/Stockholm";
+export const CADENCE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+export const STALE_AFTER_MS = (CADENCE_INTERVAL_MS * 3) / 2;
 
 type Wall = {
   year: number;

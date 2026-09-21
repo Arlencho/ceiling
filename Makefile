@@ -53,6 +53,9 @@ test-scripts: ## Run deploy-script checks that do not need a cluster
 	./scripts/devnet-setup.test.sh
 	./scripts/ci-covers-packages.test.sh
 	./scripts/gcp-verify.test.sh
+	./scripts/deploy-watcher-cloud.test.sh
+	./scripts/watcher-silent-alert.test.sh
+	./scripts/watcher-alert-round3.test.sh
 
 # Provision a chain plus the demo fixtures. Devnet by default; localnet when
 # the devnet faucet is rate limiting.

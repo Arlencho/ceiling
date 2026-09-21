@@ -17,6 +17,9 @@ import { displayPurpose } from '../../lib/ruleView';
 import {
   applyRuleset,
   assertPurposeMayOpen,
+  PAYEE_NOT_IN_RULESET,
+  PAYEE_PREFILL,
+  RULESET_ENVELOPE,
   rulesetSlug,
   stampPurpose,
   type Ruleset,
@@ -212,12 +215,15 @@ function RuleCompose({
         <Text style={styles.h2}>{title}</Text>
         {sourceMandate ? (
           <EmptyState>
-            This rule is already on chain and cannot change. Saving writes a new ruleset version on
-            this phone. Apply it to a new agent. The existing agent keeps these numbers.
+            {`This rule is already on chain and cannot change. Saving writes a new ruleset version on this phone. Apply it to a new agent. The existing agent keeps these numbers. ${RULESET_ENVELOPE} ${PAYEE_NOT_IN_RULESET} ${PAYEE_PREFILL}`}
           </EmptyState>
         ) : applying && selectedRuleset ? (
           <EmptyState>
-            {`One action opens a new rule for a new agent, with ${selectedRuleset.name} v${selectedRuleset.version} stamped into the purpose. The ruleset file stays on this phone.`}
+            {`One action opens a new rule for a new agent, with ${selectedRuleset.name} v${selectedRuleset.version} stamped into the purpose. The ruleset file stays on this phone. ${PAYEE_NOT_IN_RULESET} ${PAYEE_PREFILL}`}
+          </EmptyState>
+        ) : authoring ? (
+          <EmptyState>
+            {`${RULESET_ENVELOPE} ${PAYEE_NOT_IN_RULESET} ${PAYEE_PREFILL} Saving writes the ruleset on this phone. The ruleset itself is not on chain.`}
           </EmptyState>
         ) : (
           <EmptyState>
@@ -259,7 +265,12 @@ function RuleCompose({
           label="Payee"
           value={fields.merchant}
           onChangeText={(text) => setField('merchant', text)}
-          placeholder="the only wallet that may be paid"
+          placeholder={
+            applying || authoring
+              ? 'chosen per agent, prefills so you do not retype an address'
+              : 'the only wallet that may be paid'
+          }
+          hint={applying || authoring ? PAYEE_NOT_IN_RULESET : undefined}
         />
         <Field
           label="Purpose"

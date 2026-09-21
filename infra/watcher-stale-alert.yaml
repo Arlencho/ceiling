@@ -1,0 +1,35 @@
+displayName: Veto watcher record too old
+documentation:
+  content: |
+    The journal record is older than a window and a half (9 hours). Cadence
+    is 00:00, 06:00, 12:00, 18:00 Europe/Stockholm.
+
+    The stale job (`veto-watcher-stale`) reads the journal object's own
+    `updated` time (not a local file the checker just wrote) and exits 1 when
+    the last row, or the empty object, is older than 9 hours. This policy
+    fires when that hourly check runs and the execution result is `failed`.
+
+    Google requires a PromQL condition to be the only condition in its
+    policy, so the check-stopped path lives in the companion policy
+    `Veto watcher silent` (`infra/watcher-silent-alert.yaml`).
+
+    Point this policy at an email channel. See watcher/CLOUD.md.
+  mimeType: text/markdown
+combiner: OR
+conditions:
+  - displayName: Stale check failed
+    conditionThreshold:
+      filter: |
+        resource.type = "cloud_run_job"
+        AND resource.labels.job_name = "veto-watcher-stale"
+        AND metric.type = "run.googleapis.com/job/completed_execution_count"
+        AND metric.labels.result = "failed"
+      comparison: COMPARISON_GT
+      thresholdValue: 0
+      duration: 60s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_DELTA
+          crossSeriesReducer: REDUCE_SUM
+      trigger:
+        count: 1

@@ -110,6 +110,13 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+  watcher-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build watcher image
+        run: docker build -t veto-watcher:ci watcher
+
   tools:
     runs-on: ubuntu-latest
     defaults:

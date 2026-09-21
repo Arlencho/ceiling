@@ -1,0 +1,48 @@
+displayName: Veto watcher silent
+documentation:
+  content: |
+    The stale check has stopped reporting for longer than a window and a
+    half (9 hours). Cadence is 00:00, 06:00, 12:00, 18:00 Europe/Stockholm.
+
+    The stale job (`veto-watcher-stale`) reads the journal object's own
+    `updated` time (not a local file the checker just wrote) and exits 1 when
+    the last row, or the empty object, is older than 9 hours.
+
+    Google requires a PromQL condition to be the only condition in its
+    policy. This file is that policy: PromQL `absent()` of
+    completed_execution_count for `veto-watcher-stale`, duration 32400s,
+    `disableMetricValidation: true`. A metric-absence condition would not
+    fire when the series has never written a point.
+
+    The record-too-old path is the companion policy `Veto watcher record too
+    old` (`infra/watcher-stale-alert.yaml`):
+
+        resource.type = "cloud_run_job"
+        AND resource.labels.job_name = "veto-watcher-stale"
+        AND metric.type = "run.googleapis.com/job/completed_execution_count"
+        AND metric.labels.result = "failed"
+        COMPARISON_GT 0 for 60s
+
+    Three cases:
+
+    1. Nothing has ever run. No completed_execution_count point exists.
+       This policy fires: `absent()` is true when the series has never
+       written a point.
+    2. The watcher stopped while the checker kept going. After 9 hours the
+       object's `updated` time (or last row `ts`) is stale, the checker
+       exits 1, and companion policy `Veto watcher record too old` fires.
+    3. The checker itself stopped. This policy fires once
+       completed_execution_count for `veto-watcher-stale` has been absent
+       for 32400s.
+
+    Point this policy at an email channel. See watcher/CLOUD.md.
+  mimeType: text/markdown
+combiner: OR
+conditions:
+  - displayName: Stale check has never reported
+    conditionPrometheusQueryLanguage:
+      query: 'absent({"run.googleapis.com/job/completed_execution_count", monitored_resource="cloud_run_job", job_name="veto-watcher-stale"})'
+      duration: 32400s
+      evaluationInterval: 3600s
+      disableMetricValidation: true
+      alertRule: VetoWatcherStaleNeverReported
