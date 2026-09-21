@@ -59,7 +59,10 @@ test-scripts: ## Run deploy-script checks that do not need a cluster
 	# in now would make this target red for something nobody is fixing today.
 	./scripts/ci-runs-typecheck.test.sh
 	./scripts/docs-one-genesis.test.sh
+	./scripts/gcp-verify.test.sh
+	./scripts/gcp-verify-secrets.test.sh
 	./scripts/deploy-watcher-cloud.test.sh
+	./scripts/deploy-watcher-cloud.critic.round3.test.sh
 	./scripts/watcher-silent-alert.test.sh
 	./scripts/watcher-alert-round3.test.sh
 

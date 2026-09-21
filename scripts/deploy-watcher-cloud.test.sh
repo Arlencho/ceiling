@@ -157,6 +157,12 @@ printf '%s\n' "$*" >> "${FAKE_GCLOUD_LOG}"
 case " $* " in
   *" auth list "*) printf 'owner@example.com\n' ;;
   *" projects describe "*) printf '123456789\n' ;;
+  *" projects get-iam-policy "*) printf '{"bindings":[]}\n' ;;
+  *" secrets get-iam-policy "*) printf '{"bindings":[]}\n' ;;
+  *" secrets describe "*) printf 'NOT_FOUND: Secret [veto-agent-keypair] not found.\n' >&2; exit 1 ;;
+  *" get-ancestors "*) printf '123456789\tproject\n' ;;
+  *" organizations get-iam-policy "*) printf 'PERMISSION_DENIED\n' >&2; exit 1 ;;
+  *" folders get-iam-policy "*) printf 'PERMISSION_DENIED\n' >&2; exit 1 ;;
   *" monitoring policies list "*) printf 'projects/veto-watcher-260921/alertPolicies/1\n' ;;
   *" monitoring channels list "*) printf '\n' ;;
 esac
@@ -197,6 +203,209 @@ if printf '%s' "$out1" | grep -q "storage cp" && printf '%s' "$out1" | grep -q "
   bad "dry-run with an existing journal object must not upload a replacement"
 else
   pass "dry-run does not wipe an existing journal object"
+fi
+
+write_mode_gcloud() {
+  cat > "${FAKE_BIN}/gcloud" <<'EOF'
+#!/usr/bin/env bash
+set -u
+printf '%s\n' "$*" >> "${FAKE_GCLOUD_LOG}"
+args="$*"
+mode="${FAKE_GCLOUD_MODE:-clean}"
+
+enabled_apis() {
+  printf '%s\n' \
+    run.googleapis.com \
+    cloudscheduler.googleapis.com \
+    secretmanager.googleapis.com \
+    artifactregistry.googleapis.com \
+    cloudbuild.googleapis.com \
+    storage.googleapis.com \
+    monitoring.googleapis.com \
+    logging.googleapis.com
+}
+
+if [[ "$args" == *'auth list'* ]]; then
+  printf 'owner@example.com\n'
+  exit 0
+fi
+if [[ "$args" == *'run services list'* ]]; then
+  exit 0
+fi
+if [[ "$args" == *'services list'* ]]; then
+  enabled_apis
+  exit 0
+fi
+if [[ "$args" == *'projects describe'* ]]; then
+  printf '123456789\n'
+  exit 0
+fi
+if [[ "$args" == *'iam service-accounts describe'* ]]; then
+  exit 0
+fi
+if [[ "$args" == *'organizations get-iam-policy'* || "$args" == *'folders get-iam-policy'* ]]; then
+  printf 'PERMISSION_DENIED\n' >&2
+  exit 1
+fi
+if [[ "$args" == *'get-ancestors'* ]]; then
+  printf '123456789\tproject\n'
+  exit 0
+fi
+if [[ "$args" == *'projects get-iam-policy'* ]]; then
+  if [[ "$mode" == default-can-read ]]; then
+    printf '{"bindings":[{"role":"roles/secretmanager.secretAccessor","members":["serviceAccount:123456789-compute@developer.gserviceaccount.com"]}]}\n'
+    exit 0
+  fi
+  printf '{"bindings":[]}\n'
+  exit 0
+fi
+if [[ "$args" == *'secrets get-iam-policy'* ]]; then
+  if [[ "$mode" == default-can-read-secret ]]; then
+    printf '{"bindings":[{"role":"roles/secretmanager.secretAccessor","members":["serviceAccount:123456789-compute@developer.gserviceaccount.com"]}]}\n'
+    exit 0
+  fi
+  printf '{"bindings":[]}\n'
+  exit 0
+fi
+if [[ "$args" == *'secrets describe'* ]]; then
+  if [[ "$mode" == default-can-read-secret ]]; then
+    printf 'veto-agent-keypair\n'
+    exit 0
+  fi
+  printf 'NOT_FOUND: Secret [veto-agent-keypair] not found.\n' >&2
+  exit 1
+fi
+if [[ "$args" == *'storage buckets describe'* ]]; then
+  if [[ "$mode" == bucket-missing || "$mode" == pap-create-fail ]]; then
+    printf 'NOT_FOUND\n' >&2
+    exit 1
+  fi
+  if [[ "$args" == *'format=json'* ]]; then
+    if [[ "$mode" == pap-not-enforced ]]; then
+      printf '{"iam_config":{"public_access_prevention":"inherited","uniform_bucket_level_access":{"enabled":true}}}\n'
+      exit 0
+    fi
+    printf '{"iam_config":{"public_access_prevention":"enforced","uniform_bucket_level_access":{"enabled":true}}}\n'
+    exit 0
+  fi
+  exit 0
+fi
+if [[ "$args" == *'storage buckets create'* ]]; then
+  if [[ "$mode" == pap-create-fail ]]; then
+    printf 'could not set public access prevention\n' >&2
+    exit 1
+  fi
+  exit 0
+fi
+if [[ "$args" == *'storage buckets update'* && "$args" == *'public-access-prevention'* ]]; then
+  if [[ "$mode" == pap-update-fail ]]; then
+    printf 'could not set public access prevention\n' >&2
+    exit 1
+  fi
+  exit 0
+fi
+if [[ "$args" == *'storage objects describe'* ]]; then
+  if [[ "$mode" == bucket-missing ]]; then
+    exit 1
+  fi
+  exit 0
+fi
+exit 0
+EOF
+  chmod +x "${FAKE_BIN}/gcloud"
+}
+
+run_deploy() {
+  local mode="$1"
+  shift
+  : >"$FAKE_LOG"
+  FAKE_GCLOUD_MODE="$mode" FAKE_GCLOUD_LOG="$FAKE_LOG" \
+    env -i \
+    PATH="${FAKE_BIN}:${PATH}" \
+    HOME="${DIR}" \
+    FAKE_GCLOUD_MODE="$mode" \
+    FAKE_GCLOUD_LOG="$FAKE_LOG" \
+    AGENT_KEY_PATH="$KEY" \
+    "${IDENTITIES[@]}" \
+    "$SCRIPT" "$@"
+}
+
+write_mode_gcloud
+
+if out="$(run_deploy default-can-read --dry-run 2>&1)"; then
+  bad "default compute account with secretAccessor must stop deploy"
+else
+  if printf '%s' "$out" | grep -q 'default compute account 123456789-compute@developer.gserviceaccount.com can read a secret version' \
+    && printf '%s' "$out" | grep -q 'found: roles/secretmanager.secretAccessor on project policy'; then
+    if grep -E 'secrets create|secrets versions add' "$FAKE_LOG"; then
+      bad "default compute secretAccessor must stop before secrets create/add; gcloud log still has a secret write"
+    else
+      pass "default compute account with secretAccessor stops deploy before the secret is created"
+    fi
+  else
+    bad "default compute secretAccessor message: ${out}"
+  fi
+fi
+
+if out="$(run_deploy default-can-read-secret --dry-run 2>&1)"; then
+  bad "default compute account with secret-level secretAccessor must stop deploy"
+else
+  if printf '%s' "$out" | grep -q 'default compute account 123456789-compute@developer.gserviceaccount.com can read a secret version' \
+    && printf '%s' "$out" | grep -q 'found: roles/secretmanager.secretAccessor on secret veto-agent-keypair policy'; then
+    if grep -E 'secrets create|secrets versions add' "$FAKE_LOG"; then
+      bad "secret-level secretAccessor must stop before secrets create/add; gcloud log still has a secret write"
+    else
+      pass "default compute account with secret-level secretAccessor stops before a new version is stored"
+    fi
+  else
+    bad "secret-level secretAccessor message: ${out}"
+  fi
+fi
+
+if out="$(run_deploy pap-update-fail 2>&1)"; then
+  bad "existing bucket that cannot take public access prevention must fail"
+else
+  if printf '%s' "$out" | grep -q 'could not set public access prevention to enforced'; then
+    if grep -E 'secrets create|secrets versions add' "$FAKE_LOG"; then
+      bad "PAP failure must happen before the secret is created"
+    else
+      pass "existing bucket that cannot take public access prevention fails before the secret is created"
+    fi
+  else
+    bad "PAP update failure message: ${out}"
+  fi
+fi
+
+if out="$(run_deploy pap-not-enforced 2>&1)"; then
+  bad "bucket whose public access prevention stays inherited must fail"
+else
+  if printf '%s' "$out" | grep -q "public access prevention on gs://veto-watcher-260921-journal is 'inherited', wanted enforced"; then
+    pass "bucket that does not report PAP enforced fails"
+  else
+    bad "PAP not-enforced message: ${out}"
+  fi
+fi
+
+if out="$(run_deploy pap-create-fail 2>&1)"; then
+  bad "create that cannot set public access prevention must fail"
+else
+  if printf '%s' "$out" | grep -q 'could not create gs://veto-watcher-260921-journal with public access prevention enforced' \
+    || printf '%s' "$out" | grep -q 'could not set public access prevention to enforced'; then
+    pass "create that cannot set public access prevention fails"
+  else
+    bad "PAP create failure message: ${out}"
+  fi
+fi
+
+if out="$(run_deploy bucket-missing --dry-run 2>&1)"; then
+  if printf '%s' "$out" | grep -q 'storage buckets create' \
+    && printf '%s' "$out" | grep -q 'public-access-prevention'; then
+    pass "bucket create includes public access prevention"
+  else
+    bad "dry-run create missing --public-access-prevention: ${out}"
+  fi
+else
+  bad "dry-run with a missing bucket should print create: ${out}"
 fi
 
 rm -rf "$DIR"
