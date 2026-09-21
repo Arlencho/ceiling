@@ -2,7 +2,8 @@
 
 Completion is judged from this, and the brief is explicit that it has to run on a device: a video
 nobody can install is not a submission. Shot list written 2026-09-20 so the recording day is a
-recording day, not a writing day.
+recording day, not a writing day. Aligned 2026-09-21 to the shipped screens: Overview, Rules,
+Decisions. The refusal card, the rule, and the Decisions list are the surfaces that exist.
 
 Two phones on a desk, both visibly phones. Screen recording alone is weaker: a judge is scoring a
 mobile product and needs to see hardware.
@@ -11,8 +12,8 @@ mobile product and needs to see hardware.
 
 - Program on **devnet**, not a local validator. Every explorer link in this video has to open on a
   judge's laptop, and nobody can click localhost.
-- The watcher has been running for days, so the ledger is a diary rather than three rows made that
-  morning. This is the only item that cannot be fixed on the day.
+- The watcher has been running for days, so the Decisions screen is a diary rather than three rows
+  made that morning. This is the only item that cannot be fixed on the day.
 - Both Seekers have the release APK installed, not a dev client.
 - A charge is due within the recording window, or the merchant terminal can trigger one on demand.
 
@@ -20,19 +21,22 @@ mobile product and needs to see hardware.
 
 **00:00 to 00:12. Cold open on the refusal.**
 
-No logo, no title card, no team slide. The agent screen, a refusal card already on it:
+No logo, no title card, no team slide. Overview, a refusal card already on it:
 
-> 180 USDC to the charge point. Over your 60 per-payment limit. Not paid.
+> Your rule held.
+> No payment made.
+> Asked for 180, over the 60 per-payment maximum. An override of 180 would have cleared it.
 
 Voice: *"This agent just decided not to spend your money. That decision is on chain, and that is
 the product."*
 
-**00:12 to 00:35. What a mandate is.**
+**00:12 to 00:35. What a rule is.**
 
-Mandate screen. Point at the four numbers as they are named: a total cap, a largest single payment,
-an expiry, one allowed merchant.
+The rule, opened from the Rules tab. Point at the four fields as they are named on that screen:
+Total cap; Per payment, max; Expires; Payee.
 
-Voice: *"You write it once. The key never leaves Seed Vault. The agent gets authority, never
+Voice: *"You write a rule once. One human, several agents, one rule each. A ruleset written once
+is reused on the next agent. The key never leaves Seed Vault. The agent gets authority, never
 ownership, and it cannot widen any of these."*
 
 **00:35 to 01:00. The yes.**
@@ -44,7 +48,7 @@ Voice: *"Inside the box it just pays. Nobody approved that."*
 
 **01:00 to 01:35. The no, and the explorer.**
 
-Merchant asks for an amount over the ceiling. Same agent, same mandate, no tap. It declines and
+Merchant asks for an amount over the ceiling. Same agent, same rule, no tap. It declines and
 says why in one line, with the override that would have cleared it.
 
 Then cut to a laptop, open the transaction in the explorer, and read the log line on screen:
@@ -62,8 +66,8 @@ This is the shot the entry lives or dies on. Rehearse it most.
 
 **01:35 to 02:00. A real week.**
 
-Ledger screen, scroll a multi-day history. Stop on a paid row at a cheap night price and a refused
-row at an evening spike.
+Decisions screen, scroll a multi-day history. Stop on a paid row at a cheap night price and a
+refused row at an evening spike.
 
 Voice: *"The agent has been running for days against a public electricity price feed. It paid when
 power was cheap and refused when the evening price spiked. The price is real and you can check it
@@ -80,6 +84,8 @@ Export a refusal to JSON on the laptop, run verify against devnet, and let the o
 Mandate limits, ledger entry, and charge transaction agree.
 ```
 
+That sentence is what `tools/verify.ts` prints. It still uses the on-chain names.
+
 Then change one number in the file and run it again:
 
 ```
@@ -92,10 +98,11 @@ tampered with fails."*
 
 **02:20 to 02:35. Revoke.**
 
-One tap, one Seed Vault signature. The agent's next charge is refused with "mandate not active",
-and that refusal lands on the ledger too.
+The rule. One tap on Revoke this rule, one Seed Vault signature. The agent's next charge is
+refused with the recorded reason "mandate not active", and that refusal lands on Decisions too.
 
-Voice: *"Authority ends when you say it ends. The money never moved and never was going to."*
+Voice: *"Authority ends when you say it ends. Nothing already paid changes. The next charge is
+refused, and that refusal is recorded too."*
 
 **02:35 to 03:00. Close.**
 

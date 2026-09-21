@@ -1,61 +1,69 @@
+# Handoff
+
 ## Built
 
-Closed the five review findings on PR 62. Branch `feat/app-fleet-console`. Nothing else.
+Aligned `docs/DECK.md`, `docs/VIDEO.md`, and `docs/PITCH.md` with the shipped app. Nothing else.
 
-- F1. Refusal copy follows `row.reason`. The per-payment sentence is only for reason 5. An override line and the raise-per-payment block appear only for that reason.
-- F2. The Decisions tab no longer puts one date over the whole list. Rows group by local day, each group under its own heading.
-- F3. After three rate-limit retries the app stops claiming it is still trying. `rateLimited` is cleared, the error is "The RPC rate limited this read three times. Pull to retry.", and the read lands in `failed`.
-- F4. Rule detail, decision detail, and share wait for a completed chain read before claiming a rule or decision is absent. A decision is only taken from the ring of the rule named in its id.
-- F5. Rule detail compares a purpose stamp to the ruleset on this phone: matches, limits differ, or no ruleset with this stamp. Opening a rule rejects a typed stamp suffix unless the owner is applying a saved ruleset. Copy still does not claim the ruleset file is on chain.
+Three gaps only:
+
+1. Product copy now says **rule** and **decision** wherever it used to say mandate and ledger. **mandate** remains for AP2 / prior art, and for quoted chain or tool text (`mandate not active`, `tools/verify.ts` "Mandate limits, ledger entry, and charge transaction agree.").
+2. Scope (slide 10 and the matching pitch Q&A) states what the product does now: one rule type, delegate not vault, several rules one agent each, a ruleset written once and applied to the next agent, one pay path, one refusal path with a reason and an override hint, export, a real week of history.
+3. Fleet folded into existing slides. No eleventh slide.
+
+Screenshots named in the deck still exist: refusal card (Overview / Decisions), explorer log, Decisions with multi-day history. Shot list uses Overview, the rule (from Rules), Decisions, Revoke this rule.
 
 ## Decisions
 
-- Extracted `refusalWhyLine` so the card and the tests share one sentence.
-- Override copy is withheld for every reason that an override cannot clear, even if `suggestedOverride` is nonzero.
-- Rate-limit exhaustion reuses `failed` rather than adding a sixth read state.
-- Stamp check is phone-local (cap, per-payment max, payee). A reader without this phone cannot check that match, and the detail screen says so.
+Fleet teaching lives on **slide 3** (two lines: one human, several agents, one rule each; a ruleset written once and reused on the next agent). That slide defines the object, so cardinality belongs there rather than as a late footnote.
+
+The same facts are **named** on **slide 10** as shipped inventory, not taught again. Scope had to stop saying the product is a single mandate with no multi-rule management.
+
+Not on slide 7: Seed Vault is the only non-interchangeable why-here, and fleet would crowd it.
+Not on slide 8: the real week is one charging agent against a feed.
+Not a new slide: supporting material, two lines.
+
+Video revoke voice matches the rule screen: nothing already paid changes. It no longer says the money never moved.
 
 ## Do not repeat
 
-- Do not reorder `app/index.js` polyfill imports.
-- Do not hardcode an RPC url or program id.
-- Do not invent rows, prices, or kWh.
-- Do not claim a ruleset is on chain. Only the purpose stamp is.
-- Do not touch `programs/veto/src`.
-- Do not style a refusal as an error.
-- `lib/wallet.test.ts` `publicKeyFromMwaAddress accepts a base58 address` can fail on a random keypair whose base58 also decodes as 32-byte base64. Pre-existing. Not part of these five findings.
+- Do not add an eleventh slide.
+- Do not rename AP2 mandates or the prior-art table.
+- Do not move the record story off slide 9 / the last thirty seconds.
+- Do not claim an in-app grant of override. The card shows a hint. Grant is not on this main.
+- Do not claim the ruleset file is on chain. Only name and version are stamped into purpose.
+- Do not restyle a refusal as an error in the deck or the edit.
+- Do not invent screenshot names. Tabs are Overview, Rules, Decisions.
+- `handoff.md` is the previous fleet-console note overwritten by this beat.
 
 ## Evidence
 
-F1, unfixed why-line (perTxMax in hand, amount 50, limit 60):
+Screens read:
 
 ```
-reason 1 "Asked for 50, over the 60 per-payment maximum. No override would have cleared this."
-reason 2 same
-reason 5 same
-reason 6 same
+test -f app/app/\(tabs\)/index.tsx app/app/\(tabs\)/rules.tsx app/app/\(tabs\)/decisions.tsx \
+  app/app/rule/\[address\].tsx app/components/RefusalCard.tsx tools/verify.ts
 ```
 
-F1, after the fix:
+All exist.
 
-```
-reason 1 "mandate not active."
-reason 5 "Asked for 50, over the 60 per-payment maximum. No override would have cleared this."
-reason 6 "over remaining cap."
-```
+Refusal card copy from `app/components/RefusalCard.tsx`: "Your rule held. No payment made." plus `refusalWhyLine` in `app/lib/reasons.ts`.
 
-From `app/`:
+Rule fields from `app/app/rule/[address].tsx`: Total cap; Per payment, max; Expires; Payee. Button: Revoke this rule.
 
-- `npx tsc --noEmit`: exit 0
-- `npm test`: 71 pass, 0 fail (one earlier full run hit the pre-existing wallet base58 flake, then 71/71)
-- `npx expo lint`: exit 0
-- `npx expo config --type public`: `platforms: ['android']`, `android.package: com.veto.app`, `extra.vetoRpc: ''`, `extra.vetoProgramId: ''`, splash and adaptive icon `#0F1A16`
+Reason text from `app/lib/constants.ts`: `mandate not active`.
+
+Verify success line from `tools/verify.ts`: `Mandate limits, ledger entry, and charge transaction agree.`
+
+Relative links: `docs/VIDEO.md` -> `PITCH.md`, `docs/PITCH.md` -> `PROBLEM.md` and `PLAN.md`. All resolve.
+
+No em dash, en dash, horizontal bar, or spaced double hyphen used as a dash in the three files.
+
+Ten numbered slides. No slide 11.
 
 ## Open questions
 
-- Live Seeker / MWA open-mandate and share sheet still need a device.
-- The wallet base58 address test is flaky. Out of scope for this round.
+Issue 20 stays open for QA. Confirm the three screenshots still match once the watcher has a real week on the Decisions tab.
 
 ## Next hint
 
-PR 62 against `main` on `feat/app-fleet-console`. Issues 47, 51, 52, 55, 56, 59 stay open for QA.
+PR against `main` on `docs/deck-refresh`, referencing issue 20. Leave 20 open for QA.
