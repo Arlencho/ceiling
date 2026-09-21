@@ -55,7 +55,7 @@ Then cut to a laptop, open the transaction in the explorer, and read the log lin
 
 ```
 VETO REFUSED reason=5 (over per-payment maximum) amount=180000000
-per_tx_max=60000000 remaining=158000000 override_to_clear=180000000
+per_tx_max=60000000 remaining=450000000 override_to_clear=180000000
 ```
 
 Voice: *"The transaction confirmed and the balance did not move. It succeeded at deciding no.
@@ -90,6 +90,7 @@ Then change one number in the file and run it again:
 
 ```
 VERDICT: REJECTED
+
 - amount (instruction): record has 1, chain has 180000000
 ```
 

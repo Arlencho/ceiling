@@ -50,7 +50,7 @@ code and the override that would have cleared it, logs a readable line, and retu
 So a refusal has a signature you can open in an explorer:
 
 ```
-VETO REFUSED reason=5 (over per-payment maximum) amount=180000000 per_tx_max=60000000 remaining=158000000 override_to_clear=180000000
+VETO REFUSED reason=5 (over per-payment maximum) amount=180000000 per_tx_max=60000000 remaining=450000000 override_to_clear=180000000
 ```
 
 Read those two lines together, because they are the whole idea. The **transaction** succeeded: it

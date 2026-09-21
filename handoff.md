@@ -2,68 +2,99 @@
 
 ## Built
 
-Aligned `docs/DECK.md`, `docs/VIDEO.md`, and `docs/PITCH.md` with the shipped app. Nothing else.
+Closed the PR 70 review on `docs/deck-refresh`. The quoted refusal log was
+arithmetically impossible: amount 180 exceeded remaining 158, so
+`suggested_override` is 0 and the phone says no override would have cleared
+it. The slide wants a charge over the per-payment maximum that an override
+can still clear. That is 180 over 60 after 50 already paid against a 500
+cap (remaining 450). Same figures in the deck, the video, the README, and
+the phone copy.
 
-Three gaps only:
+Files:
 
-1. Product copy now says **rule** and **decision** wherever it used to say mandate and ledger. **mandate** remains for AP2 / prior art, and for quoted chain or tool text (`mandate not active`, `tools/verify.ts` "Mandate limits, ledger entry, and charge transaction agree.").
-2. Scope (slide 10 and the matching pitch Q&A) states what the product does now: one rule type, delegate not vault, several rules one agent each, a ruleset written once and applied to the next agent, one pay path, one refusal path with a reason and an override hint, export, a real week of history.
-3. Fleet folded into existing slides. No eleventh slide.
+- `docs/DECK.md`
+- `docs/VIDEO.md`
+- `README.md`
+- `programs/veto/tests/refusal_is_recorded.rs` (test that prints the line)
+- `app/lib/reasons.test.ts` (test that prints the phone copy)
 
-Screenshots named in the deck still exist: refusal card (Overview / Decisions), explorer log, Decisions with multi-day history. Shot list uses Overview, the rule (from Rules), Decisions, Revoke this rule.
+No eleventh slide. No program source change. No app source change.
 
 ## Decisions
 
-Fleet teaching lives on **slide 3** (two lines: one human, several agents, one rule each; a ruleset written once and reused on the next agent). That slide defines the object, so cardinality belongs there rather than as a late footnote.
+Keep the 180-over-60 scenario. Fix remaining, do not invent a new story.
 
-The same facts are **named** on **slide 10** as shipped inventory, not taught again. Scope had to stop saying the product is a single mandate with no multi-rule management.
+`suggested_override` is `amount` when reason is over per-payment maximum
+and `amount <= remaining`. Otherwise 0. Evaluate reports over per-payment
+maximum first, so a charge that also exceeds remaining still gets reason 5
+and override 0.
 
-Not on slide 7: Seed Vault is the only non-interchangeable why-here, and fleet would crowd it.
-Not on slide 8: the real week is one charging agent against a feed.
-Not a new slide: supporting material, two lines.
+Figures from `tools/produce.ts` / `docs/DECISION_RECORD.md`: cap 500,
+per_tx_max 60, paid 50, refuse 180. Remaining 450. Override 180.
 
-Video revoke voice matches the rule screen: nothing already paid changes. It no longer says the money never moved.
+VIDEO verify reject output now has the blank line `tools/verify.ts` prints
+between `VERDICT: REJECTED` and the field line.
 
 ## Do not repeat
 
+- Do not quote remaining 158 with override_to_clear 180. The program will
+  not emit that.
+- Do not quote an override of 120 for a 180 charge. The suggestion is the
+  amount, not amount minus per_tx_max. That line is still in `docs/PLAN.md`.
 - Do not add an eleventh slide.
-- Do not rename AP2 mandates or the prior-art table.
-- Do not move the record story off slide 9 / the last thirty seconds.
-- Do not claim an in-app grant of override. The card shows a hint. Grant is not on this main.
-- Do not claim the ruleset file is on chain. Only name and version are stamped into purpose.
-- Do not restyle a refusal as an error in the deck or the edit.
-- Do not invent screenshot names. Tabs are Overview, Rules, Decisions.
-- `handoff.md` is the previous fleet-console note overwritten by this beat.
+- Do not restyle a refusal as an error.
+- Do not claim an in-app grant of override.
 
 ## Evidence
 
-Screens read:
+Program log, from LiteSVM:
 
 ```
-test -f app/app/\(tabs\)/index.tsx app/app/\(tabs\)/rules.tsx app/app/\(tabs\)/decisions.tsx \
-  app/app/rule/\[address\].tsx app/components/RefusalCard.tsx tools/verify.ts
+cargo test --manifest-path programs/veto/Cargo.toml --test refusal_is_recorded -- --nocapture the_quoted_refusal_log
 ```
 
-All exist.
+```
+Program log: VETO REFUSED reason=5 (over per-payment maximum) amount=180000000 per_tx_max=60000000 remaining=450000000 override_to_clear=180000000
+test the_quoted_refusal_log_is_over_per_payment_max_and_an_override_still_clears_it ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out
+```
 
-Refusal card copy from `app/components/RefusalCard.tsx`: "Your rule held. No payment made." plus `refusalWhyLine` in `app/lib/reasons.ts`.
+Whole `refusal_is_recorded` file: 5 passed.
 
-Rule fields from `app/app/rule/[address].tsx`: Total cap; Per payment, max; Expires; Payee. Button: Revoke this rule.
+Phone copy:
 
-Reason text from `app/lib/constants.ts`: `mandate not active`.
+```
+cd app && npx tsx --test lib/reasons.test.ts
+```
 
-Verify success line from `tools/verify.ts`: `Mandate limits, ledger entry, and charge transaction agree.`
+```
+the quoted refusal card is 180 over 60 with an override that would have cleared it
+Asked for 180, over the 60 per-payment maximum. An override of 180 would have cleared it.
+tests 7, pass 7
+```
 
-Relative links: `docs/VIDEO.md` -> `PITCH.md`, `docs/PITCH.md` -> `PROBLEM.md` and `PLAN.md`. All resolve.
+Live README explorer refusal (a different decision, same kind) is real:
 
-No em dash, en dash, horizontal bar, or spaced double hyphen used as a dash in the three files.
+```
+Program log: VETO REFUSED reason=5 (over per-payment maximum) amount=6232500 per_tx_max=500000 remaining=99339500 override_to_clear=6232500
+```
 
-Ten numbered slides. No slide 11.
+SE3 prices for 2026-09-20 match the table. 0.12465 * 50 kWh = 6.2325.
 
 ## Open questions
 
-Issue 20 stays open for QA. Confirm the three screenshots still match once the watcher has a real week on the Decisions tab.
+Issue 20 stays open for QA.
+
+`docs/PLAN.md` still says an override of 120 would clear a 180-over-60
+charge. That cannot happen. Left it, because this beat was the quoted line
+on the deck, the video, and the README.
+
+The live 18:00 refusal remaining is 99339500 because the 12:00 payment
+landed after it (blockTime 1789938050 vs 1789937892). The table is labeled
+by feed windows, not submit order. The quoted remaining is what the
+program logged.
 
 ## Next hint
 
-PR against `main` on `docs/deck-refresh`, referencing issue 20. Leave 20 open for QA.
+PR 70 against `main` on `docs/deck-refresh`. Paste the cargo test output
+in the PR. Leave issue 20 open.

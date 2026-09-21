@@ -39,6 +39,19 @@ test('a refusal shows the override that would have cleared it', () => {
   assert.equal(view.overrideLine, 'An override of 0.5195 would have cleared it.');
 });
 
+test('the quoted refusal card is 180 over 60 with an override that would have cleared it', () => {
+  assert.equal(
+    refusalWhyLine({
+      reason: REASON_OVER_PER_TX_MAX,
+      amount: 180_000_000n,
+      suggestedOverride: 180_000_000n,
+      decimals: 6,
+      perTxMax: 60_000_000n,
+    }),
+    'Asked for 180, over the 60 per-payment maximum. An override of 180 would have cleared it.',
+  );
+});
+
 test('a per-payment refusal with no override amount says so in plain language', () => {
   const overPer = renderReason(REASON_OVER_PER_TX_MAX, 0n, 6);
   assert.equal(overPer.overrideLine, 'No override would have cleared this.');
