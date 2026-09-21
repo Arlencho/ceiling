@@ -18,7 +18,7 @@ any of this exists.
 | Billing | linked to `01778E-30EA11-E3BA6D`, currency SEK |
 | Labels | `environment=development`, `owner=arlen`, `purpose=veto-watcher` |
 | Budget | `veto-watcher cap`, 200 SEK, scoped to this project alone, alerts at 50, 90 and 100 percent |
-| APIs | run, cloudscheduler, secretmanager, artifactregistry, cloudbuild, storage, monitoring, billingbudgets |
+| APIs | run, cloudscheduler, secretmanager, artifactregistry, cloudbuild, storage (`storage.googleapis.com` and `storage-api.googleapis.com`), monitoring, billingbudgets |
 
 ## Why a separate project rather than an existing one
 
@@ -50,6 +50,12 @@ able to tell the two apart.
   enabled so that the deployment script does not have to enable them and then wait.
 - **No secret yet.** The agent key goes in at deployment time from a path the operator gives, and
   it has never been in this repository or in an image.
+- **Cloud Scheduler does not exist in `europe-north1`.** Cloud Run runs there; the schedule has to
+  live in the nearest region that serves Scheduler, `europe-west1`. The cadence is in
+  Europe/Stockholm either way, which is what decides when the prices are read. Found by the verify
+  script rather than by reading documentation, and it contradicts the region assumption written
+  into the deployment brief.
+
 - **No teardown date enforced.** The label says development; nothing deletes the project on a
   timer. Deleting it is a deliberate act, documented below.
 
@@ -84,5 +90,12 @@ gcloud billing budgets delete 914d5c6c-9361-437b-8ea6-dd7b50ab333d \
 scripts/gcp-verify.sh
 ```
 
-Read only. It asserts every claim in the table above against the live project and exits non-zero
-on the first one that does not hold. It changes nothing.
+Read only. It asserts every claim in the table above against the live project and changes nothing.
+Every check runs and every failure prints, so one broken claim cannot hide the next; the exit code
+is non-zero if any check failed.
+
+The rule it enforces on itself: a check may not pass because it could not look. The first version
+counted resources with `gcloud ... 2>/dev/null | wc -l` and compared the count to zero, so a gcloud
+that failed for any reason at all produced an empty list, a count of zero, and a green tick. It
+would have reported a clean project while being blind to it. Every call goes through a wrapper that
+fails the claim when the command fails.
