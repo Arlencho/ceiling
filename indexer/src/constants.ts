@@ -1,7 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 
-export const DEFAULT_PROGRAM_ID = "3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV";
-export const DEFAULT_RPC = "http://127.0.0.1:8999";
+// Well-known SPL Token program. Same on every cluster; not a Veto identity.
 export const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 export const LEDGER_CAPACITY = 32;

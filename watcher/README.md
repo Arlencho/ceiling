@@ -59,9 +59,11 @@ RPC, program id, mint, and the owner / merchant / agent accounts come from
 the environment, `keys/devnet-addresses.env`, `watcher/.env`, or
 `terminal/.env`. There is no hardcoded fallback for those. File keys may be
 `VETO_RPC=` or `RPC=`. Both packages read both package env files, so they
-cannot silently disagree about the quoted volume.
+cannot silently disagree about the quoted volume. Copy `.env.example` to
+`watcher/.env` and uncomment the identity lines with values you supply. The
+placeholders do not resolve.
 
-Other defaults, overridable with env (see `.env.example`):
+Process defaults that cannot select a chain identity (overridable with env):
 
 | | |
 |---|---|

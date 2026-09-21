@@ -9,8 +9,7 @@ export const TOOLS_DIR = dirname(fileURLToPath(import.meta.url));
 export const REPO_DIR = join(TOOLS_DIR, "..");
 export const IDL_PATH = join(TOOLS_DIR, "idl", "veto.json");
 
-export const DEFAULT_PROGRAM_ID = "3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV";
-export const DEFAULT_PUBLIC_RPC = "https://api.devnet.solana.com";
+// Well-known SPL Token program. Same on every cluster; not a Veto identity.
 export const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 export const LEDGER_CAPACITY = 32;
@@ -207,42 +206,62 @@ export function addressesFile(repoRoot = REPO_DIR): Map<string, string> {
   return parseEnvFile(join(repoRoot, "keys", "devnet-addresses.env"));
 }
 
-export function resolveRpcList(cli?: Cli, repoRoot = REPO_DIR): string[] {
+export function resolveRpcList(
+  cli?: Cli,
+  repoRoot = REPO_DIR,
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
   const fromFlag = cli ? flagString(cli, "rpc") : undefined;
   if (fromFlag !== undefined) {
     const listed = parseRpcList(fromFlag);
     if (listed.length === 0) throw new Error("no rpc endpoints configured");
     return listed;
   }
-  if (process.env.VETO_RPC && process.env.VETO_RPC.length > 0) {
-    const listed = parseRpcList(process.env.VETO_RPC);
+  if (env.VETO_RPC && env.VETO_RPC.length > 0) {
+    const listed = parseRpcList(env.VETO_RPC);
     if (listed.length === 0) throw new Error("no rpc endpoints configured");
     return listed;
   }
-  const fromFile = addressesFile(repoRoot).get("RPC");
+  const file = addressesFile(repoRoot);
+  const fromFile = file.get("RPC") ?? file.get("VETO_RPC");
   if (fromFile && fromFile.length > 0) {
     const listed = parseRpcList(fromFile);
     if (listed.length === 0) throw new Error("no rpc endpoints configured");
     return listed;
   }
-  return [DEFAULT_PUBLIC_RPC];
+  throw new Error(
+    "lib.resolveRpc: missing VETO_RPC; set it in the environment, keys/devnet-addresses.env, or pass --rpc",
+  );
 }
 
-export function resolveRpc(cli?: Cli, repoRoot = REPO_DIR): string {
-  return resolveRpcList(cli, repoRoot)[0]!;
+export function resolveRpc(
+  cli?: Cli,
+  repoRoot = REPO_DIR,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return resolveRpcList(cli, repoRoot, env)[0]!;
 }
 
-export function resolveProgramId(repoRoot = REPO_DIR): PublicKey {
-  if (process.env.VETO_PROGRAM_ID) return new PublicKey(process.env.VETO_PROGRAM_ID);
-  const fromFile = addressesFile(repoRoot).get("PROGRAM_ID");
-  if (fromFile) return new PublicKey(fromFile);
-  return new PublicKey(DEFAULT_PROGRAM_ID);
+export function resolveProgramId(
+  repoRoot = REPO_DIR,
+  env: NodeJS.ProcessEnv = process.env,
+): PublicKey {
+  if (env.VETO_PROGRAM_ID && env.VETO_PROGRAM_ID.length > 0) {
+    return new PublicKey(env.VETO_PROGRAM_ID);
+  }
+  const file = addressesFile(repoRoot);
+  const fromFile = file.get("PROGRAM_ID") ?? file.get("VETO_PROGRAM_ID");
+  if (fromFile && fromFile.length > 0) return new PublicKey(fromFile);
+  throw new Error(
+    "lib.resolveProgramId: missing VETO_PROGRAM_ID; set it in the environment or keys/devnet-addresses.env",
+  );
 }
 
 export function resolveClusterName(repoRoot = REPO_DIR): string {
   if (process.env.VETO_CLUSTER && process.env.VETO_CLUSTER.length > 0) return process.env.VETO_CLUSTER;
   const fromFile = addressesFile(repoRoot).get("CLUSTER");
   if (fromFile && fromFile.length > 0) return fromFile;
+  // A cluster label, not an endpoint, program, mint, or account.
   return "devnet";
 }
 

@@ -406,11 +406,12 @@ export async function fetchLedgerRows(
 ): Promise<{ snapshot: LedgerSnapshot; rows: LedgerRow[] }> {
   const snapshot = await fetchLedger(client, mandate);
   const ledgerAddress = new PublicKey(snapshot.address);
-  let signatures: ConfirmedSignatureInfo[] = [];
+  let signatures: ConfirmedSignatureInfo[];
   try {
     signatures = await listSignatures(client, ledgerAddress, 4);
-  } catch {
-    signatures = [];
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to list ledger signatures: ${detail}`);
   }
 
   const decoded: DecodedTxDecision[] = [];

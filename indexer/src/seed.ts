@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import anchorPkg, { AnchorProvider, Program, Wallet } from "@coral-xyz/anchor";
@@ -18,7 +18,8 @@ import {
   Transaction,
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
-import { DEFAULT_PROGRAM_ID, DEFAULT_RPC, TOKEN_PROGRAM_ID } from "./constants.js";
+import { required } from "./config.js";
+import { TOKEN_PROGRAM_ID } from "./constants.js";
 import { createFailoverConnection, parseRpcList } from "./rpc.js";
 import { ledgerPda, mandatePda } from "./ring.js";
 
@@ -44,26 +45,35 @@ function loadKeypair(path: string): Keypair {
 
 function loadAddresses(keysDir: string, rpcOverride?: string): Addresses {
   const envPath = resolve(keysDir, "devnet-addresses.env");
-  const text = readFileSync(envPath, "utf8");
   const map = new Map<string, string>();
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq <= 0) continue;
-    map.set(trimmed.slice(0, eq), trimmed.slice(eq + 1));
+  if (existsSync(envPath)) {
+    const text = readFileSync(envPath, "utf8");
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq <= 0) continue;
+      map.set(trimmed.slice(0, eq), trimmed.slice(eq + 1));
+    }
   }
   const need = (key: string) => {
     const value = map.get(key);
     if (!value) throw new Error(`missing ${key} in ${envPath}`);
     return value;
   };
-  const rpcs = parseRpcList(rpcOverride ?? process.env.VETO_RPC ?? map.get("RPC") ?? DEFAULT_RPC);
+  const files = new Map<string, string>();
+  for (const [k, v] of map) {
+    files.set(k.startsWith("VETO_") ? k : k === "RPC" ? "VETO_RPC" : k === "PROGRAM_ID" ? "VETO_PROGRAM_ID" : k, v);
+  }
+  const env: NodeJS.ProcessEnv = rpcOverride
+    ? { ...process.env, VETO_RPC: rpcOverride }
+    : process.env;
+  const rpcs = parseRpcList(required(env, files, "VETO_RPC"));
   if (rpcs.length === 0) throw new Error("no rpc endpoints configured");
   return {
     rpc: rpcs[0]!,
     rpcs,
-    programId: process.env.VETO_PROGRAM_ID ?? map.get("PROGRAM_ID") ?? DEFAULT_PROGRAM_ID,
+    programId: required(env, files, "VETO_PROGRAM_ID"),
     mint: need("MINT"),
     owner: need("OWNER"),
     ownerTokenAccount: need("OWNER_TOKEN_ACCOUNT"),

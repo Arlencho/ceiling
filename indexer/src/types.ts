@@ -60,7 +60,7 @@ export type TxView = {
 
 export type FetchHistoryOptions = {
   rpcUrl: string;
-  programId?: string;
+  programId: string;
   mandate?: string;
   pageSize?: number;
   allowBlockScan?: boolean;

@@ -12,8 +12,6 @@ export {
   createFailoverConnection,
 } from "./rpc.js";
 export {
-  DEFAULT_PROGRAM_ID,
-  DEFAULT_RPC,
   KIND_PAID,
   KIND_REFUSED,
   kindName,

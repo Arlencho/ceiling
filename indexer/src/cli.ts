@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 import { PublicKey } from "@solana/web3.js";
 import { compareRingToHistory } from "./compare.js";
-import { DEFAULT_PROGRAM_ID, DEFAULT_RPC } from "./constants.js";
+import { requiredIdentity } from "./config.js";
 import { parseRpcList } from "./rpc.js";
 import { formatComparison, formatTable, decisionToJson } from "./format.js";
 import { fetchDecisionHistory } from "./history.js";
 import { fetchLedgerRing } from "./ring.js";
 
 type Args = {
-  rpc: string;
-  program: string;
+  rpc?: string;
+  program?: string;
   mandate?: string;
   format: "table" | "json";
   pageSize?: number;
@@ -20,8 +20,11 @@ type Args = {
 function parseArgs(argv: string[]): Args {
   const fromEnv = parseRpcList(process.env.VETO_RPC);
   const out: Args = {
-    rpc: fromEnv.length > 0 ? fromEnv.join(",") : DEFAULT_RPC,
-    program: process.env.VETO_PROGRAM_ID ?? DEFAULT_PROGRAM_ID,
+    rpc: fromEnv.length > 0 ? fromEnv.join(",") : undefined,
+    program:
+      process.env.VETO_PROGRAM_ID && process.env.VETO_PROGRAM_ID.length > 0
+        ? process.env.VETO_PROGRAM_ID
+        : undefined,
     mandate: process.env.VETO_MANDATE || undefined,
     format: "table",
     pageSize: process.env.VETO_PAGE_SIZE ? Number(process.env.VETO_PAGE_SIZE) : undefined,
@@ -79,17 +82,20 @@ async function main(): Promise<void> {
     return;
   }
 
+  const rpc = args.rpc && args.rpc.length > 0 ? args.rpc : requiredIdentity("VETO_RPC");
+  const program = args.program && args.program.length > 0 ? args.program : requiredIdentity("VETO_PROGRAM_ID");
+
   const result = await fetchDecisionHistory({
-    rpcUrl: args.rpc,
-    programId: args.program,
+    rpcUrl: rpc,
+    programId: program,
     mandate: args.mandate,
     pageSize: args.pageSize,
   });
 
   if (args.format === "json") {
     const body: Record<string, unknown> = {
-      rpc: args.rpc,
-      program: args.program,
+      rpc,
+      program,
       mandate: args.mandate ?? null,
       signature_pages: result.signaturePages,
       signature_count: result.signatureCount,
@@ -99,9 +105,9 @@ async function main(): Promise<void> {
     };
     if (args.compare) {
       if (!args.mandate) throw new Error("--compare requires --mandate");
-      const program = new PublicKey(args.program);
+      const programPk = new PublicKey(program);
       const mandate = new PublicKey(args.mandate);
-      const ring = await fetchLedgerRing(args.rpc, program, mandate);
+      const ring = await fetchLedgerRing(rpc, programPk, mandate);
       const cmp = compareRingToHistory(ring.entries, result.decisions);
       body.ring = {
         address: ring.address,
@@ -138,7 +144,7 @@ async function main(): Promise<void> {
   }
 
   process.stdout.write(
-    `rpc ${args.rpc}\nprogram ${args.program}\n` +
+    `rpc ${rpc}\nprogram ${program}\n` +
       `signatures ${result.signatureCount} across ${result.signaturePages} page(s)` +
       `${result.usedBlockScan ? ` (signature index empty, scanned ${result.slotsScanned} slots)` : ""}\n` +
       `${result.decisions.length} Paid/Refused event(s)\n\n`,
@@ -147,9 +153,9 @@ async function main(): Promise<void> {
 
   if (args.compare) {
     if (!args.mandate) throw new Error("--compare requires --mandate");
-    const program = new PublicKey(args.program);
+    const programPk = new PublicKey(program);
     const mandate = new PublicKey(args.mandate);
-    const ring = await fetchLedgerRing(args.rpc, program, mandate);
+    const ring = await fetchLedgerRing(rpc, programPk, mandate);
     const cmp = compareRingToHistory(ring.entries, result.decisions);
     process.stdout.write(
       `\nring ${ring.address} total=${ring.total} head=${ring.head} occupancy=${ring.entries.length}\n`,

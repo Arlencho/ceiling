@@ -144,6 +144,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts?: LoadConf
       ? targetIdl
       : bundledIdl;
 
+  // These are not chain identities. They cannot select an endpoint, program, mint, or account.
   const mandateId = BigInt(env.VETO_MANDATE_ID ?? "1");
   const kwhMilli = BigInt(lookupFrom(env, files, "VETO_KWH_MILLI") ?? DEFAULT_KWH_MILLI.toString());
   const mintDecimals = Number.parseInt(
