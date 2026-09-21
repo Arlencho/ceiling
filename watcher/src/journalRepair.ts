@@ -124,16 +124,24 @@ function walkError(err: unknown): string {
 /** Decisions whose transaction the mandate walk could read. A signature here
  * is the transaction's own. If listing signatures fails, the walk stops and
  * returns what it already read. One transaction that cannot be fetched is
- * skipped. The caller fills every gap from the ring. */
+ * skipped. The caller fills every gap from the ring.
+ *
+ * `missing` is the set of ring nonces the journal does not hold. When it is
+ * set, the walk stops once every one of them is in `found` (newest first, so
+ * the first hit for a nonce is the row that is kept). When it is omitted, the
+ * walk reads the whole history. */
 async function decisionsFromMandateHistory(
   connection: HistoryConnection,
   programId: PublicKey,
   mandate: PublicKey,
+  missing?: ReadonlySet<string>,
 ): Promise<ChainDecision[]> {
   const found = new Map<string, ChainDecision>();
+  const outstanding = missing === undefined ? null : new Set(missing);
   let before: string | undefined;
   const pageSize = 200;
   for (let page = 0; page < 50; page += 1) {
+    if (outstanding !== null && outstanding.size === 0) break;
     let sigs: readonly SignaturePage[];
     try {
       sigs = await connection.getSignaturesForAddress(mandate, { limit: pageSize, before });
@@ -143,6 +151,7 @@ async function decisionsFromMandateHistory(
     }
     if (sigs.length === 0) break;
     for (const info of sigs) {
+      if (outstanding !== null && outstanding.size === 0) break;
       if (info.err) continue;
       let tx: VersionedTransactionResponse | null;
       try {
@@ -179,7 +188,9 @@ async function decisionsFromMandateHistory(
         suggestedOverride: outcome.suggestedOverride ?? 0n,
         signature: info.signature,
       });
+      outstanding?.delete(key);
     }
+    if (outstanding !== null && outstanding.size === 0) break;
     if (sigs.length < pageSize) break;
     const last = sigs[sigs.length - 1];
     if (last === undefined) break;
@@ -202,8 +213,10 @@ export async function fetchChainDecisions(args: {
   mandateId: bigint;
   /**
    * Nonces the journal already holds. When set, the history walk runs only
-   * if the ring still has a nonce the journal does not. A run that already
-   * holds every ring nonce reads no transaction.
+   * if the ring still has a nonce the journal does not, and a repair that
+   * already holds some of the ring stops once every missing ring nonce has
+   * been read. When omitted, or when the journal holds none of the ring,
+   * the walk reads the whole history.
    */
   hasNonce?: (nonce: bigint) => boolean;
 }): Promise<ChainDecision[]> {
@@ -213,13 +226,20 @@ export async function fetchChainDecisions(args: {
   const ring = info === null ? [] : decodeLedgerDecisions(info.data);
   if (!canWalk(args.connection)) return mergeChainDecisions(ring, []);
   const held = args.hasNonce;
-  // Nothing on the ring is missing, so there is nothing to name. The walk
-  // stays the full history walk when a ring nonce is missing, which is what
-  // keeps the signature of a charge the ring itself has lost.
+  // Nothing on the ring is missing, so there is nothing to name.
   if (held !== undefined && ring.every((row) => held(row.nonce))) {
     return mergeChainDecisions(ring, []);
   }
-  const walked = await decisionsFromMandateHistory(args.connection, args.programId, mandate);
+  // A rebuild from nothing still reads every transaction, including a charge
+  // the ring itself has lost. A repair that already holds part of the ring
+  // stops once the nonces it is missing are in hand.
+  let missing: ReadonlySet<string> | undefined;
+  if (held === undefined || ring.every((row) => !held(row.nonce))) {
+    missing = undefined;
+  } else {
+    missing = new Set(ring.filter((row) => !held(row.nonce)).map((row) => row.nonce.toString()));
+  }
+  const walked = await decisionsFromMandateHistory(args.connection, args.programId, mandate, missing);
   return mergeChainDecisions(ring, walked);
 }
 
