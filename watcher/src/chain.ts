@@ -256,18 +256,19 @@ function chargeFromTx(
   return null;
 }
 
-// Same walk as indexer/src/history.ts: paginate program signatures, fetch
-// each confirmed transaction, decode the charge. Used when the 32-entry
-// ring has rolled past the paid window we need to recover.
+// Walk signatures that touched this mandate. Charge writes the mandate, so
+// this is the paid history for this window without paging every other
+// mandate's transactions. Used when the 32-entry ring has rolled past.
 async function findPaidInHistory(
   connection: Connection,
   programId: PublicKey,
+  mandate: PublicKey,
   nonce: bigint,
 ): Promise<RecoveredCharge | null> {
   let before: string | undefined;
   const pageSize = 200;
   for (let page = 0; page < 50; page += 1) {
-    const sigs = await connection.getSignaturesForAddress(programId, {
+    const sigs = await connection.getSignaturesForAddress(mandate, {
       limit: pageSize,
       before,
     });
@@ -312,7 +313,7 @@ async function recoverFromConnection(
   if (ringHit !== null) {
     let signature = "";
     try {
-      const historyHit = await findPaidInHistory(connection, programId, nonce);
+      const historyHit = await findPaidInHistory(connection, programId, mandate, nonce);
       if (historyHit !== null) signature = historyHit.signature;
     } catch (err) {
       if (!isRateLimitError(err)) throw err;
@@ -326,7 +327,7 @@ async function recoverFromConnection(
       amount: ringHit.amount,
     };
   }
-  return findPaidInHistory(connection, programId, nonce);
+  return findPaidInHistory(connection, programId, mandate, nonce);
 }
 
 export async function recoverSettledCharge(args: {
