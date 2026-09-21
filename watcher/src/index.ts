@@ -10,7 +10,6 @@ import {
   recoverSettledCharge,
   submitCharge,
 } from "./chain.js";
-import { installUnhandledRejectionHandler } from "./confirm.js";
 import { keyPath, loadConfig } from "./config.js";
 import { EnergySpotFeed } from "./feed.js";
 import { JsonlJournal, type JournalRow } from "./journal.js";
@@ -251,7 +250,6 @@ async function cmdStale(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  installUnhandledRejectionHandler();
   const cmd = command();
   if (hasFlag("help") || cmd === "help") {
     process.stdout.write(

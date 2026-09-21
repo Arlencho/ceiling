@@ -1,45 +1,33 @@
 import { Connection, Transaction, type Finality, type Keypair, type TransactionSignature } from "@solana/web3.js";
 import { logError } from "./log.js";
-import { RateLimitedError, isRateLimitError, sleep } from "./rpc.js";
+import { sleep } from "./rpc.js";
 
 export type RejectionDisposition = "discarded" | "fatal";
 
-let answeredConfirms = 0;
+const POLL_MS = 1_000;
 
-export function noteConfirmAnswered(): void {
-  answeredConfirms += 1;
-}
-
+/** Always false. Leftover polls are handled inside confirmSignature. Kept so
+ * fixtures that drain a leftover counter still compile and stay honest. */
 export function consumeConfirmAnswer(): boolean {
-  if (answeredConfirms <= 0) return false;
-  answeredConfirms -= 1;
-  return true;
+  return false;
 }
 
 export function handleUnhandledRejection(
   reason: unknown,
   opts: { confirmAlreadyAnswered: boolean; log?: (line: string) => void },
 ): RejectionDisposition {
+  void opts.confirmAlreadyAnswered;
   const log = opts.log ?? logError;
   const message = reason instanceof Error ? reason.message : String(reason);
-  if (opts.confirmAlreadyAnswered && isRateLimitError(reason)) {
-    log(`unhandled rejection after confirm no longer needed this answer: ${message}`);
-    return "discarded";
-  }
   log(`unhandled rejection: ${message}`);
   return "fatal";
 }
 
 export function installUnhandledRejectionHandler(
-  log: (line: string) => void = logError,
+  _log: (line: string) => void = logError,
 ): void {
-  process.on("unhandledRejection", (reason) => {
-    const disposition = handleUnhandledRejection(reason, {
-      confirmAlreadyAnswered: consumeConfirmAnswer(),
-      log,
-    });
-    if (disposition === "fatal") process.exitCode = 1;
-  });
+  // Confirm catches leftover polls on every path. A process listener would
+  // swallow unrelated rejections and print programming errors without a stack.
 }
 
 function meetsCommitment(status: string | null | undefined, commitment: Finality): boolean {
@@ -67,17 +55,19 @@ export async function confirmSignature(
   const log = opts.log ?? logError;
 
   let answered = false;
+  let stopped = false;
   let leftover: unknown = null;
+  let leftoverLogged = false;
   let subId: number | undefined;
 
   const markAnswered = (): void => {
-    if (answered) return;
     answered = true;
-    noteConfirmAnswered();
   };
 
   const logLeftover = (err: unknown): void => {
     leftover = leftover ?? err;
+    if (leftoverLogged) return;
+    leftoverLogged = true;
     log(leftoverLine(signature, err));
   };
 
@@ -97,28 +87,34 @@ export async function confirmSignature(
   });
 
   const poll = (async () => {
-    try {
-      const { value } = await connection.getSignatureStatus(signature);
+    while (!stopped) {
       if (answered) return;
-      if (value?.err) {
-        throw new Error(`transaction ${signature} failed: ${JSON.stringify(value.err)}`);
+      try {
+        const { value } = await connection.getSignatureStatus(signature);
+        if (stopped || answered) return;
+        if (value?.err) {
+          throw new Error(`transaction ${signature} failed: ${JSON.stringify(value.err)}`);
+        }
+        if (meetsCommitment(value?.confirmationStatus, commitment)) {
+          markAnswered();
+          return;
+        }
+      } catch (err) {
+        leftover = err;
+        if (stopped || answered) {
+          logLeftover(err);
+          return;
+        }
+        throw err;
       }
-      if (meetsCommitment(value?.confirmationStatus, commitment)) {
-        markAnswered();
-      }
-    } catch (err) {
-      leftover = err;
-      if (answered) {
-        logLeftover(err);
-        return;
-      }
-      throw err;
+      if (stopped || answered) return;
+      await sleep(POLL_MS);
     }
   })();
 
   void poll.catch((err) => {
     leftover = leftover ?? err;
-    if (answered) logLeftover(err);
+    if (answered || stopped) logLeftover(err);
   });
 
   try {
@@ -126,22 +122,24 @@ export async function confirmSignature(
       ws.then(() => "ws" as const),
       poll.then(() => "poll" as const).catch((err) => {
         leftover = leftover ?? err;
-        return "throttled" as const;
+        return "refused" as const;
       }),
     ]);
 
-    if (winner === "ws" || (winner === "poll" && answered)) {
+    if (winner === "ws" || winner === "poll") {
       if (leftover !== null) logLeftover(leftover);
       return;
     }
 
+    // The endpoint refused to answer. Wait for the websocket during the
+    // grace; if it confirms, the refuse is leftover. If it does not, throw
+    // the refusal that actually happened. A poll that answered not yet never
+    // reaches here: it keeps waiting.
     try {
       await Promise.race([
         ws,
         sleep(graceMs).then(() => {
-          throw leftover instanceof Error
-            ? leftover
-            : new RateLimitedError(String(leftover ?? "confirm status poll failed"));
+          throw leftover instanceof Error ? leftover : new Error(String(leftover ?? "confirm status poll failed"));
         }),
       ]);
       if (leftover !== null) logLeftover(leftover);
@@ -153,6 +151,7 @@ export async function confirmSignature(
       throw err;
     }
   } finally {
+    stopped = true;
     if (subId !== undefined) {
       await connection.removeSignatureListener(subId);
     }
