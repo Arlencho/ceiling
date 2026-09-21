@@ -23,9 +23,13 @@ mobile product and needs to see hardware.
 - The on-chain ring holds 32 entries. If it has wrapped past 20 September by recording day, the
   phone will not still show that row. Explorer and verify do not need the ring. Do not replace
   the quoted card, log, or verify line with a different decision.
-- For the yes beat, a payment under this same 0.5 maximum: either a cheap-window row already on
-  the diary, or a live in-limit charge the merchant terminal can trigger on demand. Do not stage
-  an over-ceiling amount on a different rule.
+- Decisions stamps each row with the time the decision was recorded, not the SE3 price window it
+  priced. The four 20 September rows were written within a few minutes of each other, so their
+  clock labels cluster. Find those rows by the amount on the row (0.2145 paid, 6.2325 refused).
+  Continuous running of the watcher spreads later rows across real times of day.
+- For the yes beat, a payment under this same 0.5 maximum: either the paid row of 0.2145 already
+  on the diary, or a live in-limit charge the merchant terminal can trigger on demand. Do not
+  stage an over-ceiling amount on a different rule.
 
 ## Shot list
 
@@ -33,7 +37,7 @@ mobile product and needs to see hardware.
 
 No logo, no title card, no team slide. The refusal card for the 18:00 SE3 decision the
 [README](../README.md) already links. If that row is still on the ring, open it from Decisions
-(the evening refused row on 20 September). Overview is today only, so on recording day that row
+(the refused row of 6.2325 on 20 September). Overview is today only, so on recording day that row
 is not there. If the ring has wrapped, hold a still of this same card copy. Do not quote a
 different amount.
 
@@ -59,7 +63,7 @@ ownership, and it cannot widen any of these."*
 **00:35 to 01:00. The yes.**
 
 A payment under this same rule, under the 0.5 per-payment maximum, at a real cheap-window
-electricity price. The 06:00 row on this rule paid 0.2145. Agent phone: no tap, no prompt.
+electricity price. The paid row of 0.2145 on this rule. Agent phone: no tap, no prompt.
 Paid. Both screens agree.
 
 Voice: *"Inside the box it just pays. Nobody approved that."*
@@ -90,8 +94,8 @@ This is the shot the entry lives or dies on. Rehearse it most.
 
 **01:35 to 02:00. A real week.**
 
-Decisions screen, scroll a multi-day history under this same charging rule. Stop on a paid row at
-a cheap night price and the refused evening spike the video already opened on.
+Decisions screen, scroll a multi-day history under this same charging rule. Stop on the paid row
+of 0.2145 and the refused row of 6.2325 the video already opened on.
 
 Voice: *"The agent has been running for days against a public electricity price feed. It paid when
 power was cheap and refused when the evening price spiked. The price is real and you can check it

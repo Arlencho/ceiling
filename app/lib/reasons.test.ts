@@ -15,6 +15,7 @@ import {
   REASON_ZERO_AMOUNT,
   reasonText as reasonLabel,
 } from './constants';
+import { formatBaseUnits } from './format';
 import { notActiveHint, reasonText, refusalWhyLine, renderReason } from './reasons';
 
 test('reason text matches the indexer table', () => {
@@ -39,7 +40,7 @@ test('a refusal shows the override that would have cleared it', () => {
   assert.equal(view.overrideLine, 'An override of 0.5195 would have cleared it.');
 });
 
-test('the quoted refusal card is 180 over 60 with an override that would have cleared it', () => {
+test('a 180-over-60 per-payment refusal still has an override that would have cleared it', () => {
   assert.equal(
     refusalWhyLine({
       reason: REASON_OVER_PER_TX_MAX,
@@ -49,6 +50,26 @@ test('the quoted refusal card is 180 over 60 with an override that would have cl
       perTxMax: 60_000_000n,
     }),
     'Asked for 180, over the 60 per-payment maximum. An override of 180 would have cleared it.',
+  );
+});
+
+test('a 6232500-over-500000 per-payment refusal still has an override that would have cleared it', () => {
+  const amount = 6_232_500n;
+  const perTxMax = 500_000n;
+  const suggestedOverride = 6_232_500n;
+  const decimals = 6;
+  assert.equal(formatBaseUnits(amount, decimals), '6.2325');
+  assert.equal(formatBaseUnits(perTxMax, decimals), '0.5');
+  assert.equal(formatBaseUnits(suggestedOverride, decimals), '6.2325');
+  assert.equal(
+    refusalWhyLine({
+      reason: REASON_OVER_PER_TX_MAX,
+      amount,
+      suggestedOverride,
+      decimals,
+      perTxMax,
+    }),
+    `Asked for ${formatBaseUnits(amount, decimals)}, over the ${formatBaseUnits(perTxMax, decimals)} per-payment maximum. An override of ${formatBaseUnits(suggestedOverride, decimals)} would have cleared it.`,
   );
 });
 

@@ -94,7 +94,8 @@ refusal: electricity got twenty nine times more expensive in the evening and the
 To take one off chain and check it independently:
 
 ```bash
-cd tools && npm ci
+cd indexer && npm ci
+cd ../tools && npm ci
 VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --signature 3rTpyrHEScEPhjHL3cUDYSGwGAxU6JVzbdWVZbr4YMHt3wAM7ad9JGPC26R8aQMH9aqYVzrFqbEogX1CquNcWqib --out refusal.json
 VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts refusal.json
 # Mandate limits, ledger entry, and charge transaction agree.

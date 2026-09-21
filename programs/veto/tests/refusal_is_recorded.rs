@@ -281,14 +281,12 @@ fn a_charge_within_the_mandate_is_paid() {
     assert_eq!(entry.amount, 50 * ONE);
 }
 
-/// The line the deck, the video, the README and the phone quote: 180 over a 60
-/// per-payment maximum, after 50 already paid against a 500 cap. Remaining is
-/// 450, so an override of 180 still clears it. The old remaining=158 figure
-/// made amount exceed remaining, so the program would have logged
-/// override_to_clear=0 and the phone would have said no override would have
-/// cleared it.
+/// A 180-over-60 per-payment refusal after 50 already paid against a 500 cap.
+/// Remaining is 450, so an override of 180 still clears it. The old
+/// remaining=158 figure made amount exceed remaining, so the program would
+/// have logged override_to_clear=0.
 #[test]
-fn the_quoted_refusal_log_is_over_per_payment_max_and_an_override_still_clears_it() {
+fn a_180_over_60_refusal_logs_remaining_450_and_an_override_that_still_clears_it() {
     let mut w = setup_with(500 * ONE, 60 * ONE);
     let agent = w.agent.insecure_clone();
 
@@ -315,6 +313,52 @@ fn the_quoted_refusal_log_is_over_per_payment_max_and_an_override_still_clears_i
     assert_eq!(entry.reason, REASON_OVER_PER_TX_MAX);
     assert_eq!(entry.amount, 180 * ONE);
     assert_eq!(entry.suggested_override, 180 * ONE);
+}
+
+/// The line the deck, the video, the README and the phone quote. Live SE3
+/// figures: cap 100000000, per_tx_max 500000, the two cheap payments that
+/// landed before the refusal (446000 + 214500), amount 6232500. Remaining is
+/// cap minus spent. Override is the amount because 6232500 is over 500000
+/// and still under remaining.
+#[test]
+fn the_quoted_refusal_log_is_6232500_over_500000_and_an_override_still_clears_it() {
+    const CAP: u64 = 100_000_000;
+    const PER_TX_MAX: u64 = 500_000;
+    const FIRST_PAID: u64 = 446_000;
+    const SECOND_PAID: u64 = 214_500;
+    const REFUSED: u64 = 6_232_500;
+
+    let mut w = setup_with(CAP, PER_TX_MAX);
+    let agent = w.agent.insecure_clone();
+
+    let first = charge_ix(&w, FIRST_PAID, 1);
+    send(&mut w.svm, &agent, &[&agent], &[first]).expect("first cheap payment");
+    let second = charge_ix(&w, SECOND_PAID, 2);
+    send(&mut w.svm, &agent, &[&agent], &[second]).expect("second cheap payment");
+
+    let refused = charge_ix(&w, REFUSED, 3);
+    let meta =
+        send_meta(&mut w.svm, &agent, &[&agent], &[refused]).expect("a refusal still confirms");
+
+    let line = meta
+        .logs
+        .iter()
+        .find(|row| row.contains("VETO REFUSED"))
+        .cloned()
+        .expect("refusal log is present");
+    let remaining = CAP - FIRST_PAID - SECOND_PAID;
+    assert_eq!(remaining, 99_339_500);
+    let expected = format!(
+        "Program log: VETO REFUSED reason=5 (over per-payment maximum) amount={REFUSED} per_tx_max={PER_TX_MAX} remaining={remaining} override_to_clear={REFUSED}"
+    );
+    assert_eq!(line, expected);
+    println!("{line}");
+
+    let entry = last_entry(&w.svm, &w.ledger);
+    assert_eq!(entry.kind, KIND_REFUSED);
+    assert_eq!(entry.reason, REASON_OVER_PER_TX_MAX);
+    assert_eq!(entry.amount, REFUSED);
+    assert_eq!(entry.suggested_override, REFUSED);
 }
 
 /// This is the test the whole pitch rests on.
