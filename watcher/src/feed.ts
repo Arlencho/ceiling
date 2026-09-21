@@ -5,6 +5,8 @@
  * There is no synthetic fallback: a missing or failed fetch is a gap.
  */
 
+import { sekPerKwhToScaled } from "./money.js";
+
 export type PriceWindow = {
   timeStart: string;
   timeEnd: string;
@@ -35,9 +37,10 @@ export const FEED_ORIGIN = "https://www.elprisetjustnu.se";
 // The price is captured as raw text from the same object it belongs to, never
 // parsed into a float, because every amount downstream is integer base units.
 // JSON.parse would turn 1e-05 into a float and the cheap windows would be the
-// ones lost. The token is read by field name so key order and a quoted value
-// still yield a window. A nested object repeating the key cannot shift a
-// neighbour: the source token is taken from that entry's own text.
+// ones lost. The token is read by field name so key order and a quoted decimal
+// still yield a window. A quoted value that is not a decimal does not. A nested
+// object repeating the key cannot shift a neighbour: the source token is taken
+// from that entry's own text.
 const SEK_VALUE_RE = /"SEK_per_kWh"\s*:\s*(?:"([^"]*)"|([-+0-9.eE]+))/;
 
 /** Expand scientific notation to a plain decimal string, textually.
@@ -248,8 +251,28 @@ function topLevelSekToken(objectSrc: string): string | undefined {
   return found;
 }
 
+/** True when a quoted price is a decimal the money path will price, as written.
+ *
+ * The grammar is sekPerKwhToScaled: the same acceptance the rest of the money
+ * path uses, including scientific text that expands before the strict parser.
+ * Surrounding space is not part of that decimal, so a padded token is not a
+ * price. An empty string and a non-numeric token are not either.
+ */
+function quotedPriceIsDecimal(value: string): boolean {
+  if (value.length === 0 || value !== value.trim()) return false;
+  try {
+    sekPerKwhToScaled(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function sekFromParsed(value: unknown, raw: string | undefined): string | null {
-  if (typeof value === "string") return value;
+  if (typeof value === "string") {
+    if (!quotedPriceIsDecimal(value)) return null;
+    return value;
+  }
   if (typeof value === "number" && Number.isFinite(value)) {
     if (raw === undefined || raw.length === 0) return null;
     return raw;

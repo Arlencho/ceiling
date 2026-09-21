@@ -426,3 +426,21 @@ test("round 2: a full day with every fifth entry skipped for a rotating reason k
   assert.deepEqual(got, expected);
   assert.ok(got.every((w) => w.sek !== "0.9"));
 });
+
+test("a day file whose quoted price is not a decimal is unreadable", async () => {
+  const at = new Date("2026-09-20T10:05:00+02:00");
+  const start = "2026-09-20T10:00:00+02:00";
+  const end = "2026-09-20T10:15:00+02:00";
+  // Issue 97: padding around a number, and a token that is not a number.
+  // Neither string is a decimal, so the day file is unreadable.
+  const samples = [" 0.30722 ", "abc"];
+  for (const sek of samples) {
+    const body = `[{"SEK_per_kWh":${JSON.stringify(sek)},"time_start":"${start}","time_end":"${end}"}]`;
+    const feed = new EnergySpotFeed(async () => new Response(body, { status: 200 }));
+    const read = await feed.readWindow(at);
+    assert.equal(read.status, "malformed", JSON.stringify(sek));
+    assert.equal(read.window, null, JSON.stringify(sek));
+    assert.equal(isMalformedDayBody(body), true, JSON.stringify(sek));
+    assert.deepEqual(parseFeedBody(body), [], JSON.stringify(sek));
+  }
+});

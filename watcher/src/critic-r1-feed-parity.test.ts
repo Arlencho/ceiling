@@ -1,8 +1,10 @@
 // Critic fixture, PR 96 round 1, issue 88: the feed parser's classification
 // and price text for every body shape, captured from main at 4233ad3 by
 // running main's feed.ts and the branch's side by side (35 bodies, 0 diffs).
-// Issue 88 is open: any rewrite of the parser must keep every row here byte
-// identical. A row that changes is a block regardless of which looks right.
+// Issue 97 corrects two rows, "string price with spaces" and "string price
+// non numeric": a quoted price that is not a decimal is unreadable. The other
+// thirty-three rows stay as captured. A change to one of those is a block
+// regardless of which looks right.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { EnergySpotFeed, isMalformedDayBody, parseFeedBody } from "./feed.js";
@@ -355,23 +357,19 @@ const expected: Array<{ name: string; status: string; sek: string | null; start:
   },
   {
     "name": "string price with spaces",
-    "status": "ok",
-    "sek": " 0.30722 ",
-    "start": "2026-09-20T10:00:00+02:00",
-    "malformed": false,
-    "windows": [
-      "2026-09-20T10:00:00+02:00|2026-09-20T10:15:00+02:00| 0.30722 "
-    ]
+    "status": "malformed",
+    "sek": null,
+    "start": null,
+    "malformed": true,
+    "windows": []
   },
   {
     "name": "string price non numeric",
-    "status": "ok",
-    "sek": "abc",
-    "start": "2026-09-20T10:00:00+02:00",
-    "malformed": false,
-    "windows": [
-      "2026-09-20T10:00:00+02:00|2026-09-20T10:15:00+02:00|abc"
-    ]
+    "status": "malformed",
+    "sek": null,
+    "start": null,
+    "malformed": true,
+    "windows": []
   },
   {
     "name": "empty time_start",
