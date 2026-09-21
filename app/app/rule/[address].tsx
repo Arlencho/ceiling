@@ -14,7 +14,7 @@ import { formatBaseUnits, formatTimeLeft } from '../../lib/format';
 import { mayClaimAbsence } from '../../lib/mandateRead';
 import { notActiveHint } from '../../lib/reasons';
 import { displayPurpose, formatExpiryDate, ruleSentence, stampedRulesetLine } from '../../lib/ruleView';
-import { stampAlignment, stampAlignmentLine } from '../../lib/ruleset';
+import { PAYEE_NOT_IN_RULESET, stampAlignment, stampAlignmentLine } from '../../lib/ruleset';
 import { useChain } from '../../lib/useChain';
 import { useRulesets } from '../../lib/useRulesets';
 import { truncateAddress } from '../../lib/wallet';
@@ -36,16 +36,15 @@ export default function RuleDetailScreen() {
           purpose: mandate.purpose,
           cap: mandate.cap,
           perTxMax: mandate.perTxMax,
-          merchant: mandate.merchant,
           decimals: chain.decimals,
           rulesets: stored.rulesets,
         })
       : null;
   const stampNote =
     stamp && alignment
-      ? `${stamp} is written into the purpose on chain. The ruleset file itself is not on chain. ${stampAlignmentLine(alignment.alignment, alignment.version)}. A reader without this phone cannot check that match. These numbers cannot be edited afterwards.`
+      ? `${stamp} is written into the purpose on chain. The ruleset file itself is not on chain. ${stampAlignmentLine(alignment.alignment, alignment.version)}. The stamp claims the cap and per-payment maximum. ${PAYEE_NOT_IN_RULESET} A reader without this phone cannot check that match. These numbers cannot be edited afterwards.`
       : stamp
-        ? `${stamp} is written into the purpose on chain. The ruleset file itself is not on chain. These numbers cannot be edited afterwards.`
+        ? `${stamp} is written into the purpose on chain. The ruleset file itself is not on chain. The stamp claims the cap and per-payment maximum. ${PAYEE_NOT_IN_RULESET} These numbers cannot be edited afterwards.`
         : null;
 
   const onRefresh = useCallback(() => {

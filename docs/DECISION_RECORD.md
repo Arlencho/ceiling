@@ -191,8 +191,9 @@ verdict names how many rows were confirmed and lists every row that was not,
 with the signature and the reason. Exit 0 only when every row confirms. A
 tampered amount on one row rejects that row and leaves the others confirmed.
 
-Default RPC, in order: `--rpc`, then `VETO_RPC`, then
-`keys/devnet-addresses.env` `RPC=`, then `https://api.devnet.solana.com`.
+RPC, in order: `--rpc`, then `VETO_RPC`, then `keys/devnet-addresses.env`
+`RPC=`. If none of those is set, the tool exits and names `VETO_RPC`. There
+is no built-in endpoint.
 
 The recorded cluster for this repo is the RPC in [DEVNET.md](DEVNET.md). Public
 `https://api.devnet.solana.com` is a different genesis. Verify against the

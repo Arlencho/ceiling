@@ -10,6 +10,7 @@ export function Field({
   editable = true,
   accessibilityLabel,
   multiline = false,
+  hint,
 }: {
   label: string;
   value: string;
@@ -18,6 +19,7 @@ export function Field({
   editable?: boolean;
   accessibilityLabel?: string;
   multiline?: boolean;
+  hint?: string;
 }) {
   return (
     <View style={styles.wrap}>
@@ -34,6 +36,7 @@ export function Field({
         multiline={multiline}
         style={[styles.input, multiline && styles.multiline]}
       />
+      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
     </View>
   );
 }
@@ -65,5 +68,12 @@ const styles = StyleSheet.create({
   multiline: {
     minHeight: 72,
     textAlignVertical: 'top',
+  },
+  hint: {
+    color: colors.muted,
+    fontSize: 12.5,
+    fontWeight: '500',
+    lineHeight: 17,
+    fontFamily: fonts.sans,
   },
 });

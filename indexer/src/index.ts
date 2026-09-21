@@ -3,10 +3,15 @@ export { compareRingToHistory, decisionFieldsMatch } from "./compare.js";
 export { decodeLedgerAccount, fetchLedgerRing, ledgerPda, mandatePda } from "./ring.js";
 export { decodeEventsFromLogs, decodeEventBytes, decisionsFromTx } from "./events.js";
 export { formatTable, formatComparison, decisionToJson } from "./format.js";
-export { paginateNewestFirst, withRetry, clampPageSize } from "./rpc.js";
 export {
-  DEFAULT_PROGRAM_ID,
-  DEFAULT_RPC,
+  paginateNewestFirst,
+  withRetry,
+  clampPageSize,
+  parseRpcList,
+  isRateLimitError,
+  createFailoverConnection,
+} from "./rpc.js";
+export {
   KIND_PAID,
   KIND_REFUSED,
   kindName,

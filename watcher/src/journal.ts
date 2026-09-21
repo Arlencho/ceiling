@@ -25,8 +25,9 @@ export type JournalRow = {
 // eighteen-day run each burned window is a row missing from the demo ledger.
 const TERMINAL: ReadonlySet<Decision> = new Set(["paid", "refused", "skipped"]);
 
-// A gap row already exists for this window, so a retry should not append a
-// second one. The window stays retryable; the outage is recorded once.
+// A gap row already exists for this window and outage kind, so a retry
+// should not append a second one of the same kind. The window stays
+// retryable; each kind is recorded once.
 const GAP: Decision = "gap";
 
 export class JsonlJournal {
@@ -70,12 +71,14 @@ export class JsonlJournal {
     return max;
   }
 
-  /// True when an outage was already recorded for this window. The window is
-  /// still retryable; this only stops the journal filling with duplicate gaps.
-  hasGap(nonce: bigint): boolean {
+  /// True when an outage was already recorded for this window. Pass `reason`
+  /// to match one outage kind so a later rate limit is not hidden by an
+  /// earlier feed gap. Without `reason`, any gap for the window matches.
+  hasGap(nonce: bigint, reason?: string): boolean {
     const key = nonce.toString();
     for (const row of this.load()) {
-      if (row.nonce === key && row.decision === GAP) return true;
+      if (row.nonce !== key || row.decision !== GAP) continue;
+      if (reason === undefined || row.reason === reason) return true;
     }
     return false;
   }

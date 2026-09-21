@@ -20,12 +20,20 @@ function tmpDir(): string {
   return mkdtempSync(join(tmpdir(), "veto-config-"));
 }
 
-test("loadConfig refuses to invent rpc and merchant accounts", () => {
+test("loadConfig refuses to invent rpc and account identities", () => {
   const empty = tmpDir();
   assert.throws(
     () => loadConfig({ VETO_KEYS_DIR: empty }, { envFiles: [] }),
     /missing VETO_RPC/,
   );
+});
+
+test("loadConfig reads VETO_ keys from the environment", () => {
+  const cfg = loadConfig({ ...IDENTITIES, VETO_KEYS_DIR: tmpDir() }, { envFiles: [] });
+  assert.equal(cfg.rpc, "http://rpc.test");
+  assert.equal(cfg.merchantTokenAccount, "MerchantToken");
+  assert.equal(cfg.programId, "Prog");
+  assert.deepEqual(cfg.rpcs, ["http://rpc.test"]);
 });
 
 test("loadConfig reads VETO_ keys from an env file, including volume", () => {

@@ -71,6 +71,29 @@ jobs:
       # could not even load on the Node version this job pins stayed green.
       - run: npm test
 
+  terminal:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terminal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            terminal/package-lock.json
+            watcher/package-lock.json
+      - run: npm ci
+      # terminal imports the feed parsing and the money arithmetic from the
+      # watcher rather than copying them, so the typecheck needs its deps too.
+      - name: Install watcher deps for the cross-package typecheck
+        run: npm ci
+        working-directory: watcher
+      - run: npm run typecheck
+      - run: npm test
+
   watcher:
     runs-on: ubuntu-latest
     defaults:

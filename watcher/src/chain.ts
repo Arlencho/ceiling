@@ -7,8 +7,8 @@ import anchorPkg, { AnchorProvider, Program, Wallet } from "@coral-xyz/anchor";
 // default export, where it is present on both.
 const { BN } = anchorPkg;
 import type { Idl } from "@coral-xyz/anchor";
+import type { Connection, VersionedTransactionResponse } from "@solana/web3.js";
 import {
-  Connection,
   Keypair,
   PublicKey,
   SystemProgram,
@@ -17,7 +17,9 @@ import {
 } from "@solana/web3.js";
 import type { WatcherConfig } from "./config.js";
 import type { Veto } from "./idl.js";
+import { logLine } from "./log.js";
 import { parseChargeLogs, type ChargeOutcome } from "./parse.js";
+import { createFailoverConnection, isRateLimitError } from "./rpc.js";
 
 export const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
@@ -57,17 +59,30 @@ export function connect(cfg: WatcherConfig, payer: Keypair): {
   program: Program<Veto>;
   programId: PublicKey;
 } {
-  const connection = new Connection(cfg.rpc, "confirmed");
+  const connection = createFailoverConnection(cfg.rpcs, logLine);
   const provider = new AnchorProvider(connection, new Wallet(payer), {
     commitment: "confirmed",
     skipPreflight: false,
   });
-  const idl = loadIdl(cfg.idlPath);
+  const idl = loadIdl(cfg.idlPath) as unknown as Idl;
+  if (idl.address && idl.address !== cfg.programId) {
+    idl.address = cfg.programId;
+  }
   const program = new Program<Veto>(idl as unknown as Veto & Idl, provider);
   return { connection, program, programId: new PublicKey(cfg.programId) };
 }
 
 export type ChargeReceipt = ChargeOutcome & { signature: string };
+
+export type RecoveredCharge = ChargeReceipt & { amount: bigint };
+
+const CHARGE_DISCRIMINATOR = Buffer.from([26, 55, 197, 209, 93, 77, 242, 15]);
+const LEDGER_DISCRIMINATOR = Buffer.from([43, 41, 21, 213, 180, 176, 95, 32]);
+const LEDGER_CAPACITY = 32;
+const LEDGER_HEADER_SIZE = 40;
+const ENTRY_SIZE = 72;
+const KIND_PAID = 1;
+const MANDATE_LAST_NONCE_OFFSET = 224;
 
 export async function submitCharge(args: {
   cfg: WatcherConfig;
@@ -79,6 +94,19 @@ export async function submitCharge(args: {
   const owner = new PublicKey(args.cfg.owner);
   const mandate = mandatePda(programId, owner, args.cfg.mandateId);
   const ledger = ledgerPda(programId, mandate);
+
+  const lastNonce = await readLastNonceFromAccount(connection, mandate);
+  if (args.nonce <= lastNonce) {
+    const recovered = await recoverFromConnection(connection, programId, mandate, args.nonce);
+    if (recovered !== null) return recovered;
+    return {
+      decision: "paid",
+      reason: "chain shows this window paid; signature could not be recovered",
+      reasonCode: 0,
+      suggestedOverride: null,
+      signature: "",
+    };
+  }
 
   const ix = await program.methods
     .charge(new BN(args.amount.toString()), new BN(args.nonce.toString()))
@@ -147,4 +175,177 @@ export async function openMandate(args: {
     commitment: "confirmed",
   });
   return { signature, mandate: mandate.toBase58(), ledger: ledger.toBase58() };
+}
+
+export function decodeMandateLastNonce(data: Uint8Array): bigint {
+  if (data.length < MANDATE_LAST_NONCE_OFFSET + 8) {
+    throw new Error("mandate account too small to read last_nonce");
+  }
+  return Buffer.from(data.subarray(MANDATE_LAST_NONCE_OFFSET, MANDATE_LAST_NONCE_OFFSET + 8)).readBigUInt64LE(0);
+}
+
+async function readLastNonceFromAccount(connection: Connection, mandate: PublicKey): Promise<bigint> {
+  const info = await connection.getAccountInfo(mandate, "confirmed");
+  if (!info) throw new Error(`mandate ${mandate.toBase58()} not found`);
+  return decodeMandateLastNonce(info.data);
+}
+
+export async function readLastNonce(args: {
+  cfg: WatcherConfig;
+  agent: Keypair;
+}): Promise<bigint> {
+  const { connection, programId } = connect(args.cfg, args.agent);
+  const owner = new PublicKey(args.cfg.owner);
+  const mandate = mandatePda(programId, owner, args.cfg.mandateId);
+  return readLastNonceFromAccount(connection, mandate);
+}
+
+type RingPaid = { amount: bigint; suggestedOverride: bigint };
+
+export function findPaidInLedgerBytes(data: Uint8Array, nonce: bigint): RingPaid | null {
+  const minSize = 8 + LEDGER_HEADER_SIZE + ENTRY_SIZE;
+  if (data.length < minSize) return null;
+  if (!LEDGER_DISCRIMINATOR.equals(Buffer.from(data.subarray(0, 8)))) return null;
+  const body = data.subarray(8);
+  const total = Buffer.from(body.subarray(32, 36)).readUInt32LE(0);
+  const head = Buffer.from(body.subarray(36, 38)).readUInt16LE(0);
+  const occupied = Math.min(total, LEDGER_CAPACITY);
+  const start = total >= LEDGER_CAPACITY ? head % LEDGER_CAPACITY : 0;
+  for (let i = 0; i < occupied; i += 1) {
+    const idx = (start + i) % LEDGER_CAPACITY;
+    const off = LEDGER_HEADER_SIZE + idx * ENTRY_SIZE;
+    const raw = body.subarray(off, off + ENTRY_SIZE);
+    if (raw.length < ENTRY_SIZE) continue;
+    const entryNonce = Buffer.from(raw.subarray(48, 56)).readBigUInt64LE(0);
+    const kind = raw[64] ?? 0;
+    if (entryNonce !== nonce || kind !== KIND_PAID) continue;
+    return {
+      amount: Buffer.from(raw.subarray(8, 16)).readBigUInt64LE(0),
+      suggestedOverride: Buffer.from(raw.subarray(56, 64)).readBigUInt64LE(0),
+    };
+  }
+  return null;
+}
+
+function chargeFromTx(
+  tx: VersionedTransactionResponse,
+  programId: PublicKey,
+): { amount: bigint; nonce: bigint } | null {
+  const msg = tx.transaction.message;
+  const staticKeys = (
+    "staticAccountKeys" in msg && Array.isArray(msg.staticAccountKeys)
+      ? msg.staticAccountKeys
+      : "accountKeys" in msg && Array.isArray((msg as { accountKeys?: PublicKey[] }).accountKeys)
+        ? (msg as { accountKeys: PublicKey[] }).accountKeys
+        : []
+  );
+  const loaded = tx.meta?.loadedAddresses;
+  const keys = [
+    ...staticKeys,
+    ...(loaded?.writable ?? []),
+    ...(loaded?.readonly ?? []),
+  ];
+  const compiled =
+    "compiledInstructions" in msg && Array.isArray(msg.compiledInstructions)
+      ? msg.compiledInstructions.map((ix) => ({
+          programIdIndex: ix.programIdIndex,
+          data: Buffer.from(ix.data),
+        }))
+      : [];
+  for (const ix of compiled) {
+    const pid = keys[ix.programIdIndex];
+    if (!pid || !pid.equals(programId)) continue;
+    if (ix.data.length < 24) continue;
+    if (!ix.data.subarray(0, 8).equals(CHARGE_DISCRIMINATOR)) continue;
+    return {
+      amount: ix.data.readBigUInt64LE(8),
+      nonce: ix.data.readBigUInt64LE(16),
+    };
+  }
+  return null;
+}
+
+// Walk signatures that touched this mandate. Charge writes the mandate, so
+// this is the paid history for this window without paging every other
+// mandate's transactions. Used when the 32-entry ring has rolled past.
+async function findPaidInHistory(
+  connection: Connection,
+  programId: PublicKey,
+  mandate: PublicKey,
+  nonce: bigint,
+): Promise<RecoveredCharge | null> {
+  let before: string | undefined;
+  const pageSize = 200;
+  for (let page = 0; page < 50; page += 1) {
+    const sigs = await connection.getSignaturesForAddress(mandate, {
+      limit: pageSize,
+      before,
+    });
+    if (sigs.length === 0) break;
+    for (const info of sigs) {
+      if (info.err) continue;
+      const tx = await connection.getTransaction(info.signature, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+      });
+      if (!tx) continue;
+      const charge = chargeFromTx(tx, programId);
+      if (charge === null || charge.nonce !== nonce) continue;
+      const logs = tx.meta?.logMessages ?? [];
+      try {
+        const outcome = parseChargeLogs(logs);
+        if (outcome.decision !== "paid") continue;
+        return {
+          ...outcome,
+          signature: info.signature,
+          amount: charge.amount,
+        };
+      } catch {
+        continue;
+      }
+    }
+    if (sigs.length < pageSize) break;
+    before = sigs[sigs.length - 1]?.signature;
+  }
+  return null;
+}
+
+async function recoverFromConnection(
+  connection: Connection,
+  programId: PublicKey,
+  mandate: PublicKey,
+  nonce: bigint,
+): Promise<RecoveredCharge | null> {
+  const ledger = ledgerPda(programId, mandate);
+  const info = await connection.getAccountInfo(ledger, "confirmed");
+  const ringHit = info ? findPaidInLedgerBytes(info.data, nonce) : null;
+  if (ringHit !== null) {
+    let signature = "";
+    try {
+      const historyHit = await findPaidInHistory(connection, programId, mandate, nonce);
+      if (historyHit !== null) signature = historyHit.signature;
+    } catch (err) {
+      if (!isRateLimitError(err)) throw err;
+    }
+    return {
+      decision: "paid",
+      reason: "ok",
+      reasonCode: 0,
+      suggestedOverride: ringHit.suggestedOverride === 0n ? null : ringHit.suggestedOverride,
+      signature,
+      amount: ringHit.amount,
+    };
+  }
+  return findPaidInHistory(connection, programId, mandate, nonce);
+}
+
+export async function recoverSettledCharge(args: {
+  cfg: WatcherConfig;
+  agent: Keypair;
+  nonce: bigint;
+}): Promise<RecoveredCharge | null> {
+  const { connection, programId } = connect(args.cfg, args.agent);
+  const owner = new PublicKey(args.cfg.owner);
+  const mandate = mandatePda(programId, owner, args.cfg.mandateId);
+  return recoverFromConnection(connection, programId, mandate, args.nonce);
 }

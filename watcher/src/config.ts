@@ -3,6 +3,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseGsUri } from "./journalStore.js";
 import { DEFAULT_KWH_MILLI, DEFAULT_MINT_DECIMALS } from "./money.js";
+import { parseRpcList } from "./rpc.js";
 
 export const WATCHER_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const REPO_DIR = join(WATCHER_DIR, "..");
@@ -24,6 +25,7 @@ const SHORT_TO_VETO: Record<string, string> = {
 
 export type WatcherConfig = {
   rpc: string;
+  rpcs: string[];
   keysDir: string;
   journalPath: string;
   journalGcsUri: string | null;
@@ -147,6 +149,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts?: LoadConf
       ? targetIdl
       : bundledIdl;
 
+  // These are not chain identities. They cannot select an endpoint, program, mint, or account.
   const mandateId = BigInt(env.VETO_MANDATE_ID ?? "1");
   const kwhMilli = BigInt(lookupFrom(env, files, "VETO_KWH_MILLI") ?? DEFAULT_KWH_MILLI.toString());
   const mintDecimals = Number.parseInt(
@@ -156,8 +159,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts?: LoadConf
   const cap = BigInt(env.VETO_CAP ?? "100000000");
   const perTxMax = BigInt(env.VETO_PER_TX_MAX ?? "500000");
 
+  const rpcs = parseRpcList(required(env, files, "VETO_RPC"));
+  if (rpcs.length === 0) {
+    throw new Error("VETO_RPC has no endpoints");
+  }
+
   return {
-    rpc: required(env, files, "VETO_RPC"),
+    rpc: rpcs[0]!,
+    rpcs,
     keysDir,
     journalPath,
     journalGcsUri,

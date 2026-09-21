@@ -1,7 +1,15 @@
 #!/usr/bin/env node
 import { existsSync, statSync } from "node:fs";
 import { dueSlots, msUntil, nextSlot, STALE_AFTER_MS } from "./cadence.js";
-import { connect, loadKeypair, mandatePda, openMandate, submitCharge } from "./chain.js";
+import {
+  connect,
+  loadKeypair,
+  mandatePda,
+  openMandate,
+  readLastNonce,
+  recoverSettledCharge,
+  submitCharge,
+} from "./chain.js";
 import { keyPath, loadConfig } from "./config.js";
 import { EnergySpotFeed } from "./feed.js";
 import { JsonlJournal, type JournalRow } from "./journal.js";
@@ -15,7 +23,7 @@ import {
 } from "./journalStore.js";
 import { logError, logLine } from "./log.js";
 import { nonceFromWindowStart } from "./nonce.js";
-import { processWindow, sleep } from "./run.js";
+import { processWindow, sleep, type ProcessResult } from "./run.js";
 import { isJournalStale, lastDecisionAt } from "./stale.js";
 import { PublicKey } from "@solana/web3.js";
 
@@ -69,7 +77,9 @@ async function withJournalAndFeed() {
     }
   }
   const submit = (amount: bigint, nonce: bigint) => submitCharge({ cfg, agent, amount, nonce });
-  return { cfg, journal, feed, submit, agent, store };
+  const chainLastNonce = () => readLastNonce({ cfg, agent });
+  const recoverSettled = (nonce: bigint) => recoverSettledCharge({ cfg, agent, nonce });
+  return { cfg, journal, feed, submit, agent, store, chainLastNonce, recoverSettled };
 }
 
 async function lastAppendedAfter<T>(
@@ -83,9 +93,10 @@ async function lastAppendedAfter<T>(
   return { result, row: last === undefined ? null : last };
 }
 
-async function processAt(at: Date): Promise<void> {
-  const { cfg, journal, feed, submit, store } = await withJournalAndFeed();
-  const { row } = await lastAppendedAfter(journal, () =>
+async function processAt(at: Date): Promise<ProcessResult> {
+  const { cfg, journal, feed, submit, store, chainLastNonce, recoverSettled } =
+    await withJournalAndFeed();
+  const { result, row } = await lastAppendedAfter(journal, () =>
     processWindow({
       at,
       feed,
@@ -93,19 +104,24 @@ async function processAt(at: Date): Promise<void> {
       submit,
       kwhMilli: cfg.kwhMilli,
       mintDecimals: cfg.mintDecimals,
+      chainLastNonce,
+      recoverSettled,
     }),
   );
   await persistJournal(cfg.journalPath, store, row);
+  return result;
 }
 
-async function processDue(now: Date, announceIdle = false): Promise<void> {
-  const { cfg, journal, feed, submit, store } = await withJournalAndFeed();
+async function processDue(now: Date, announceIdle = false): Promise<boolean> {
+  const { cfg, journal, feed, submit, store, chainLastNonce, recoverSettled } =
+    await withJournalAndFeed();
   let acted = false;
+  let deferred = false;
   for (const slot of dueSlots(now)) {
     const nonce = nonceFromWindowStart(slot.toISOString());
     if (journal.hasNonce(nonce)) continue;
     acted = true;
-    const { row } = await lastAppendedAfter(journal, () =>
+    const { result, row } = await lastAppendedAfter(journal, () =>
       processWindow({
         at: slot,
         feed,
@@ -113,13 +129,17 @@ async function processDue(now: Date, announceIdle = false): Promise<void> {
         submit,
         kwhMilli: cfg.kwhMilli,
         mintDecimals: cfg.mintDecimals,
+        chainLastNonce,
+        recoverSettled,
       }),
     );
     await persistJournal(cfg.journalPath, store, row);
+    if (result === "deferred") deferred = true;
   }
   if (!acted && announceIdle) {
     logLine("caught up: no due cadence slots left to submit");
   }
+  return deferred;
 }
 
 async function cmdOnce(): Promise<void> {
@@ -132,16 +152,24 @@ async function cmdOnce(): Promise<void> {
     if (at.getTime() > Date.now()) {
       throw new Error("refusing a future window: wait for it, do not invent a present");
     }
-    await processAt(at);
+    const result = await processAt(at);
+    if (result === "deferred") {
+      logError("once: rpc rate limited on all endpoints");
+      process.exitCode = 1;
+    }
     return;
   }
-  await processDue(new Date(), true);
+  const deferred = await processDue(new Date(), true);
+  if (deferred) {
+    logError("once: rpc rate limited on all endpoints");
+    process.exitCode = 1;
+  }
 }
 
 async function cmdRun(): Promise<void> {
   const cfg = loadConfig();
   logLine(
-    `watcher start rpc=${cfg.rpc} mandate_id=${cfg.mandateId.toString()} kwh_milli=${cfg.kwhMilli.toString()} journal=${cfg.journalPath}`,
+    `watcher start rpc=${cfg.rpcs.join(",")} mandate_id=${cfg.mandateId.toString()} kwh_milli=${cfg.kwhMilli.toString()} journal=${cfg.journalPath}`,
   );
   let stopping = false;
   const stop = (): void => {
