@@ -32,6 +32,15 @@ else
   pass "policy does not use conditionAbsent for the never-run case"
 fi
 
+# https://docs.cloud.google.com/monitoring/promql/create-promql-alerts
+# "An alerting policy that uses PromQL must have only one condition."
+if grep -q 'conditionPrometheusQueryLanguage' "$POLICY" \
+  && grep -q 'conditionThreshold' "$POLICY"; then
+  bad "PromQL condition shares the policy with a threshold; GCP requires PromQL to be the only condition"
+else
+  pass "PromQL condition is the only condition in this policy"
+fi
+
 if grep -q 'object' "$POLICY" && grep -q 'updated' "$POLICY"; then
   pass "policy docs name the object updated time as the age source"
 else

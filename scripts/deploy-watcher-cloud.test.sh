@@ -138,6 +138,16 @@ else
   fi
 fi
 
+if out="$(env -i PATH="$PATH" HOME="${HOME:-/tmp}" AGENT_KEY_PATH="$KEY" VETO_RPC=http://rpc.test VETO_PROGRAM_ID=Prog VETO_OWNER=Owner VETO_OWNER_TOKEN=OwnerToken VETO_MERCHANT=Merchant VETO_MERCHANT_TOKEN=MerchantToken VETO_AGENT=Agent "$SCRIPT" --check 2>&1)"; then
+  bad "missing VETO_MINT must refuse"
+else
+  if printf '%s' "$out" | grep -q "missing VETO_MINT"; then
+    pass "missing VETO_MINT refuses before any deploy"
+  else
+    bad "missing VETO_MINT message: ${out}"
+  fi
+fi
+
 FAKE_BIN="${DIR}/bin"
 mkdir -p "$FAKE_BIN"
 FAKE_LOG="${DIR}/gcloud.log"
