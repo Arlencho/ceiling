@@ -4,15 +4,17 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 POLICY="${ROOT}/infra/watcher-silent-alert.yaml"
+STALE_POLICY="${ROOT}/infra/watcher-stale-alert.yaml"
 
 fail=0
 pass() { printf 'ok - %s\n' "$1"; }
 bad() { printf 'not ok - %s\n' "$1"; fail=1; }
 
 [[ -f "$POLICY" ]] || { echo "missing ${POLICY}"; exit 1; }
+[[ -f "$STALE_POLICY" ]] || { echo "missing ${STALE_POLICY}"; exit 1; }
 
-if grep -q 'conditionThreshold' "$POLICY" \
-  && grep -q 'metric.labels.result = "failed"' "$POLICY"; then
+if grep -q 'conditionThreshold' "$STALE_POLICY" \
+  && grep -q 'metric.labels.result = "failed"' "$STALE_POLICY"; then
   pass "policy fires when the stale check fails (record too old)"
 else
   bad "policy missing the failed-stale threshold"

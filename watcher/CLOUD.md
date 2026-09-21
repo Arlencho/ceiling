@@ -21,7 +21,9 @@ in `europe-north1`; Belgium is the nearest Scheduler region. The job it invokes
 still runs in Finland. The cron timezone is `Europe/Stockholm`.
 
 Nothing in the image is a key, an RPC endpoint, a program id, a mint, or an
-account. Those are environment and a Secret Manager mount.
+account. Those are environment and a Secret Manager mount. The image is
+compiled JavaScript. TypeScript and the rest of the build toolchain stay
+in the build stage.
 
 ## 1. What you need on the machine
 
@@ -87,15 +89,19 @@ export VETO_AGENT='AGENT'
    Run jobs API `:run` URI.
 10. Creates or updates Cloud Scheduler `veto-watcher-stale-hourly` at
     `0 * * * *` `Europe/Stockholm`.
-11. Creates alerting policy `Veto watcher silent` from
-    `infra/watcher-silent-alert.yaml`. If `ALERT_EMAIL` is set, creates or reuses
-    an email notification channel and attaches it.
+11. Creates or updates two alerting policies. `Veto watcher record too old`
+    from `infra/watcher-stale-alert.yaml` (failed stale execution). `Veto
+    watcher silent` from `infra/watcher-silent-alert.yaml` (PromQL `absent()`
+    of that check). If `ALERT_EMAIL` is set, creates or reuses an email
+    notification channel and attaches it to both.
 
 The script does not execute the job (`--execute-now` is not passed).
 
-## 3. Point the alert at an email address
+## 3. Point both alerts at an email address
 
-The failure that costs the demo is a job that stops quietly. The check is:
+The failure that costs the demo is a job that stops quietly. Google requires a
+PromQL condition to be the only condition in its policy, so the two paths are
+two policies.
 
 - Cadence is six hours (00:00, 06:00, 12:00, 18:00 Stockholm).
 - A window and a half is **9 hours** (`STALE_AFTER_MS` in `watcher/src/cadence.ts`).
@@ -104,23 +110,30 @@ The failure that costs the demo is a job that stops quietly. The check is:
   journal is empty, from the object's own server-side `updated` time. The
   checker does not use the local file it just wrote, so an empty object from
   deploy still ages.
-- Alert policy `Veto watcher silent` is OR of:
-  1. `run.googleapis.com/job/completed_execution_count` with
-     `resource.labels.job_name="veto-watcher-stale"` and
-     `metric.labels.result="failed"` greater than 0 for 60s. This is the
-     record-too-old path.
-  2. PromQL `absent()` on that same metric for 32400s (9 hours), with
-     `disableMetricValidation: true`. This is the check-stopped-reporting
-     path, and it is true when the series has never written a point.
+- Policy `Veto watcher record too old` (`infra/watcher-stale-alert.yaml`):
+  `run.googleapis.com/job/completed_execution_count` with
+  `resource.labels.job_name="veto-watcher-stale"` and
+  `metric.labels.result="failed"` greater than 0 for 60s.
+- Policy `Veto watcher silent` (`infra/watcher-silent-alert.yaml`): PromQL
+  `absent()` on that same metric for 32400s (9 hours), with
+  `disableMetricValidation: true`. True when the series has never written a
+  point.
 
-When the watcher job has never once executed, condition 1 fires after 9 hours
-if the hourly stale job runs: the empty object still carries the `updated`
-time from deploy, the stale job exits 1, and the failed-execution threshold
-trips. If the stale job itself has also never completed, condition 2 fires:
-`absent()` is true for a metric that has never existed. A Cloud Monitoring
-metric-absence condition would not fire in that case.
+What fires in each case:
 
-If `ALERT_EMAIL` was set on deploy, the channel is already attached. Otherwise:
+1. Nothing has ever run. `Veto watcher silent` fires. `absent()` is true for a
+   series that has never existed. A Cloud Monitoring metric-absence condition
+   would not fire in that case.
+2. The watcher stopped while the checker kept going. After 9 hours the empty
+   object still carries the `updated` time from deploy (or the last row `ts`
+   is older than 9 hours), the stale job exits 1, and `Veto watcher record too
+   old` fires on the failed-execution threshold.
+3. The checker itself stopped. `Veto watcher silent` fires once
+   `completed_execution_count` for `veto-watcher-stale` has been absent for
+   32400s.
+
+If `ALERT_EMAIL` was set on deploy, the channel is already attached to both
+policies. Otherwise:
 
 ```bash
 gcloud monitoring channels create \
@@ -129,15 +142,28 @@ gcloud monitoring channels create \
   --type=email \
   --channel-labels=email_address=you@example.com
 
-# Copy the channel name from the output, then:
-gcloud monitoring policies list \
+CHANNEL=$(gcloud monitoring channels list \
+  --project=veto-watcher-260921 \
+  --filter='labels.email_address="you@example.com" AND type=email' \
+  --format='value(name)')
+
+POLICY_SILENT=$(gcloud monitoring policies list \
   --project=veto-watcher-260921 \
   --filter='displayName="Veto watcher silent"' \
-  --format='value(name)'
+  --format='value(name)')
 
-gcloud monitoring policies update PROJECTS_POLICY_NAME \
+POLICY_STALE=$(gcloud monitoring policies list \
   --project=veto-watcher-260921 \
-  --add-notification-channels=CHANNEL_NAME
+  --filter='displayName="Veto watcher record too old"' \
+  --format='value(name)')
+
+gcloud monitoring policies update "$POLICY_SILENT" \
+  --project=veto-watcher-260921 \
+  --add-notification-channels="$CHANNEL"
+
+gcloud monitoring policies update "$POLICY_STALE" \
+  --project=veto-watcher-260921 \
+  --add-notification-channels="$CHANNEL"
 ```
 
 Google sends a verification email to that address. The channel stays unverified
@@ -157,7 +183,7 @@ the free tiers below.
 | Secret Manager | One secret, read on each job start | $0.06 per secret per month plus $0.03 per 10,000 accesses | One secret, about 30 days * 28 reads |
 | Artifact Registry | One image in `europe-north1` | $0.10 / GB-month after 0.5 GB free | One Node image, often inside the free 0.5 GB |
 | Cloud Build | One image build per deploy | 120 free build-minutes per day | One watcher build is a few minutes |
-| Cloud Monitoring | One policy, email channel | Email notifications are free | Free |
+| Cloud Monitoring | Two policies, email channel | Email notifications are free | Free |
 | Cloud Logging | stdout from the jobs | 50 GiB free per month | Well under |
 
 Pricing pages: [Cloud Run](https://cloud.google.com/run/pricing),
@@ -219,8 +245,10 @@ gcloud storage buckets delete gs://$PROJECT-journal --project=$PROJECT --quiet
 
 gcloud secrets delete veto-agent-keypair --project=$PROJECT --quiet
 
-POLICY=$(gcloud monitoring policies list --project=$PROJECT --filter='displayName="Veto watcher silent"' --format='value(name)')
-[ -n "$POLICY" ] && gcloud monitoring policies delete "$POLICY" --project=$PROJECT --quiet
+POLICY_SILENT=$(gcloud monitoring policies list --project=$PROJECT --filter='displayName="Veto watcher silent"' --format='value(name)')
+[ -n "$POLICY_SILENT" ] && gcloud monitoring policies delete "$POLICY_SILENT" --project=$PROJECT --quiet
+POLICY_STALE=$(gcloud monitoring policies list --project=$PROJECT --filter='displayName="Veto watcher record too old"' --format='value(name)')
+[ -n "$POLICY_STALE" ] && gcloud monitoring policies delete "$POLICY_STALE" --project=$PROJECT --quiet
 
 gcloud iam service-accounts delete veto-watcher@$PROJECT.iam.gserviceaccount.com --project=$PROJECT --quiet
 ```

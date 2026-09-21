@@ -1,7 +1,9 @@
 # Node 22 is the floor the READMEs document and the version CI runs.
-# The image carries the watcher and the bundled IDL. It carries no key,
-# no RPC endpoint, and no account. Those arrive at run time as env and
-# a Secret Manager mount.
+# The image carries the compiled watcher and the bundled IDL. It carries no
+# key, no RPC endpoint, no program id, no mint, and no account. Those arrive
+# at run time as env and a Secret Manager mount.
+# TypeScript is compiled in the build stage. The runtime image runs the
+# JavaScript and does not contain the compiler or any other build-only tool.
 
 FROM node:22-alpine AS build
 WORKDIR /src
@@ -12,7 +14,17 @@ RUN npm ci --ignore-scripts
 COPY tsconfig.json ./
 COPY src ./src
 COPY idl ./idl
-RUN npm run build && npm prune --omit=dev
+RUN npm run build
+
+FROM node:22-alpine AS deps
+WORKDIR /src
+COPY package.json package-lock.json ./
+ENV NODE_ENV=production
+# Production deps still pull TypeScript (optional peer of @solana/*) and
+# @types (jayson lists them as dependencies). The job runs compiled JS.
+# Those packages are build-only; drop them before the runtime copy.
+RUN npm ci --omit=dev --ignore-scripts \
+  && rm -rf node_modules/typescript node_modules/@types node_modules/tsx
 
 FROM node:22-alpine
 RUN addgroup -S veto \
@@ -20,8 +32,9 @@ RUN addgroup -S veto \
   && mkdir -p /app /tmp/veto \
   && chown -R veto:veto /app /tmp/veto
 WORKDIR /app
-COPY --from=build --chown=veto:veto /src/package.json /src/package-lock.json ./
-COPY --from=build --chown=veto:veto /src/node_modules ./node_modules
+ENV NODE_ENV=production
+COPY --from=deps --chown=veto:veto /src/package.json ./
+COPY --from=deps --chown=veto:veto /src/node_modules ./node_modules
 COPY --from=build --chown=veto:veto /src/dist ./dist
 COPY --from=build --chown=veto:veto /src/idl ./idl
 USER veto

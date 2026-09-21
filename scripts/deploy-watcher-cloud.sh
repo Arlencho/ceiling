@@ -29,6 +29,7 @@ if [[ -z "${BUCKET+x}" ]]; then
 fi
 JOURNAL_OBJECT="${JOURNAL_OBJECT:-decisions.jsonl}"
 ALERT_POLICY_FILE="${ALERT_POLICY_FILE:-${ROOT}/infra/watcher-silent-alert.yaml}"
+STALE_ALERT_POLICY_FILE="${STALE_ALERT_POLICY_FILE:-${ROOT}/infra/watcher-stale-alert.yaml}"
 DOCKERFILE="${DOCKERFILE:-${ROOT}/watcher/Dockerfile}"
 
 IDENTITY_VARS=(
@@ -62,7 +63,8 @@ usage() {
 usage: ./scripts/deploy-watcher-cloud.sh [--check] [--dry-run]
 
 Creates the journal bucket, the agent key in Secret Manager, the image, the
-Cloud Run jobs, the Cloud Scheduler entries, and the silent-journal alert.
+Cloud Run jobs, the Cloud Scheduler entries, and the two silent-journal
+alert policies (record too old, check stopped reporting).
 
 Required environment:
   AGENT_KEY_PATH     path to the agent keypair JSON (never printed)
@@ -151,6 +153,7 @@ require_local_inputs() {
   [[ -f "$DOCKERFILE" ]] || die "missing ${DOCKERFILE}"
   [[ -f "${ROOT}/watcher/package-lock.json" ]] || die "missing watcher/package-lock.json"
   [[ -f "$ALERT_POLICY_FILE" ]] || die "missing ${ALERT_POLICY_FILE}"
+  [[ -f "$STALE_ALERT_POLICY_FILE" ]] || die "missing ${STALE_ALERT_POLICY_FILE}"
   [[ -n "$PROJECT" ]] || die "missing PROJECT"
   [[ -n "$REGION" ]] || die "missing REGION"
   [[ -n "$BUCKET" ]] || die "missing BUCKET; set BUCKET to the journal bucket name"
@@ -301,9 +304,75 @@ ensure_scheduler() {
   fi
 }
 
+policy_name_by_display() {
+  gcloud monitoring policies list \
+    --project="$PROJECT" \
+    --filter="displayName=\"${1}\"" \
+    --format='value(name)' | head -n1 || true
+}
+
+# Merge a comma-separated channel list with an optional extra channel.
+merge_channels() {
+  local combined="${1:-}"
+  local extra="${2:-}"
+  if [[ -z "$extra" ]]; then
+    printf '%s' "$combined"
+    return 0
+  fi
+  case ",${combined}," in
+    *",${extra},"*) printf '%s' "$combined" ;;
+    *)
+      if [[ -n "$combined" ]]; then
+        printf '%s,%s' "$combined" "$extra"
+      else
+        printf '%s' "$extra"
+      fi
+      ;;
+  esac
+}
+
+ensure_one_alert() {
+  local display_name="$1"
+  local policy_file="$2"
+  local ch="${3:-}"
+  local existing preserved="" combined
+  existing="$(policy_name_by_display "$display_name")"
+  if [[ -n "$existing" ]]; then
+    log "alert policy exists: ${existing}"
+    # Replacing a policy from file drops notification channels. Read them
+    # first, then put them back on the same update.
+    if [[ "$MODE" != "dry-run" ]]; then
+      preserved="$(gcloud monitoring policies describe "$existing" \
+        --project="$PROJECT" \
+        --format='value[separator=","](notificationChannels)' 2>/dev/null || true)"
+    fi
+    combined="$(merge_channels "$preserved" "$ch")"
+    if [[ -n "$combined" ]]; then
+      run gcloud monitoring policies update "$existing" \
+        --policy-from-file="$policy_file" \
+        --set-notification-channels="$combined" \
+        --project="$PROJECT"
+    else
+      run gcloud monitoring policies update "$existing" \
+        --policy-from-file="$policy_file" \
+        --project="$PROJECT"
+    fi
+    return 0
+  fi
+  if [[ -n "$ch" ]]; then
+    run gcloud monitoring policies create \
+      --policy-from-file="$policy_file" \
+      --notification-channels="$ch" \
+      --project="$PROJECT"
+  else
+    run gcloud monitoring policies create \
+      --policy-from-file="$policy_file" \
+      --project="$PROJECT"
+  fi
+}
+
 ensure_alert() {
-  local existing ch=""
-  existing="$(gcloud monitoring policies list --project="$PROJECT" --filter='displayName="Veto watcher silent"' --format='value(name)' | head -n1 || true)"
+  local ch=""
   if [[ -n "${ALERT_EMAIL:-}" ]]; then
     ch="$(gcloud monitoring channels list --project="$PROJECT" --filter="labels.email_address=\"${ALERT_EMAIL}\" AND type=email" --format='value(name)' | head -n1 || true)"
     if [[ -z "$ch" ]]; then
@@ -317,27 +386,10 @@ ensure_alert() {
       fi
     fi
   else
-    log "ALERT_EMAIL is unset; the policy is created without a channel. See watcher/CLOUD.md to point it at an address."
+    log "ALERT_EMAIL is unset; the policies are created without a channel. See watcher/CLOUD.md to point them at an address."
   fi
-  if [[ -n "$existing" ]]; then
-    log "alert policy exists: ${existing}"
-    if [[ -n "$ch" ]]; then
-      run gcloud monitoring policies update "$existing" \
-        --add-notification-channels="$ch" \
-        --project="$PROJECT"
-    fi
-    return 0
-  fi
-  if [[ -n "$ch" ]]; then
-    run gcloud monitoring policies create \
-      --policy-from-file="$ALERT_POLICY_FILE" \
-      --notification-channels="$ch" \
-      --project="$PROJECT"
-  else
-    run gcloud monitoring policies create \
-      --policy-from-file="$ALERT_POLICY_FILE" \
-      --project="$PROJECT"
-  fi
+  ensure_one_alert "Veto watcher silent" "$ALERT_POLICY_FILE" "$ch"
+  ensure_one_alert "Veto watcher record too old" "$STALE_ALERT_POLICY_FILE" "$ch"
 }
 
 deploy() {
@@ -453,7 +505,7 @@ deploy() {
 
   log "deployed ${JOB_NAME} in ${REGION} on ${PROJECT}"
   log "scheduler ${SCHEDULER_JOB} in ${SCHEDULER_LOCATION} (Europe/Stockholm 00,06,12,18)"
-  log "stale job ${STALE_JOB_NAME} hourly; alert policy 'Veto watcher silent'"
+  log "stale job ${STALE_JOB_NAME} hourly; alert policies 'Veto watcher silent' and 'Veto watcher record too old'"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
