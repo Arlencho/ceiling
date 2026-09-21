@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!--
+    Veto app mark: the decision slip.
+    A parchment slip (the record) on spruce ink (the screen), carrying one heavy
+    ledger stroke that runs toward the cap rule and halts before it. The stroke
+    is nearly three times its own thickness, so it reads as something travelling
+    rather than a block sitting still, and between its end and the rule stand 88
+    units of bare slip, about four pixels at launcher size. That gap is the whole
+    idea: a payment that was going somewhere and did not get there. Two earlier
+    drawings were rejected for colliding with familiar glyphs, one where the
+    stroke touched the rule and read as log out, one where the stroke was
+    shortened to a block and the pair read as pause. Sized and checked at 48px
+    first, never for balance at 1024. The rule stays full and unbroken, because
+    the boundary held. Palette from docs/DESIGN_DECISION.md.
+  -->
+  <rect width="1024" height="1024" fill="#0F1A16"/>
+  <rect x="322" y="284" width="380" height="456" rx="16" fill="#EDE6D6"/>
+  <rect x="356" y="484" width="156" height="56" fill="#0F1A16"/>
+  <rect x="600" y="408" width="56" height="208" fill="#0F1A16"/>
+</svg>

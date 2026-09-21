@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="512" viewBox="0 0 1536 512">
+  <!--
+    Mask survival preview: the adaptive icon (background + foreground) under
+    the three launcher mask families, circle, squircle (approx), rounded
+    square. Rendered large, downscaled by scripts/render-icon.sh.
+  -->
+  <defs>
+    <clipPath id="circle"><circle cx="256" cy="256" r="256"/></clipPath>
+    <clipPath id="squircle"><rect x="512" y="0" width="512" height="512" rx="150"/></clipPath>
+    <clipPath id="roundsq"><rect x="1024" y="0" width="512" height="512" rx="80"/></clipPath>
+    <g id="adaptive">
+      <rect width="512" height="512" fill="#0F1A16"/>
+      <g transform="scale(0.5)">
+        <rect x="322" y="284" width="380" height="456" rx="16" fill="#EDE6D6"/>
+        <rect x="356" y="484" width="156" height="56" fill="#0F1A16"/>
+        <rect x="600" y="408" width="56" height="208" fill="#0F1A16"/>
+      </g>
+    </g>
+  </defs>
+  <rect width="1536" height="512" fill="#E4DED0"/>
+  <g clip-path="url(#circle)"><use href="#adaptive"/></g>
+  <g clip-path="url(#squircle)"><use href="#adaptive" x="512"/></g>
+  <g clip-path="url(#roundsq)"><use href="#adaptive" x="1024"/></g>
+</svg>
