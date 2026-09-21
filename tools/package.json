@@ -10,7 +10,7 @@
     "produce": "tsx produce.ts",
     "export": "tsx export.ts",
     "verify": "tsx verify.ts",
-    "test": "tsx --test lib.test.ts bulk.test.ts",
+    "test": "tsx --test *.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

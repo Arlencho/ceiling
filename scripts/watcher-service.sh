@@ -20,6 +20,25 @@ case "${1:-status}" in
   install)
     [ -n "$NODE" ] || { echo "node is not on PATH"; exit 1; }
     [ -f "${ROOT}/watcher/dist/index.js" ] || { echo "build the watcher first: cd watcher && npm run build"; exit 1; }
+
+    # Prove this node can actually load the build before handing it to launchd.
+    #
+    # The plist bakes in whichever node is on PATH right now, and launchd will
+    # restart a crashing agent forever without saying why. A build that cannot
+    # link on this node therefore installs cleanly, reports itself running, and
+    # produces no history at all, which is the one failure this script exists to
+    # prevent and the one nobody would notice until the demand for a week of
+    # history could no longer be met.
+    linkage="$("$NODE" -e 'const { pathToFileURL } = require("node:url"); import(pathToFileURL(process.argv[1]).href).catch(e => { process.stderr.write(String(e && e.message)); process.exit(1); })' "${ROOT}/watcher/dist/index.js" 2>&1 || true)"
+    case "$linkage" in
+      *"Named export"*|*"SyntaxError"*|*"does not provide an export"*|*ERR_MODULE_NOT_FOUND*)
+        echo "this node cannot load the watcher build, so the service would crash on every restart:" >&2
+        echo "  node:  ${NODE} ($("$NODE" --version))" >&2
+        echo "  error: ${linkage}" >&2
+        echo "Nothing was installed. Fix the build or use a node that can load it, then run install again." >&2
+        exit 1
+        ;;
+    esac
     mkdir -p "${HOME}/Library/LaunchAgents" "${ROOT}/watcher/logs"
     cat > "$PLIST" <<PLIST_EOF
 <?xml version="1.0" encoding="UTF-8"?>

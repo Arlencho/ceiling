@@ -1,6 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { AnchorProvider, BN, Program, Wallet } from "@coral-xyz/anchor";
+import anchorPkg, { AnchorProvider, Program, Wallet } from "@coral-xyz/anchor";
+// BN is not exposed as a named export on the CommonJS build of anchor, so a
+// named import of it is a SyntaxError on Node 22, which is the floor the
+// READMEs document and the version CI runs. Node 26 accepts it, which is why
+// this survived: every seat and every local run was on 26. Take BN off the
+// default export, where it is present on both.
+const { BN } = anchorPkg;
 import type { Idl } from "@coral-xyz/anchor";
 import {
   TOKEN_PROGRAM_ID as SPL_TOKEN_PROGRAM_ID,
