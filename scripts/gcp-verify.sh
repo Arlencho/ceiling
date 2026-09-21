@@ -27,6 +27,7 @@ BILLING="01778E-30EA11-E3BA6D"
 BUDGET="914d5c6c-9361-437b-8ea6-dd7b50ab333d"
 DISPLAY_NAME="Veto Watcher"
 CREATED="2026-09-21T11:36:55Z"
+# Live resource was renamed off "veto-watcher cap"; this is the name asserted below.
 BUDGET_NAME="veto-watcher spend alert (does not stop spend)"
 # The billing account currency decides what a budget amount means, and the
 # document states it, so it is asserted rather than assumed.
@@ -74,6 +75,95 @@ member() { # member <claim> <needle> <haystack>
         if [ "$item" = "$2" ]; then ok "$1"; return 0; fi
     done
     bad "$1" "no exact match for: [$2]" "in: [$3]"
+    return 0
+}
+
+# IAM roles that include secretmanager.versions.access.
+# Editor and Viewer do not. See Secret Manager access-control docs.
+iam_policy_secret_access_rows() {
+    python3 -c '
+import json, sys
+ACCESS = {
+    "roles/owner",
+    "roles/secretmanager.admin",
+    "roles/secretmanager.secretAccessor",
+}
+KNOWN_NO = {
+    "roles/editor",
+    "roles/viewer",
+    "roles/secretmanager.viewer",
+    "roles/secretmanager.editor",
+    "roles/secretmanager.secretVersionManager",
+    "roles/secretmanager.secretVersionAdder",
+}
+raw = sys.stdin.read()
+if not raw.strip():
+    sys.stderr.write("empty IAM policy\n")
+    sys.exit(2)
+try:
+    policy = json.loads(raw)
+except json.JSONDecodeError as exc:
+    sys.stderr.write("IAM policy is not JSON: %s\n" % exc)
+    sys.exit(2)
+if not isinstance(policy, dict):
+    sys.stderr.write("IAM policy JSON is not an object\n")
+    sys.exit(2)
+for binding in policy.get("bindings") or []:
+    if not isinstance(binding, dict):
+        continue
+    role = binding.get("role") or ""
+    members = binding.get("members") or []
+    if role in ACCESS:
+        kind = "ACCESS"
+    elif role in KNOWN_NO or not role:
+        continue
+    else:
+        kind = "CHECK"
+    for member in members:
+        if not member or str(member).startswith("deleted:"):
+            continue
+        sys.stdout.write("%s\t%s\t%s\n" % (kind, role, member))
+'
+}
+
+role_grants_versions_access_via_describe() {
+    local role="$1"
+    local perms rc=0
+    perms="$(gcloud iam roles describe "$role" --format="value(includedPermissions)")" || rc=$?
+    if [ $rc -ne 0 ]; then
+        return 2
+    fi
+    if printf '%s\n' "$perms" | tr ';,' '\n' | grep -qx 'secretmanager.versions.access'; then
+        return 0
+    fi
+    return 1
+}
+
+# Append "member<TAB>role<TAB>where" lines to $3. Returns 1 if the policy could not be read as JSON.
+scan_iam_json_into() {
+    local json="$1"
+    local where="$2"
+    local findings="$3"
+    local rows rc=0
+    rows="$(printf '%s' "$json" | iam_policy_secret_access_rows)" || rc=$?
+    if [ $rc -ne 0 ]; then
+        return 1
+    fi
+    local kind role member grant_rc
+    while IFS=$'\t' read -r kind role member; do
+        [ -n "${kind:-}" ] || continue
+        if [ "$kind" = ACCESS ]; then
+            printf '%s\t%s\t%s\n' "$member" "$role" "$where" >> "$findings"
+            continue
+        fi
+        grant_rc=0
+        role_grants_versions_access_via_describe "$role" || grant_rc=$?
+        if [ $grant_rc -eq 2 ]; then
+            bad "could not describe $role on $where" "silence is not absence: this principal was not classified" "$member"
+        elif [ $grant_rc -eq 0 ]; then
+            printf '%s\t%s\t%s\n' "$member" "$role" "$where" >> "$findings"
+        fi
+    done <<< "$rows"
     return 0
 }
 
@@ -170,15 +260,104 @@ if capture roles "the default compute account's project roles can be listed" \
     equal "the default compute account holds no project LEVEL role binding" "" "$(printf '%s' "$roles" | tr -d '[:space:]')"
 fi
 
-# A project level policy says nothing about inheritance. Someone with Editor at
-# the organisation can read every secret here and appears in no binding above.
+echo
+echo "Principals that can read a secret version"
+findings="$(mktemp)"
+policy_readable=0
+if capture pj "project IAM policy can be read as JSON" \
+        gcloud projects get-iam-policy "$PROJECT" --format=json; then
+    if scan_iam_json_into "$pj" "project policy" "$findings"; then
+        policy_readable=1
+        ok "project IAM policy was parsed for secretmanager.versions.access"
+    else
+        bad "project IAM policy was parsed for secretmanager.versions.access" "policy was not JSON, silence is not an empty list"
+    fi
+fi
+
+if capture secret_names "secrets can be listed for IAM" \
+        gcloud secrets list --project="$PROJECT" --format=value'(name)'; then
+    while IFS= read -r sname; do
+        [ -n "${sname:-}" ] || continue
+        if capture sj "secret $sname IAM policy can be read as JSON" \
+                gcloud secrets get-iam-policy "$sname" --project="$PROJECT" --format=json; then
+            if scan_iam_json_into "$sj" "secret ${sname} policy" "$findings"; then
+                ok "secret $sname IAM policy was parsed for secretmanager.versions.access"
+            else
+                bad "secret $sname IAM policy was parsed for secretmanager.versions.access" "policy was not JSON, silence is not an empty list"
+            fi
+        fi
+    done <<< "$secret_names"
+fi
+
+above_inspected=0
+above_missed=0
 if capture anc "the project's ancestry can be read" \
         gcloud projects get-ancestors "$PROJECT" --format=value'(id,type)'; then
-    printf '  note the check above covers project level bindings ONLY. Access inherited from\n'
-    printf '       the org or a folder does not appear in a project policy and is NOT checked\n'
-    printf '       here. Anyone with Owner or Editor at the levels below can read every secret\n'
-    printf '       in this project:\n'
-    printf '%s\n' "$anc" | sed 's/^/         /'
+    while IFS=$'\t' read -r anc_id anc_type; do
+        [ -n "${anc_id:-}" ] || continue
+        case "$anc_type" in
+            project) continue ;;
+            folder)
+                if capture fj "folder $anc_id IAM policy can be read as JSON" \
+                        gcloud resource-manager folders get-iam-policy "$anc_id" --format=json; then
+                    if scan_iam_json_into "$fj" "folder ${anc_id} policy" "$findings"; then
+                        above_inspected=1
+                        ok "folder $anc_id IAM policy was parsed for secretmanager.versions.access"
+                    else
+                        above_missed=1
+                        bad "folder $anc_id IAM policy was parsed for secretmanager.versions.access" "policy was not JSON"
+                    fi
+                else
+                    above_missed=1
+                fi
+                ;;
+            organization)
+                if capture oj "organization $anc_id IAM policy can be read as JSON" \
+                        gcloud organizations get-iam-policy "$anc_id" --format=json; then
+                    if scan_iam_json_into "$oj" "organization ${anc_id} policy" "$findings"; then
+                        above_inspected=1
+                        ok "organization $anc_id IAM policy was parsed for secretmanager.versions.access"
+                    else
+                        above_missed=1
+                        bad "organization $anc_id IAM policy was parsed for secretmanager.versions.access" "policy was not JSON"
+                    fi
+                else
+                    above_missed=1
+                fi
+                ;;
+        esac
+    done <<< "$anc"
+fi
+
+printed=0
+default_hit=0
+if [ -s "$findings" ]; then
+    while IFS=$'\t' read -r princ role where; do
+        [ -n "${princ:-}" ] || continue
+        printf '  principal %s  role %s  from %s\n' "$princ" "$role" "$where"
+        printed=1
+        if [ "$princ" = "serviceAccount:$DEFAULT_SA" ] || [ "$princ" = "$DEFAULT_SA" ]; then
+            default_hit=1
+            bad "the default compute account can read a secret version" "found: $role on $where"
+        fi
+    done < "$findings"
+fi
+rm -f "$findings"
+if [ "$printed" -eq 0 ] && [ "$policy_readable" -eq 1 ]; then
+    printf '  none on the project or secret policies that were readable\n'
+fi
+if [ "$policy_readable" -eq 1 ] && [ "$default_hit" -eq 0 ]; then
+    ok "the default compute account is absent from readable policies that grant secretmanager.versions.access"
+fi
+
+printf '  note this listing cannot see IAM bindings above the project.\n'
+printf '       It reads the project policy and each secret policy. Organization and folder\n'
+printf '       bindings do not appear in a project policy. A short list is not a complete\n'
+printf '       list of who can read a secret version.\n'
+if [ "$above_missed" -ne 0 ]; then
+    printf '       Organization or folder get-iam-policy did not succeed; those bindings were not inspected.\n'
+elif [ "$above_inspected" -eq 0 ]; then
+    printf '       Ancestry had no readable folder or organization policy; those bindings were not inspected.\n'
 fi
 
 echo

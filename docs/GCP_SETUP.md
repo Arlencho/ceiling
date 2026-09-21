@@ -21,6 +21,16 @@ any of this exists.
 | Audit | Secret Manager `DATA_READ` and `DATA_WRITE` logged, so every read of the agent key leaves a trail |
 | APIs | run, cloudscheduler, secretmanager, artifactregistry, cloudbuild, storage (`storage.googleapis.com` and `storage-api.googleapis.com`), monitoring, billingbudgets |
 
+## Before the agent key is loaded
+
+`scripts/deploy-watcher-cloud.sh` is in the tree. It has not been run against this project, so the bucket, secret, job and scheduler still do not exist. Three things it now does, which used to sit in the gap list below, are required before the agent key is stored.
+
+1. **Default compute account and secret versions.** The account a Cloud Run job picks up when nobody names one is `472736420070-compute@developer.gserviceaccount.com`. Before the script creates the secret (or adds a version), it reads the project IAM policy and, if the secret already exists, the secret IAM policy. If that account has a role that grants `secretmanager.versions.access` (`roles/owner`, `roles/secretmanager.admin`, `roles/secretmanager.secretAccessor`, or another role whose included permissions contain that permission), the script stops and names the role and the policy it was found on. It also tries the organization and folder policies. When those cannot be read it says so. A missing line at those levels is not treated as missing access.
+2. **Public access prevention on the journal bucket.** Uniform bucket-level access is already on create. The script also sets public access prevention to enforced when it creates the bucket and when the bucket already exists, then reads the setting back. If it cannot be set, the script stops.
+3. **Named inventory of who can read a secret version.** `scripts/gcp-verify.sh` lists every principal on the project policy and on each secret policy whose role grants `secretmanager.versions.access`, and for each prints the role and which policy it came from. The listing states that it cannot see bindings above the project, so a short list is not a complete list of who can read a secret version.
+
+The job service account `veto-watcher@veto-watcher-260921.iam.gserviceaccount.com` is created by that deploy script when it runs. It is the identity the jobs are given. The default compute account is not granted a role by the script.
+
 ## Why a separate project rather than an existing one
 
 The account holds SafePlace, Aegis and four others. Veto is a hackathon entry that may be thrown
@@ -32,26 +42,24 @@ noise inside another product.
 ## What is deliberately NOT here yet
 
 Named because an undocumented gap reads as an oversight later, and because the reviewer should be
-able to tell the two apart.
+able to tell the two apart. Public access prevention, the default-compute secret check, and the
+principal listing used to belong here. They live in the scripts above.
 
-- **No service account for the job yet.** One service account does exist,
-  `472736420070-compute@developer.gserviceaccount.com`, the default compute account that GCP
-  creates by itself when the APIs are enabled. Nobody asked for it. Whether anything uses it is
-  not asserted anywhere and should not be read as a claim. It holds
-  no project level role binding today, which is better than the historical default of Editor, but
-  a Cloud Run job deployed without being told which identity to use will pick it up. The job needs
-  its own account with the narrowest set of permissions that lets it read one secret, read and
-  write one bucket object, and write logs, and that belongs with the deployment script on
-  `feat/watcher-cloud-run`, because the permissions follow from what the job actually does and
-  inventing them ahead of the code would mean guessing.
+- **No job service account, bucket, Artifact Registry repository, job or scheduler in the live
+  project yet.** The deploy script creates them when the owner runs it. One service account does
+  exist today, `472736420070-compute@developer.gserviceaccount.com`, the default compute account
+  that GCP creates by itself when the APIs are enabled. Nobody asked for it. Whether anything uses
+  it is not asserted anywhere and should not be read as a claim. It holds no project level role
+  binding today. A Cloud Run job deployed without `--service-account` will pick it up; the deploy
+  script passes `veto-watcher@veto-watcher-260921.iam.gserviceaccount.com` and refuses to store the
+  agent key if the default account can already read a secret version.
 
   This entry was wrong when first written. It said no service account existed at all.
   `scripts/gcp-verify.sh` failed on it the first time it ran, which is the reason that script
   asserts the absences as well as the presences.
-- **No bucket, no Artifact Registry repository, no job, no scheduler.** Same reason. The APIs are
-  enabled so that the deployment script does not have to enable them and then wait.
 - **No secret yet.** The agent key goes in at deployment time from a path the operator gives, and
-  it has never been in this repository or in an image.
+  it has never been in this repository or in an image. The deploy script will not create it until
+  the default compute account check above has passed.
 - **Cloud Scheduler does not exist in `europe-north1`.** Cloud Run runs there; the schedule has to
   live in the nearest region that serves Scheduler, `europe-west1`. The cadence is in
   Europe/Stockholm either way, which is what decides when the prices are read. Found by the verify
@@ -65,8 +73,9 @@ able to tell the two apart.
 
 - The default compute service account on a new project carries broad permissions. If the job is
   deployed without being given its own identity, it will run with far more access than it needs.
-  This is the single most likely way this setup goes wrong, and it is why the service account is
-  called out above rather than left implicit.
+  The deploy script passes a dedicated account and stops before creating the secret if the default
+  compute account can already read a secret version. That is still the single most likely way a
+  hand-rolled deploy goes wrong.
 - A Cloud Scheduler misconfiguration can invoke a job far more often than intended. The budget is
   the backstop, not the fix, and 200 SEK is chosen to be noticed rather than to be affordable.
 - The budget alerts by email to the billing account administrators. Nobody has confirmed that
