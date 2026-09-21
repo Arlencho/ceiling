@@ -27,7 +27,10 @@ BILLING="01778E-30EA11-E3BA6D"
 BUDGET="914d5c6c-9361-437b-8ea6-dd7b50ab333d"
 DISPLAY_NAME="Veto Watcher"
 CREATED="2026-09-21T11:36:55Z"
-BUDGET_NAME="veto-watcher cap"
+BUDGET_NAME="veto-watcher spend alert (does not stop spend)"
+# The billing account currency decides what a budget amount means, and the
+# document states it, so it is asserted rather than assumed.
+BILLING_CURRENCY="SEK"
 DEFAULT_SA="$NUMBER-compute@developer.gserviceaccount.com"
 # Cloud Run runs in europe-north1. Cloud Scheduler does not exist there at all,
 # so the schedule lives in the nearest region that serves it. The cadence is in
@@ -107,6 +110,11 @@ if capture b "billing is enabled and points at the documented account" \
     equal "billing enabled and account" "True	billingAccounts/$BILLING" "$b"
 fi
 
+if capture cur "billing account currency can be read" \
+        gcloud billing accounts describe "$BILLING" --format=value'(currencyCode)'; then
+    equal "billing account currency" "$BILLING_CURRENCY" "$cur"
+fi
+
 echo
 echo "Budget"
 if capture bj "budget $BUDGET can be read" \
@@ -159,14 +167,17 @@ fi
 if capture roles "the default compute account's project roles can be listed" \
         gcloud projects get-iam-policy "$PROJECT" --flatten=bindings'[].members' \
           --filter="bindings.members:$DEFAULT_SA" --format=value'(bindings.role)'; then
-    equal "the default compute account holds no project role" "" "$(printf '%s' "$roles" | tr -d '[:space:]')"
+    equal "the default compute account holds no project LEVEL role binding" "" "$(printf '%s' "$roles" | tr -d '[:space:]')"
 fi
 
 # A project level policy says nothing about inheritance. Someone with Editor at
 # the organisation can read every secret here and appears in no binding above.
 if capture anc "the project's ancestry can be read" \
         gcloud projects get-ancestors "$PROJECT" --format=value'(id,type)'; then
-    printf '  note ancestry, inherited access is NOT visible in the project policy:\n'
+    printf '  note the check above covers project level bindings ONLY. Access inherited from\n'
+    printf '       the org or a folder does not appear in a project policy and is NOT checked\n'
+    printf '       here. Anyone with Owner or Editor at the levels below can read every secret\n'
+    printf '       in this project:\n'
     printf '%s\n' "$anc" | sed 's/^/         /'
 fi
 

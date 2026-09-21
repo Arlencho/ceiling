@@ -17,7 +17,8 @@ any of this exists.
 | Created | 2026-09-21T11:36:55Z |
 | Billing | linked to `01778E-30EA11-E3BA6D`, currency SEK |
 | Labels | `environment=development`, `owner=arlen`, `purpose=veto-watcher` |
-| Budget | `veto-watcher cap`, 200 SEK, scoped to this project alone, alerts at 50, 90 and 100 percent |
+| Budget | `veto-watcher spend alert (does not stop spend)`, 200 SEK, scoped to this project alone, notifies at 50, 90 and 100 percent. It does not stop anything; the name says so because a budget called a cap gets trusted as one |
+| Audit | Secret Manager `DATA_READ` and `DATA_WRITE` logged, so every read of the agent key leaves a trail |
 | APIs | run, cloudscheduler, secretmanager, artifactregistry, cloudbuild, storage (`storage.googleapis.com` and `storage-api.googleapis.com`), monitoring, billingbudgets |
 
 ## Why a separate project rather than an existing one
@@ -35,7 +36,8 @@ able to tell the two apart.
 
 - **No service account for the job yet.** One service account does exist,
   `472736420070-compute@developer.gserviceaccount.com`, the default compute account that GCP
-  creates by itself when the APIs are enabled. Nobody asked for it and nothing uses it. It holds
+  creates by itself when the APIs are enabled. Nobody asked for it. Whether anything uses it is
+  not asserted anywhere and should not be read as a claim. It holds
   no project level role binding today, which is better than the historical default of Editor, but
   a Cloud Run job deployed without being told which identity to use will pick it up. The job needs
   its own account with the narrowest set of permissions that lets it read one secret, read and
