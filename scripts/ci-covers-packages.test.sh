@@ -25,7 +25,10 @@
 # Those keys are read from the workflow as a structure. Key order does not
 # matter, a quoted key is the same key, and a nested key is not the step's
 # own key. A pull_request types list that never runs during review does not
-# gate, and paths-ignore ** counts when it is a list item on the next line.
+# gate. paths, paths-ignore, branches, and branches-ignore are judged by
+# whether a pull request can pass them at all: an ignore glob that matches
+# every path counts, not only the literal **, and so does a paths list that
+# matches no file here or a branches list that misses every branch push names.
 #
 # A suite nobody runs is worse than no suite, because it is quoted as evidence.
 # No network, no cloud, no vendor CLIs. Python stdlib only.
@@ -47,6 +50,8 @@ CHECKS="test typecheck"
 
 ci_py() {
     python3 - "$@" <<'PY'
+import os
+import re
 import sys
 
 # The workflow is a mapping, not a sequence of lines. A key after steps:,
@@ -383,25 +388,195 @@ def pull_request_gates(on) -> bool:
     return any(t in GATE_TYPES for t in types)
 
 
-def paths_ignore_all(on) -> bool:
-    for body in event_map(on).values():
-        if not isinstance(body, dict) or "paths-ignore" not in body:
+# One ignore pattern that matches every probe matches every path: a root file
+# with no dot, a nested source file, and a hidden path. A list of ordinary
+# globs does not, so this is not a comparison with the literal **.
+_PATH_PROBES = (
+    "README.md",
+    "Makefile",
+    "app/package.json",
+    "programs/veto/src/lib.rs",
+    "watcher/src/journal.ts",
+    ".github/workflows/ci.yml",
+    "a/b/c.d",
+)
+# Branch names used when push names none. A listed push branch replaces these.
+_BRANCH_PROBES = ("main", "master", "develop", "never", "feature/foo", "release/1")
+_SKIP_DIRS = {".git", "node_modules", "target", "dist", ".next", "coverage"}
+_glob_cache = {}
+
+
+def glob_to_regex(pattern: str) -> str:
+    """GitHub filter pattern, matched against the whole path or branch.
+
+    * does not cross /, ** crosses /, and **/ may match zero directories so
+    **/* covers a root file as well as a nested one. ? and + quantify the
+    preceding character, as in the filter cheat sheet.
+    """
+    out = ["^"]
+    i = 0
+    while i < len(pattern):
+        c = pattern[i]
+        if c == "\\" and i + 1 < len(pattern):
+            out.append(re.escape(pattern[i + 1]))
+            i += 2
             continue
-        for item in as_list(body.get("paths-ignore")):
-            if item_text(item) == "**":
-                return True
+        if c == "*" and i + 1 < len(pattern) and pattern[i + 1] == "*":
+            if i + 2 < len(pattern) and pattern[i + 2] == "/":
+                out.append("(?:.*/)?")
+                i += 3
+                continue
+            out.append(".*")
+            i += 2
+            continue
+        if c == "*":
+            out.append("[^/]*")
+            i += 1
+            continue
+        if c in "?+" and len(out) > 1:
+            out.append(c)
+            i += 1
+            continue
+        if c == "[":
+            end = pattern.find("]", i + 1)
+            body = pattern[i + 1 : end] if end != -1 else ""
+            if end != -1 and re.fullmatch(r"[A-Za-z0-9\-]+", body):
+                out.append("[" + body + "]")
+                i = end + 1
+                continue
+        out.append(re.escape(c))
+        i += 1
+    out.append("$")
+    return "".join(out)
+
+
+def glob_match(pattern: str, value: str) -> bool:
+    regex = _glob_cache.get(pattern)
+    if regex is None:
+        try:
+            regex = re.compile(glob_to_regex(pattern))
+        except re.error:
+            return False
+        _glob_cache[pattern] = regex
+    return regex.fullmatch(value) is not None
+
+
+def list_matches(patterns, value: str) -> bool:
+    """Last matching pattern wins. A leading ! on a pattern excludes."""
+    matched = False
+    for item in patterns:
+        text = item_text(item)
+        if text == "":
+            continue
+        neg = text.startswith("!")
+        if glob_match(text[1:] if neg else text, value):
+            matched = not neg
+    return matched
+
+
+def repo_paths(workflow_path: str) -> list[str]:
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(workflow_path))))
+    found = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [name for name in dirnames if name not in _SKIP_DIRS]
+        for name in filenames:
+            full = os.path.join(dirpath, name)
+            found.append(os.path.relpath(full, root).replace(os.sep, "/"))
+    return found
+
+
+def covers_all(patterns, values) -> bool:
+    return all(list_matches(patterns, value) for value in values)
+
+
+def matches_any(patterns, values) -> bool:
+    return any(list_matches(patterns, value) for value in values)
+
+
+def push_branch_names(push) -> list[str]:
+    if not isinstance(push, dict) or "branches" not in push:
+        return []
+    names = []
+    for item in as_list(push.get("branches")):
+        text = item_text(item)
+        if text == "" or text.startswith("!"):
+            continue
+        if any(ch in text for ch in "*?["):
+            matched = [probe for probe in _BRANCH_PROBES if glob_match(text, probe)]
+            if matched:
+                names.extend(matched)
+                continue
+            witness = text.replace("**", "a/b").replace("*", "a")
+            if glob_match(text, witness):
+                names.append(witness)
+            continue
+        names.append(text)
+    return names
+
+
+def branch_names_for(push) -> list[str]:
+    names = push_branch_names(push)
+    return names if names else list(_BRANCH_PROBES)
+
+
+def one_pattern_matches_every_path(patterns) -> bool:
+    for item in patterns:
+        text = item_text(item)
+        if text == "" or text.startswith("!"):
+            continue
+        if covers_all([text], _PATH_PROBES):
+            return True
     return False
 
 
-def trigger_problem(doc) -> str:
+def paths_ignore_blocks(patterns, files) -> bool:
+    if one_pattern_matches_every_path(patterns):
+        return True
+    return bool(files) and covers_all(patterns, files)
+
+
+def paths_admit(patterns, files) -> bool:
+    if matches_any(patterns, files):
+        return True
+    return not files and covers_all(patterns, _PATH_PROBES)
+
+
+def any_paths_ignore_blocks(events, files) -> bool:
+    for body in events.values():
+        if not isinstance(body, dict) or "paths-ignore" not in body:
+            continue
+        if paths_ignore_blocks(as_list(body.get("paths-ignore")), files):
+            return True
+    return False
+
+
+def pull_request_filter_problem(events, files) -> str:
+    body = events.get("pull_request")
+    if not isinstance(body, dict):
+        return ""
+    names = branch_names_for(events.get("push"))
+    if "branches" in body and not matches_any(as_list(body.get("branches")), names):
+        return "on: pull_request branches admit no pull request to a branch push names"
+    if "branches-ignore" in body and covers_all(as_list(body.get("branches-ignore")), names):
+        return "on: pull_request branches-ignore skips every branch push names"
+    if "paths" in body and not paths_admit(as_list(body.get("paths")), files):
+        return "on: pull_request paths match no file in the repository"
+    return ""
+
+
+def trigger_problem(doc, workflow_path: str) -> str:
     if not isinstance(doc, dict) or "on" not in doc:
         return "has no on: block, so it never runs on a pull request"
     on = doc["on"]
     events = event_map(on)
     if "pull_request" not in events and "push" not in events:
         return "on: has neither pull_request nor push, so a pull request never runs the checks"
-    if paths_ignore_all(on):
-        return "on: paths-ignore ** skips every pull request path"
+    files = repo_paths(workflow_path)
+    if any_paths_ignore_blocks(events, files):
+        return "on: paths-ignore matches every path, so a pull request never runs the checks"
+    problem = pull_request_filter_problem(events, files)
+    if problem:
+        return problem
     if "pull_request" in events and not pull_request_gates(on):
         return "on: pull_request types do not include a review event, so a pull request is not gated"
     return ""
@@ -456,7 +631,7 @@ def main():
     mode = sys.argv[1]
     if mode == "trigger":
         doc = parse_document(open(sys.argv[2]).read())
-        problem = trigger_problem(doc)
+        problem = trigger_problem(doc, sys.argv[2])
         if problem:
             print(problem)
             sys.exit(1)
