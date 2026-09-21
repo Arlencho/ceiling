@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { KIND_PAID, KIND_REFUSED } from './constants';
@@ -14,6 +15,7 @@ import {
   parseDecisionId,
   rowToExportable,
   selectExportRows,
+  SHARE_RULE_MISMATCH,
   type ExportContext,
   type ExportableDecision,
 } from './exportRecord';
@@ -200,6 +202,43 @@ test('a CSV with zero data rows still states completeness and scope', () => {
 test('YYYY-MM-DD bounds are UTC calendar days, inclusive', () => {
   assert.equal(parseDayBound('2026-09-20', false), Math.floor(Date.UTC(2026, 8, 20) / 1000));
   assert.equal(parseDayBound('2026-09-20', true), Math.floor(Date.UTC(2026, 8, 20, 23, 59, 59) / 1000));
+});
+
+test('a share deep link whose decision belongs to another rule names the mismatch and the remedy', () => {
+  const selected = mandate().address;
+  const other = 'OtherMandate1111111111111111111111111111111';
+  const id = `${other}:1000:1:1`;
+  const parsed = parseDecisionId(id);
+  assert.ok(parsed);
+  assert.equal(parsed.mandate, other);
+  assert.equal(loadedRuleMatchesDecision(selected, parsed.mandate), false);
+
+  const shareSource = readFileSync(new URL('../app/share.tsx', import.meta.url), 'utf8');
+  const exportSource = readFileSync(new URL('./exportRecord.ts', import.meta.url), 'utf8');
+  const mismatch = SHARE_RULE_MISMATCH;
+  assert.equal(
+    mismatch,
+    'This decision belongs to a rule that is not selected. Switch on the Rules tab first.',
+  );
+  assert.ok(
+    shareSource.includes(mismatch) ||
+      (shareSource.includes('SHARE_RULE_MISMATCH') && exportSource.includes(mismatch)),
+    'share screen must name the mismatch and tell the owner to switch on the Rules tab',
+  );
+  assert.match(shareSource, /loadedRuleMatchesDecision/);
+  // Search for where the constant is RENDERED, not where it is imported. The
+  // bare identifier first matches the import at the top of the file, so this
+  // assertion passed whether or not the empty state existed at all.
+  const mismatchGate = shareSource.search(
+    /<EmptyState>\{SHARE_RULE_MISMATCH\}<\/EmptyState>/,
+  );
+  const chooser = shareSource.search(/What do you want to prove\?/);
+  assert.notEqual(mismatchGate, -1);
+  assert.notEqual(chooser, -1);
+  assert.ok(
+    mismatchGate < chooser,
+    'the mismatch empty state must be reached before the scope chooser',
+  );
 });
 
 test('a decision is only read from the ring of the rule named in its id', () => {

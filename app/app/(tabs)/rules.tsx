@@ -10,6 +10,7 @@ import { RuleListItem } from '../../components/RuleListItem';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
+import { PAYEE_NOT_IN_RULESET, PAYEE_PREFILL, RULESET_ENVELOPE } from '../../lib/ruleset';
 import { TEMPLATES } from '../../lib/templates';
 import { useChain } from '../../lib/useChain';
 import { useRulesets } from '../../lib/useRulesets';
@@ -103,9 +104,7 @@ export default function RulesScreen() {
 
             <Text style={styles.eyebrow}>Rulesets on this phone</Text>
             <EmptyState>
-              A ruleset is authored here. Applying one to a new agent is one action. The ruleset
-              itself is not on chain. Its name and version are written into the purpose, which is on
-              chain and cannot change after the rule is opened.
+              {`${RULESET_ENVELOPE} ${PAYEE_NOT_IN_RULESET} ${PAYEE_PREFILL} Applying one to a new agent is one action. The ruleset itself is not on chain. Its name and version are written into the purpose, which is on chain and cannot change after the rule is opened.`}
             </EmptyState>
             {rulesets.rulesets.length === 0 ? (
               <EmptyState>No rulesets saved on this phone yet.</EmptyState>
@@ -125,7 +124,8 @@ export default function RulesScreen() {
                       {set.name} v{set.version}
                     </Text>
                     <Text style={styles.tplSum}>
-                      {set.cap} total, {set.perTxMax} per payment. Apply to a new agent.
+                      {set.cap} total, {set.perTxMax} per payment, {set.expiryDays} days. Apply to a
+                      new agent.
                     </Text>
                   </View>
                   <Text style={styles.use}>apply</Text>

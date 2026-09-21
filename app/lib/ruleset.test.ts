@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { PURPOSE_MAX_LEN } from './constants';
@@ -9,6 +10,7 @@ import {
   assertPurposeMayOpen,
   nextRulesetVersion,
   parsePurposeStamp,
+  PAYEE_NOT_IN_RULESET,
   purposeHasStampSuffix,
   rulesetSlug,
   stampAlignment,
@@ -89,7 +91,6 @@ test('a purpose stamp is checked against the ruleset on this phone', () => {
     purpose: 'cap a mint bot [mint-budget v2]',
     cap,
     perTxMax,
-    merchant: stored.merchant,
     decimals: 6,
     rulesets: [stored],
   });
@@ -100,7 +101,6 @@ test('a purpose stamp is checked against the ruleset on this phone', () => {
     purpose: 'cap a mint bot [mint-budget v2]',
     cap: 999_000_000n,
     perTxMax,
-    merchant: stored.merchant,
     decimals: 6,
     rulesets: [stored],
   });
@@ -114,12 +114,45 @@ test('a purpose stamp is checked against the ruleset on this phone', () => {
     purpose: 'x [mint-budget v1]',
     cap,
     perTxMax,
-    merchant: stored.merchant,
     decimals: 6,
     rulesets: [stored],
   });
   assert.equal(missing?.alignment, 'missing');
   assert.equal(stampAlignmentLine('missing', 1), 'no ruleset with this stamp on this phone');
+});
+
+test('changing the payee after applying a ruleset does not make the stamp report that limits differ', () => {
+  const stored = mintBudget();
+  const applied = applyRuleset(stored);
+  const otherPayee = 'OtherPayee111111111111111111111111111111111';
+  assert.notEqual(otherPayee, stored.merchant);
+  assert.equal(applied.merchant, stored.merchant);
+  const alignment = stampAlignment({
+    purpose: applied.purpose,
+    cap: parseBaseUnits(applied.cap, 6),
+    perTxMax: parseBaseUnits(applied.perTxMax, 6),
+    decimals: 6,
+    rulesets: [stored],
+  });
+  assert.equal(alignment?.alignment, 'match');
+});
+
+test('every ruleset surface says the payee is chosen per agent and is not part of the ruleset', () => {
+  const files = [
+    '../app/rule/new.tsx',
+    '../app/(tabs)/rules.tsx',
+    '../app/rule/[address].tsx',
+    '../app/help/index.tsx',
+  ];
+  const needle = 'The payee is chosen per agent and is not part of the ruleset.';
+  assert.equal(PAYEE_NOT_IN_RULESET, needle);
+  for (const rel of files) {
+    const text = readFileSync(new URL(rel, import.meta.url), 'utf8');
+    assert.ok(
+      text.includes('PAYEE_NOT_IN_RULESET') || text.includes(needle),
+      `${rel} must say that the payee is chosen per agent and is not part of the ruleset`,
+    );
+  }
 });
 
 test('saving a ruleset publishes a new version and never overwrites an existing one', () => {

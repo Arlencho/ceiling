@@ -19,6 +19,7 @@ import {
   parseDecisionId,
   rowToExportable,
   selectExportRows,
+  SHARE_RULE_MISMATCH,
   signedExportRows,
   type ChargeKind,
   type ShareScope,
@@ -101,6 +102,9 @@ export default function ShareScreen() {
       if (!scope) {
         throw new Error('Choose a scope the export can name.');
       }
+      if (parsed && !loadedRuleMatchesDecision(mandate.address, parsed.mandate)) {
+        throw new Error(SHARE_RULE_MISMATCH);
+      }
       const body = formatExport({
         rows: exportable,
         scope,
@@ -132,6 +136,8 @@ export default function ShareScreen() {
           />
         ) : !mandate ? (
           <EmptyState>No rule is selected. Switch on the Rules tab first.</EmptyState>
+        ) : parsed && !loadedRuleMatchesDecision(mandate.address, parsed.mandate) ? (
+          <EmptyState>{SHARE_RULE_MISMATCH}</EmptyState>
         ) : (
           <View style={styles.block}>
             <Text style={styles.h2}>What do you want to prove?</Text>
