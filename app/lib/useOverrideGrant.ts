@@ -41,6 +41,7 @@ export function useOverrideGrant(args: {
   const [probed, setProbed] = useState<{ key: string; assessment: OverrideAssessment } | null>(
     null,
   );
+  const [failedRead, setFailedRead] = useState<OverrideAssessment | null>(null);
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const [signing, setSigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +52,7 @@ export function useOverrideGrant(args: {
       return;
     }
     // Same row and mandate fields (not object identity): skip the extra chain read.
+    // Only a result is cached under the live key. A failure must not skip the retry.
     if (overrideProbeIsCurrent(probed?.key, key)) {
       return;
     }
@@ -59,16 +61,14 @@ export function useOverrideGrant(args: {
       .then((next) => {
         if (!cancelled) {
           setProbed({ key, assessment: next });
+          setFailedRead(null);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setProbed({
-            key,
-            assessment: {
-              status: 'blocked',
-              why: 'The chain could not be re-read for this rule. This screen will not offer an override from a stale row. Pull to retry.',
-            },
+          setFailedRead({
+            status: 'blocked',
+            why: 'The chain could not be re-read for this rule. This screen will not offer an override from a stale row. Pull to retry.',
           });
         }
       });
@@ -112,6 +112,8 @@ export function useOverrideGrant(args: {
       assessment = { status: 'none', why: offer.why };
     } else if (probed && overrideProbeIsCurrent(probed.key, key)) {
       assessment = probed.assessment;
+    } else if (failedRead) {
+      assessment = failedRead;
     } else if (needsProbe) {
       assessment = { status: 'checking' };
     }

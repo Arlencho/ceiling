@@ -1,50 +1,46 @@
 ## Built
 
-Closed the four review findings on PR 69 (`feat/app-override`) without touching `programs/veto/src`.
+Closed the remaining round 2 finding on PR 69 (`feat/app-override`) without touching `programs/veto/src` and without editing the critic fixture in `f4a2d0a`.
 
-- F1: `assessOverride` runs `overrideGuard` before the already-granted branch. An expired or exhausted rule with a pending waiver is `blocked` and does not say the agent can retry.
-- F2: `overrideGuard` and `assessOverride` take `nowSec`. Clock expiry uses `isActive` from `lib/mandate.ts` and the existing expired-on-chain sentence. `probeOverride` and `grantOverride` pass the current unix time.
-- F3: the live probe keys on row and mandate fields (plus an `isActive` clock bit), not object identity. A refresh that rebuilds the same accounts returns before a second chain read.
-- F4: grant state and the probe effect live in `lib/useOverrideGrant.ts`. The detail screen calls the hook. `OverrideGrant` takes the view plus decimals.
-
-The two critic tests were recreated first and were red on `bfc78d3` (`status 3 must be blocked, got already`; `expired by the clock must be blocked`, actual true). They are green after the product change. Two probe-key tests lock F3.
+- A failed override probe is no longer stored under the live probe key. The skip that avoids a second chain read on a same-state refresh only applies to a probe that returned a result.
+- The blocked copy ("Pull to retry") still shows after a failed read. A later refresh with the same row and mandate fields issues the read the copy promises.
+- The two F3 regression checks still pass: a successful probe is not re-read on a same-state refresh, and a moved `last_nonce` still re-probes.
 
 ## Decisions
 
-- Guard first, then already. A live pending waiver still returns `already` and can retry. A dead rule cannot.
-- Reuse `isActive` for the clock question. Do not add a second expiry helper.
-- Probe skip is `overrideProbeIsCurrent` on the string key. The key's clock bit flips from live to expired so a later refresh can block without depending on object identity.
-- Grant UI state is a hook, not five `useState`s on the screen.
+- Keep the field-keyed skip for results. That is the F3 close the previous review confirmed.
+- Hold a failed read in separate state so the screen can show the blocked copy without making `overrideProbeIsCurrent` true.
 
 ## Do not repeat
 
+- Do not cache a thrown probe under the live key. The owner was told to pull to retry.
+- Do not edit `app/lib/useOverrideGrant.test.ts` or `app/lib/overrideGrant.test.ts`.
+- Do not undo the guard-before-already order, the `isActive` clock path, or the field-keyed success skip.
 - Do not touch `programs/veto/src`.
-- Do not offer a grant for a reason the program writes `suggested_override = 0` for.
-- Do not claim success from the wallet signature alone. The ledger row is the proof.
-- Do not promise a retry when `evaluate` will refuse on status or expiry.
-- Do not depend on `row` / `mandate` object identity for the live probe.
-- Do not weaken the critic tests. They were red on `bfc78d3` with the quoted assertions.
-- `lib/wallet.test.ts` `publicKeyFromMwaAddress accepts a base58 address` can fail on a random keypair whose base58 also decodes as 32-byte base64. Pre-existing.
+- `react-test-renderer` is a devDependency in `app/package.json` and in `app/package-lock.json`. `npm ci` in `app/` must keep installing it or the app job and the hook fixture break.
 
 ## Evidence
 
-Red on unfixed `bfc78d3`, from `app/`:
+Red on unfixed `f4a2d0a`, from `app/`:
 
 ```
-npx tsx --test lib/override.test.ts
+npx tsx --experimental-test-module-mocks --test lib/useOverrideGrant.test.ts
 ```
 
-- `CRITIC: an already-granted override on a rule that is not active must not claim the agent can retry`
-  `AssertionError: status 3 must be blocked, got already`
-- `CRITIC: a rule past its expiry by the clock is not offered an override, because the retry cannot clear`
-  `AssertionError: expired by the clock must be blocked` (actual true, expected false)
+- `CRITIC F3: after a failed probe, a refresh that reads the same state back must re-probe, because the copy says "Pull to retry"`
+  `AssertionError: the pull the owner was told to do must issue the read it promised` (`1 !== 2`)
+- `regression F3: after a successful probe, a refresh that reads the same state back does not re-probe`: pass
+- `regression F3: a refresh that shows the chain moved on does re-probe`: pass
 
-After the fix, from `app/`:
+After the product change, from `app/`:
 
+- same file: 3 pass, 0 fail
 - `npx tsc --noEmit`: exit 0
 - `npx expo lint`: exit 0
-- `npm test`: 89 pass, 0 fail
+- `npm test`: 95 pass, 0 fail
 - `npx expo config --type public`: `platforms: ['android']`, `android.package: com.veto.app`, `extra.vetoRpc: ''`, `extra.vetoProgramId: ''`
+- `npm ci`: exit 0
+- `npm ls react-test-renderer --depth=0`: `react-test-renderer@19.2.3`
 
 No Seeker run. `grant_override` via Mobile Wallet Adapter still has to be signed on device.
 
