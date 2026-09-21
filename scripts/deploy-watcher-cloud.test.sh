@@ -128,6 +128,67 @@ else
   pass "script does not echo a secret variable"
 fi
 
+if out="$(env -i PATH="$PATH" HOME="${HOME:-/tmp}" AGENT_KEY_PATH="$KEY" VETO_RPC=http://rpc.test VETO_MINT=Mint VETO_OWNER=Owner VETO_OWNER_TOKEN=OwnerToken VETO_MERCHANT=Merchant VETO_MERCHANT_TOKEN=MerchantToken VETO_AGENT=Agent "$SCRIPT" --check 2>&1)"; then
+  bad "missing VETO_PROGRAM_ID must refuse"
+else
+  if printf '%s' "$out" | grep -q "missing VETO_PROGRAM_ID"; then
+    pass "missing VETO_PROGRAM_ID refuses before any deploy"
+  else
+    bad "missing VETO_PROGRAM_ID message: ${out}"
+  fi
+fi
+
+FAKE_BIN="${DIR}/bin"
+mkdir -p "$FAKE_BIN"
+FAKE_LOG="${DIR}/gcloud.log"
+cat > "${FAKE_BIN}/gcloud" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${FAKE_GCLOUD_LOG}"
+case " $* " in
+  *" auth list "*) printf 'owner@example.com\n' ;;
+  *" projects describe "*) printf '123456789\n' ;;
+  *" monitoring policies list "*) printf 'projects/veto-watcher-260921/alertPolicies/1\n' ;;
+  *" monitoring channels list "*) printf '\n' ;;
+esac
+exit 0
+EOF
+chmod +x "${FAKE_BIN}/gcloud"
+
+DRY_ENV=(
+  env -i
+  PATH="${FAKE_BIN}:${PATH}"
+  HOME="${DIR}"
+  FAKE_GCLOUD_LOG="$FAKE_LOG"
+  AGENT_KEY_PATH="$KEY"
+  "${IDENTITIES[@]}"
+)
+if out1="$("${DRY_ENV[@]}" "$SCRIPT" --dry-run 2>&1)" \
+  && out2="$("${DRY_ENV[@]}" "$SCRIPT" --dry-run 2>&1)"; then
+  if printf '%s\n' "$out1" "$out2" | grep -qE 'storage rm|buckets delete|secrets delete|jobs delete' ; then
+    bad "dry-run twice must not delete the journal, secret, or jobs"
+  elif printf '%s' "$out1" | grep -q 'dry-run:' && printf '%s' "$out2" | grep -q 'dry-run:'; then
+    if printf '%s' "$out1$out2" | grep -q '\[0, 0, 0'; then
+      bad "dry-run printed key bytes"
+    else
+      pass "dry-run twice is safe (no delete, no key bytes)"
+    fi
+  else
+    bad "dry-run twice output missing dry-run prefix: ${out2}"
+  fi
+else
+  if printf '%s' "${out1-}${out2-}" | grep -q 'env_file: unbound variable'; then
+    bad "EXIT trap references local env_file after deploy returns; script exits 1 after printing deployed"
+  else
+    bad "dry-run twice must succeed: ${out1-}${out2-}"
+  fi
+fi
+
+if printf '%s' "$out1" | grep -q "storage cp" && printf '%s' "$out1" | grep -q "decisions.jsonl"; then
+  bad "dry-run with an existing journal object must not upload a replacement"
+else
+  pass "dry-run does not wipe an existing journal object"
+fi
+
 rm -rf "$DIR"
 
 if [[ "$fail" -ne 0 ]]; then
