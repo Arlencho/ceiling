@@ -8,6 +8,20 @@ import { Keypair, PublicKey } from "@solana/web3.js";
 import { mandatePda, recoverSettledCharge, u64Le } from "./chain.js";
 import { loadConfig } from "./config.js";
 
+// Every chain identity is required now: the loader stopped inventing an
+// endpoint, a program or an account when nothing is configured. These tests
+// were written while those defaults still existed, so they name them here.
+// Nothing about what they assert has changed.
+const IDENTITIES = {
+  VETO_PROGRAM_ID: "3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV",
+  VETO_MINT: "2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU",
+  VETO_OWNER: "EGQdANFMq6xVjKcSrij4gWiH91q8TvhdY5e87KjjF2yc",
+  VETO_OWNER_TOKEN: "FbhygYPyFk5PeiFppCezmMkqPqywTdAZxhkqxw79FBBE",
+  VETO_MERCHANT: "2bt9HMQbNy6t2J4hnw15QF8iUesPrgJoNDvf99HNay7F",
+  VETO_MERCHANT_TOKEN: "2bt9HMQbNy6t2J4hnw15QF8iUesPrgJoNDvf99HNay7F",
+  VETO_AGENT: "6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w",
+};
+
 // Critic fixture, round 3. Confirms N4 on 4867104 by execution: the history
 // walk asks for the mandate's signatures, never the program's, and still
 // recovers the paid charge. Goes RED on e03cbc3, where the walk asked for the
@@ -122,6 +136,7 @@ test("critic r3: history recovery walks the mandate's signatures, not the progra
 
   try {
     const cfg = loadConfig({
+      ...IDENTITIES,
       VETO_RPC: rpc.url,
       VETO_KEYS_DIR: mkdtempSync(join(tmpdir(), "veto-critic-r3-keys-")),
       VETO_MANDATE_ID: "1",

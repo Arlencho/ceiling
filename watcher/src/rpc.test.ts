@@ -8,6 +8,20 @@ import {
   parseRpcList,
 } from "./rpc.js";
 
+// Every chain identity is required now: the loader stopped inventing an
+// endpoint, a program or an account when nothing is configured. These tests
+// were written while those defaults still existed, so they name them here.
+// Nothing about what they assert has changed.
+const IDENTITIES = {
+  VETO_PROGRAM_ID: "3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV",
+  VETO_MINT: "2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU",
+  VETO_OWNER: "EGQdANFMq6xVjKcSrij4gWiH91q8TvhdY5e87KjjF2yc",
+  VETO_OWNER_TOKEN: "FbhygYPyFk5PeiFppCezmMkqPqywTdAZxhkqxw79FBBE",
+  VETO_MERCHANT: "2bt9HMQbNy6t2J4hnw15QF8iUesPrgJoNDvf99HNay7F",
+  VETO_MERCHANT_TOKEN: "2bt9HMQbNy6t2J4hnw15QF8iUesPrgJoNDvf99HNay7F",
+  VETO_AGENT: "6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w",
+};
+
 test("parseRpcList keeps order, splits on commas and whitespace, and drops duplicates", () => {
   assert.deepEqual(parseRpcList("http://a.invalid"), ["http://a.invalid"]);
   assert.deepEqual(parseRpcList("http://a.invalid, http://b.invalid"), [
@@ -27,6 +41,7 @@ test("parseRpcList keeps order, splits on commas and whitespace, and drops dupli
 
 test("loadConfig honours a comma-separated VETO_RPC list, first URL first", () => {
   const cfg = loadConfig({
+    ...IDENTITIES,
     VETO_RPC: "http://dedicated.invalid, http://127.0.0.1:8999",
     VETO_KEYS_DIR: "/tmp/veto-rpc-test-keys-missing",
   });
