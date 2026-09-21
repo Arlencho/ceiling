@@ -25,13 +25,13 @@
 # Those keys are read from the workflow as a structure. Key order does not
 # matter, a quoted key is the same key, and a nested key is not the step's
 # own key. A pull_request types list that never runs during review does not
-# gate. For each package directory that has a job, a paths list must admit
-# that package and a paths-ignore must not exclude it. Leaving the package
-# unchecked on the changes that need checking is the same as switching its
-# job off. An ignore glob that matches every path still counts, not only the
-# literal **, and so does a paths list that matches no file here. A branches
-# list must admit a branch push names. When push names no branch, that name
-# is the repository default branch.
+# gate. The workflow that carries those checks may not declare a paths or
+# paths-ignore filter on any trigger. A filter that admits one witness file
+# and excludes the sources leaves the package unchecked, and the next witness
+# can be excluded the same way, so the guard does not read the globs. A
+# branches list must admit a branch push names. When push names no branch,
+# that name is the repository default branch. The placeholder a push glob
+# expands to is not a branch that list may name.
 #
 # A suite nobody runs is worse than no suite, because it is quoted as evidence.
 # No network, no cloud, no vendor CLIs. Python stdlib only.
@@ -391,24 +391,14 @@ def pull_request_gates(on) -> bool:
     return any(t in GATE_TYPES for t in types)
 
 
-# One ignore pattern that matches every probe matches every path: a root file
-# with no dot, a nested source file, and a hidden path. A list of ordinary
-# globs does not, so this is not a comparison with the literal **.
-_PATH_PROBES = (
-    "README.md",
-    "Makefile",
-    "app/package.json",
-    "programs/veto/src/lib.rs",
-    "watcher/src/journal.ts",
-    ".github/workflows/ci.yml",
-    "a/b/c.d",
-)
 # Samples a push branch glob is expanded against. Not the branch list when
 # push names none: that list is the repository default branch. The fourth
-# name is a placeholder nobody would write, so a branches filter cannot pass
-# by naming a probe.
-_BRANCH_PROBES = ("main", "master", "develop", "zz-unwritten-branch-probe", "feature/foo", "release/1")
-_SKIP_DIRS = {".git", "node_modules", "target", "dist", ".next", "coverage"}
+# name is a placeholder nobody would write. A pull_request branches list is
+# judged without it, so a push glob cannot satisfy that filter by landing on
+# the placeholder. A branches-ignore list is still judged against the full
+# expansion, placeholder included.
+_BRANCH_PLACEHOLDER = "zz-unwritten-branch-probe"
+_BRANCH_PROBES = ("main", "master", "develop", _BRANCH_PLACEHOLDER, "feature/foo", "release/1")
 _glob_cache = {}
 
 
@@ -478,17 +468,6 @@ def list_matches(patterns, value: str) -> bool:
         if glob_match(text[1:] if neg else text, value):
             matched = not neg
     return matched
-
-
-def repo_paths(workflow_path: str) -> list[str]:
-    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(workflow_path))))
-    found = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [name for name in dirnames if name not in _SKIP_DIRS]
-        for name in filenames:
-            full = os.path.join(dirpath, name)
-            found.append(os.path.relpath(full, root).replace(os.sep, "/"))
-    return found
 
 
 def covers_all(patterns, values) -> bool:
@@ -587,77 +566,34 @@ def branch_names_for(push, workflow_path: str) -> list[str]:
     return [repository_default_branch(workflow_path)]
 
 
-def one_pattern_matches_every_path(patterns) -> bool:
-    for item in patterns:
-        text = item_text(item)
-        if text == "" or text.startswith("!"):
-            continue
-        if covers_all([text], _PATH_PROBES):
-            return True
-    return False
-
-
-def paths_ignore_blocks(patterns, files) -> bool:
-    if one_pattern_matches_every_path(patterns):
-        return True
-    return bool(files) and covers_all(patterns, files)
-
-
-def paths_admit(patterns, files) -> bool:
-    if matches_any(patterns, files):
-        return True
-    return not files and covers_all(patterns, _PATH_PROBES)
-
-
-def any_paths_ignore_blocks(events, files) -> bool:
-    for body in events.values():
-        if not isinstance(body, dict) or "paths-ignore" not in body:
-            continue
-        if paths_ignore_blocks(as_list(body.get("paths-ignore")), files):
-            return True
-    return False
-
-
-def packages_with_jobs(doc, workflow_path: str) -> list[str]:
-    jobs = doc.get("jobs") if isinstance(doc, dict) else None
-    if not isinstance(jobs, dict):
-        return []
-    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(workflow_path))))
-    found = []
-    try:
-        entries = os.listdir(root)
-    except OSError:
-        return []
-    for name in entries:
-        if name == "node_modules" or name not in jobs:
-            continue
-        if os.path.isfile(os.path.join(root, name, "package.json")):
-            found.append(name)
-    found.sort()
-    return found
-
-
-def pull_request_filter_problem(events, files, packages, workflow_path: str) -> str:
+def pull_request_filter_problem(events, workflow_path: str) -> str:
     body = events.get("pull_request")
     if not isinstance(body, dict):
         return ""
     names = branch_names_for(events.get("push"), workflow_path)
-    if "branches" in body and not matches_any(as_list(body.get("branches")), names):
+    # A push glob expands onto the placeholder. That name is not a branch a
+    # pull_request branches list may cite. branches-ignore still uses the
+    # full list, placeholder included.
+    admitted = [name for name in names if name != _BRANCH_PLACEHOLDER]
+    if "branches" in body and not matches_any(as_list(body.get("branches")), admitted):
         return "on: pull_request branches admit no pull request to a branch push names"
     if "branches-ignore" in body and covers_all(as_list(body.get("branches-ignore")), names):
         return "on: pull_request branches-ignore skips every branch push names"
-    if "paths" in body:
-        patterns = as_list(body.get("paths"))
-        if not paths_admit(patterns, files):
-            return "on: pull_request paths match no file in the repository"
-        for pkg in packages:
-            if not list_matches(patterns, pkg + "/package.json"):
-                return "on: pull_request paths leave " + pkg + " unchecked"
-    if "paths-ignore" in body:
-        patterns = as_list(body.get("paths-ignore"))
-        for pkg in packages:
-            if list_matches(patterns, pkg + "/package.json"):
-                return "on: pull_request paths-ignore leaves " + pkg + " unchecked"
+    return ""
+
+
+def path_filter_problem(events) -> str:
+    """Refuse a paths filter outright. Do not match the glob.
+
+    Any list, on any trigger, decides which files run the checks. A narrow
+    list and a list of everything are the same kind of gate, and the checks
+    in this repository are not gated that way.
+    """
+    for name, body in events.items():
+        if not isinstance(body, dict):
+            continue
+        if "paths" in body or "paths-ignore" in body:
+            return "on: " + name + " declares a paths filter, so a file change can skip the checks"
     return ""
 
 
@@ -668,12 +604,10 @@ def trigger_problem(doc, workflow_path: str) -> str:
     events = event_map(on)
     if "pull_request" not in events and "push" not in events:
         return "on: has neither pull_request nor push, so a pull request never runs the checks"
-    files = repo_paths(workflow_path)
-    if any_paths_ignore_blocks(events, files):
-        return "on: paths-ignore matches every path, so a pull request never runs the checks"
-    problem = pull_request_filter_problem(
-        events, files, packages_with_jobs(doc, workflow_path), workflow_path
-    )
+    filtered = path_filter_problem(events)
+    if filtered:
+        return filtered
+    problem = pull_request_filter_problem(events, workflow_path)
     if problem:
         return problem
     if "pull_request" in events and not pull_request_gates(on):

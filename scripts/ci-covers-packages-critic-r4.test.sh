@@ -20,7 +20,8 @@
 # info-escape (reported, not counted): shapes outside the fix diff. The
 # review says for each whether it matters.
 #
-# control (counted): legitimate filters the guard must accept.
+# The ctl-* rows are paths filters the review called legitimate. The guard
+# now refuses every paths filter, so they are counted failures.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -108,9 +109,10 @@ guard_passes() {
 MUST_REJECT="src-ignore-app src-ignore-all src-ignore-ts src-negate-all src-negate-app
 man-any-depth man-one-depth man-json
 one-app one-watcher-file
-probe-named"
+probe-named
+ctl-ignore-md ctl-ignore-docs-md ctl-paths-all-not-md ctl-paths-all ctl-ignore-lockfiles"
 INFO_ESCAPE="esc-push-only esc-ignore-programs esc-paths-node-only esc-leading-qmark esc-push-negated-main"
-CONTROL_PASS="ctl-ignore-md ctl-ignore-docs-md ctl-paths-all-not-md ctl-paths-all ctl-ignore-lockfiles"
+CONTROL_PASS=""
 
 for mode in $MUST_REJECT; do
     dir=$(scratch)
