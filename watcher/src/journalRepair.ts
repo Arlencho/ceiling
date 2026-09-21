@@ -200,12 +200,25 @@ export async function fetchChainDecisions(args: {
   programId: PublicKey;
   owner: PublicKey;
   mandateId: bigint;
+  /**
+   * Nonces the journal already holds. When set, the history walk runs only
+   * if the ring still has a nonce the journal does not. A run that already
+   * holds every ring nonce reads no transaction.
+   */
+  hasNonce?: (nonce: bigint) => boolean;
 }): Promise<ChainDecision[]> {
   const mandate = mandatePda(args.programId, args.owner, args.mandateId);
   const ledger = ledgerPda(args.programId, mandate);
   const info = await args.connection.getAccountInfo(ledger, "confirmed");
   const ring = info === null ? [] : decodeLedgerDecisions(info.data);
   if (!canWalk(args.connection)) return mergeChainDecisions(ring, []);
+  const held = args.hasNonce;
+  // Nothing on the ring is missing, so there is nothing to name. The walk
+  // stays the full history walk when a ring nonce is missing, which is what
+  // keeps the signature of a charge the ring itself has lost.
+  if (held !== undefined && ring.every((row) => held(row.nonce))) {
+    return mergeChainDecisions(ring, []);
+  }
   const walked = await decisionsFromMandateHistory(args.connection, args.programId, mandate);
   return mergeChainDecisions(ring, walked);
 }
