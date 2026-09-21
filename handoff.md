@@ -1,54 +1,54 @@
 ## Built
 
-Close-out of the critic review on PR 68 (`feat/merchant-terminal`). Shared watcher code was in scope. Recreated `terminal/src/critic.test.ts` (lost from the critic worktree; never posted to GitHub). Red on HEAD `6794c7e`: 1 pass, 8 fail. Green after the product changes: 9 pass.
+Round 3 close-out of PR 68 (`feat/merchant-terminal`). One classification defect, three screens. Fixtures in `d6f84ec` were not edited.
 
-- E1: `EnergySpotFeed.readWindow` classifies HTTP 200 missing-hour and malformed bodies separately from unreachable. The screen no longer claims the feed could not be reached when it answered 200.
-- E2: `parseFeedBody` keeps the source `SEK_per_kWh` text (including `1e-05`). Money math still expands through `plainDecimal` inside `sekPerKwhToScaled`. The number on screen matches the source URL.
-- E3: `loadConfig` no longer fills RPC or accounts from hardcoded defaults. Missing identities throw.
-- Finding 1: the day file stays cached. A later failed fetch still hits the network, keeps the last successful read time, sets `refreshFailed`, and says so. No fresh fetch stamp on a cached price.
-- Finding 2: an unparseable matched price becomes a no-quote state (503 JSON, source URL, no amount). It no longer escapes as plain-text 500.
-- Finding 3: watcher and terminal both read `keys/devnet-addresses.env`, `watcher/.env`, and `terminal/.env`. File keys may be `VETO_RPC=` or `RPC=`. Volume is in that merge. Two files with different values throw.
-- Finding 4: the disclosure block sits under the h1, before the payments table.
-- Finding 5: the literal em dash in `page.test.ts` is now `"\u2014"`.
+- Unreadable body: a JSON array the parser cannot read (wrong keys, quoted price text, or any non-empty array with zero parsed windows) is `malformed`, not `missing_window`. The screen says the body could not be read. A valid day file that simply lacks this hour stays `missing_window`.
+- HTTP answer: a non-2xx response is `http_error` with the status code. The screen names the status. Fetch throw or timeout stays `unreachable`.
+- Last-read time: `readAt` is the last successful price read, or null. `fetchedAt` is only set when `feed === "ok"`. A screen with nothing read does not say "Price last read at".
 
 ## Decisions
 
-- Widen the watcher `PriceFeed` with optional `readWindow` rather than a second fetch in the terminal. `getWindow` stays `PriceWindow | null` for the watcher loop.
-- Keep the day-file cache (a day of prices is fixed), as the plan required. The critic's original cache case wanted the second state to be unreachable; the fixture now asserts last-read honesty and a visible failed refresh instead of dropping the cache.
-- Identities are required from env or files. Volume still defaults to 50 kWh when unset, and a disagreement between files is an error.
+- Widen `FeedStatus` with `http_error` and carry `httpStatus` on `FeedRead`, rather than rewriting the unreachable sentence per status.
+- Treat a non-empty JSON array with zero parsed windows as unreadable. An empty array is understood and is a missing hour.
+- Cache still stores a day file we understood. Cache is not a last-read time when no price came out of it.
 
 ## Do not repeat
 
-- Do not treat every `getWindow` null as unreachable. HTTP 200 with a missing hour or a bad body is a different sentence on the screen.
-- Do not run `plainDecimal` before the terminal sees the price string. Expand only at the money boundary.
-- Do not stamp `fetchedAt = now` on a cached day file.
-- Do not give `quoteForWindow` a chance to throw out of `buildState`; the agent endpoint must stay JSON.
-- Do not restore hardcoded RPC or merchant token fallbacks.
+- Do not treat `windows.length === 0` on a JSON array as a missing hour. That is how a body holding this hour under other keys was mislabelled.
+- Do not map `!res.ok` to unreachable. The feed answered.
+- Do not stamp `readAt` with the attempt time when no price was read, and do not render "Price last read at" unless `feed === "ok"`.
+- Do not edit `terminal/src/critic-round2.test.ts` or `terminal/src/critic.test.ts`.
 
 ## Evidence
 
-Red before the product change, from `terminal/`:
+Red at `d6f84ec`, before the product change:
 
 ```
-npx tsx --test src/critic.test.ts
-tests 9, pass 1, fail 8
+cd terminal && npx tsx --test src/critic-round2.test.ts
+13 tests in that file: 5 pass, 8 fail
+(wrong-shape array as missing hour; last-read time on no-price screens; HTTP 404/429/503 as unreachable)
 ```
 
-After:
+Round 1 regression (`critic.test.ts` "feed goes down after one good read") stayed green on unfixed code.
+
+After, at this SHA:
 
 ```
-terminal:  npm test  -> 32 pass, 0 fail; npm run typecheck exit 0
+cd terminal && npx tsx --test src/critic-round2.test.ts src/critic.test.ts
+22 pass, 0 fail (13 round 2 + 9 round 1)
+
+terminal:  npm test  -> 45 pass, 0 fail; npm run typecheck exit 0
 watcher:   npm test  -> 41 pass, 0 fail; npm run typecheck exit 0
 indexer:   npm test  -> 18 pass, 0 fail; npm run typecheck exit 0
 tools:     npm test  -> 29 pass, 0 fail; npm run typecheck exit 0
 ```
 
-Critic fixtures: 9 pass, 0 fail. Dash sweep on the added lines: no U+2014, U+2013, or U+2015.
+Dash sweep on the added lines: no U+2014, U+2013, or U+2015. Fixtures, `programs/veto/src`, and `app/` untouched.
 
 ## Open questions
 
-None for this round. Critic findings 5 (mint_decimals on `/api/quote`), 6 (batched `getParsedTransactions`), and 8 (fixed 500 body) were listed by the critic and were not in this plan's five fixable items.
+None for this round. Out of scope stays #72 (entry parser key order), #73 (20 s state cache across a window boundary), and the round 1 items listed as outside the plan.
 
 ## Next hint
 
-Re-run `terminal/src/critic.test.ts` first. The cache case now expects a second network call, an unchanged `fetchedAt`, `refreshFailed: true`, and a still-usable quote. A 200 missing-hour or malformed body must not contain "could not be reached".
+Re-run `terminal/src/critic-round2.test.ts` (13) and `terminal/src/critic.test.ts` (9). A 200 array that is not the day-file shape must say "the body could not be read". A 404/429/503 must name the status and must not say "could not be reached". A no-price screen must not contain "Price last read at".
