@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 import { dueSlots, msUntil, nextSlot } from "./cadence.js";
-import { loadKeypair, mandatePda, openMandate, submitCharge } from "./chain.js";
+import { loadKeypair, mandatePda, openMandate, readLastNonce, recoverSettledCharge, submitCharge } from "./chain.js";
 import { keyPath, loadConfig } from "./config.js";
 import { EnergySpotFeed } from "./feed.js";
 import { JsonlJournal } from "./journal.js";
 import { logError, logLine } from "./log.js";
 import { nonceFromWindowStart } from "./nonce.js";
-import { processWindow, sleep } from "./run.js";
+import { processWindow, sleep, type ProcessResult } from "./run.js";
 import { PublicKey } from "@solana/web3.js";
 
 function flag(name: string): string | undefined {
@@ -32,40 +32,49 @@ async function withJournalAndFeed() {
   const feed = new EnergySpotFeed();
   const agent = loadKeypair(keyPath(cfg, "agent"));
   const submit = (amount: bigint, nonce: bigint) => submitCharge({ cfg, agent, amount, nonce });
-  return { cfg, journal, feed, submit, agent };
+  const chainLastNonce = () => readLastNonce({ cfg, agent });
+  const recoverSettled = (nonce: bigint) => recoverSettledCharge({ cfg, agent, nonce });
+  return { cfg, journal, feed, submit, agent, chainLastNonce, recoverSettled };
 }
 
-async function processAt(at: Date): Promise<void> {
-  const { cfg, journal, feed, submit } = await withJournalAndFeed();
-  await processWindow({
+async function processAt(at: Date): Promise<ProcessResult> {
+  const { cfg, journal, feed, submit, chainLastNonce, recoverSettled } = await withJournalAndFeed();
+  return processWindow({
     at,
     feed,
     journal,
     submit,
     kwhMilli: cfg.kwhMilli,
     mintDecimals: cfg.mintDecimals,
+    chainLastNonce,
+    recoverSettled,
   });
 }
 
-async function processDue(now: Date, announceIdle = false): Promise<void> {
-  const { cfg, journal, feed, submit } = await withJournalAndFeed();
+async function processDue(now: Date, announceIdle = false): Promise<boolean> {
+  const { cfg, journal, feed, submit, chainLastNonce, recoverSettled } = await withJournalAndFeed();
   let acted = false;
+  let deferred = false;
   for (const slot of dueSlots(now)) {
     const nonce = nonceFromWindowStart(slot.toISOString());
     if (journal.hasNonce(nonce)) continue;
     acted = true;
-    await processWindow({
+    const result = await processWindow({
       at: slot,
       feed,
       journal,
       submit,
       kwhMilli: cfg.kwhMilli,
       mintDecimals: cfg.mintDecimals,
+      chainLastNonce,
+      recoverSettled,
     });
+    if (result === "deferred") deferred = true;
   }
   if (!acted && announceIdle) {
     logLine("caught up: no due cadence slots left to submit");
   }
+  return deferred;
 }
 
 async function cmdOnce(): Promise<void> {
@@ -78,16 +87,24 @@ async function cmdOnce(): Promise<void> {
     if (at.getTime() > Date.now()) {
       throw new Error("refusing a future window: wait for it, do not invent a present");
     }
-    await processAt(at);
+    const result = await processAt(at);
+    if (result === "deferred") {
+      logError("once: rpc rate limited on all endpoints");
+      process.exitCode = 1;
+    }
     return;
   }
-  await processDue(new Date(), true);
+  const deferred = await processDue(new Date(), true);
+  if (deferred) {
+    logError("once: rpc rate limited on all endpoints");
+    process.exitCode = 1;
+  }
 }
 
 async function cmdRun(): Promise<void> {
   const cfg = loadConfig();
   logLine(
-    `watcher start rpc=${cfg.rpc} mandate_id=${cfg.mandateId.toString()} kwh_milli=${cfg.kwhMilli.toString()} journal=${cfg.journalPath}`,
+    `watcher start rpc=${cfg.rpcs.join(",")} mandate_id=${cfg.mandateId.toString()} kwh_milli=${cfg.kwhMilli.toString()} journal=${cfg.journalPath}`,
   );
   let stopping = false;
   const stop = (): void => {
