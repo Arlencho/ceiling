@@ -95,10 +95,12 @@ EOF
 }
 
 MODE="deploy"
+SKIP_BUILD="${SKIP_BUILD:-0}"
 for arg in "$@"; do
   case "$arg" in
     --check) MODE="check" ;;
     --dry-run) MODE="dry-run" ;;
+    --skip-build) SKIP_BUILD=1 ;;
     --help|-h) usage; exit 0 ;;
     *) die "unknown argument: ${arg} (try --help)" ;;
   esac
@@ -207,22 +209,25 @@ require_services() {
 write_env_file() {
   local dest="$1"
   local purpose="${VETO_PURPOSE:-SE3 home charging}"
+  # gcloud --env-vars-file wants YAML, a mapping of key to value. Writing
+  # KEY="value" is dotenv, which YAML reads as a single scalar and gcloud
+  # rejects with "expected map-like data".
   cat > "$dest" <<EOF
-VETO_RPC="${VETO_RPC}"
-VETO_PROGRAM_ID="${VETO_PROGRAM_ID}"
-VETO_MINT="${VETO_MINT}"
-VETO_OWNER="${VETO_OWNER}"
-VETO_OWNER_TOKEN="${VETO_OWNER_TOKEN}"
-VETO_MERCHANT="${VETO_MERCHANT}"
-VETO_MERCHANT_TOKEN="${VETO_MERCHANT_TOKEN}"
-VETO_AGENT="${VETO_AGENT}"
-VETO_KEYS_DIR="/keys"
-VETO_JOURNAL="/tmp/veto/decisions.jsonl"
-VETO_JOURNAL_GCS="gs://${BUCKET}/${JOURNAL_OBJECT}"
-VETO_MANDATE_ID="${VETO_MANDATE_ID:-1}"
-VETO_KWH_MILLI="${VETO_KWH_MILLI:-50000}"
-VETO_MINT_DECIMALS="${VETO_MINT_DECIMALS:-6}"
-VETO_PURPOSE="${purpose}"
+VETO_RPC: "${VETO_RPC}"
+VETO_PROGRAM_ID: "${VETO_PROGRAM_ID}"
+VETO_MINT: "${VETO_MINT}"
+VETO_OWNER: "${VETO_OWNER}"
+VETO_OWNER_TOKEN: "${VETO_OWNER_TOKEN}"
+VETO_MERCHANT: "${VETO_MERCHANT}"
+VETO_MERCHANT_TOKEN: "${VETO_MERCHANT_TOKEN}"
+VETO_AGENT: "${VETO_AGENT}"
+VETO_KEYS_DIR: "/keys"
+VETO_JOURNAL: "/tmp/veto/decisions.jsonl"
+VETO_JOURNAL_GCS: "gs://${BUCKET}/${JOURNAL_OBJECT}"
+VETO_MANDATE_ID: "${VETO_MANDATE_ID:-1}"
+VETO_KWH_MILLI: "${VETO_KWH_MILLI:-50000}"
+VETO_MINT_DECIMALS: "${VETO_MINT_DECIMALS:-6}"
+VETO_PURPOSE: "${purpose}"
 EOF
 }
 
@@ -662,15 +667,15 @@ ensure_one_alert() {
 ensure_alert() {
   local ch=""
   if [[ -n "${ALERT_EMAIL:-}" ]]; then
-    ch="$(gcloud monitoring channels list --project="$PROJECT" --filter="labels.email_address=\"${ALERT_EMAIL}\" AND type=email" --format='value(name)' | head -n1 || true)"
+    ch="$(gcloud beta monitoring channels list --project="$PROJECT" --filter="type=\"email\" AND labels.email_address=\"${ALERT_EMAIL}\"" --format='value(name)' | head -n1 || true)"
     if [[ -z "$ch" ]]; then
-      run gcloud monitoring channels create \
+      run gcloud beta monitoring channels create \
         --display-name="Veto watcher owner" \
         --type=email \
         --channel-labels="email_address=${ALERT_EMAIL}" \
         --project="$PROJECT"
       if [[ "$MODE" != "dry-run" ]]; then
-        ch="$(gcloud monitoring channels list --project="$PROJECT" --filter="labels.email_address=\"${ALERT_EMAIL}\" AND type=email" --format='value(name)' | head -n1 || true)"
+        ch="$(gcloud beta monitoring channels list --project="$PROJECT" --filter="type=\"email\" AND labels.email_address=\"${ALERT_EMAIL}\"" --format='value(name)' | head -n1 || true)"
       fi
     fi
   else
@@ -738,9 +743,17 @@ deploy() {
     --role="roles/iam.serviceAccountUser" \
     --project="$PROJECT"
 
-  run gcloud builds submit "${ROOT}/watcher" \
-    --tag="$image" \
-    --project="$PROJECT"
+  if [[ "$SKIP_BUILD" == "1" ]]; then
+    log "skipping build, expecting $image to exist already"
+    if [[ "$MODE" != "dry-run" ]]; then
+      gcloud artifacts docker images describe "$image" --project="$PROJECT" >/dev/null 2>&1 \
+        || die "--skip-build was given but $image does not exist"
+    fi
+  else
+    run gcloud builds submit "${ROOT}/watcher" \
+      --tag="$image" \
+      --project="$PROJECT"
+  fi
 
   run gcloud run jobs deploy "$JOB_NAME" \
     --image="$image" \
