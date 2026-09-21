@@ -9,7 +9,6 @@ import {
   paginateNewestFirst,
   parseRpcList,
   withRetry,
-  withRpcFailover,
 } from "./rpc.js";
 
 test("paginates getSignaturesForAddress past one page using the before cursor", async () => {
@@ -85,24 +84,7 @@ test("a 429 is retried on the next endpoint rather than treated as a dead read",
   assert.doesNotMatch(lines.join("\n"), /failure/);
 });
 
-test("withRpcFailover walks the list on 429 and then succeeds", async () => {
-  const seen: string[] = [];
-  const lines: string[] = [];
-  const value = await withRpcFailover(
-    "getAccountInfo",
-    ["http://primary.invalid", "http://fallback.invalid"],
-    async (endpoint) => {
-      seen.push(endpoint);
-      if (endpoint.includes("primary")) throw new Error("429 Too Many Requests");
-      return "ok";
-    },
-    { log: (line) => lines.push(line), sleep: async () => {}, initialDelayMs: 0 },
-  );
-  assert.equal(value, "ok");
-  assert.deepEqual(seen, ["http://primary.invalid", "http://fallback.invalid"]);
-  assert.match(lines.join("\n"), /rate limited/);
-  assert.doesNotMatch(lines.join("\n"), /failure/);
-});
+
 
 test("withRetry logs a 429 as a rate limit, not a failure", async () => {
   const lines: string[] = [];

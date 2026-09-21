@@ -3,7 +3,8 @@ import type { JournalRow, JsonlJournal } from "./journal.js";
 import { logError, logLine } from "./log.js";
 import { amountBaseUnits, sekPerKwhToScaled } from "./money.js";
 import { nonceFromWindowStart } from "./nonce.js";
-import type { ChargeReceipt } from "./chain.js";
+import type { ChargeReceipt, RecoveredCharge } from "./chain.js";
+import { REASON_STALE_NONCE } from "./reasons.js";
 import { RateLimitedError, isRateLimitError } from "./rpc.js";
 
 export type SubmitCharge = (amount: bigint, nonce: bigint) => Promise<ChargeReceipt>;
@@ -22,7 +23,8 @@ export function sleep(ms: number): Promise<void> {
 export async function withRpcBackoff<T>(
   label: string,
   fn: () => Promise<T>,
-  log: (line: string) => void = logError,
+  log: (line: string) => void = logLine,
+  failLog: (line: string) => void = logError,
 ): Promise<T> {
   let delay = RPC_INITIAL_MS;
   for (;;) {
@@ -34,7 +36,7 @@ export async function withRpcBackoff<T>(
         log(`${label}: rpc rate limited: ${message}`);
         throw err instanceof RateLimitedError ? err : new RateLimitedError(`${label}: ${message}`);
       }
-      log(`${label}: rpc failure, retry in ${delay}ms: ${message}`);
+      failLog(`${label}: rpc failure, retry in ${delay}ms: ${message}`);
       await sleep(delay);
       delay = delay * 2 > RPC_MAX_MS ? RPC_MAX_MS : delay * 2;
     }
@@ -62,6 +64,14 @@ function rowBase(args: {
   };
 }
 
+const RATE_LIMIT_GAP_REASON = "rpc rate limited on all endpoints";
+const PAID_UNRECOVERED_REASON = "chain shows this window paid; signature could not be recovered";
+
+function journalSignature(signature: string | null | undefined): string | null {
+  if (signature === null || signature === undefined || signature.length === 0) return null;
+  return signature;
+}
+
 export async function processWindow(args: {
   at: Date;
   feed: PriceFeed;
@@ -72,6 +82,8 @@ export async function processWindow(args: {
   log?: (line: string) => void;
   feedAttempts?: number;
   feedRetryMs?: number;
+  chainLastNonce?: () => Promise<bigint>;
+  recoverSettled?: (nonce: bigint) => Promise<RecoveredCharge | null>;
 }): Promise<ProcessResult> {
   const log = args.log ?? logLine;
   const feedAttempts = args.feedAttempts ?? FEED_ATTEMPTS;
@@ -92,23 +104,99 @@ export async function processWindow(args: {
     return "skipped";
   }
 
-  // A later window already paid on chain, so this one can never pay:
-  // only a payment advances last_nonce. Close it honestly rather than
-  // submitting a charge whose only possible outcome is a replay refusal.
-  // This check sits before the feed-up / feed-down branch so a recovered
-  // feed cannot resubmit an overtaken gap.
-  if (nonce <= args.journal.maxSettledNonce()) {
+  const deferRateLimit = (): ProcessResult => {
+    if (!args.journal.hasGap(nonce)) {
+      args.journal.append({
+        ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: 0n }),
+        ...(window === null ? { window_start: args.at.toISOString() } : {}),
+        decision: "gap",
+        reason: RATE_LIMIT_GAP_REASON,
+        reason_code: null,
+        signature: null,
+        suggested_override: null,
+      });
+    }
+    log(
+      `charge: rpc rate limited, window stays due nonce=${nonce.toString()} window=${window?.timeStart ?? args.at.toISOString()}`,
+    );
+    return "deferred";
+  };
+
+  const writeRecoveredPaid = (recovered: RecoveredCharge): ProcessResult => {
     args.journal.append({
-      ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: 0n }),
+      ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: recovered.amount }),
       ...(window === null ? { window_start: args.at.toISOString() } : {}),
-      decision: "skipped",
-      reason: "window overtaken by a later settled charge",
-      reason_code: null,
+      decision: "paid",
+      reason: recovered.reason,
+      reason_code: recovered.reasonCode,
+      signature: journalSignature(recovered.signature),
+      suggested_override: recovered.suggestedOverride === null ? null : recovered.suggestedOverride.toString(),
+    });
+    log(
+      `paid recovered amount=${recovered.amount.toString()} nonce=${nonce.toString()} sig=${recovered.signature.length > 0 ? recovered.signature : "-"}`,
+    );
+    return "submitted";
+  };
+
+  const writePaidUnrecovered = (amount: bigint): ProcessResult => {
+    args.journal.append({
+      ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount }),
+      ...(window === null ? { window_start: args.at.toISOString() } : {}),
+      decision: "paid",
+      reason: PAID_UNRECOVERED_REASON,
+      reason_code: 0,
       signature: null,
       suggested_override: null,
     });
-    log(`skipped overtaken window at=${args.at.toISOString()}`);
-    return "skipped";
+    log(`paid unrecovered nonce=${nonce.toString()} window=${window?.timeStart ?? args.at.toISOString()}`);
+    return "submitted";
+  };
+
+  const closeAlreadySettled = async (settled: bigint, amount: bigint): Promise<ProcessResult> => {
+    if (args.recoverSettled) {
+      const recovered = await args.recoverSettled(nonce);
+      if (recovered !== null && recovered.decision === "paid") {
+        return writeRecoveredPaid(recovered);
+      }
+    }
+    if (nonce < settled) {
+      args.journal.append({
+        ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: 0n }),
+        ...(window === null ? { window_start: args.at.toISOString() } : {}),
+        decision: "skipped",
+        reason: "window overtaken by a later settled charge",
+        reason_code: null,
+        signature: null,
+        suggested_override: null,
+      });
+      log(`skipped overtaken window at=${args.at.toISOString()}`);
+      return "skipped";
+    }
+    return writePaidUnrecovered(amount);
+  };
+
+  // Settlement is read from the chain when a reader is provided. The journal
+  // is only a cache: a rate limit after send leaves it empty, and using it
+  // here would resubmit a nonce the program has already paid.
+  let settled: bigint;
+  if (args.chainLastNonce) {
+    try {
+      settled = await args.chainLastNonce();
+    } catch (err) {
+      if (isRateLimitError(err)) return deferRateLimit();
+      throw err;
+    }
+  } else {
+    settled = args.journal.maxSettledNonce();
+  }
+
+  if (nonce <= settled) {
+    try {
+      return await closeAlreadySettled(settled, 0n);
+    } catch (err) {
+      if (isRateLimitError(err)) return deferRateLimit();
+      throw err;
+    }
   }
 
   if (window === null) {
@@ -190,20 +278,31 @@ export async function processWindow(args: {
   try {
     receipt = await withRpcBackoff("charge", () => args.submit(amount, nonce), log);
   } catch (err) {
-    if (isRateLimitError(err)) {
-      log(
-        `charge: rpc rate limited, window stays due nonce=${nonce.toString()} window=${window.timeStart}`,
-      );
-      return "deferred";
-    }
+    if (isRateLimitError(err)) return deferRateLimit();
     throw err;
   }
+
+  if (receipt.decision === "refused" && receipt.reasonCode === REASON_STALE_NONCE) {
+    try {
+      if (args.recoverSettled) {
+        const recovered = await args.recoverSettled(nonce);
+        if (recovered !== null && recovered.decision === "paid") {
+          return writeRecoveredPaid(recovered);
+        }
+      }
+    } catch (err) {
+      if (isRateLimitError(err)) return deferRateLimit();
+      throw err;
+    }
+    return writePaidUnrecovered(amount);
+  }
+
   args.journal.append({
     ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount }),
     decision: receipt.decision,
     reason: receipt.reason,
     reason_code: receipt.reasonCode,
-    signature: receipt.signature,
+    signature: journalSignature(receipt.signature),
     suggested_override: receipt.suggestedOverride === null ? null : receipt.suggestedOverride.toString(),
   });
 

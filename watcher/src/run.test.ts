@@ -6,6 +6,7 @@ import { test } from "node:test";
 import type { PriceFeed } from "./feed.js";
 import { JsonlJournal } from "./journal.js";
 import { processWindow } from "./run.js";
+import { decodeMandateLastNonce, findPaidInLedgerBytes } from "./chain.js";
 
 const windowStart = "2026-09-20T00:00:00+02:00";
 
@@ -397,9 +398,9 @@ test("a rate limited cadence slot stays due afterwards", async () => {
   };
   assert.equal(await processWindow(args), "deferred");
   assert.equal(calls, 1);
-  assert.equal(journal.load().length, 0, "a rate limit must not write a journal row");
   assert.equal(journal.hasNonce(1789855200n), false, "the window is still owed a charge");
-  assert.equal(journal.hasGap(1789855200n), false, "a rate limit is not a feed gap");
+  assert.equal(journal.hasGap(1789855200n), true, "a rate limit is recorded as a retryable gap");
+  assert.equal(journal.load()[0]?.reason, "rpc rate limited on all endpoints");
   assert.ok(lines.some((line) => /rate limited/.test(line)));
   assert.ok(!lines.some((line) => /rpc failure/.test(line)));
 
@@ -421,7 +422,7 @@ test("a rate limited cadence slot stays due afterwards", async () => {
   });
   assert.equal(retry, "submitted");
   assert.equal(paid, 1);
-  assert.equal(journal.load()[0]?.decision, "paid");
+  assert.equal(journal.load().at(-1)?.decision, "paid");
   assert.equal(journal.hasNonce(1789855200n), true);
 });
 
@@ -456,6 +457,92 @@ test("an unreadable price is recorded as a gap only once", async () => {
   assert.equal(calls, 0);
   assert.equal(journal.load().length, 1);
   assert.equal(journal.load()[0]?.decision, "gap");
+});
+
+test("a feed gap and a rate-limit gap stay distinguishable by reason", async () => {
+  const journal = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-gap-kinds-")), "d.jsonl"));
+  await processWindow({
+    at: new Date(windowStart),
+    feed: { async getWindow() { return null; } },
+    journal,
+    submit: async () => {
+      throw new Error("should not submit");
+    },
+    kwhMilli: 50_000n,
+    mintDecimals: 6,
+    log: () => {},
+    feedAttempts: 1,
+    feedRetryMs: 0,
+  });
+  const feedGap = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-rl-kinds-")), "d.jsonl"));
+  await processWindow({
+    at: new Date(windowStart),
+    feed: feedWith("0.00892"),
+    journal: feedGap,
+    submit: async () => {
+      throw new Error("429 Too Many Requests");
+    },
+    kwhMilli: 50_000n,
+    mintDecimals: 6,
+    log: () => {},
+    feedAttempts: 1,
+    feedRetryMs: 0,
+  });
+  assert.equal(journal.load()[0]?.reason, "feed unavailable");
+  assert.equal(feedGap.load()[0]?.reason, "rpc rate limited on all endpoints");
+  assert.notEqual(journal.load()[0]?.reason, feedGap.load()[0]?.reason);
+});
+
+test("a chain lastNonce at this window is recovered instead of submitted", async () => {
+  const journal = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-chain-settled-")), "d.jsonl"));
+  let submits = 0;
+  const result = await processWindow({
+    at: new Date(windowStart),
+    feed: feedWith("0.00892"),
+    journal,
+    submit: async () => {
+      submits += 1;
+      throw new Error("should not submit");
+    },
+    kwhMilli: 50_000n,
+    mintDecimals: 6,
+    log: () => {},
+    feedAttempts: 1,
+    feedRetryMs: 0,
+    chainLastNonce: async () => 1789855200n,
+    recoverSettled: async () => ({
+      decision: "paid" as const,
+      reason: "ok",
+      reasonCode: 0,
+      suggestedOverride: null,
+      signature: "recovered-sig",
+      amount: 446_000n,
+    }),
+  });
+  assert.equal(result, "submitted");
+  assert.equal(submits, 0);
+  assert.equal(journal.load()[0]?.decision, "paid");
+  assert.equal(journal.load()[0]?.signature, "recovered-sig");
+  assert.notEqual(journal.load()[0]?.decision, "refused");
+});
+
+test("decodeMandateLastNonce reads the u64 at the mandate last_nonce offset", () => {
+  const data = Buffer.alloc(232);
+  data.writeBigUInt64LE(1789855200n, 224);
+  assert.equal(decodeMandateLastNonce(data), 1789855200n);
+});
+
+test("findPaidInLedgerBytes returns the paid ring entry for a nonce", () => {
+  const disc = Buffer.from([43, 41, 21, 213, 180, 176, 95, 32]);
+  const body = Buffer.alloc(40 + 72);
+  body.writeUInt32LE(1, 32);
+  const entry = body.subarray(40, 112);
+  entry.writeBigUInt64LE(446_000n, 8);
+  entry.writeBigUInt64LE(1789855200n, 48);
+  entry[64] = 1;
+  const data = Buffer.concat([disc, body]);
+  const hit = findPaidInLedgerBytes(data, 1789855200n);
+  assert.equal(hit?.amount, 446_000n);
 });
 
 // Critic fixtures, round 1. Each one goes RED on b23b9d3.
