@@ -470,8 +470,19 @@ try:
 except json.JSONDecodeError as exc:
     sys.stderr.write("bucket describe is not JSON: %s\n" % exc)
     sys.exit(2)
+# gcloud has moved this field between releases: some versions nest it under
+# iam_config, others return it at the top level of the describe. Reading only
+# the nested shape made this check report empty on a bucket that was correctly
+# enforced, which refuses every deploy on a false negative.
 iam = data.get("iam_config") or data.get("iamConfig") or {}
-sys.stdout.write(str(iam.get("public_access_prevention") or iam.get("publicAccessPrevention") or ""))
+value = (
+    iam.get("public_access_prevention")
+    or iam.get("publicAccessPrevention")
+    or data.get("public_access_prevention")
+    or data.get("publicAccessPrevention")
+    or ""
+)
+sys.stdout.write(str(value))
 '
 }
 
