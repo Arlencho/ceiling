@@ -33,15 +33,10 @@ export interface PriceFeed {
 export const FEED_ORIGIN = "https://www.elprisetjustnu.se";
 
 // The price is captured as raw text, never parsed into a float, because every
-// amount downstream is integer base units. EUR_per_kWh and EXR are captured
-// loosely on purpose: we do not use them, and the feed emits them in
-// scientific notation for very cheap windows ("EUR_per_kWh": 1e-05). A strict
-// numeric pattern on those fields silently dropped the whole entry, and
-// because scientific notation appears exactly when the price is tiny, the
-// windows lost were the cheapest ones, which are the ones that would have
-// paid. Four of ninety-six windows on 2026-09-20, including a cadence slot.
-const ENTRY_RE =
-  /"SEK_per_kWh"\s*:\s*([-+0-9.eE]+)\s*,\s*"EUR_per_kWh"\s*:\s*[^,]+,\s*"EXR"\s*:\s*[^,]+,\s*"time_start"\s*:\s*"([^"]+)"\s*,\s*"time_end"\s*:\s*"([^"]+)"/g;
+// amount downstream is integer base units. JSON.parse would turn 1e-05 into a
+// float and the cheap windows would be the ones lost. The token is read by
+// field name so key order and a quoted value still yield a window.
+const SEK_TOKEN_RE = /"SEK_per_kWh"\s*:\s*(?:"([^"]*)"|([-+0-9.eE]+))/g;
 
 /** Expand scientific notation to a plain decimal string, textually.
  *
@@ -94,19 +89,62 @@ export function feedUrlFor(at: Date): string {
   return `${FEED_ORIGIN}/api/v1/prices/${yyyy}/${mm}-${dd}_SE3.json`;
 }
 
-export function parseFeedBody(text: string): PriceWindow[] {
-  const windows: PriceWindow[] = [];
-  ENTRY_RE.lastIndex = 0;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function rawSekTokens(text: string): string[] {
+  const tokens: string[] = [];
+  SEK_TOKEN_RE.lastIndex = 0;
   for (;;) {
-    const match = ENTRY_RE.exec(text);
+    const match = SEK_TOKEN_RE.exec(text);
     if (!match) break;
-    const sek = match[1];
-    const timeStart = match[2];
-    const timeEnd = match[3];
-    if (sek === undefined || timeStart === undefined || timeEnd === undefined) {
-      continue;
-    }
-    windows.push({ timeStart, timeEnd, sekPerKwh: sek });
+    const quoted = match[1];
+    const unquoted = match[2];
+    if (quoted !== undefined) tokens.push(quoted);
+    else if (unquoted !== undefined) tokens.push(unquoted);
+  }
+  return tokens;
+}
+
+function sekFromParsed(value: unknown, raw: string | undefined): string | null {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (raw === undefined || raw.length === 0) return null;
+    return raw;
+  }
+  return null;
+}
+
+export function parseFeedBody(text: string): PriceWindow[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+
+  const rawTokens = rawSekTokens(text);
+  let tokenAt = 0;
+  const windows: PriceWindow[] = [];
+  for (const item of parsed) {
+    if (!isRecord(item)) continue;
+    const timeStart = item.time_start;
+    const timeEnd = item.time_end;
+    if (typeof timeStart !== "string" || typeof timeEnd !== "string") continue;
+    if (timeStart.length === 0 || timeEnd.length === 0) continue;
+
+    const sekValue = item.SEK_per_kWh;
+    const readable =
+      typeof sekValue === "string" || (typeof sekValue === "number" && Number.isFinite(sekValue));
+    if (!readable) continue;
+
+    const raw = rawTokens[tokenAt];
+    tokenAt += 1;
+    const sekPerKwh = sekFromParsed(sekValue, raw);
+    if (sekPerKwh === null || sekPerKwh.length === 0) continue;
+    windows.push({ timeStart, timeEnd, sekPerKwh });
   }
   return windows;
 }

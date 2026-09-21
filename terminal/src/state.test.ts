@@ -14,7 +14,7 @@ function feedWith(window: PriceWindow | null): PriceFeed {
   return { getWindow: async () => window };
 }
 
-const ENDPOINTS = { mint: "MintAddr", merchantTokenAccount: "MerchantTokenAcct" };
+const ENDPOINTS = { mint: "MintAddr", merchantTokenAccount: "MerchantTokenAcct", mintDecimals: 6 };
 
 test("a reachable feed yields the real window, price, quote and nonce", async () => {
   const state = await buildState({ feed: feedWith(WINDOW), at: AT, kwhMilli: 50_000n, mintDecimals: 6 });
@@ -57,8 +57,17 @@ test("quoteResponse exposes amount and nonce to the agent when the feed is up", 
   assert.equal(body.amount, "446000");
   assert.equal(body.nonce, (BigInt(Date.parse(WINDOW.timeStart)) / 1000n).toString());
   assert.equal(body.merchant_token_account, "MerchantTokenAcct");
+  assert.equal(body.mint_decimals, 6);
   assert.equal(body.sek_per_kwh, "0.00892");
   assert.equal(body.source, state.sourceUrl);
+});
+
+test("quoteResponse tells the agent the mint decimals so amount can be rendered", async () => {
+  const state = await buildState({ feed: feedWith(WINDOW), at: AT, kwhMilli: 50_000n, mintDecimals: 6 });
+  const res = quoteResponse(state, { ...ENDPOINTS, mintDecimals: 6 });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.mint_decimals, 6);
+  assert.equal(typeof res.body.mint_decimals, "number");
 });
 
 test("quoteResponse refuses with 503 and no price at all when the feed is down", async () => {

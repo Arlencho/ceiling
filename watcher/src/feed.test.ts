@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { EnergySpotFeed, feedUrlFor, parseFeedBody, plainDecimal, windowContaining } from "./feed.js";
+import { EnergySpotFeed, feedUrlFor, isMalformedDayBody, parseFeedBody, plainDecimal, windowContaining } from "./feed.js";
 
 const BODY = `[
   {"SEK_per_kWh": 0.00892, "EUR_per_kWh": 0.00079, "EXR": 11.290555, "time_start": "2026-09-20T00:00:00+02:00", "time_end": "2026-09-20T00:15:00+02:00"},
@@ -115,6 +115,82 @@ test("a later failed fetch keeps the cached day file and reports the failed refr
   assert.equal(second.window?.sekPerKwh, "0.00892");
   assert.ok(first.readAt !== null && second.readAt !== null);
   assert.equal(second.readAt.getTime(), first.readAt.getTime());
+});
+
+test("a reordered entry is read by field name", () => {
+  const body =
+    '[{"time_start":"2026-09-20T10:00:00+02:00","time_end":"2026-09-20T10:15:00+02:00","SEK_per_kWh":0.30722,"EUR_per_kWh":0.027,"EXR":11.17}]';
+  const windows = parseFeedBody(body);
+  assert.equal(windows.length, 1);
+  assert.equal(windows[0]?.sekPerKwh, "0.30722");
+  assert.equal(windows[0]?.timeStart, "2026-09-20T10:00:00+02:00");
+  assert.equal(windows[0]?.timeEnd, "2026-09-20T10:15:00+02:00");
+});
+
+test("a quoted SEK price is read as the source text", () => {
+  const body =
+    '[{"SEK_per_kWh":"0.30722","EUR_per_kWh":0.027,"EXR":11.17,"time_start":"2026-09-20T10:00:00+02:00","time_end":"2026-09-20T10:15:00+02:00"}]';
+  const windows = parseFeedBody(body);
+  assert.equal(windows.length, 1);
+  assert.equal(windows[0]?.sekPerKwh, "0.30722");
+});
+
+test("a quoted scientific SEK price stays the source text", () => {
+  const body =
+    '[{"SEK_per_kWh":"1e-05","EUR_per_kWh":"1e-05","EXR":11.17,"time_start":"2026-09-20T10:00:00+02:00","time_end":"2026-09-20T10:15:00+02:00"}]';
+  const windows = parseFeedBody(body);
+  assert.equal(windows.length, 1);
+  assert.equal(windows[0]?.sekPerKwh, "1e-05");
+});
+
+test("a reordered day file with a quoted price is a readable window, not malformed", async () => {
+  const body =
+    '[{"EXR":11.17,"time_end":"2026-09-20T10:15:00+02:00","SEK_per_kWh":"0.30722","time_start":"2026-09-20T10:00:00+02:00","EUR_per_kWh":0.027}]';
+  const feed = new EnergySpotFeed(async () => new Response(body, { status: 200 }));
+  const read = await feed.readWindow(new Date("2026-09-20T10:05:00+02:00"));
+  assert.equal(read.status, "ok");
+  assert.equal(read.window?.sekPerKwh, "0.30722");
+});
+
+test("a body that is not JSON is malformed, distinct from a missing hour", async () => {
+  const at = new Date("2026-09-20T10:05:00+02:00");
+  const unreadable = new EnergySpotFeed(async () => new Response("<html>rate limited</html>", { status: 200 }));
+  const noHour = new EnergySpotFeed(
+    async () =>
+      new Response(
+        '[{"SEK_per_kWh":0.1,"EUR_per_kWh":0.01,"EXR":11,"time_start":"2026-09-20T00:00:00+02:00","time_end":"2026-09-20T00:15:00+02:00"}]',
+        { status: 200 },
+      ),
+  );
+  const bad = await unreadable.readWindow(at);
+  const missing = await noHour.readWindow(at);
+  assert.equal(bad.status, "malformed");
+  assert.equal(missing.status, "missing_window");
+  assert.equal(isMalformedDayBody("<html>rate limited</html>"), true);
+  assert.equal(
+    isMalformedDayBody(
+      '[{"SEK_per_kWh":0.1,"EUR_per_kWh":0.01,"EXR":11,"time_start":"2026-09-20T00:00:00+02:00","time_end":"2026-09-20T00:15:00+02:00"}]',
+    ),
+    false,
+  );
+});
+
+test("a JSON body of the wrong shape is malformed, distinct from a missing hour", async () => {
+  const at = new Date("2026-09-20T10:05:00+02:00");
+  const objectBody = new EnergySpotFeed(async () => new Response('{"oops":true}', { status: 200 }));
+  const otherKeys = new EnergySpotFeed(
+    async () =>
+      new Response(
+        '[{"price_sek":0.30722,"from":"2026-09-20T10:00:00+02:00","to":"2026-09-20T10:15:00+02:00"}]',
+        { status: 200 },
+      ),
+  );
+  const objectRead = await objectBody.readWindow(at);
+  const otherKeysRead = await otherKeys.readWindow(at);
+  assert.equal(objectRead.status, "malformed");
+  assert.equal(otherKeysRead.status, "malformed");
+  assert.notEqual(objectRead.status, "missing_window");
+  assert.notEqual(otherKeysRead.status, "missing_window");
 });
 
 test("every window in a real feed body is read, not most of them", () => {

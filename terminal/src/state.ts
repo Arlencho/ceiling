@@ -131,6 +131,7 @@ export async function buildState(args: {
 export type QuoteEndpoints = {
   mint: string;
   merchantTokenAccount: string;
+  mintDecimals: number;
 };
 
 /** The JSON the agent reads. Amount and nonce are decimal strings of bigints. */
@@ -161,6 +162,7 @@ export function quoteResponse(
       sek_per_kwh: state.quote.sekPerKwh,
       kwh_milli: state.quote.kwhMilli.toString(),
       mint: endpoints.mint,
+      mint_decimals: endpoints.mintDecimals,
       merchant_token_account: endpoints.merchantTokenAccount,
       source: state.sourceUrl,
     },
