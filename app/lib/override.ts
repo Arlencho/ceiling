@@ -11,7 +11,7 @@ import {
   statusName,
 } from './constants';
 import { formatBaseUnits } from './format';
-import { mandateRemaining, type MandateAccount } from './mandate';
+import { isActive, mandateRemaining, type MandateAccount } from './mandate';
 
 export const CAP_OVERRIDE_REFUSAL =
   'An override cannot raise the cap because the program will not accept one.';
@@ -79,6 +79,7 @@ export function overrideGuard(
   mandate: MandateAccount,
   nonce: bigint,
   amount: bigint,
+  nowSec?: bigint,
 ): OverrideGuard {
   if (nonce === 0n) {
     return { ok: false, why: 'This row has no nonce. The program will not accept an override.' };
@@ -105,6 +106,12 @@ export function overrideGuard(
     return {
       ok: false,
       why: `This rule is ${statusName(mandate.status)} on chain. An override cannot be granted.`,
+    };
+  }
+  if (nowSec !== undefined && !isActive(mandate, nowSec)) {
+    return {
+      ok: false,
+      why: 'This rule is expired on chain. An override cannot be granted.',
     };
   }
   if (nonce <= mandate.lastNonce) {
@@ -161,6 +168,7 @@ export function assessOverride(args: {
   row: OverrideSource;
   mandate: MandateAccount;
   decimals: number;
+  nowSec?: bigint;
 }): OverrideAssessment {
   if (args.row.kind !== KIND_REFUSED) {
     return {
@@ -172,6 +180,10 @@ export function assessOverride(args: {
   if (!offer.offer) {
     return { status: 'none', why: offer.why };
   }
+  const guard = overrideGuard(args.mandate, args.row.nonce, offer.amount, args.nowSec);
+  if (!guard.ok) {
+    return { status: 'blocked', why: guard.why };
+  }
   if (args.mandate.overrideNonce === args.row.nonce && args.mandate.overrideAmount > 0n) {
     const amount = formatBaseUnits(args.mandate.overrideAmount, args.decimals);
     return {
@@ -180,10 +192,6 @@ export function assessOverride(args: {
       nonce: args.row.nonce,
       why: `This nonce already has an override of ${amount} on chain. The agent can retry it.`,
     };
-  }
-  const guard = overrideGuard(args.mandate, args.row.nonce, offer.amount);
-  if (!guard.ok) {
-    return { status: 'blocked', why: guard.why };
   }
   const pending =
     args.mandate.overrideNonce !== 0n && args.mandate.overrideNonce !== args.row.nonce
@@ -203,6 +211,38 @@ export function assessOverride(args: {
       pendingOtherNonce: pending,
     }),
   };
+}
+
+export type OverrideProbeRow = {
+  ts: bigint;
+  kind: number;
+  nonce: bigint;
+  reason: number;
+  suggestedOverride: bigint;
+};
+
+export function overrideRowProbeKey(row: OverrideProbeRow): string {
+  return `${row.ts.toString()}:${row.kind}:${row.nonce.toString()}:${row.reason}:${row.suggestedOverride.toString()}`;
+}
+
+export function overrideMandateProbeKey(mandate: MandateAccount, nowSec?: bigint): string {
+  const clock = nowSec === undefined ? '' : isActive(mandate, nowSec) ? 'live' : 'expired';
+  return `${mandate.address}:${mandate.status}:${mandate.lastNonce.toString()}:${mandate.overrideNonce.toString()}:${mandate.spent.toString()}:${clock}`;
+}
+
+export function overrideProbeKey(
+  row: OverrideProbeRow,
+  mandate: MandateAccount,
+  nowSec?: bigint,
+): string {
+  return `${overrideRowProbeKey(row)}|${overrideMandateProbeKey(mandate, nowSec)}`;
+}
+
+export function overrideProbeIsCurrent(
+  currentKey: string | null | undefined,
+  nextKey: string,
+): boolean {
+  return currentKey === nextKey;
 }
 
 export function overrideRowView(row: OverrideSource, decimals: number): OverrideRowView {

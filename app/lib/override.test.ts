@@ -33,6 +33,8 @@ import {
   overrideCommitCopy,
   overrideGuard,
   overrideOfferForReason,
+  overrideProbeIsCurrent,
+  overrideProbeKey,
   overrideRowView,
   sequenceLine,
   type OverrideSource,
@@ -331,4 +333,55 @@ test('grant_override instruction data is amount then nonce after the discriminat
   assert.equal(decoded?.amount, 180n);
   assert.equal(decoded?.nonce, 7n);
   assert.equal(decoded?.reason, 0);
+});
+
+// Critic round 1. Both tests go red on bfc78d3.
+
+test('CRITIC: an already-granted override on a rule that is not active must not claim the agent can retry', () => {
+  // programs/veto/src/lib.rs `charge` sets STATUS_EXPIRED without clearing
+  // override_nonce, and a paid charge on another nonce can flip the rule to
+  // STATUS_EXHAUSTED with an override still pending. `evaluate` then refuses
+  // the retry with REASON_NOT_ACTIVE before it ever reads the override.
+  for (const status of [STATUS_EXPIRED, STATUS_EXHAUSTED]) {
+    const assessment = assessOverride({
+      row: row(),
+      mandate: mandate({ status, overrideNonce: 7n, overrideAmount: 180n }),
+      decimals: 0,
+    });
+    assert.equal(assessment.status, 'blocked', `status ${status} must be blocked, got ${assessment.status}`);
+    if (assessment.status !== 'ready') {
+      assert.equal(assessment.why.includes('can retry'), false, 'must not promise a retry that evaluate() will refuse');
+    }
+  }
+});
+
+test('CRITIC: a rule past its expiry by the clock is not offered an override, because the retry cannot clear', () => {
+  // programs/veto/src/lib.rs `evaluate` refuses with REASON_EXPIRED when
+  // now >= expires_at, regardless of status. grant_override does not check
+  // the clock, so the program would accept a waiver the agent can never use.
+  // The guard needs the clock the way lib/mandate.ts `isActive` already does.
+  const past = overrideGuard(mandate({ status: STATUS_ACTIVE, expiresAt: 1_000n }), 7n, 180n, 1_500n);
+  assert.equal(past.ok, false, 'expired by the clock must be blocked');
+  if (!past.ok) {
+    assert.ok(/expir/i.test(past.why), `why must name expiry, got: ${past.why}`);
+  }
+  const future = overrideGuard(mandate({ status: STATUS_ACTIVE, expiresAt: 2_000n }), 7n, 180n, 1_500n);
+  assert.equal(future.ok, true);
+});
+
+test('an override probe key is unchanged for the same row and mandate under new object identities', () => {
+  const source = { ...row(), ts: 99n };
+  const live = mandate();
+  const first = overrideProbeKey(source, live, 1_000n);
+  const second = overrideProbeKey({ ...source }, { ...live }, 1_000n);
+  assert.equal(first, second);
+  assert.equal(overrideProbeIsCurrent(first, second), true);
+});
+
+test('an override probe key changes when the rule expires by the clock, so a later refresh can block', () => {
+  const source = { ...row(), ts: 99n };
+  const live = mandate({ expiresAt: 1_000n });
+  const before = overrideProbeKey(source, live, 999n);
+  const after = overrideProbeKey(source, live, 1_000n);
+  assert.equal(overrideProbeIsCurrent(before, after), false);
 });

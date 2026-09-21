@@ -276,14 +276,19 @@ export async function revokeMandate(
   return { signature, mandate: next };
 }
 
+function unixNowSec(): bigint {
+  return BigInt(Math.floor(Date.now() / 1000));
+}
+
 export async function probeOverride(
   client: ChainClient,
   mandateAddress: PublicKey,
   row: LedgerRow,
   decimals: number,
+  nowSec: bigint = unixNowSec(),
 ): Promise<OverrideAssessment> {
   const live = await fetchMandate(client, mandateAddress);
-  return assessOverride({ row, mandate: live, decimals });
+  return assessOverride({ row, mandate: live, decimals, nowSec });
 }
 
 export async function grantOverride(
@@ -295,7 +300,12 @@ export async function grantOverride(
   decimals: number,
 ): Promise<GrantOverrideResult> {
   const live = await fetchMandate(client, new PublicKey(mandate.address));
-  const assessment = assessOverride({ row, mandate: live, decimals });
+  const assessment = assessOverride({
+    row,
+    mandate: live,
+    decimals,
+    nowSec: unixNowSec(),
+  });
   if (assessment.status !== 'ready') {
     throw new Error(assessment.why);
   }
