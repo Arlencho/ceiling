@@ -153,7 +153,8 @@ export function createTerminalServer(deps: TerminalDeps): Server {
       }
       res.writeHead(404, { "content-type": "text/plain" });
       res.end("not found");
-    })().catch(() => {
+    })().catch((err: unknown) => {
+      console.error(err);
       if (res.headersSent) return;
       if (jsonApi) {
         res.writeHead(500, { "content-type": "application/json" });

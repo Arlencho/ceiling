@@ -54,6 +54,7 @@ export async function fetchPayments(args: {
   const limit = args.limit ?? 10;
   const account = new PublicKey(args.tokenAccount);
   const signatures = await args.connection.getSignaturesForAddress(account, { limit }, "confirmed");
+  if (signatures.length === 0) return [];
   const txs = await args.connection.getParsedTransactions(
     signatures.map((sig) => sig.signature),
     {
