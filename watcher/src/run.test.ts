@@ -613,3 +613,119 @@ test("critic: a 429 after the send landed must not turn a paid window into a ref
     "the chain paid this window; a stale-nonce refusal on the resubmit is not its decision",
   );
 });
+
+// Critic fixtures, round 2. Each one goes RED on 1ea83b4.
+
+test("critic r2: a transient non-429 failure on the pre-submit last_nonce read is retried, not thrown out of the run loop", async () => {
+  const journal = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-critic-r2-502-")), "d.jsonl"));
+  let reads = 0;
+  let submits = 0;
+  const result = await processWindow({
+    at: new Date(windowStart),
+    feed: feedWith("0.00892"),
+    journal,
+    kwhMilli: 50_000n,
+    mintDecimals: 6,
+    log: () => {},
+    feedAttempts: 1,
+    feedRetryMs: 0,
+    chainLastNonce: async () => {
+      reads += 1;
+      if (reads === 1) throw new Error("502 Bad Gateway: Bad Gateway");
+      return 0n;
+    },
+    recoverSettled: async () => null,
+    submit: async () => {
+      submits += 1;
+      return { decision: "paid" as const, reason: "ok", reasonCode: 0, suggestedOverride: null, signature: "sig-after-blip" };
+    },
+  });
+  // README.md:28 "An RPC failure backs off and retries the same window. The
+  // thread is not dropped." On main the only chain call sat inside
+  // withRpcBackoff. The new pre-submit read at run.ts:182-189 sits outside it,
+  // so one 502 or ECONNRESET on getAccountInfo escapes processWindow,
+  // processDue and cmdRun, and main().catch ends the run loop.
+  assert.equal(result, "submitted");
+  assert.equal(reads, 2);
+  assert.equal(submits, 1);
+  assert.equal(journal.load()[0]?.decision, "paid");
+});
+
+test("critic r2: a stale-nonce refusal on a window a later payment overtook is not journalled as paid", async () => {
+  const journal = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-critic-r2-overtaken-")), "d.jsonl"));
+  let reads = 0;
+  const later = 1789855200n + 21_600n;
+  const result = await processWindow({
+    at: new Date(windowStart),
+    feed: feedWith("0.00892"),
+    journal,
+    kwhMilli: 50_000n,
+    mintDecimals: 6,
+    log: () => {},
+    feedAttempts: 1,
+    feedRetryMs: 0,
+    chainLastNonce: async () => {
+      reads += 1;
+      return reads === 1 ? 0n : later;
+    },
+    recoverSettled: async () => null,
+    submit: async () => ({
+      decision: "refused" as const,
+      reason: "nonce already settled",
+      reasonCode: 3,
+      suggestedOverride: null,
+      signature: "replay-sig",
+    }),
+  });
+  // Between the pre-submit read and the send, last_nonce moved past this
+  // window (a second submitter paid a later slot). The program refuses the
+  // stale nonce. run.ts:284-297 then writes decision=paid with the attempted
+  // amount and no signature for a window the chain never paid. The pre-submit
+  // branch already closes this honestly (closeAlreadySettled: nonce < settled
+  // is "window overtaken by a later settled charge"); the post-refusal branch
+  // has to re-read last_nonce and reuse it instead of assuming paid.
+  const row = journal.load().find((r) => r.nonce === "1789855200");
+  assert.ok(row, "the window must be on record");
+  assert.notEqual(row?.decision, "refused");
+  assert.notEqual(row?.decision, "paid", "the chain paid a later window, not this one");
+  assert.notEqual(result, "submitted");
+});
+
+test("critic r2: a feed gap already on record does not hide a later rate limit on the same window", async () => {
+  const journal = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-critic-r2-gapkinds-")), "d.jsonl"));
+  await processWindow({
+    at: new Date(windowStart),
+    feed: { async getWindow() { return null; } },
+    journal,
+    kwhMilli: 50_000n,
+    mintDecimals: 6,
+    log: () => {},
+    feedAttempts: 1,
+    feedRetryMs: 0,
+    submit: async () => {
+      throw new Error("should not submit");
+    },
+  });
+  const result = await processWindow({
+    at: new Date(windowStart),
+    feed: feedWith("0.00892"),
+    journal,
+    kwhMilli: 50_000n,
+    mintDecimals: 6,
+    log: () => {},
+    feedAttempts: 1,
+    feedRetryMs: 0,
+    submit: async () => {
+      throw new Error("429 Too Many Requests");
+    },
+  });
+  assert.equal(result, "deferred");
+  // run.ts:107 dedupes on hasGap(nonce), which is per window, not per kind.
+  // The feed came back and the RPC throttled for the rest of the day, but the
+  // only row for this window says "feed unavailable". One row per outage kind
+  // keeps both facts on record; the window stays retryable either way.
+  const reasons = journal.load().filter((r) => r.nonce === "1789855200").map((r) => r.reason);
+  assert.ok(reasons.includes("feed unavailable"));
+  assert.ok(reasons.includes("rpc rate limited on all endpoints"), `journal reasons: ${reasons.join(", ")}`);
+  assert.equal(journal.hasNonce(1789855200n), false, "the window is still owed a charge");
+});
