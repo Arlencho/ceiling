@@ -118,3 +118,25 @@ test("fetchPayments makes two requests on the wire for any number of signatures"
 test("fetchPayments sends no empty batch for an account with no history", async () => {
   assert.deepEqual(await wirePosts(0), ["getSignaturesForAddress"]);
 });
+
+// Round 2 critic fixture for F3: with no history the batch call is never
+// reached, whatever limit the caller asked for, and the result is empty.
+
+test("round 2: fetchPayments never reaches the batch call for an account with no history", async () => {
+  for (const limit of [undefined, 1, 10]) {
+    let signatureCalls = 0;
+    const connection = {
+      getSignaturesForAddress: async () => {
+        signatureCalls += 1;
+        return [];
+      },
+      getParsedTransactions: async () => {
+        throw new Error("batch must not be requested for an empty signature list");
+      },
+    } as unknown as Connection;
+    const payments = await fetchPayments(limit === undefined ? { connection, tokenAccount: TOKEN } : { connection, tokenAccount: TOKEN, limit });
+    assert.deepEqual(payments, [], `limit ${String(limit)}`);
+    assert.equal(signatureCalls, 1, `limit ${String(limit)}`);
+  }
+  assert.deepEqual(await wirePosts(0), ["getSignaturesForAddress"], "one request on the wire, no batch");
+});

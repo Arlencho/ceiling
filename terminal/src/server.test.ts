@@ -249,3 +249,134 @@ test("an internal error on a JSON endpoint is logged on the server, not dropped"
     await new Promise<void>((r) => server.close(() => r()));
   }
 });
+
+// Round 2 critic fixtures. F2: the error lands on stderr, where the operator
+// running `node src/index.ts serve` is looking, while the wire carries only
+// the generic body. Issue 73: the boundary still turns over when the day file
+// has skipped entries around it, since the parser changed underneath it.
+
+test("round 2: the operator sees the error on stderr and the caller sees only the generic body", async () => {
+  const secret = "secret-internal-token-do-not-leak";
+  const cfg: TerminalConfig = { ...CFG };
+  Object.defineProperty(cfg, "mint", {
+    get: () => {
+      throw new Error(secret);
+    },
+    enumerable: true,
+  });
+  const window = { timeStart: START_A, timeEnd: END_A, sekPerKwh: "0.11111" };
+  const feed = {
+    getWindow: async () => window,
+    readWindow: async () => ({
+      status: "ok" as const,
+      sourceUrl: "http://example.invalid/day.json",
+      readAt: new Date("2026-09-20T10:05:00+02:00"),
+      refreshFailed: false,
+      window,
+      httpStatus: null,
+    }),
+  };
+  const server = createTerminalServer({ cfg, feed, connection: rpcOff });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  const addr = server.address();
+  assert.ok(addr !== null && typeof addr === "object");
+  const base = `http://127.0.0.1:${String(addr.port)}`;
+  const stderr: string[] = [];
+  const realWrite = process.stderr.write.bind(process.stderr);
+  process.stderr.write = ((chunk: unknown) => {
+    stderr.push(typeof chunk === "string" ? chunk : String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    const rows: Array<{ path: string; body: string; type: RegExp }> = [
+      { path: "/api/quote", body: '{"error":"internal error"}', type: /application\/json/ },
+      { path: "/api/state", body: '{"error":"internal error"}', type: /application\/json/ },
+      { path: "/", body: "terminal error", type: /text\/plain/ },
+    ];
+    for (const row of rows) {
+      stderr.length = 0;
+      const res = await fetch(`${base}${row.path}`, { signal: AbortSignal.timeout(5_000) });
+      const text = await res.text();
+      assert.equal(res.status, 500, row.path);
+      assert.match(res.headers.get("content-type") ?? "", row.type, row.path);
+      assert.equal(text, row.body, row.path);
+      const headerDump = [...res.headers.entries()].map(([k, v]) => `${k}: ${v}`).join("\n");
+      assert.ok(!headerDump.includes(secret), `${row.path}: headers`);
+      const logged = stderr.join("");
+      assert.ok(logged.includes(secret), `${row.path}: the message reaches stderr`);
+      assert.ok(logged.includes("at "), `${row.path}: the stack reaches stderr, not a flattened string`);
+    }
+  } finally {
+    process.stderr.write = realWrite;
+    await new Promise<void>((r) => server.close(() => r()));
+  }
+});
+
+async function listenCountingBody(body: string): Promise<{
+  base: string;
+  fetches: () => number;
+  close: () => Promise<void>;
+}> {
+  let fetches = 0;
+  const feed = new EnergySpotFeed(async () => {
+    fetches += 1;
+    return new Response(body, { status: 200 });
+  });
+  const server = createTerminalServer({ cfg: CFG, feed, connection: rpcOff });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  const addr = server.address();
+  assert.ok(addr !== null && typeof addr === "object");
+  return {
+    base: `http://127.0.0.1:${String(addr.port)}`,
+    fetches: () => fetches,
+    close: () => new Promise<void>((r) => server.close(() => r())),
+  };
+}
+
+test("round 2: the boundary turns over on a day file with skipped entries around both windows", async () => {
+  // Decoys: a priced entry with no end, a null-priced entry claiming window B's
+  // slot before B does, and a nested copy of the key after B. None may leak.
+  const body = `[${entry("0.11111", START_A, END_A)},{"SEK_per_kWh":0.99999,"time_start":"${END_A}"},{"SEK_per_kWh":null,"time_start":"${END_A}","time_end":"${END_B}"},${entry("0.22222", END_A, END_B)},{"meta":{"SEK_per_kWh":0.99999},"time_start":"${END_B}","time_end":"2026-09-20T10:45:00+02:00"}]`;
+  const { base, fetches, close } = await listenCountingBody(body);
+  const boundary = Date.parse(END_A);
+  try {
+    const first = await quoteAt(base, boundary - 14_000);
+    const second = await quoteAt(base, boundary - 1);
+    assert.equal(fetches(), 1, "inside the window the cache still serves");
+    assert.equal(first.nonce, second.nonce);
+    assert.equal(second.window_start, START_A);
+    assert.equal(second.sek_per_kwh, "0.11111");
+    assert.equal(second.amount, "5555500");
+    const after = await quoteAt(base, boundary);
+    assert.equal(after.window_start, END_A);
+    assert.equal(after.window_end, END_B);
+    assert.equal(after.sek_per_kwh, "0.22222");
+    assert.equal(after.amount, "11111000");
+    assert.equal(after.nonce, (BigInt(boundary) / 1000n).toString());
+    assert.notEqual(after.nonce, second.nonce);
+    assert.equal(fetches(), 2, "the boundary forces a rebuild even inside the TTL");
+    const realNow = Date.now;
+    Date.now = () => boundary + 1_000;
+    try {
+      const stateRes = await fetch(`${base}/api/state`);
+      const view = (await stateRes.json()) as Record<string, unknown>;
+      assert.equal(view.nonce, after.nonce);
+      assert.equal(view.amountBaseUnits, after.amount);
+    } finally {
+      Date.now = realNow;
+    }
+    // After B ends, the nested-only entry owns the slot and must not price it.
+    const realNow2 = Date.now;
+    Date.now = () => Date.parse(END_B) + 1_000;
+    try {
+      const res = await fetch(`${base}/api/quote`);
+      const text = await res.text();
+      assert.equal(res.status, 503, "the slot after B has no readable price");
+      assert.ok(!text.includes("0.99999"), "the decoy price never reaches the wire");
+    } finally {
+      Date.now = realNow2;
+    }
+  } finally {
+    await close();
+  }
+});
