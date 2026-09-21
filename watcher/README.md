@@ -50,11 +50,16 @@ Open a mandate once (owner signature, rent paid by the owner key):
 npm run open-mandate
 ```
 
-Defaults, overridable with env (see `.env.example`):
+RPC, program id, mint, and the owner / merchant / agent accounts come from
+the environment, `keys/devnet-addresses.env`, `watcher/.env`, or
+`terminal/.env`. There is no hardcoded fallback for those. File keys may be
+`VETO_RPC=` or `RPC=`. Both packages read both package env files, so they
+cannot silently disagree about the quoted volume.
+
+Other defaults, overridable with env (see `.env.example`):
 
 | | |
 |---|---|
-| RPC | `http://127.0.0.1:8999` (the cluster recorded in `docs/DEVNET.md`) |
 | Volume | 50 kWh (`VETO_KWH_MILLI=50000`) |
 | Cap | 100 tokens |
 | Per-payment max | 0.5 tokens |

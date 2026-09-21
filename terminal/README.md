@@ -30,9 +30,12 @@ npm run typecheck
 ```
 
 Config comes from the same sources as the watcher and indexer: the
-environment, `keys/devnet-addresses.env`, or `terminal/.env` (see
-`.env.example`). RPC, program id, mint, and the merchant token account are
-read from config, never hardcoded. For the recorded devnet cluster:
+environment, `keys/devnet-addresses.env`, `watcher/.env`, and `terminal/.env`
+(see `.env.example`). File keys may be `VETO_RPC=` or `RPC=`. Both packages
+read both package env files, so a volume set in one place is the volume both
+use; two different values is an error at load, not a silent disagreement.
+RPC, program id, mint, and the merchant token account are required from those
+sources. There is no hardcoded fallback. For the recorded devnet cluster:
 
 ```bash
 export VETO_RPC=https://api.devnet.solana.com
@@ -49,19 +52,24 @@ npm start
 Open `http://127.0.0.1:8788`. The page reloads itself every 5 seconds and
 shows, top to bottom:
 
-1. The current 15-minute window, the real SEK/kWh price it just fetched, the
-   quoted amount for 50 kWh in tokens and base units, and the nonce.
-2. The source URL as a link. Open it in a second tab on camera and match the
-   number. That is the verification moment.
-3. The merchant token account with its live balance and the payments received
+1. The honesty block: the price is public and verifiable at the source, and
+   this terminal is a demo counterparty, not a real charge point.
+2. The current 15-minute window, the real SEK/kWh price last read from the
+   source, the quoted amount for 50 kWh in tokens and base units, and the
+   nonce.
+3. The source URL as a link, and the time of the last successful read. Open
+   the URL in a second tab on camera and match the number. That is the
+   verification moment.
+4. The merchant token account with its live balance and the payments received
    so far, each with an explorer link. When the watcher's `charge` settles,
    the row appears here on the next reload.
-4. The honesty block: the price is public and verifiable at the source, and
-   this terminal is a demo counterparty, not a real charge point.
 
-Point the feed down (for example, no network) and the page says the feed
-could not be reached and shows no price. Point it back and the real price
-returns. Nothing is cached across that boundary.
+The day file is cached, because that day's prices are fixed. A later failed
+read does not invent a new fetch time for the cached price: the page keeps
+the last successful read time and says the refresh failed. A first read that
+never succeeds says the feed could not be reached and shows no price. A 200
+body with no current hour, or a body that cannot be read, says that rather
+than claiming the feed was unreachable.
 
 The agent does not scrape the page. It reads JSON:
 

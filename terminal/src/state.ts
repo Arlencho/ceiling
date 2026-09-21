@@ -2,10 +2,11 @@
  *
  * A down feed is a first-class state, not an error to swallow. When the feed
  * cannot be reached the state carries no window, no price and no quote, so
- * nothing downstream can accidentally render a stale number.
+ * nothing downstream can accidentally render a stale number. HTTP 200 with a
+ * missing hour or a bad body is not reported as unreachable.
  */
 
-import { feedUrlFor, type PriceFeed } from "../../watcher/src/feed.js";
+import { feedUrlFor, type FeedRead, type FeedStatus, type PriceFeed } from "../../watcher/src/feed.js";
 import { quoteForWindow, type Quote } from "./quote.js";
 
 export type StateWindow = {
@@ -15,13 +16,39 @@ export type StateWindow = {
 };
 
 export type TerminalState = {
-  feed: "ok" | "unreachable";
+  feed: FeedStatus;
   sourceUrl: string;
   fetchedAt: string;
+  refreshFailed: boolean;
   window: StateWindow | null;
   quote: Quote | null;
   note: string | null;
 };
+
+function noteFor(read: FeedRead, quote: Quote | null, unreadable: boolean): string | null {
+  if (unreadable) {
+    return "The fetched price could not be parsed, so there is no price and no quote.";
+  }
+  if (read.status === "unreachable") {
+    return "The price feed could not be reached, so there is no price and no quote.";
+  }
+  if (read.status === "malformed") {
+    return "The price feed answered, but the body could not be read, so there is no price and no quote.";
+  }
+  if (read.status === "missing_window") {
+    return "The price feed has no entry for this hour, so there is no price and no quote.";
+  }
+  const parts: string[] = [];
+  if (read.refreshFailed) {
+    parts.push(
+      `A later read of the source failed. The price is from the last successful read at ${read.readAt.toISOString()}.`,
+    );
+  }
+  if (quote === null) {
+    parts.push("The fetched price is zero or negative, so no charge is quoted for this window.");
+  }
+  return parts.length === 0 ? null : parts.join(" ");
+}
 
 export async function buildState(args: {
   feed: PriceFeed;
@@ -30,40 +57,48 @@ export async function buildState(args: {
   mintDecimals: number;
 }): Promise<TerminalState> {
   const sourceUrl = feedUrlFor(args.at);
-  const fetchedAt = args.at.toISOString();
 
-  let window: StateWindow | null = null;
+  let read: FeedRead;
   try {
-    window = await args.feed.getWindow(args.at);
+    if (typeof args.feed.readWindow === "function") {
+      read = await args.feed.readWindow(args.at);
+    } else {
+      const window = await args.feed.getWindow(args.at);
+      read =
+        window === null
+          ? { status: "unreachable", sourceUrl, readAt: args.at, refreshFailed: false, window: null }
+          : { status: "ok", sourceUrl, readAt: args.at, refreshFailed: false, window };
+    }
   } catch {
-    window = null;
-  }
-  if (window === null) {
-    return {
-      feed: "unreachable",
-      sourceUrl,
-      fetchedAt,
-      window: null,
-      quote: null,
-      note: "The price feed could not be reached, so there is no price and no quote.",
-    };
+    read = { status: "unreachable", sourceUrl, readAt: args.at, refreshFailed: true, window: null };
   }
 
-  const quote = quoteForWindow({
-    window,
-    kwhMilli: args.kwhMilli,
-    mintDecimals: args.mintDecimals,
-  });
+  let quote: Quote | null = null;
+  let unreadable = false;
+  if (read.window !== null) {
+    try {
+      quote = quoteForWindow({
+        window: read.window,
+        kwhMilli: args.kwhMilli,
+        mintDecimals: args.mintDecimals,
+      });
+    } catch {
+      unreadable = true;
+      quote = null;
+    }
+  }
+
+  const feed: FeedStatus = unreadable ? "malformed" : read.status;
+  const window = unreadable || feed !== "ok" ? null : read.window;
+
   return {
-    feed: "ok",
-    sourceUrl,
-    fetchedAt,
+    feed,
+    sourceUrl: read.sourceUrl,
+    fetchedAt: read.readAt.toISOString(),
+    refreshFailed: read.refreshFailed,
     window,
-    quote,
-    note:
-      quote === null
-        ? "The fetched price is zero or negative, so no charge is quoted for this window."
-        : null,
+    quote: unreadable ? null : quote,
+    note: noteFor(read, quote, unreadable),
   };
 }
 
@@ -82,9 +117,9 @@ export function quoteResponse(
       status: 503,
       body: {
         error:
-          state.feed === "ok"
-            ? "no chargeable quote for this window"
-            : "price feed unreachable, no quote offered",
+          state.feed === "unreachable"
+            ? "price feed unreachable, no quote offered"
+            : "no chargeable quote for this window",
         detail: state.note,
         source: state.sourceUrl,
       },

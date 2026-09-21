@@ -11,8 +11,21 @@ export type PriceWindow = {
   sekPerKwh: string;
 };
 
+export type FeedStatus = "ok" | "unreachable" | "malformed" | "missing_window";
+
+/** One classified read of the day file. */
+export type FeedRead = {
+  status: FeedStatus;
+  sourceUrl: string;
+  /** Time of the last successful day-file read, or of this attempt if none. */
+  readAt: Date;
+  refreshFailed: boolean;
+  window: PriceWindow | null;
+};
+
 export interface PriceFeed {
   getWindow(at: Date): Promise<PriceWindow | null>;
+  readWindow?(at: Date): Promise<FeedRead>;
 }
 
 export const FEED_ORIGIN = "https://www.elprisetjustnu.se";
@@ -33,7 +46,8 @@ const ENTRY_RE =
  * Never goes through a float: the digits are shifted as strings so the value
  * handed to the integer money math is exact. The feed can emit a SEK price
  * this way too, and the strict decimal parser in money.ts rejects scientific
- * notation by design, so normalising here keeps that guard intact.
+ * notation by design, so normalising at the money boundary keeps that guard
+ * intact while the screen can still show the source text byte for byte.
  */
 export function plainDecimal(raw: string): string {
   const t = raw.trim();
@@ -84,7 +98,7 @@ export function parseFeedBody(text: string): PriceWindow[] {
   for (;;) {
     const match = ENTRY_RE.exec(text);
     if (!match) break;
-    const sek = match[1] === undefined ? undefined : plainDecimal(match[1]);
+    const sek = match[1];
     const timeStart = match[2];
     const timeEnd = match[3];
     if (sek === undefined || timeStart === undefined || timeEnd === undefined) {
@@ -106,29 +120,88 @@ export function windowContaining(windows: PriceWindow[], at: Date): PriceWindow 
   return null;
 }
 
+/** True when the body is not a JSON array (HTML, an object, truncated JSON). */
+export function isMalformedDayBody(text: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return !Array.isArray(parsed);
+  } catch {
+    return true;
+  }
+}
+
+function classifyDayBody(
+  text: string,
+  at: Date,
+  sourceUrl: string,
+  readAt: Date,
+  refreshFailed: boolean,
+): FeedRead {
+  const windows = parseFeedBody(text);
+  if (windows.length === 0) {
+    return {
+      status: isMalformedDayBody(text) ? "malformed" : "missing_window",
+      sourceUrl,
+      readAt,
+      refreshFailed,
+      window: null,
+    };
+  }
+  const window = windowContaining(windows, at);
+  if (window === null) {
+    return { status: "missing_window", sourceUrl, readAt, refreshFailed, window: null };
+  }
+  return { status: "ok", sourceUrl, readAt, refreshFailed, window };
+}
+
+type CachedDay = { text: string; readAt: Date };
+
 export class EnergySpotFeed implements PriceFeed {
-  private readonly cache = new Map<string, string>();
+  private readonly cache = new Map<string, CachedDay>();
 
   constructor(
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly timeoutMs = 15_000,
   ) {}
 
-  async getWindow(at: Date): Promise<PriceWindow | null> {
-    const url = feedUrlFor(at);
-    let text = this.cache.get(url);
-    if (text === undefined) {
-      try {
-        const res = await this.fetchImpl(url, { signal: AbortSignal.timeout(this.timeoutMs) });
-        if (!res.ok) {
-          return null;
+  async readWindow(at: Date): Promise<FeedRead> {
+    const sourceUrl = feedUrlFor(at);
+    const cached = this.cache.get(sourceUrl);
+    let text: string;
+    let readAt = at;
+    let refreshFailed = false;
+
+    try {
+      const res = await this.fetchImpl(sourceUrl, { signal: AbortSignal.timeout(this.timeoutMs) });
+      if (!res.ok) {
+        refreshFailed = true;
+        if (cached === undefined) {
+          return { status: "unreachable", sourceUrl, readAt: at, refreshFailed: true, window: null };
         }
+        text = cached.text;
+        readAt = cached.readAt;
+      } else {
         text = await res.text();
-        this.cache.set(url, text);
-      } catch {
-        return null;
+        readAt = at;
       }
+    } catch {
+      refreshFailed = true;
+      if (cached === undefined) {
+        return { status: "unreachable", sourceUrl, readAt: at, refreshFailed: true, window: null };
+      }
+      text = cached.text;
+      readAt = cached.readAt;
     }
-    return windowContaining(parseFeedBody(text), at);
+
+    const classified = classifyDayBody(text, at, sourceUrl, readAt, refreshFailed);
+    if (!refreshFailed && !isMalformedDayBody(text)) {
+      this.cache.set(sourceUrl, { text, readAt });
+    }
+    return classified;
+  }
+
+  async getWindow(at: Date): Promise<PriceWindow | null> {
+    const read = await this.readWindow(at);
+    return read.window;
   }
 }

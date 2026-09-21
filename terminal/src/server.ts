@@ -56,6 +56,7 @@ export function viewFromState(state: TerminalState, snap: PaymentsSnapshot, cfg:
     })),
     paymentsError: snap.error,
     paymentsAt: snap.okAt,
+    refreshFailed: state.refreshFailed,
   };
 }
 

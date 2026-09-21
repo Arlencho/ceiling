@@ -1,11 +1,12 @@
 /** Terminal config: the same sources as the watcher and indexer.
  *
  * RPC, program id, mint and the merchant token account come from the shared
- * loader (environment, keys/devnet-addresses.env, or the package .env). Only
- * the HTTP port is terminal-specific. Nothing is hardcoded here.
+ * loader (environment, keys/devnet-addresses.env, watcher/.env, or
+ * terminal/.env). Only the HTTP port is terminal-specific. Identities are
+ * never filled in from hardcoded defaults.
  */
 
-import { loadConfig } from "../../watcher/src/config.js";
+import { loadConfig, lookupConfigString } from "../../watcher/src/config.js";
 
 export type TerminalConfig = {
   rpc: string;
@@ -27,9 +28,10 @@ export function explorerQueryFor(rpc: string): string {
 
 export function loadTerminalConfig(env: NodeJS.ProcessEnv = process.env): TerminalConfig {
   const base = loadConfig(env);
-  const port = Number.parseInt(env.VETO_TERMINAL_PORT ?? "8788", 10);
+  const portRaw = lookupConfigString(env, "VETO_TERMINAL_PORT") ?? "8788";
+  const port = Number.parseInt(portRaw, 10);
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-    throw new Error(`terminal.loadTerminalConfig: bad VETO_TERMINAL_PORT: ${env.VETO_TERMINAL_PORT ?? ""}`);
+    throw new Error(`terminal.loadTerminalConfig: bad VETO_TERMINAL_PORT: ${portRaw}`);
   }
   return {
     rpc: base.rpc,

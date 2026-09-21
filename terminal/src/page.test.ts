@@ -42,7 +42,11 @@ test("the page states the honesty boundary in plain language", () => {
   const html = renderPage(BASE);
   assert.ok(html.includes("independently verifiable"));
   assert.ok(html.includes("not a real charge point"));
-  assert.ok(!html.includes("—"), "no em dash anywhere on the page");
+  assert.ok(!html.includes("\u2014"), "no em dash anywhere on the page");
+  assert.ok(
+    html.indexOf("not a real charge point") < html.indexOf("Received payments"),
+    "disclosure must sit above the payments table",
+  );
 });
 
 test("a down feed renders the outage and no price at all", () => {

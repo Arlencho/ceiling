@@ -75,6 +75,47 @@ test("a scientific price expands to a plain decimal without touching a float", (
   assert.equal(plainDecimal("0.00429"), "0.00429", "a plain decimal passes through");
 });
 
+test("parseFeedBody keeps a scientific SEK price as the source text", () => {
+  const body = `[{"SEK_per_kWh":1e-05,"EUR_per_kWh":1e-05,"EXR":11.17,"time_start":"2026-09-20T10:00:00+02:00","time_end":"2026-09-20T10:15:00+02:00"}]`;
+  const windows = parseFeedBody(body);
+  assert.equal(windows.length, 1);
+  assert.equal(windows[0]?.sekPerKwh, "1e-05");
+});
+
+test("a 200 body with no current hour is missing_window, not unreachable", async () => {
+  const body = `[{"SEK_per_kWh":0.1,"EUR_per_kWh":0.01,"EXR":11,"time_start":"2026-09-20T00:00:00+02:00","time_end":"2026-09-20T00:15:00+02:00"}]`;
+  const feed = new EnergySpotFeed(async () => new Response(body, { status: 200 }));
+  const read = await feed.readWindow(new Date("2026-09-20T10:05:00+02:00"));
+  assert.equal(read.status, "missing_window");
+  assert.equal(read.refreshFailed, false);
+  assert.equal(read.window, null);
+});
+
+test("a 200 body that is not a JSON array is malformed, not unreachable", async () => {
+  const feed = new EnergySpotFeed(async () => new Response(`{"oops":true}`, { status: 200 }));
+  const read = await feed.readWindow(new Date("2026-09-20T00:05:00+02:00"));
+  assert.equal(read.status, "malformed");
+  assert.equal(read.window, null);
+});
+
+test("a later failed fetch keeps the cached day file and reports the failed refresh", async () => {
+  let calls = 0;
+  const feed = new EnergySpotFeed(async () => {
+    calls += 1;
+    if (calls === 1) return new Response(BODY, { status: 200 });
+    throw new TypeError("fetch failed");
+  });
+  const at = new Date("2026-09-20T00:05:00+02:00");
+  const first = await feed.readWindow(at);
+  assert.equal(first.status, "ok");
+  const second = await feed.readWindow(new Date(at.getTime() + 60_000));
+  assert.equal(calls, 2);
+  assert.equal(second.status, "ok");
+  assert.equal(second.refreshFailed, true);
+  assert.equal(second.window?.sekPerKwh, "0.00892");
+  assert.equal(second.readAt.getTime(), first.readAt.getTime());
+});
+
 test("every window in a real feed body is read, not most of them", () => {
   const rows = [];
   for (let i = 0; i < 96; i += 1) {
