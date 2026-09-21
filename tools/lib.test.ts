@@ -119,3 +119,16 @@ test("every reason code the program can emit resolves to text, not unknown", () 
   }
   assert.equal(reasonText(10), "account frozen");
 });
+
+// Critic fixture, round 1. Goes RED on b23b9d3.
+
+test("critic: an empty --rpc list does not silently become the public default endpoint", () => {
+  const saved = process.env.VETO_RPC;
+  delete process.env.VETO_RPC;
+  try {
+    const cli = parseArgs(["--rpc", ","]);
+    assert.throws(() => resolveRpcList(cli, "/tmp/veto-tools-rpc-missing"));
+  } finally {
+    if (saved !== undefined) process.env.VETO_RPC = saved;
+  }
+});

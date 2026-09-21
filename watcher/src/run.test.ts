@@ -457,3 +457,72 @@ test("an unreadable price is recorded as a gap only once", async () => {
   assert.equal(journal.load().length, 1);
   assert.equal(journal.load()[0]?.decision, "gap");
 });
+
+// Critic fixtures, round 1. Each one goes RED on b23b9d3.
+
+test("critic: a slot that only saw a rate limit leaves a retryable trace, so it survives the day boundary and shows in status", async () => {
+  const journal = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-critic-429-")), "d.jsonl"));
+  const result = await processWindow({
+    at: new Date(windowStart),
+    feed: feedWith("0.00892"),
+    journal,
+    kwhMilli: 50_000n,
+    mintDecimals: 6,
+    log: () => {},
+    feedAttempts: 1,
+    feedRetryMs: 0,
+    submit: async () => {
+      throw new Error("429 Too Many Requests");
+    },
+  });
+  assert.notEqual(result, "submitted");
+  // dueSlots (cadence.ts:72) only returns today's slots. With no row the
+  // window is gone from every code path at midnight and `status` never counts
+  // it. A gap row is not terminal (journal.ts:21-30), so recording the outage
+  // keeps the window retryable and visible at no cost.
+  assert.equal(journal.hasNonce(1789855200n), false, "the window must stay owed");
+  assert.equal(journal.hasGap(1789855200n), true, "the outage must be on record");
+  assert.equal(journal.counts().gap, 1);
+});
+
+test("critic: a 429 after the send landed must not turn a paid window into a refused row", async () => {
+  const journal = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-critic-landed-")), "d.jsonl"));
+  // Fake chain: the first charge lands (last_nonce advances) but its
+  // confirmation is throttled, which is what a 429 inside chain.ts:93-99
+  // (confirmTransaction polling or getTransaction) looks like from here.
+  // The retry carries a stale nonce and the program refuses it (lib.rs:381).
+  let lastNonce = 0n;
+  const submit = async (_amount: bigint, nonce: bigint) => {
+    if (nonce <= lastNonce) {
+      return {
+        decision: "refused" as const,
+        reason: "nonce already settled",
+        reasonCode: 3,
+        suggestedOverride: null,
+        signature: "replay-sig",
+      };
+    }
+    lastNonce = nonce;
+    throw new Error("429 Too Many Requests");
+  };
+  const args = {
+    at: new Date(windowStart),
+    feed: feedWith("0.00892"),
+    journal,
+    submit,
+    kwhMilli: 50_000n,
+    mintDecimals: 6,
+    log: () => {},
+    feedAttempts: 1,
+    feedRetryMs: 0,
+  };
+  assert.equal(await processWindow(args), "deferred");
+  await processWindow(args);
+  const row = journal.load().find((r) => r.nonce === "1789855200");
+  assert.ok(row, "the window must be on record");
+  assert.notEqual(
+    row?.decision,
+    "refused",
+    "the chain paid this window; a stale-nonce refusal on the resubmit is not its decision",
+  );
+});
