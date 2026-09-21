@@ -41,7 +41,7 @@ export type LedgerSnapshot = {
   entries: RingEntry[];
 };
 
-export type LedgerRow = RingEntry & { signature: string | null };
+export type LedgerRow = RingEntry & { signature: string | null; slot?: number | null };
 
 export function ledgerPda(programId: PublicKey, mandate: PublicKey): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
@@ -105,6 +105,9 @@ export type DecodedTxDecision = {
   nonce: bigint;
   reason: number;
   blockTime?: number | null;
+  slot?: number | null;
+  suggestedOverride?: bigint;
+  counterparty?: string | null;
 };
 
 function sameDecision(tx: DecodedTxDecision, entry: RingEntry): boolean {
@@ -139,8 +142,9 @@ export function attachSignatures(
     });
     if (index >= 0) {
       used.add(index);
-      return { ...entry, signature: txs[index]?.signature ?? null };
+      const tx = txs[index];
+      return { ...entry, signature: tx?.signature ?? null, slot: tx?.slot ?? null };
     }
-    return { ...entry, signature: null };
+    return { ...entry, signature: null, slot: null };
   });
 }

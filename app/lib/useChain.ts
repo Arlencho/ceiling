@@ -13,6 +13,7 @@ import type { ReactNode } from 'react';
 import { tryLoadConfig, type AppConfig } from './config';
 import {
   createClient,
+  fetchGenesisHash,
   fetchLedgerRows,
   fetchMintDecimals,
   fetchOwnerMandates,
@@ -27,28 +28,35 @@ import {
 import { mandateReadStatus, type MandateReadStatus } from './mandateRead';
 import type { MandateAccount } from './mandate';
 import type { LedgerRow, LedgerSnapshot } from './ring';
+import { isRateLimitError } from './rpcError';
 import { secureStore } from './mwa';
 import { useWallet } from './useWallet';
 import type { WalletStore } from './wallet';
 
 export const SELECTED_MANDATE_KEY = 'veto.mandate.selected';
 
+const RETRY_MS = [500, 1000, 2000];
+
 export type ChainState = {
   ready: boolean;
   loading: boolean;
   error: string | null;
+  rateLimited: boolean;
   checkedOwner: string | null;
   mandateStatus: MandateReadStatus;
   config: AppConfig | null;
   configError: string | null;
   mandate: MandateAccount | null;
+  mandates: MandateAccount[];
   snapshot: LedgerSnapshot | null;
   rows: LedgerRow[];
   decimals: number;
   nowMs: number;
+  genesisHash: string | null;
   refresh: () => Promise<void>;
+  selectMandate: (address: string) => Promise<void>;
   open: (input: Omit<OpenMandateInput, 'owner' | 'agent'> & { agent?: PublicKey }) => Promise<OpenMandateResult>;
-  revoke: () => Promise<RevokeResult>;
+  revoke: (address?: string) => Promise<RevokeResult>;
 };
 
 async function loadSelected(store: WalletStore): Promise<string | null> {
@@ -59,19 +67,28 @@ async function saveSelected(store: WalletStore, address: string): Promise<void> 
   await store.setItem(SELECTED_MANDATE_KEY, address);
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 function useChainState(): ChainState {
   const wallet = useWallet();
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rateLimited, setRateLimited] = useState(false);
   const [checkedOwner, setCheckedOwner] = useState<string | null>(null);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const [mandate, setMandate] = useState<MandateAccount | null>(null);
+  const [mandates, setMandates] = useState<MandateAccount[]>([]);
   const [snapshot, setSnapshot] = useState<LedgerSnapshot | null>(null);
   const [rows, setRows] = useState<LedgerRow[]>([]);
   const [decimals, setDecimals] = useState(6);
   const [nowMs, setNowMs] = useState(0);
+  const [genesisHash, setGenesisHash] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setNowMs(Date.now());
@@ -80,10 +97,13 @@ function useChainState(): ChainState {
       setConfig(null);
       setConfigError(loaded.error);
       setMandate(null);
+      setMandates([]);
       setSnapshot(null);
       setRows([]);
       setError(null);
+      setRateLimited(false);
       setCheckedOwner(null);
+      setGenesisHash(null);
       setReady(true);
       return;
     }
@@ -92,9 +112,11 @@ function useChainState(): ChainState {
 
     if (!wallet.ownerPublicKey) {
       setMandate(null);
+      setMandates([]);
       setSnapshot(null);
       setRows([]);
       setError(null);
+      setRateLimited(false);
       setCheckedOwner(null);
       setReady(true);
       return;
@@ -103,12 +125,15 @@ function useChainState(): ChainState {
     const ownerKey = wallet.ownerPublicKey;
     setLoading(true);
     setError(null);
-    try {
+    setRateLimited(false);
+
+    const run = async () => {
       const client = createClient(loaded.config);
       const owner = new PublicKey(ownerKey);
       const preferred = await loadSelected(secureStore);
-      const mandates = await fetchOwnerMandates(client, owner);
-      const selected = pickMandate(mandates, preferred);
+      const found = await fetchOwnerMandates(client, owner);
+      setMandates(found);
+      const selected = pickMandate(found, preferred);
       if (!selected) {
         setMandate(null);
         setSnapshot(null);
@@ -123,12 +148,55 @@ function useChainState(): ChainState {
       } catch {
         // Keep the configured fallback rather than inventing an amount.
       }
+      let genesis: string | null = null;
+      try {
+        genesis = await fetchGenesisHash(client);
+      } catch (err) {
+        if (isRateLimitError(err)) {
+          throw err;
+        }
+      }
       setMandate(selected);
       setSnapshot(ledger.snapshot);
       setRows(ledger.rows);
       setDecimals(mintDecimals);
+      if (genesis) {
+        setGenesisHash(genesis);
+      }
+    };
+
+    try {
+      await run();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Chain read failed');
+      if (isRateLimitError(err)) {
+        setRateLimited(true);
+        let last: unknown = err;
+        for (const delay of RETRY_MS) {
+          await wait(delay);
+          try {
+            await run();
+            setRateLimited(false);
+            last = null;
+            break;
+          } catch (retryErr) {
+            last = retryErr;
+            if (!isRateLimitError(retryErr)) {
+              break;
+            }
+          }
+        }
+        if (last) {
+          if (isRateLimitError(last)) {
+            setError(last instanceof Error ? last.message : 'The RPC is rate limiting this read.');
+            setRateLimited(true);
+          } else {
+            setError(last instanceof Error ? last.message : 'Chain read failed');
+            setRateLimited(false);
+          }
+        }
+      } else {
+        setError(err instanceof Error ? err.message : 'Chain read failed');
+      }
     } finally {
       setLoading(false);
       setReady(true);
@@ -140,6 +208,14 @@ function useChainState(): ChainState {
     void refresh();
   }, [refresh]);
 
+  const selectMandate = useCallback(
+    async (address: string) => {
+      await saveSelected(secureStore, address);
+      await refresh();
+    },
+    [refresh],
+  );
+
   const open = useCallback(
     async (input: Omit<OpenMandateInput, 'owner' | 'agent'> & { agent?: PublicKey }) => {
       const loaded = tryLoadConfig();
@@ -149,14 +225,11 @@ function useChainState(): ChainState {
       if (!wallet.ownerPublicKey) {
         throw new Error('Connect with Seed Vault first');
       }
-      const agentKey = await wallet.getAgentKeypair();
-      if (!agentKey) {
-        throw new Error('Agent key is missing from secure storage');
-      }
+      const agentKey = input.agent ?? (await wallet.createAgentKeypair()).publicKey;
       const client: ChainClient = createClient(loaded.config);
       const result = await openMandate(client, wallet.signAndSend, {
         owner: new PublicKey(wallet.ownerPublicKey),
-        agent: input.agent ?? agentKey.publicKey,
+        agent: agentKey,
         merchant: input.merchant,
         cap: input.cap,
         perTxMax: input.perTxMax,
@@ -171,27 +244,32 @@ function useChainState(): ChainState {
     [refresh, wallet],
   );
 
-  const revoke = useCallback(async () => {
-    const loaded = tryLoadConfig();
-    if (!loaded.ok) {
-      throw new Error(loaded.error);
-    }
-    if (!wallet.ownerPublicKey) {
-      throw new Error('Connect with Seed Vault first');
-    }
-    if (!mandate) {
-      throw new Error('No mandate on chain to revoke');
-    }
-    const client = createClient(loaded.config);
-    const result = await revokeMandate(
-      client,
-      wallet.signAndSend,
-      new PublicKey(wallet.ownerPublicKey),
-      mandate,
-    );
-    await refresh();
-    return result;
-  }, [mandate, refresh, wallet]);
+  const revoke = useCallback(
+    async (address?: string) => {
+      const loaded = tryLoadConfig();
+      if (!loaded.ok) {
+        throw new Error(loaded.error);
+      }
+      if (!wallet.ownerPublicKey) {
+        throw new Error('Connect with Seed Vault first');
+      }
+      const target =
+        (address ? mandates.find((row) => row.address === address) : null) ?? mandate;
+      if (!target) {
+        throw new Error('No mandate on chain to revoke');
+      }
+      const client = createClient(loaded.config);
+      const result = await revokeMandate(
+        client,
+        wallet.signAndSend,
+        new PublicKey(wallet.ownerPublicKey),
+        target,
+      );
+      await refresh();
+      return result;
+    },
+    [mandate, mandates, refresh, wallet],
+  );
 
   const mandateStatus = mandateReadStatus({
     checkedOwner,
@@ -199,6 +277,7 @@ function useChainState(): ChainState {
     loading,
     error,
     hasMandate: mandate != null,
+    rateLimited,
   });
 
   return useMemo(
@@ -206,16 +285,20 @@ function useChainState(): ChainState {
       ready,
       loading,
       error,
+      rateLimited,
       checkedOwner,
       mandateStatus,
       config,
       configError,
       mandate,
+      mandates,
       snapshot,
       rows,
       decimals,
       nowMs,
+      genesisHash,
       refresh,
+      selectMandate,
       open,
       revoke,
     }),
@@ -223,16 +306,20 @@ function useChainState(): ChainState {
       ready,
       loading,
       error,
+      rateLimited,
       checkedOwner,
       mandateStatus,
       config,
       configError,
       mandate,
+      mandates,
       snapshot,
       rows,
       decimals,
       nowMs,
+      genesisHash,
       refresh,
+      selectMandate,
       open,
       revoke,
     ],

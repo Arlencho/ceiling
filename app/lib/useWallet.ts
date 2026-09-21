@@ -5,6 +5,7 @@ import { Keypair, Transaction } from '@solana/web3.js';
 import { secureStore, transact } from './mwa';
 import {
   connect,
+  createAgentKeypair,
   disconnect,
   loadAgentKeypair,
   restore,
@@ -21,6 +22,7 @@ export type WalletState = {
   disconnect: () => Promise<void>;
   signAndSend: (transactions: Transaction[]) => Promise<string[]>;
   getAgentKeypair: () => Promise<Keypair | null>;
+  createAgentKeypair: () => Promise<Keypair>;
 };
 
 function messageFromUnknown(error: unknown): string {
@@ -113,6 +115,12 @@ function useWalletState(): WalletState {
 
   const getAgentKeypair = useCallback(() => loadAgentKeypair(secureStore), []);
 
+  const onCreateAgent = useCallback(async () => {
+    const created = await createAgentKeypair(secureStore);
+    setAgentPublicKey(created.publicKey.toBase58());
+    return created;
+  }, []);
+
   return useMemo(
     () => ({
       ready,
@@ -124,6 +132,7 @@ function useWalletState(): WalletState {
       disconnect: onDisconnect,
       signAndSend,
       getAgentKeypair,
+      createAgentKeypair: onCreateAgent,
     }),
     [
       ready,
@@ -135,6 +144,7 @@ function useWalletState(): WalletState {
       onDisconnect,
       signAndSend,
       getAgentKeypair,
+      onCreateAgent,
     ],
   );
 }

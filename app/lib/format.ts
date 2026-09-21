@@ -114,3 +114,57 @@ export function formatUnix(unixSeconds: bigint): string {
   const year = date.getFullYear().toString().padStart(4, '0');
   return `${year}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
 }
+
+export function formatClock(unixSeconds: bigint): string {
+  const date = new Date(Number(unixSeconds) * 1000);
+  if (Number.isNaN(date.getTime())) {
+    return unixSeconds.toString();
+  }
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+const DAY_MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+export function formatDayHeading(unixSeconds: bigint): string {
+  const date = new Date(Number(unixSeconds) * 1000);
+  if (Number.isNaN(date.getTime())) {
+    return unixSeconds.toString();
+  }
+  return `${date.getDate()} ${DAY_MONTHS[date.getMonth()] ?? ''}`;
+}
+
+export function timeLeftParts(
+  expiresAt: bigint,
+  nowSec: bigint,
+): { value: string; label: string } {
+  if (nowSec >= expiresAt) {
+    return { value: '0', label: 'expired' };
+  }
+  const sec = expiresAt - nowSec;
+  const days = sec / 86400n;
+  if (days > 0n) {
+    return { value: days.toString(), label: days === 1n ? 'day left' : 'days left' };
+  }
+  const hours = sec / 3600n;
+  if (hours > 0n) {
+    return { value: hours.toString(), label: hours === 1n ? 'hour left' : 'hours left' };
+  }
+  const minutes = sec / 60n;
+  if (minutes > 0n) {
+    return { value: minutes.toString(), label: minutes === 1n ? 'minute left' : 'minutes left' };
+  }
+  return { value: '1', label: 'minute left' };
+}

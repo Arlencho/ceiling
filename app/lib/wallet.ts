@@ -10,6 +10,7 @@ export const MWA_CHAIN = 'solana:devnet' as const;
 
 export const SESSION_STORE_KEY = 'veto.wallet.session';
 export const AGENT_SECRET_STORE_KEY = 'veto.wallet.agentSecret';
+export const AGENTS_STORE_KEY = 'veto.wallet.agents';
 
 export type WalletStore = {
   getItem(key: string): Promise<string | null>;
@@ -148,20 +149,55 @@ export async function loadAgentKeypair(store: WalletStore): Promise<Keypair | nu
   }
 }
 
+async function rememberAgent(store: WalletStore, keypair: Keypair): Promise<void> {
+  const raw = await store.getItem(AGENTS_STORE_KEY);
+  let map: Record<string, string> = {};
+  if (raw) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        map = parsed as Record<string, string>;
+      }
+    } catch {
+      map = {};
+    }
+  }
+  const pk = keypair.publicKey.toBase58();
+  if (!map[pk]) {
+    map[pk] = Buffer.from(keypair.secretKey).toString('base64');
+    await store.setItem(AGENTS_STORE_KEY, JSON.stringify(map));
+  }
+}
+
+async function persistAgent(store: WalletStore, keypair: Keypair): Promise<void> {
+  await store.setItem(
+    AGENT_SECRET_STORE_KEY,
+    Buffer.from(keypair.secretKey).toString('base64'),
+  );
+  await rememberAgent(store, keypair);
+}
+
 export async function loadOrCreateAgentPublicKey(
   store: WalletStore,
   generate: () => Keypair = Keypair.generate,
 ): Promise<string> {
   const existing = await loadAgentKeypair(store);
   if (existing) {
+    await rememberAgent(store, existing);
     return existing.publicKey.toBase58();
   }
   const created = generate();
-  await store.setItem(
-    AGENT_SECRET_STORE_KEY,
-    Buffer.from(created.secretKey).toString('base64'),
-  );
+  await persistAgent(store, created);
   return created.publicKey.toBase58();
+}
+
+export async function createAgentKeypair(
+  store: WalletStore,
+  generate: () => Keypair = Keypair.generate,
+): Promise<Keypair> {
+  const created = generate();
+  await persistAgent(store, created);
+  return created;
 }
 
 export async function authorize(

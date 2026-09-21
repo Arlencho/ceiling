@@ -1,0 +1,85 @@
+import { useRouter } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { colors, fonts } from './theme';
+
+export function TopBar({
+  title,
+  meta,
+  back,
+}: {
+  title?: string;
+  meta?: string;
+  back?: string;
+}) {
+  const router = useRouter();
+  return (
+    <View style={styles.row}>
+      {back ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={back}
+          onPress={() => router.back()}
+          hitSlop={8}
+        >
+          <Text style={styles.back}>{`\u2190 ${back}`}</Text>
+        </Pressable>
+      ) : (
+        <Text style={styles.brand}>
+          Veto{title ? <Text style={styles.brandMuted}>{` ${title}`}</Text> : null}
+        </Text>
+      )}
+      <View style={styles.right}>
+        {meta ? <Text style={styles.meta}>{meta}</Text> : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Help"
+          onPress={() => router.push('/help')}
+          hitSlop={8}
+        >
+          <Text style={styles.help}>Help</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 6,
+  },
+  brand: {
+    color: colors.text,
+    fontSize: 22,
+    fontFamily: fonts.serif,
+  },
+  brandMuted: {
+    color: colors.muted,
+    fontStyle: 'italic',
+    fontFamily: fonts.serif,
+  },
+  back: {
+    color: colors.body,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  right: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 12,
+  },
+  meta: {
+    color: colors.muted,
+    fontSize: 12,
+    fontFamily: fonts.mono,
+  },
+  help: {
+    color: colors.body,
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: fonts.mono,
+  },
+});
