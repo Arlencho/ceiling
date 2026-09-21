@@ -286,3 +286,39 @@ test('disconnect still clears the session if deauthorize throws', async () => {
   );
   assert.equal(await loadSession(store), null);
 });
+
+test('an unreadable agent secret is reported and is not replaced by a newly minted identity', async () => {
+  const replacement = Keypair.generate();
+  const garbage = 'not-a-valid-agent-secret';
+  const store = memoryStore({
+    [AGENT_SECRET_STORE_KEY]: garbage,
+  });
+  let minted = 0;
+  await assert.rejects(
+    () =>
+      loadOrCreateAgentPublicKey(store, () => {
+        minted += 1;
+        return replacement;
+      }),
+    /could not read the stored agent identity/i,
+  );
+  assert.equal(minted, 0, 'must not mint over an identity the store could not read');
+  assert.equal(store.data[AGENT_SECRET_STORE_KEY], garbage);
+  assert.equal(store.data[AGENTS_STORE_KEY], undefined);
+});
+
+test('an unreadable agents map is reported and is not overwritten', async () => {
+  const existing = Keypair.generate();
+  const garbage = '{not json';
+  const store = memoryStore({
+    [AGENT_SECRET_STORE_KEY]: Buffer.from(existing.secretKey).toString('base64'),
+    [AGENTS_STORE_KEY]: garbage,
+  });
+  await assert.rejects(
+    () => loadOrCreateAgentPublicKey(store, () => Keypair.generate()),
+    /could not read the stored agent identity/i,
+  );
+  assert.equal(store.data[AGENTS_STORE_KEY], garbage);
+  const loaded = await loadAgentKeypair(store);
+  assert.equal(loaded?.publicKey.toBase58(), existing.publicKey.toBase58());
+});

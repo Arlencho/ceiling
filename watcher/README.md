@@ -26,7 +26,12 @@ Four times per Stockholm day (00:00, 06:00, 12:00, 18:00) the process:
 
 A down feed is a gap: the row is recorded, nothing is submitted, no synthetic
 price is invented. An RPC failure backs off and retries the same window. The
-thread is not dropped.
+thread is not dropped. A rate limit is not a failure: the process logs that it
+was throttled, tries the next configured endpoint (and re-walks a single
+endpoint with bounded doubling), and leaves the cadence slot due so the next
+cycle can still submit it. The outage is written as a gap with a reason that
+names the rate limit, so it stays visible after midnight and `status` can
+count it. A gap is not terminal.
 
 The `PriceFeed` interface exists because the feed may be revisited
 (`docs/DECISIONS.md`, 2026-09-20). The only implementation is `EnergySpotFeed`.
@@ -54,12 +59,15 @@ RPC, program id, mint, and the owner / merchant / agent accounts come from
 the environment, `keys/devnet-addresses.env`, `watcher/.env`, or
 `terminal/.env`. There is no hardcoded fallback for those. File keys may be
 `VETO_RPC=` or `RPC=`. Both packages read both package env files, so they
-cannot silently disagree about the quoted volume.
+cannot silently disagree about the quoted volume. Copy `.env.example` to
+`watcher/.env` and uncomment the identity lines with values you supply. The
+placeholders do not resolve.
 
-Other defaults, overridable with env (see `.env.example`):
+Process defaults that cannot select a chain identity (overridable with env):
 
 | | |
 |---|---|
+| RPC | `VETO_RPC`, required. One URL, or several separated by commas, tried in order. |
 | Volume | 50 kWh (`VETO_KWH_MILLI=50000`) |
 | Cap | 100 tokens |
 | Per-payment max | 0.5 tokens |
@@ -70,6 +78,22 @@ Other defaults, overridable with env (see `.env.example`):
 and midday dips and refuses the evening spike. Raise `VETO_PER_TX_MAX` before
 opening if you want a looser ceiling. Opening is a chain instruction; changing
 the env later does not rewrite an existing mandate.
+
+## Pointing at a dedicated RPC
+
+The public cluster URL is shared and will 429 under load. `VETO_RPC` is a list,
+read from the environment (or `watcher/.env`, or `keys/devnet-addresses.env`
+`RPC=`). Put a dedicated JSON-RPC URL first and keep the public cluster URL
+from `docs/DEVNET.md` after it as fallback. No code change is required.
+
+```bash
+VETO_RPC=<dedicated>,<public> npm start
+```
+
+On HTTP 429 the watcher backs off, tries the next URL, and logs `rpc rate limited`
+rather than `rpc failure`. Those need different responses from a person. A slot
+that only saw a rate limit stays due and is tried again; it is not written off
+as a gap.
 
 ## How to run it
 
@@ -199,4 +223,5 @@ npm test
 
 Covered: integer money conversion, no float in the money source, deterministic
 nonce, re-running the same window does not resubmit, a refusal is recorded
-rather than thrown, a down feed writes a gap.
+rather than thrown, a down feed writes a gap, a 429 is failed over and a rate
+limited slot stays due.

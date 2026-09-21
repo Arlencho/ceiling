@@ -147,35 +147,47 @@ export async function clearSession(store: WalletStore): Promise<void> {
   await store.deleteItem(SESSION_STORE_KEY);
 }
 
+function readFailed(detail: string): Error {
+  return new Error(`could not read the stored agent identity: ${detail}`);
+}
+
+function parseAgentSecret(raw: string): Keypair {
+  try {
+    const secret = Buffer.from(raw, 'base64');
+    if (secret.length !== 64) {
+      throw new Error(`secret is ${secret.length} bytes, expected 64`);
+    }
+    return Keypair.fromSecretKey(secret);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw readFailed(detail);
+  }
+}
+
+function parseAgentsMap(raw: string): Record<string, string> {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('agent map is not an object');
+    }
+    return parsed as Record<string, string>;
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw readFailed(detail);
+  }
+}
+
 export async function loadAgentKeypair(store: WalletStore): Promise<Keypair | null> {
   const raw = await store.getItem(AGENT_SECRET_STORE_KEY);
   if (!raw) {
     return null;
   }
-  try {
-    const secret = Buffer.from(raw, 'base64');
-    if (secret.length !== 64) {
-      return null;
-    }
-    return Keypair.fromSecretKey(secret);
-  } catch {
-    return null;
-  }
+  return parseAgentSecret(raw);
 }
 
 async function rememberAgent(store: WalletStore, keypair: Keypair): Promise<void> {
   const raw = await store.getItem(AGENTS_STORE_KEY);
-  let map: Record<string, string> = {};
-  if (raw) {
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        map = parsed as Record<string, string>;
-      }
-    } catch {
-      map = {};
-    }
-  }
+  const map = raw ? parseAgentsMap(raw) : {};
   const pk = keypair.publicKey.toBase58();
   if (!map[pk]) {
     map[pk] = Buffer.from(keypair.secretKey).toString('base64');
