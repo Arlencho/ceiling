@@ -1,7 +1,9 @@
 # Deck
 
-Slide by slide, written 2026-09-20 so M5 is a build job rather than a writing job. Presentation is
-25% of the score and clarity of vision is one of the five things the evaluation process names.
+Slide by slide, written 2026-09-20 so M5 is a build job rather than a writing job. Aligned
+2026-09-21 to the app that shipped: rule and decision, the fleet folded into existing slides,
+scope as it is now. Presentation is 25% of the score and clarity of vision is one of the five
+things the evaluation process names.
 
 Ten slides. Nothing here needs a screenshot that does not exist yet, except where marked.
 
@@ -11,8 +13,14 @@ Ten slides. Nothing here needs a screenshot that does not exist yet, except wher
 
 > **The agent tried to pay. It didn't.**
 
-One screenshot, full bleed: the refusal card on the phone, showing the amount, the limit it broke,
-and the override that would have cleared it.
+One screenshot, full bleed: the refusal card on the phone. It says "Your rule held. No payment
+made." Then the why line from the 18:00 SE3 refusal the [README](../README.md) already links:
+
+> Asked for 6.2325, over the 0.5 per-payment maximum. An override of 6.2325 would have cleared
+> it.
+
+Never styled as an error. That card, the explorer log on slide 6, and the verify beat in the
+video are the same recorded decision. Not a second rule.
 
 No logo slide, no team slide, no agenda. The first thing a judge sees is the product doing the one
 thing nothing else does.
@@ -29,14 +37,16 @@ analysis.
 
 ---
 
-## 3. What a mandate is
+## 3. What a rule is
 
-Four limits, one screen:
+Four limits, on the rule:
 
 - **cap** the total it may ever spend
 - **per-payment maximum** the largest single payment
 - **expiry** after which nothing moves
-- **merchant** the only payee
+- **payee** the only counterparty
+
+One human, several agents, one rule each. A ruleset is written once and reused on the next agent.
 
 > The key never leaves Seed Vault. Funds never leave your wallet. The agent gets authority, not
 > ownership.
@@ -83,9 +93,13 @@ in their own words is far more persuasive than asserting our side of it.
 Screenshot of an explorer showing a confirmed transaction, with the program log visible:
 
 ```
-VETO REFUSED reason=5 (over per-payment maximum) amount=180000000
-per_tx_max=60000000 remaining=158000000 override_to_clear=180000000
+VETO REFUSED reason=5 (over per-payment maximum) amount=6232500
+per_tx_max=500000 remaining=99339500 override_to_clear=6232500
 ```
+
+That line is the program log on the 18:00 refusal the [README](../README.md) already links.
+Amount 6.2325, per-payment maximum 0.5, remaining 99.3395 of a 100 cap, override 6.2325.
+Same decision as slide 1.
 
 > The transaction succeeded at deciding no. The payment did not happen. The balance is unchanged,
 > and neither party can edit the record.
@@ -99,7 +113,7 @@ per_tx_max=60000000 remaining=158000000 override_to_clear=180000000
 > Seed Vault is built so a human approves every signature. That is the right default, and it is
 > exactly why unattended agent spend has nowhere to live on this platform.
 >
-> A mandate is the Seed Vault-shaped answer: the key never leaves the vault, and the agent gets
+> A rule is the Seed Vault-shaped answer: the key never leaves the vault, and the agent gets
 > bounded authority beside it rather than a copy of the key.
 
 Squads cannot make this argument. AP2 cannot. It is the only "why here" that is not
@@ -109,7 +123,7 @@ interchangeable, and it is the reason this is a phone product and not another RE
 
 ## 8. A real week, not a staged morning
 
-Screenshot: the ledger with multi-day history. **Needs the watcher to have been running.**
+Screenshot: the Decisions screen with multi-day history. **Needs the watcher to have been running.**
 
 > The agent watches a public electricity price feed and pays for charging under the ceiling. The
 > price is real and you can check it at the same URL we do. The merchant terminal is ours, because
@@ -124,7 +138,7 @@ Say the honesty boundary out loud. It converts the obvious objection into a cred
 
 ## 9. The exhaust
 
-> A worst case fixed in advance by the mandate. A complete record of every payment made against it.
+> A worst case fixed in advance by the rule. A complete record of every payment made against it.
 > Every refusal the agent surfaced.
 >
 > AP2 standardised the record of a yes. This is the missing half.
@@ -139,8 +153,9 @@ so.
 
 ## 10. Scope, honestly
 
-> One mandate type. Delegate, not vault. One pay path. One refusal path with a reason and an
-> override hint. An export anyone can re-read from the chain. A real week of history.
+> One rule type. Delegate, not vault. Several rules, one agent each. A ruleset written once and
+> applied to the next agent. One pay path. One refusal path with a reason and an override hint.
+> An export anyone can re-read from the chain. A real week of history.
 >
 > Shipped by Oct 8. Not a bank. Not a marketplace.
 
@@ -156,4 +171,5 @@ restraint" unqualified, "every attempt", "capped budgets" as a headline claim. N
 ## Build notes
 
 Screenshots needed, and the slide each belongs to: 1 the refusal card, 6 the explorer log, 8 the
-multi-day ledger. All three depend on the watcher having run, which is why Sep 23 is the gate.
+Decisions screen with multi-day history. All three depend on the watcher having run, which is why
+Sep 23 is the gate.
