@@ -8,7 +8,7 @@
     "android": "expo start --dev-client --android",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test lib/wallet.test.ts lib/templates.test.ts lib/reasons.test.ts lib/ring.test.ts lib/format.test.ts lib/today.test.ts lib/appConfig.test.ts lib/signatures.test.ts lib/mandateRead.test.ts lib/rpcError.test.ts lib/ruleset.test.ts lib/exportRecord.test.ts lib/ruleView.test.ts lib/override.test.ts"
+    "test": "tsx --experimental-test-module-mocks --test lib/wallet.test.ts lib/templates.test.ts lib/reasons.test.ts lib/ring.test.ts lib/format.test.ts lib/today.test.ts lib/appConfig.test.ts lib/signatures.test.ts lib/mandateRead.test.ts lib/rpcError.test.ts lib/ruleset.test.ts lib/exportRecord.test.ts lib/ruleView.test.ts lib/override.test.ts lib/overrideGrant.test.ts lib/useOverrideGrant.test.ts"
   },
   "dependencies": {
     "@solana-mobile/mobile-wallet-adapter-protocol": "^2.3.0",
@@ -36,6 +36,7 @@
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
+    "react-test-renderer": "^19.2.3",
     "tsx": "^4.23.13",
     "typescript": "~6.0.3"
   }
