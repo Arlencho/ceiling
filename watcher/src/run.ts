@@ -164,7 +164,10 @@ export async function processWindow(args: {
     return withRpcBackoff("recover settled", () => args.recoverSettled!(nonce), log);
   };
 
-  const closeAlreadySettled = async (settled: bigint, amount: bigint): Promise<ProcessResult> => {
+  const closeAlreadySettled = async (
+    settled: bigint,
+    seenSignature: string | null = null,
+  ): Promise<ProcessResult> => {
     const recovered = await recoverPaid();
     if (recovered !== null && recovered.decision === "paid") {
       return writeRecoveredPaid(recovered);
@@ -176,14 +179,14 @@ export async function processWindow(args: {
         decision: "skipped",
         reason: "window overtaken by a later settled charge",
         reason_code: null,
-        signature: null,
+        signature: journalSignature(seenSignature),
         suggested_override: null,
       });
       log(`skipped overtaken window at=${args.at.toISOString()}`);
       return "skipped";
     }
     if (nonce <= settled) {
-      return writePaidUnrecovered(amount);
+      return writePaidUnrecovered(0n);
     }
     // The program refused a stale nonce, but a chain re-read did not show
     // this window as settled. Do not invent paid.
@@ -194,7 +197,7 @@ export async function processWindow(args: {
         decision: "gap",
         reason: STALE_UNCONFIRMED_REASON,
         reason_code: null,
-        signature: null,
+        signature: journalSignature(seenSignature),
         suggested_override: null,
       });
     }
@@ -217,7 +220,7 @@ export async function processWindow(args: {
 
   if (nonce <= settled) {
     try {
-      return await closeAlreadySettled(settled, 0n);
+      return await closeAlreadySettled(settled);
     } catch (err) {
       if (isRateLimitError(err)) return deferRateLimit();
       throw err;
@@ -314,7 +317,7 @@ export async function processWindow(args: {
     // the chain confirms it.
     try {
       const latest = await readSettled();
-      return await closeAlreadySettled(latest, 0n);
+      return await closeAlreadySettled(latest, receipt.signature);
     } catch (err) {
       if (isRateLimitError(err)) return deferRateLimit();
       throw err;
