@@ -7,7 +7,7 @@
   <defs>
     <mask id="knockout">
       <rect x="322" y="284" width="380" height="456" rx="16" fill="#FFFFFF"/>
-      <rect x="372" y="456" width="184" height="112" fill="#000000"/>
+      <rect x="372" y="456" width="72" height="112" fill="#000000"/>
       <rect x="556" y="408" width="56" height="208" fill="#000000"/>
     </mask>
   </defs>
