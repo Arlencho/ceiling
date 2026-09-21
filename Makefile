@@ -54,6 +54,8 @@ test-scripts: ## Run deploy-script checks that do not need a cluster
 	./scripts/ci-covers-packages.test.sh
 	./scripts/ci-covers-packages-round3.test.sh
 	./scripts/ci-covers-packages-critic-r1.test.sh
+	./scripts/ci-covers-packages-critic-r2.test.sh
+	./scripts/ci-covers-packages-critic-r3.test.sh
 	./scripts/gcp-verify.test.sh
 	./scripts/gcp-verify-secrets.test.sh
 	./scripts/deploy-watcher-cloud.test.sh
