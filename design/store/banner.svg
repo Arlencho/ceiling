@@ -7,9 +7,8 @@
   <rect width="1200" height="600" fill="#0F1A16"/>
   <svg x="72" y="78" width="444" height="444" viewBox="192 192 640 640">
     <rect x="322" y="284" width="380" height="456" rx="16" fill="#EDE6D6"/>
-    <rect x="382" y="404" width="260" height="30" fill="#0F1A16"/>
-    <rect x="382" y="512" width="206" height="56" fill="#0F1A16"/>
-    <rect x="588" y="478" width="27" height="124" fill="#0F1A16"/>
+    <rect x="372" y="456" width="184" height="112" fill="#0F1A16"/>
+    <rect x="556" y="408" width="56" height="208" fill="#0F1A16"/>
   </svg>
   <text x="596" y="312" font-family="Georgia" font-size="120" fill="#EDE6D6">Veto</text>
   <text x="600" y="386" font-family="Menlo" font-size="24" letter-spacing="2" fill="#7F8C82">YOUR RULE HELD. NO PAYMENT MADE.</text>

@@ -46,5 +46,9 @@ echo "wrote design/icon/preview/masked-48.png (144x48)"
 
 render "$ICON_SRC/icon.svg" "$PREVIEW/icon-large.png" 512 512
 sips -z 48 48 "$PREVIEW/icon-large.png" --out "$PREVIEW/icon-48.png" >/dev/null
+sips -z 72 72 "$PREVIEW/icon-large.png" --out "$PREVIEW/icon-72.png" >/dev/null
+sips -z 192 192 "$PREVIEW/icon-large.png" --out "$PREVIEW/icon-192.png" >/dev/null
 rm "$PREVIEW/icon-large.png"
 echo "wrote design/icon/preview/icon-48.png (48x48)"
+echo "wrote design/icon/preview/icon-72.png (72x72)"
+echo "wrote design/icon/preview/icon-192.png (192x192)"

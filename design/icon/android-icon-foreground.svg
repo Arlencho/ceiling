@@ -5,7 +5,6 @@
     survives circle, squircle and rounded-square masks.
   -->
   <rect x="322" y="284" width="380" height="456" rx="16" fill="#EDE6D6"/>
-  <rect x="382" y="404" width="260" height="30" fill="#0F1A16"/>
-  <rect x="382" y="512" width="206" height="56" fill="#0F1A16"/>
-  <rect x="588" y="478" width="27" height="124" fill="#0F1A16"/>
+  <rect x="372" y="456" width="184" height="112" fill="#0F1A16"/>
+  <rect x="556" y="408" width="56" height="208" fill="#0F1A16"/>
 </svg>
