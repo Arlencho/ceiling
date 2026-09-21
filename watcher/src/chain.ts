@@ -7,8 +7,8 @@ import anchorPkg, { AnchorProvider, Program, Wallet } from "@coral-xyz/anchor";
 // default export, where it is present on both.
 const { BN } = anchorPkg;
 import type { Idl } from "@coral-xyz/anchor";
+import type { Connection } from "@solana/web3.js";
 import {
-  Connection,
   Keypair,
   PublicKey,
   SystemProgram,
@@ -17,7 +17,9 @@ import {
 } from "@solana/web3.js";
 import type { WatcherConfig } from "./config.js";
 import type { Veto } from "./idl.js";
+import { logLine } from "./log.js";
 import { parseChargeLogs, type ChargeOutcome } from "./parse.js";
+import { createFailoverConnection } from "./rpc.js";
 
 export const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
@@ -57,7 +59,7 @@ export function connect(cfg: WatcherConfig, payer: Keypair): {
   program: Program<Veto>;
   programId: PublicKey;
 } {
-  const connection = new Connection(cfg.rpc, "confirmed");
+  const connection = createFailoverConnection(cfg.rpcs, logLine);
   const provider = new AnchorProvider(connection, new Wallet(payer), {
     commitment: "confirmed",
     skipPreflight: false,

@@ -1,5 +1,5 @@
-import { Connection, PublicKey } from "@solana/web3.js";
-import { withRetry } from "./rpc.js";
+import { PublicKey } from "@solana/web3.js";
+import { createFailoverConnection, parseRpcList, withRetry } from "./rpc.js";
 import {
   buffersEqual,
   ENTRY_SIZE,
@@ -38,7 +38,9 @@ export async function fetchLedgerRing(
   mandate: PublicKey,
 ): Promise<LedgerSnapshot> {
   const address = ledgerPda(programId, mandate);
-  const connection = new Connection(rpcUrl, "confirmed");
+  const endpoints = parseRpcList(rpcUrl);
+  if (endpoints.length === 0) throw new Error("no rpc endpoints configured");
+  const connection = createFailoverConnection(endpoints);
   const info = await withRetry(`getAccountInfo ${address.toBase58()}`, () =>
     connection.getAccountInfo(address, "confirmed"),
   );

@@ -1,11 +1,5 @@
 import { Connection } from "@solana/web3.js";
 
-const RETRY_RE =
-  /429|503|504|timeout|timed out|ECONNRESET|ECONNREFUSED|fetch failed|rate limit|Too many requests|socket hang up|Connect Timeout|503 Service/i;
-
-const SKIP_RE =
-  /cleaned up|does not exist on node|Block not available|Slot \d+ was skipped|was skipped, or missing/i;
-
 export class RateLimitedError extends Error {
   readonly endpoints: readonly string[];
 
@@ -46,50 +40,8 @@ export function isRateLimitError(err: unknown): boolean {
   return /429|too many requests|rate limit/i.test(msg);
 }
 
-export function isRetryable(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  if (SKIP_RE.test(msg)) return false;
-  return RETRY_RE.test(msg);
-}
-
-export function isSkippableSlot(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return SKIP_RE.test(msg);
-}
-
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export async function withRetry<T>(
-  label: string,
-  fn: () => Promise<T>,
-  opts?: { attempts?: number; baseDelayMs?: number; log?: (line: string) => void },
-): Promise<T> {
-  const attempts = opts?.attempts ?? 5;
-  const base = opts?.baseDelayMs ?? 250;
-  const log = opts?.log ?? ((line: string) => process.stderr.write(`${line}\n`));
-  let last: unknown;
-  for (let i = 0; i < attempts; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      last = err;
-      if (!isRetryable(err) || i === attempts - 1) {
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`${label}: ${msg}`);
-      }
-      const delay = base * 2 ** i;
-      const msg = err instanceof Error ? err.message : String(err);
-      if (isRateLimitError(err)) {
-        log(`${label}: rpc rate limited, retry in ${delay}ms`);
-      } else {
-        log(`${label}: rpc failure, retry in ${delay}ms: ${msg}`);
-      }
-      await sleep(delay);
-    }
-  }
-  throw last instanceof Error ? last : new Error(`${label}: retry exhausted`);
 }
 
 function requestUrl(input: RequestInfo | URL): string {
@@ -148,7 +100,7 @@ export function makeFailoverFetch(
 
 export function createFailoverConnection(
   endpoints: readonly string[],
-  log: (line: string) => void = (line) => process.stderr.write(`${line}\n`),
+  log: (line: string) => void = () => {},
   opts: FailoverFetchOpts = {},
 ): Connection {
   const list = [...endpoints];
@@ -176,7 +128,7 @@ export async function withRpcFailover<T>(
   if (list.length === 0) {
     throw new Error(`${label}: no rpc endpoints configured`);
   }
-  const log = opts.log ?? ((line: string) => process.stderr.write(`${line}\n`));
+  const log = opts.log ?? (() => {});
   const sleepFn = opts.sleep ?? sleep;
   let delay = opts.initialDelayMs ?? 250;
   let lastErr: unknown;
@@ -196,35 +148,5 @@ export async function withRpcFailover<T>(
       throw new RateLimitedError(`${label}: rpc rate limited on all endpoints`, list);
     }
   }
-  throw lastErr instanceof Error
-    ? lastErr
-    : new RateLimitedError(`${label}: rpc rate limited on all endpoints`, list);
-}
-
-export function clampPageSize(n: number | undefined): number {
-  if (n === undefined || !Number.isFinite(n)) return 200;
-  const i = Math.floor(n);
-  if (i < 1) return 1;
-  if (i > 1000) return 1000;
-  return i;
-}
-
-export async function paginateNewestFirst<T extends { signature: string }>(
-  fetchPage: (before?: string) => Promise<T[]>,
-  pageSize: number,
-): Promise<{ items: T[]; pageCount: number }> {
-  const items: T[] = [];
-  let pageCount = 0;
-  let before: string | undefined;
-  for (;;) {
-    const batch = await fetchPage(before);
-    if (batch.length === 0) break;
-    pageCount += 1;
-    items.push(...batch);
-    if (batch.length < pageSize) break;
-    const last = batch[batch.length - 1];
-    if (!last) break;
-    before = last.signature;
-  }
-  return { items, pageCount };
+  throw lastErr instanceof Error ? lastErr : new RateLimitedError(`${label}: rpc rate limited on all endpoints`, list);
 }

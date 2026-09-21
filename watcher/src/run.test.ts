@@ -377,6 +377,54 @@ test("a gapped window below a later refusal is still submitted when the feed is 
   assert.equal(journal.load().at(-1)?.decision, "paid");
 });
 
+test("a rate limited cadence slot stays due afterwards", async () => {
+  const journal = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-429-")), "d.jsonl"));
+  const lines: string[] = [];
+  let calls = 0;
+  const args = {
+    at: new Date(windowStart),
+    feed: feedWith("0.00892"),
+    journal,
+    kwhMilli: 50_000n,
+    mintDecimals: 6,
+    log: (line: string) => lines.push(line),
+    feedAttempts: 1,
+    feedRetryMs: 0,
+    submit: async () => {
+      calls += 1;
+      throw new Error("429 Too Many Requests");
+    },
+  };
+  assert.equal(await processWindow(args), "deferred");
+  assert.equal(calls, 1);
+  assert.equal(journal.load().length, 0, "a rate limit must not write a journal row");
+  assert.equal(journal.hasNonce(1789855200n), false, "the window is still owed a charge");
+  assert.equal(journal.hasGap(1789855200n), false, "a rate limit is not a feed gap");
+  assert.ok(lines.some((line) => /rate limited/.test(line)));
+  assert.ok(!lines.some((line) => /rpc failure/.test(line)));
+
+  let paid = 0;
+  const retry = await processWindow({
+    ...args,
+    submit: async (amount, nonce) => {
+      paid += 1;
+      assert.equal(nonce, 1789855200n);
+      assert.equal(amount, 446_000n);
+      return {
+        decision: "paid" as const,
+        reason: "ok",
+        reasonCode: 0,
+        suggestedOverride: null,
+        signature: "after-429-sig",
+      };
+    },
+  });
+  assert.equal(retry, "submitted");
+  assert.equal(paid, 1);
+  assert.equal(journal.load()[0]?.decision, "paid");
+  assert.equal(journal.hasNonce(1789855200n), true);
+});
+
 test("an unreadable price is recorded as a gap only once", async () => {
   const journal = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-unreadable-")), "d.jsonl"));
   let calls = 0;

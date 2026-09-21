@@ -1,12 +1,15 @@
-import {
-  Connection,
-  PublicKey,
-  type ConfirmedSignatureInfo,
-  type VersionedTransactionResponse,
-} from "@solana/web3.js";
+import type { Connection, ConfirmedSignatureInfo, VersionedTransactionResponse } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import { DEFAULT_PROGRAM_ID } from "./constants.js";
 import { decodeEventsFromLogs, decodeIxData, decisionsFromTx } from "./events.js";
-import { clampPageSize, isSkippableSlot, paginateNewestFirst, withRetry } from "./rpc.js";
+import {
+  clampPageSize,
+  createFailoverConnection,
+  isSkippableSlot,
+  paginateNewestFirst,
+  parseRpcList,
+  withRetry,
+} from "./rpc.js";
 import type { CompiledIx, Decision, FetchHistoryOptions, SignaturePage, TxView } from "./types.js";
 
 export type HistoryResult = {
@@ -35,7 +38,9 @@ type MetaLike = {
 } | null;
 
 export async function fetchDecisionHistory(opts: FetchHistoryOptions): Promise<HistoryResult> {
-  const connection = new Connection(opts.rpcUrl, "confirmed");
+  const endpoints = parseRpcList(opts.rpcUrl);
+  if (endpoints.length === 0) throw new Error("no rpc endpoints configured");
+  const connection = createFailoverConnection(endpoints);
   const programId = new PublicKey(opts.programId ?? DEFAULT_PROGRAM_ID);
   const pageSize = clampPageSize(opts.pageSize);
   const allowBlockScan = opts.allowBlockScan !== false;
@@ -258,7 +263,9 @@ export async function fetchLedgerBytes(
   rpcUrl: string,
   address: string,
 ): Promise<Buffer> {
-  const connection = new Connection(rpcUrl, "confirmed");
+  const endpoints = parseRpcList(rpcUrl);
+  if (endpoints.length === 0) throw new Error("no rpc endpoints configured");
+  const connection = createFailoverConnection(endpoints);
   const info = await withRetry(`getAccountInfo ${address}`, () =>
     connection.getAccountInfo(new PublicKey(address), "confirmed"),
   );

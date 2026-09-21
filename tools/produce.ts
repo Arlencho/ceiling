@@ -34,14 +34,14 @@ import {
   parseArgs,
   resolveClusterName,
   resolveProgramId,
-  resolveRpc,
+  resolveRpcList,
 } from "./lib.js";
 
 function usage(): never {
   console.error(`open a mandate and submit one paying charge and one refused charge
 
 Usage:
-  npx tsx produce.ts [--rpc url] [--keys-dir dir]
+  npx tsx produce.ts [--rpc url[,url...]] [--keys-dir dir]
 
 Needs gitignored keypairs under keys/ (owner, agent, deployer, plus
 devnet-addresses.env). Creates a dedicated source token account so the
@@ -68,7 +68,8 @@ async function main(): Promise<void> {
   const cli = parseArgs(process.argv.slice(2));
   if (cli.flags.help || cli.flags.h) usage();
 
-  const rpc = resolveRpc(cli);
+  const rpcs = resolveRpcList(cli);
+  const rpc = rpcs.join(",");
   const programId = resolveProgramId();
   const cluster = resolveClusterName();
   const dir = flagString(cli, "keys-dir") ?? keysDir();
@@ -85,7 +86,7 @@ async function main(): Promise<void> {
     throw new Error("owner and agent keypairs must differ");
   }
 
-  const conn = connection(rpc);
+  const conn = connection(rpcs);
   const idl = JSON.parse(readFileSync(IDL_PATH, "utf8")) as Idl;
   const provider = new AnchorProvider(conn, new Wallet(owner), {
     commitment: "confirmed",

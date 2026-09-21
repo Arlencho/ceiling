@@ -1,0 +1,117 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { loadConfig } from "./config.js";
+import {
+  RateLimitedError,
+  isRateLimitError,
+  makeFailoverFetch,
+  parseRpcList,
+  withRpcFailover,
+} from "./rpc.js";
+
+test("parseRpcList keeps order, splits on commas and whitespace, and drops duplicates", () => {
+  assert.deepEqual(parseRpcList("http://a.invalid"), ["http://a.invalid"]);
+  assert.deepEqual(parseRpcList("http://a.invalid, http://b.invalid"), [
+    "http://a.invalid",
+    "http://b.invalid",
+  ]);
+  assert.deepEqual(parseRpcList("http://a.invalid\nhttp://b.invalid"), [
+    "http://a.invalid",
+    "http://b.invalid",
+  ]);
+  assert.deepEqual(parseRpcList("http://a.invalid, http://a.invalid, http://b.invalid"), [
+    "http://a.invalid",
+    "http://b.invalid",
+  ]);
+  assert.deepEqual(parseRpcList("  ,  "), []);
+});
+
+test("loadConfig honours a comma-separated VETO_RPC list, first URL first", () => {
+  const cfg = loadConfig({
+    VETO_RPC: "http://dedicated.invalid, http://127.0.0.1:8999",
+    VETO_KEYS_DIR: "/tmp/veto-rpc-test-keys-missing",
+  });
+  assert.deepEqual(cfg.rpcs, ["http://dedicated.invalid", "http://127.0.0.1:8999"]);
+  assert.equal(cfg.rpc, "http://dedicated.invalid");
+});
+
+test("isRateLimitError is true for 429 and rate-limit wording, false for a dead read", () => {
+  assert.equal(isRateLimitError(new Error("429 Too Many Requests")), true);
+  assert.equal(isRateLimitError(new Error("Server responded with 429")), true);
+  assert.equal(isRateLimitError(new RateLimitedError("rpc rate limited on http://a")), true);
+  assert.equal(isRateLimitError(new Error("fetch failed")), false);
+  assert.equal(isRateLimitError(new Error("Block 4 cleaned up, does not exist on node")), false);
+});
+
+test("a 429 is retried on the next endpoint rather than treated as a dead read", async () => {
+  const calls: string[] = [];
+  const fetchImpl = async (input: RequestInfo | URL) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.includes("primary")) {
+      return new Response("Too Many Requests", { status: 429, statusText: "Too Many Requests" });
+    }
+    return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: "ok" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  const lines: string[] = [];
+  const failover = makeFailoverFetch(
+    ["http://primary.invalid", "http://fallback.invalid"],
+    (line) => lines.push(line),
+    { fetch: fetchImpl, sleep: async () => {}, initialDelayMs: 0 },
+  );
+  const res = await failover("http://primary.invalid", { method: "POST" });
+  assert.equal(res.status, 200);
+  assert.deepEqual(calls, ["http://primary.invalid", "http://fallback.invalid"]);
+  assert.equal(lines.length, 1);
+  assert.match(lines[0] ?? "", /rate limited/);
+  assert.doesNotMatch(lines.join("\n"), /failure/);
+});
+
+test("withRpcFailover walks the list on 429 and then succeeds", async () => {
+  const seen: string[] = [];
+  const lines: string[] = [];
+  const value = await withRpcFailover(
+    "charge",
+    ["http://primary.invalid", "http://fallback.invalid"],
+    async (endpoint) => {
+      seen.push(endpoint);
+      if (endpoint.includes("primary")) {
+        throw new Error("429 Too Many Requests");
+      }
+      return "ok";
+    },
+    { log: (line) => lines.push(line), sleep: async () => {}, initialDelayMs: 0 },
+  );
+  assert.equal(value, "ok");
+  assert.deepEqual(seen, ["http://primary.invalid", "http://fallback.invalid"]);
+  assert.match(lines.join("\n"), /rate limited/);
+  assert.doesNotMatch(lines.join("\n"), /failure/);
+});
+
+test("when every endpoint rate limits, the error names the rate limit", async () => {
+  const lines: string[] = [];
+  await assert.rejects(
+    () =>
+      withRpcFailover(
+        "charge",
+        ["http://a.invalid", "http://b.invalid"],
+        async () => {
+          throw new Error("Server responded with 429 Too Many Requests");
+        },
+        { log: (line) => lines.push(line), sleep: async () => {}, initialDelayMs: 0 },
+      ),
+    (err: unknown) => {
+      assert.equal(err instanceof RateLimitedError, true);
+      assert.match(err instanceof Error ? err.message : "", /rate limited/);
+      return true;
+    },
+  );
+  assert.equal(lines.length, 2);
+  for (const line of lines) {
+    assert.match(line, /rate limited/);
+    assert.doesNotMatch(line, /failure/);
+  }
+});

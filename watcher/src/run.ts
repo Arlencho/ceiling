@@ -4,10 +4,11 @@ import { logError, logLine } from "./log.js";
 import { amountBaseUnits, sekPerKwhToScaled } from "./money.js";
 import { nonceFromWindowStart } from "./nonce.js";
 import type { ChargeReceipt } from "./chain.js";
+import { RateLimitedError, isRateLimitError } from "./rpc.js";
 
 export type SubmitCharge = (amount: bigint, nonce: bigint) => Promise<ChargeReceipt>;
 
-export type ProcessResult = "submitted" | "skipped" | "gap";
+export type ProcessResult = "submitted" | "skipped" | "gap" | "deferred";
 
 const FEED_ATTEMPTS = 5;
 const FEED_RETRY_MS = 2_000;
@@ -29,6 +30,10 @@ export async function withRpcBackoff<T>(
       return await fn();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      if (isRateLimitError(err)) {
+        log(`${label}: rpc rate limited: ${message}`);
+        throw err instanceof RateLimitedError ? err : new RateLimitedError(`${label}: ${message}`);
+      }
       log(`${label}: rpc failure, retry in ${delay}ms: ${message}`);
       await sleep(delay);
       delay = delay * 2 > RPC_MAX_MS ? RPC_MAX_MS : delay * 2;
@@ -181,7 +186,18 @@ export async function processWindow(args: {
     return "skipped";
   }
 
-  const receipt = await withRpcBackoff("charge", () => args.submit(amount, nonce), logError);
+  let receipt: ChargeReceipt;
+  try {
+    receipt = await withRpcBackoff("charge", () => args.submit(amount, nonce), log);
+  } catch (err) {
+    if (isRateLimitError(err)) {
+      log(
+        `charge: rpc rate limited, window stays due nonce=${nonce.toString()} window=${window.timeStart}`,
+      );
+      return "deferred";
+    }
+    throw err;
+  }
   args.journal.append({
     ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount }),
     decision: receipt.decision,
