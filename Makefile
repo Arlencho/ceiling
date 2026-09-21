@@ -58,10 +58,12 @@ test-scripts: ## Run deploy-script checks that do not need a cluster
 	./scripts/watcher-silent-alert.test.sh
 	./scripts/watcher-alert-round3.test.sh
 
-# Provision a chain plus the demo fixtures. VETO_RPC must be set. Use localnet
-# when the devnet faucet is rate limiting.
+# Provision a chain plus the demo fixtures. `make setup` names public devnet
+# (the recorded cluster). `make localnet` names a local validator. The script
+# still refuses if VETO_RPC is unset, so a direct invocation must name it.
+VETO_RPC ?= https://api.devnet.solana.com
 setup: ## Provision the demo cluster and token fixtures
-	./scripts/devnet-setup.sh
+	VETO_RPC=$(VETO_RPC) ./scripts/devnet-setup.sh
 
 LOCALNET_RPC ?= http://127.0.0.1:8899
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Ground Truth: a package with tests has a CI job that runs them.
+# Ground Truth: a package that defines a check has a CI job that runs that
+# npm script, not a similar command the workflow happens to carry.
 #
 # This exists because that was false three separate times and nobody noticed
 # any of them until something else went looking:
@@ -10,6 +11,10 @@
 #   tools     had a test file the hand-written script never named, so CI ran
 #             every test except that one.
 #   terminal  49 tests and no job at all, from the day it was merged.
+#
+# A fourth time: app's job ran `npx tsc --noEmit` while package.json typecheck
+# added tsconfig.test.json. Matching the command CI happened to carry, rather
+# than the script the package defines, left the new tsconfig off the gate.
 #
 # A suite nobody runs is worse than no suite, because it is quoted as evidence.
 # No network, no cloud, no vendor CLIs.
@@ -24,19 +29,30 @@ bad() { printf 'not ok - %s\n' "$1"; fail=$((fail+1)); }
 
 [ -f "$CI" ] || { echo "no workflow at $CI" >&2; exit 1; }
 
+# Checks the package itself defines. CI must invoke these npm scripts.
+# `test` also accepts the `npm test` alias. A bare `npx tsc --noEmit` does
+# not count as the package's typecheck script.
+CHECKS="test typecheck"
+
 for pkg in "$ROOT"/*/package.json; do
     dir=$(dirname "$pkg")
     name=$(basename "$dir")
     [ "$name" = "node_modules" ] && continue
 
-    has_test=$(python3 -c "
+    defined=$(python3 -c "
 import json,sys
-try: print('yes' if 'test' in json.load(open(sys.argv[1])).get('scripts',{}) else 'no')
-except Exception: print('no')" "$pkg")
-    [ "$has_test" = "yes" ] || continue
+try:
+    scripts = json.load(open(sys.argv[1])).get('scripts', {})
+except Exception:
+    scripts = {}
+wanted = sys.argv[2].split()
+print(' '.join(s for s in wanted if s in scripts))
+" "$pkg" "$CHECKS")
+    [ -n "$defined" ] || continue
 
-    # The job must exist, and it must actually run the tests. A job that stops
-    # at the typecheck is how app stayed green while never running a test.
+    # The job must exist, and it must actually run the scripts the package
+    # defines. A job that stops at a bare tsc is how app stayed green while
+    # never typechecking the test files.
     block=$(awk -v p="  $name:" '
         $0 == p {inblock=1; next}
         inblock && /^  [a-zA-Z0-9_-]+:$/ {exit}
@@ -44,15 +60,27 @@ except Exception: print('no')" "$pkg")
     ' "$CI")
 
     if [ -z "$block" ]; then
-        bad "$name has a test script but no CI job"
+        bad "$name defines check script(s) ($defined) but has no CI job"
         continue
     fi
-    if printf '%s' "$block" | grep -qE "run: (npm test|npm run test)"; then
-        ok "$name has a CI job that runs its tests"
-    else
-        bad "$name has a CI job that never runs its tests"
-    fi
 
+    for check in $defined; do
+        if [ "$check" = "test" ]; then
+            pat='run: (npm test|npm run test)'
+        else
+            pat="run: npm run ${check}"
+        fi
+        if printf '%s' "$block" | grep -qE "$pat"; then
+            ok "$name CI job runs the package's $check script"
+        else
+            bad "$name CI job does not run the package's $check script (a command CI happens to carry is not scripts.$check)"
+        fi
+    done
+
+    case " $defined " in
+        *" test "*) ;;
+        *) continue ;;
+    esac
     # A hand-written list of test files silently drops the next file added.
     script=$(python3 -c "
 import json,sys

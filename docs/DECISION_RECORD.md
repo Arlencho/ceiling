@@ -20,32 +20,34 @@ timestamps and nonces are integers (mint base units, unix seconds). No floats.
 {
   "schema_version": 1,
   "cluster": "devnet",
-  "genesis_hash": "5NrLCg7BRzhkDYxbiDy966tfYmVPfpprZamwXLALe3L5",
+  "genesis_hash": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
   "program_id": "3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV",
-  "mandate": "GLrnmrCEVa7fLawwFtFJ8D91Nvv3WMTKweiM9xKdx6RS",
+  "mandate": "CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g",
   "limits": {
-    "cap": 500000000,
-    "per_tx_max": 60000000,
-    "expires_at": 1792465618,
+    "cap": 100000000,
+    "per_tx_max": 500000,
+    "expires_at": 1797713870,
     "merchant": "6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG",
-    "purpose": "charging"
+    "purpose": "SE3 home charging"
   },
   "kind": "refused",
-  "amount": 180000000,
+  "amount": 6232500,
   "counterparty": "2bt9HMQbNy6t2J4hnw15QF8iUesPrgJoNDvf99HNay7F",
-  "timestamp": 1789873620,
-  "nonce": 2,
+  "timestamp": 1789937892,
+  "nonce": 1789920000,
   "reason_code": 5,
   "reason_text": "over per-payment maximum",
-  "suggested_override": 180000000,
-  "signature": "5j6QCeKUFeu5FcAgePUp9xqyLMkTUF3C6ocoA8MWQbUuBZJhK8ZhewnivkWfK3eN1M8CDeDbEXxUmWXqL8zwj6Ls"
+  "suggested_override": 6232500,
+  "signature": "3rTpyrHEScEPhjHL3cUDYSGwGAxU6JVzbdWVZbr4YMHt3wAM7ad9JGPC26R8aQMH9aqYVzrFqbEogX1CquNcWqib"
 }
 ```
 
-That object is a live export from 2026-09-20: mandate opened, one charge paid
-at 50000000, one refused at 180000000 because it broke the 60000000
-per-payment maximum. `tools/verify.ts` confirmed it against the cluster in
-[DEVNET.md](DEVNET.md). The signature is the refused `charge`.
+That object is a live export from public Solana devnet (the cluster in
+[DEVNET.md](DEVNET.md)): mandate `CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g`
+(SE3 home charging), refused at 6232500 because it broke the 500000
+per-payment maximum. `tools/verify.ts` confirmed it against
+`https://api.devnet.solana.com`. The signature is the refused `charge` the
+README links for 2026-09-20 evening.
 
 ## Fields
 
