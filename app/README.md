@@ -11,7 +11,7 @@ Do not add an iOS or web target.
 From this directory:
 
 ```bash
-npx tsc --noEmit
+npm run typecheck
 npx expo config
 npm test
 ```

@@ -242,6 +242,24 @@ export function resolveRpc(
   return resolveRpcList(cli, repoRoot, env)[0]!;
 }
 
+function programIdFromIdl(repoRoot: string): string | undefined {
+  const path = join(repoRoot, "tools", "idl", "veto.json");
+  if (!existsSync(path)) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8"));
+  } catch (err) {
+    throw new Error(
+      `lib.resolveProgramId: ${path}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  if (parsed && typeof parsed === "object" && "address" in parsed) {
+    const address = (parsed as { address: unknown }).address;
+    if (typeof address === "string" && address.length > 0) return address;
+  }
+  return undefined;
+}
+
 export function resolveProgramId(
   repoRoot = REPO_DIR,
   env: NodeJS.ProcessEnv = process.env,
@@ -252,6 +270,8 @@ export function resolveProgramId(
   const file = addressesFile(repoRoot);
   const fromFile = file.get("PROGRAM_ID") ?? file.get("VETO_PROGRAM_ID");
   if (fromFile && fromFile.length > 0) return new PublicKey(fromFile);
+  const fromIdl = programIdFromIdl(repoRoot);
+  if (fromIdl) return new PublicKey(fromIdl);
   throw new Error(
     "lib.resolveProgramId: missing VETO_PROGRAM_ID; set it in the environment or keys/devnet-addresses.env",
   );
@@ -457,6 +477,8 @@ export async function fetchLedger(conn: Connection, address: PublicKey): Promise
   return decodeLedger(Buffer.from(info.data));
 }
 
+type AccountKeyLike = string | { pubkey: string } | { toBase58: () => string };
+
 type RpcTx = {
   meta: {
     err: unknown;
@@ -464,7 +486,7 @@ type RpcTx = {
   } | null;
   transaction: {
     message: {
-      accountKeys?: Array<string | { pubkey: string } | PublicKey>;
+      accountKeys?: Array<AccountKeyLike>;
       instructions?: Array<{
         programIdIndex: number;
         accounts: number[];
@@ -475,26 +497,39 @@ type RpcTx = {
         accountKeyIndexes: number[];
         data: Uint8Array | number[];
       }>;
-      staticAccountKeys?: PublicKey[];
+      staticAccountKeys?: AccountKeyLike[];
     };
   };
 };
 
-function flattenAccountKeys(tx: RpcTx, loaded?: { writable: PublicKey[]; readonly: PublicKey[] }): PublicKey[] {
+function toPublicKey(k: unknown): PublicKey {
+  if (k instanceof PublicKey) return k;
+  if (typeof k === "string") return new PublicKey(k);
+  if (k && typeof k === "object") {
+    const rec = k as { toBase58?: unknown; pubkey?: unknown };
+    if (typeof rec.toBase58 === "function") {
+      return new PublicKey((rec.toBase58 as () => string)());
+    }
+    if (rec.pubkey !== undefined) return toPublicKey(rec.pubkey);
+  }
+  throw new Error("lib.toPublicKey: not a public key");
+}
+
+function flattenAccountKeys(tx: RpcTx, loaded?: { writable: AccountKeyLike[]; readonly: AccountKeyLike[] }): PublicKey[] {
   const msg = tx.transaction.message;
   if (Array.isArray(msg.accountKeys) && msg.accountKeys.length > 0) {
-    return msg.accountKeys.map((k) => {
-      if (k instanceof PublicKey) return k;
-      if (typeof k === "string") return new PublicKey(k);
-      return new PublicKey(k.pubkey);
-    });
+    return msg.accountKeys.map((k) => toPublicKey(k));
   }
   const staticKeys = msg.staticAccountKeys ?? [];
-  return [...staticKeys, ...(loaded?.writable ?? []), ...(loaded?.readonly ?? [])];
+  return [
+    ...staticKeys.map((k) => toPublicKey(k)),
+    ...(loaded?.writable ?? []).map((k) => toPublicKey(k)),
+    ...(loaded?.readonly ?? []).map((k) => toPublicKey(k)),
+  ];
 }
 
 export function parseChargeFromTx(
-  tx: RpcTx & { meta?: { loadedAddresses?: { writable: PublicKey[]; readonly: PublicKey[] } } | null },
+  tx: RpcTx & { meta?: { loadedAddresses?: { writable: AccountKeyLike[]; readonly: AccountKeyLike[] } } | null },
   programId: PublicKey,
 ): ChargeIx | null {
   const keys = flattenAccountKeys(tx, tx.meta?.loadedAddresses ?? undefined);

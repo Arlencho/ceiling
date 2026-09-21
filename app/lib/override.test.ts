@@ -349,9 +349,7 @@ test('CRITIC: an already-granted override on a rule that is not active must not 
       decimals: 0,
     });
     assert.equal(assessment.status, 'blocked', `status ${status} must be blocked, got ${assessment.status}`);
-    if (assessment.status !== 'ready') {
-      assert.equal(assessment.why.includes('can retry'), false, 'must not promise a retry that evaluate() will refuse');
-    }
+    assert.equal(assessment.why.includes('can retry'), false, 'must not promise a retry that evaluate() will refuse');
   }
 });
 

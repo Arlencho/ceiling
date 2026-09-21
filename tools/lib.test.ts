@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import {
   CHARGE_DISCRIMINATOR,
   KIND_PAID,
@@ -10,6 +11,7 @@ import {
   decodeBase58,
   kindName,
   parseArgs,
+  parseChargeFromTx,
   parseRecord,
   reasonText,
   recordToJson,
@@ -173,4 +175,61 @@ test("critic: an empty --rpc list does not silently become the public default en
   } finally {
     if (saved !== undefined) process.env.VETO_RPC = saved;
   }
+});
+
+// A PublicKey from another module copy: toBase58 works, instanceof PublicKey is
+// false, and there is no .pubkey field. That is the shape Connection from
+// indexer/node_modules hands tools/lib.ts in a two-package install (#92).
+function foreignKey(real: PublicKey) {
+  const s = real.toBase58();
+  return {
+    toBase58: () => s,
+    toString: () => s,
+  };
+}
+
+test("parseChargeFromTx reads account keys from another web3.js copy", () => {
+  const agent = Keypair.generate().publicKey;
+  const mandate = Keypair.generate().publicKey;
+  const ledger = Keypair.generate().publicKey;
+  const source = Keypair.generate().publicKey;
+  const destination = Keypair.generate().publicKey;
+  const mint = Keypair.generate().publicKey;
+  const program = new PublicKey("3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV");
+  const locals = [agent, mandate, ledger, source, destination, mint, program];
+  const data = Buffer.concat([CHARGE_DISCRIMINATOR, u64Le(6232500n), u64Le(1789920000n)]);
+  const tx = {
+    meta: { err: null },
+    transaction: {
+      message: {
+        accountKeys: locals.map(foreignKey),
+        compiledInstructions: [
+          {
+            programIdIndex: 6,
+            accountKeyIndexes: [0, 1, 2, 3, 4, 5, 6],
+            data,
+          },
+        ],
+      },
+    },
+  };
+  const charge = parseChargeFromTx(tx, program);
+  assert.ok(charge, "a charge instruction with foreign PublicKey account keys must parse");
+  assert.equal(charge.amount, 6232500n);
+  assert.equal(charge.nonce, 1789920000n);
+  assert.equal(charge.mandate.toBase58(), mandate.toBase58());
+  assert.equal(charge.destination.toBase58(), destination.toBase58());
+});
+
+test("resolveProgramId reads the program id from the committed IDL", () => {
+  const repo = tmpRepo();
+  mkdirSync(join(repo, "tools", "idl"), { recursive: true });
+  writeFileSync(
+    join(repo, "tools", "idl", "veto.json"),
+    JSON.stringify({ address: "3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV" }),
+  );
+  assert.equal(
+    resolveProgramId(repo, {}).toBase58(),
+    "3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV",
+  );
 });
