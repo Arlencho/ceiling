@@ -226,8 +226,11 @@ test('a share deep link whose decision belongs to another rule names the mismatc
     'share screen must name the mismatch and tell the owner to switch on the Rules tab',
   );
   assert.match(shareSource, /loadedRuleMatchesDecision/);
+  // Search for where the constant is RENDERED, not where it is imported. The
+  // bare identifier first matches the import at the top of the file, so this
+  // assertion passed whether or not the empty state existed at all.
   const mismatchGate = shareSource.search(
-    /SHARE_RULE_MISMATCH|This decision belongs to a rule that is not selected/,
+    /<EmptyState>\{SHARE_RULE_MISMATCH\}<\/EmptyState>/,
   );
   const chooser = shareSource.search(/What do you want to prove\?/);
   assert.notEqual(mismatchGate, -1);

@@ -131,7 +131,6 @@ test('changing the payee after applying a ruleset does not make the stamp report
     purpose: applied.purpose,
     cap: parseBaseUnits(applied.cap, 6),
     perTxMax: parseBaseUnits(applied.perTxMax, 6),
-    merchant: otherPayee,
     decimals: 6,
     rulesets: [stored],
   });
