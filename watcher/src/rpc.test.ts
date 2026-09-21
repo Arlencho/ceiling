@@ -115,3 +115,55 @@ test("when every endpoint rate limits, the error names the rate limit", async ()
     assert.doesNotMatch(line, /failure/);
   }
 });
+
+// Critic fixtures, round 1. Each one goes RED on b23b9d3.
+
+test("critic: one configured endpoint still backs off on a transient 429 instead of surfacing it on the first throttle", async () => {
+  // Before this branch, web3.js retried a 429 on the same endpoint four more
+  // times (500 ms doubling). disableRetryOnRateLimit: true removed that and
+  // makeFailoverFetch only moves between entries, so the default one-URL
+  // config now gets zero retries on a rate limit.
+  let n = 0;
+  const slept: number[] = [];
+  const fetchImpl = async () => {
+    n += 1;
+    if (n === 1) {
+      return new Response("Too Many Requests", { status: 429, statusText: "Too Many Requests" });
+    }
+    return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: "ok" }), { status: 200 });
+  };
+  const failover = makeFailoverFetch(["http://only.invalid"], () => {}, {
+    fetch: fetchImpl,
+    sleep: async (ms) => {
+      slept.push(ms);
+    },
+    initialDelayMs: 1,
+  });
+  const res = await failover("http://only.invalid", { method: "POST" });
+  assert.equal(res.status, 200);
+  assert.equal(n, 2);
+  assert.ok(slept.length >= 1, "a bounded backoff must run before the retry");
+});
+
+test("critic: a malformed entry in VETO_RPC is refused at load, not discovered at the first 429", () => {
+  // parseRpcList validates nothing. The primary works, so a typo in the
+  // fallback is a silent single-endpoint configuration until the first 429,
+  // at which point fetch("gargabe") throws a TypeError that withRpcBackoff
+  // treats as an rpc failure and retries every 60 s.
+  assert.throws(() =>
+    loadConfig({
+      VETO_RPC: "http://a.invalid, gargabe",
+      VETO_KEYS_DIR: "/tmp/veto-rpc-test-keys-missing",
+    }),
+  );
+});
+
+test("critic: an unconfirmed-transaction timeout is not a rate limit even when the signature contains 429", () => {
+  // web3.js TransactionExpiredTimeoutError message shape. Base58 signatures
+  // can contain the digits 429. This is the one error where the send may
+  // have landed, and classifying it as a rate limit routes it to deferred
+  // and a resubmit of the same nonce.
+  const msg =
+    "Transaction was not confirmed in 30.00 seconds. It is unknown if it succeeded or failed. Check signature 3Q429kLmNoPqRsTuVwXyZ using the Solana Explorer or CLI tools.";
+  assert.equal(isRateLimitError(new Error(msg)), false);
+});
