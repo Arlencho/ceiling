@@ -107,9 +107,11 @@ guard_passes() {
 MUST_REJECT="bi-two-globs bi-exact-main bi-single-quoted bi-block-list bi-char-class
 br-release br-negation-only br-refs-heads br-all-then-negate br-main-suffix
 on-schedule-only on-dispatch-only on-dispatch-scalar on-dispatch-list on-dispatch-flow on-dispatch-pr-closed
-paths-self-negated"
-INFO_ESCAPE="esc-push-bare-br-never esc-push-tags-bi-main esc-pr-tags esc-paths-readme esc-paths-ignore-app esc-paths-app-only"
-CONTROL_PASS="ctl-br-main ctl-br-glob ctl-br-negate-then-all ctl-bi-other ctl-paths-ignore-md ctl-paths-all ctl-push-bare"
+paths-self-negated
+esc-push-bare-br-never esc-push-tags-bi-main esc-paths-readme esc-paths-ignore-app esc-paths-app-only
+ctl-paths-ignore-md ctl-paths-all"
+INFO_ESCAPE="esc-pr-tags"
+CONTROL_PASS="ctl-br-main ctl-br-glob ctl-br-negate-then-all ctl-bi-other ctl-push-bare"
 
 for mode in $MUST_REJECT; do
     dir=$(scratch)
