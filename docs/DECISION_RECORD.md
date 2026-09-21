@@ -195,9 +195,9 @@ RPC, in order: `--rpc`, then `VETO_RPC`, then `keys/devnet-addresses.env`
 `RPC=`. If none of those is set, the tool exits and names `VETO_RPC`. There
 is no built-in endpoint.
 
-The recorded cluster for this repo is the RPC in [DEVNET.md](DEVNET.md). Public
-`https://api.devnet.solana.com` is a different genesis. Verify against the
-cluster that actually ran the transaction.
+The recorded cluster for this repo is public Solana devnet. The RPC is
+`https://api.devnet.solana.com`, as listed in [DEVNET.md](DEVNET.md). Verify
+against that cluster. A record from another genesis will not confirm.
 
 ## Commands
 

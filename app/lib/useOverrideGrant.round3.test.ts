@@ -133,6 +133,10 @@ function why(out: Out): string {
   return out.view?.assessment && 'why' in out.view.assessment ? out.view.assessment.why : '';
 }
 
+function assessmentStatus(out: Out): string | undefined {
+  return out.view?.assessment?.status;
+}
+
 test('CRITIC R3: two failed probes in a row each cost a read, and the third pull recovers', async () => {
   const probe = probeStub(['reject', 'reject', READY]);
   const out: Out = { view: null };
@@ -170,17 +174,17 @@ test('CRITIC R3: a failure after the chain moved does not fall back to the stale
   const out: Out = { view: null };
   const first = args(probe.fn);
   const root = await mount(first, out);
-  assert.equal(out.view?.assessment?.status, 'ready');
+  assert.equal(assessmentStatus(out), 'ready');
 
   const moved: Args = { ...first, mandate: mandate({ lastNonce: 7n }) };
   await pull(root, moved, out);
   assert.equal(probe.calls(), 2);
-  assert.equal(out.view?.assessment?.status, 'blocked', 'the old ready must not survive a failed re-read');
+  assert.equal(assessmentStatus(out), 'blocked', 'the old ready must not survive a failed re-read');
   assert.match(why(out), /Pull to retry/);
 
   await pull(root, sameState(moved), out);
   assert.equal(probe.calls(), 3, 'the pull after that failure must read again');
-  assert.equal(out.view?.assessment?.status, 'ready');
+  assert.equal(assessmentStatus(out), 'ready');
 });
 
 test('CRITIC R3: while the retry after a failure is in flight the screen never offers', async () => {
@@ -188,14 +192,14 @@ test('CRITIC R3: while the retry after a failure is in flight the screen never o
   const out: Out = { view: null };
   const first = args(probe.fn);
   const root = await mount(first, out);
-  assert.equal(out.view?.assessment?.status, 'blocked');
+  assert.equal(assessmentStatus(out), 'blocked');
 
   await pull(root, sameState(first), out);
   assert.equal(probe.calls(), 2);
-  assert.notEqual(out.view?.assessment?.status, 'ready', 'no offer while the read is pending');
+  assert.notEqual(assessmentStatus(out), 'ready', 'no offer while the read is pending');
   assert.ok(
-    out.view?.assessment?.status === 'blocked' || out.view?.assessment?.status === 'checking',
-    `in flight after a failure shows blocked or checking, got ${String(out.view?.assessment?.status)}`,
+    assessmentStatus(out) === 'blocked' || assessmentStatus(out) === 'checking',
+    `in flight after a failure shows blocked or checking, got ${String(assessmentStatus(out))}`,
   );
 
   const moved: Args = { ...first, mandate: mandate({ lastNonce: 7n }) };

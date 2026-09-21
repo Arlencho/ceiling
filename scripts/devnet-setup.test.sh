@@ -60,7 +60,36 @@ else
 fi
 PROGRAM_KP="$saved_kp"
 
+if out="$(env -u VETO_RPC "${ROOT}/scripts/devnet-setup.sh" 2>&1)"; then
+  bad "unset VETO_RPC must refuse"
+else
+  if printf '%s' "$out" | grep -q "missing VETO_RPC"; then
+    pass "unset VETO_RPC names the variable"
+  else
+    bad "unset VETO_RPC message: ${out}"
+  fi
+fi
+
+if out="$(env VETO_RPC= "${ROOT}/scripts/devnet-setup.sh" 2>&1)"; then
+  bad "empty VETO_RPC must refuse"
+else
+  if printf '%s' "$out" | grep -q "missing VETO_RPC"; then
+    pass "empty VETO_RPC names the variable"
+  else
+    bad "empty VETO_RPC message: ${out}"
+  fi
+fi
+
+VETO_RPC="https://rpc.test.invalid"
+if require_rpc && [[ "$RPC" == "https://rpc.test.invalid" ]]; then
+  pass "set VETO_RPC is used as the endpoint"
+else
+  bad "set VETO_RPC should become RPC (got '${RPC:-}')"
+fi
+unset VETO_RPC
+RPC=""
+
 if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
-printf 'devnet-setup checks: 4 passed\n'
+printf 'devnet-setup checks: 7 passed\n'

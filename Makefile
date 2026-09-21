@@ -56,8 +56,8 @@ test-scripts: ## Run deploy-script checks that do not need a cluster
 	./scripts/watcher-silent-alert.test.sh
 	./scripts/watcher-alert-round3.test.sh
 
-# Provision a chain plus the demo fixtures. Devnet by default; localnet when
-# the devnet faucet is rate limiting.
+# Provision a chain plus the demo fixtures. VETO_RPC must be set. Use localnet
+# when the devnet faucet is rate limiting.
 setup: ## Provision the demo cluster and token fixtures
 	./scripts/devnet-setup.sh
 

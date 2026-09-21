@@ -64,8 +64,10 @@ git status --ignored -- keys
 Toolchain used when this file was written: anchor-cli 1.2.0, solana-cli 4.1.2.
 
 ```bash
-./scripts/devnet-setup.sh
+VETO_RPC=https://api.devnet.solana.com ./scripts/devnet-setup.sh
 ```
+
+The script does not choose an RPC. It refuses and names `VETO_RPC` if that variable is unset.
 
 The script:
 
