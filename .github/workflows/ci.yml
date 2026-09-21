@@ -93,8 +93,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: tools/package-lock.json
+          cache-dependency-path: |
+            tools/package-lock.json
+            indexer/package-lock.json
       - run: npm ci
+      # tools/tsconfig.json includes ../indexer/src, so the typecheck needs
+      # the indexer dependencies installed to resolve its imports.
+      - name: Install indexer deps for the cross-package typecheck
+        run: npm ci
+        working-directory: indexer
       - run: npm run typecheck
       - run: npm test
 
