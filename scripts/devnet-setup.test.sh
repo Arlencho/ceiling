@@ -13,7 +13,10 @@ cd "$ROOT"
 source "${ROOT}/scripts/devnet-setup.sh"
 
 fail=0
-pass() { printf 'ok - %s\n' "$1"; }
+# The summary line used to carry a hardcoded number, and the merge produced
+# two of them disagreeing. Count what actually ran instead.
+passed=0
+pass() { printf 'ok - %s\n' "$1"; passed=$((passed+1)); }
 bad() { printf 'not ok - %s\n' "$1"; fail=1; }
 
 [[ -f "${ROOT}/programs/veto/src/lib.rs" ]] || { echo "missing programs/veto/src/lib.rs"; exit 1; }
@@ -60,6 +63,21 @@ else
 fi
 PROGRAM_KP="$saved_kp"
 
+# make localnet sets VETO_CLUSTER=localnet. The generated files must say so.
+# A hardcoded devnet label points explorer links at public devnet for
+# addresses that exist only on the local validator.
+if grep -q '^CLUSTER=${CLUSTER_NAME}$' "${ROOT}/scripts/devnet-setup.sh"; then
+  pass "addresses file writes CLUSTER from VETO_CLUSTER"
+else
+  bad "addresses file writes CLUSTER from VETO_CLUSTER"
+fi
+
+if grep -q 'cluster={cluster}' "${ROOT}/scripts/devnet-setup.sh" \
+  && ! grep -q '?cluster=devnet' "${ROOT}/scripts/devnet-setup.sh"; then
+  pass "docs template uses the cluster name in explorer links"
+else
+  bad "docs template uses the cluster name in explorer links"
+fi
 if out="$(env -u VETO_RPC "${ROOT}/scripts/devnet-setup.sh" 2>&1)"; then
   bad "unset VETO_RPC must refuse"
 else
@@ -92,4 +110,4 @@ RPC=""
 if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
-printf 'devnet-setup checks: 7 passed\n'
+printf 'devnet-setup checks: %d passed\n' "$passed"

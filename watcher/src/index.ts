@@ -63,11 +63,14 @@ async function withJournalAndFeed() {
   const agent = loadKeypair(keyPath(cfg, "agent"));
   if (store !== null) {
     const { connection, programId } = connect(cfg, agent);
+    // Tell the walk which nonces the journal already holds. A ring that is
+    // already complete reads no transaction.
     const entries = await fetchChainDecisions({
       connection,
       programId,
       owner: new PublicKey(cfg.owner),
       mandateId: cfg.mandateId,
+      hasNonce: (nonce) => journal.hasNonce(nonce),
     });
     const repaired = repairJournalFromChain(journal, entries);
     if (repaired > 0) {

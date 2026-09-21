@@ -227,7 +227,7 @@ export function findPaidInLedgerBytes(data: Uint8Array, nonce: bigint): RingPaid
   return null;
 }
 
-function chargeFromTx(
+export function chargeFromTx(
   tx: VersionedTransactionResponse,
   programId: PublicKey,
 ): { amount: bigint; nonce: bigint } | null {

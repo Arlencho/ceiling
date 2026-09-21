@@ -193,6 +193,7 @@ docs/PLAN.md              build plan, milestones, verified event rules, prior ar
 docs/PITCH.md             positioning, the sixty seconds, judge Q&A
 docs/DECK.md              the deck, slide by slide
 docs/DECISIONS.md         architecture decisions and what would reverse them
+docs/GCP_SETUP.md         the watcher GCP project, checked by scripts/gcp-verify.sh
 ```
 
 ## Build and run
