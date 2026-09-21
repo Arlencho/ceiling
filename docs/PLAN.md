@@ -108,6 +108,11 @@ no charge point operator accepts USDC. What this buys is the property that matte
 because the real price crossed the ceiling, not because anyone pressed a button. Claiming a real
 merchant would be false and §15 disqualifies for misleading submission materials.
 
+### The watcher, unattended
+
+The hourly job runs in the cloud project described in [GCP_SETUP.md](GCP_SETUP.md).
+`scripts/gcp-verify.sh` checks that document against the live project.
+
 ### History: ring plus logs
 
 The on-chain `Ledger` is a 32-entry ring. A week of activity will wrap it. The ring is the
