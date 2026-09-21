@@ -65,12 +65,82 @@ print(' '.join(s for s in wanted if s in scripts))
     fi
 
     for check in $defined; do
-        if [ "$check" = "test" ]; then
-            pat='run: (npm test|npm run test)'
-        else
-            pat="run: npm run ${check}"
-        fi
-        if printf '%s' "$block" | grep -qE "$pat"; then
+        # A live step: a list item whose `run` is exactly the package script,
+        # not a comment, not `|| true`, not gated by `if:` / `continue-on-error:`,
+        # and not pointed at another package via working-directory.
+        if python3 - "$check" "$name" "$block" <<'PY'
+import sys
+
+check, pkg, block = sys.argv[1], sys.argv[2], sys.argv[3]
+commands = ["npm test", "npm run test"] if check == "test" else [f"npm run {check}"]
+
+
+def strip_quotes(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1].strip()
+    return value
+
+
+def parse_steps(text: str):
+    lines = text.split("\n")
+    i = 0
+    while i < len(lines):
+        if lines[i].lstrip().startswith("steps:"):
+            i += 1
+            break
+        i += 1
+    else:
+        return []
+    steps = []
+    current = None
+    step_indent = None
+    while i < len(lines):
+        line = lines[i]
+        i += 1
+        if not line.strip():
+            continue
+        stripped = line.lstrip()
+        indent = len(line) - len(stripped)
+        if stripped.startswith("#"):
+            continue
+        if stripped.startswith("- "):
+            current = {}
+            steps.append(current)
+            step_indent = indent
+            rest = stripped[2:]
+            if ":" in rest:
+                key, _, value = rest.partition(":")
+                current[key.strip()] = strip_quotes(value)
+            continue
+        if current is not None and step_indent is not None and indent > step_indent:
+            if ":" in stripped:
+                key, _, value = stripped.partition(":")
+                current[key.strip()] = strip_quotes(value)
+            continue
+        break
+    return steps
+
+
+def working_directory_is_this_package(wd):
+    if not wd:
+        return True
+    last = wd.rstrip("/").split("/")[-1]
+    return last == pkg
+
+
+for step in parse_steps(block):
+    run = step.get("run", "")
+    if run not in commands:
+        continue
+    if "if" in step or "continue-on-error" in step:
+        continue
+    if not working_directory_is_this_package(step.get("working-directory")):
+        continue
+    sys.exit(0)
+sys.exit(1)
+PY
+        then
             ok "$name CI job runs the package's $check script"
         else
             bad "$name CI job does not run the package's $check script (a command CI happens to carry is not scripts.$check)"

@@ -133,7 +133,7 @@ function why(out: Out): string {
   return out.view?.assessment && 'why' in out.view.assessment ? out.view.assessment.why : '';
 }
 
-function assessmentStatus(out: Out): string | undefined {
+function assessmentStatus(out: Out): NonNullable<NonNullable<Out['view']>['assessment']>['status'] | undefined {
   return out.view?.assessment?.status;
 }
 
