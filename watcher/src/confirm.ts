@@ -2,33 +2,7 @@ import { Connection, Transaction, type Finality, type Keypair, type TransactionS
 import { logError } from "./log.js";
 import { sleep } from "./rpc.js";
 
-export type RejectionDisposition = "discarded" | "fatal";
-
 const POLL_MS = 1_000;
-
-/** Always false. Leftover polls are handled inside confirmSignature. Kept so
- * fixtures that drain a leftover counter still compile and stay honest. */
-export function consumeConfirmAnswer(): boolean {
-  return false;
-}
-
-export function handleUnhandledRejection(
-  reason: unknown,
-  opts: { confirmAlreadyAnswered: boolean; log?: (line: string) => void },
-): RejectionDisposition {
-  void opts.confirmAlreadyAnswered;
-  const log = opts.log ?? logError;
-  const message = reason instanceof Error ? reason.message : String(reason);
-  log(`unhandled rejection: ${message}`);
-  return "fatal";
-}
-
-export function installUnhandledRejectionHandler(
-  _log: (line: string) => void = logError,
-): void {
-  // Confirm catches leftover polls on every path. A process listener would
-  // swallow unrelated rejections and print programming errors without a stack.
-}
 
 function meetsCommitment(status: string | null | undefined, commitment: Finality): boolean {
   if (status === "finalized") return true;

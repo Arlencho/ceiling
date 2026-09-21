@@ -12,14 +12,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import { mandatePda, readLastNonce, recoverSettledCharge, submitCharge, u64Le } from "./chain.js";
 import { loadConfig } from "./config.js";
-import { confirmSignature, consumeConfirmAnswer, handleUnhandledRejection } from "./confirm.js";
 import type { PriceFeed } from "./feed.js";
 import { JsonlJournal } from "./journal.js";
 import { processWindow } from "./run.js";
-import { RateLimitedError } from "./rpc.js";
 
 const require = createRequire(import.meta.url);
 type WsServer = {
@@ -466,96 +464,6 @@ test(
     } finally {
       await rpc.close();
     }
-  },
-);
-
-// ---------------------------------------------------------------------------
-// The thing worse than the bug: a rejection the confirm did not produce.
-// ---------------------------------------------------------------------------
-function cleanConnection(): Connection {
-  return {
-    onSignature(_sig: string, cb: (result: { err: null }, ctx: { slot: number }) => void) {
-      setTimeout(() => cb({ err: null }, { slot: 1 }), 10);
-      return 1;
-    },
-    async getSignatureStatus() {
-      return { context: { slot: 1 }, value: { slot: 1, confirmations: 1, err: null, confirmationStatus: "confirmed" } };
-    },
-    async removeSignatureListener() {},
-  } as unknown as Connection;
-}
-
-test("critic r1: a confirm that finished with nothing left over leaves nothing for the process handler to discard", async () => {
-  while (consumeConfirmAnswer()) {
-    // drain answers left by earlier tests in this process
-  }
-  const lines: string[] = [];
-  await confirmSignature(cleanConnection(), "clean-sig", { log: (line) => lines.push(line) });
-  assert.equal(lines.length, 0, `nothing was left over: ${lines.join(" | ")}`);
-  // Some other throttled request in the process rejects without a handler.
-  const disposition = handleUnhandledRejection(new RateLimitedError("rpc rate limited on https://elsewhere.example"), {
-    confirmAlreadyAnswered: consumeConfirmAnswer(),
-    log: (line) => lines.push(line),
-  });
-  assert.equal(disposition, "fatal", `absorbed as a leftover confirm poll: ${lines.join(" | ")}`);
-});
-
-test(
-  "critic r1: an unrelated rate-limit rejection after a clean confirm is fatal and is not reported as a leftover poll",
-  { timeout: 20_000 },
-  async () => {
-    const dir = mkdtempSync(join(tmpdir(), "veto-c66-unrelated-"));
-    const script = join(dir, "unrelated.mts");
-    writeFileSync(
-      script,
-      [
-        `import { confirmSignature, installUnhandledRejectionHandler } from ${JSON.stringify(pathToFileURL(join(SRC_DIR, "confirm.ts")).href)};`,
-        `import { RateLimitedError } from ${JSON.stringify(pathToFileURL(join(SRC_DIR, "rpc.ts")).href)};`,
-        `installUnhandledRejectionHandler();`,
-        `const connection = {`,
-        `  onSignature(_sig, cb) { setTimeout(() => cb({ err: null }, { slot: 1 }), 10); return 1; },`,
-        `  async getSignatureStatus() { return { context: { slot: 1 }, value: { slot: 1, confirmations: 1, err: null, confirmationStatus: "confirmed" } }; },`,
-        `  async removeSignatureListener() {},`,
-        `};`,
-        `await confirmSignature(connection, "clean-sig", { log: () => {} });`,
-        `// The confirm is done. Something unrelated is throttled and nobody awaits it.`,
-        `Promise.reject(new RateLimitedError("rpc rate limited on https://elsewhere.example"));`,
-        `setInterval(() => {}, 100);`,
-        `setTimeout(() => { process.stdout.write("run loop still going\\n"); process.exit(0); }, 2_000);`,
-        "",
-      ].join("\n"),
-    );
-    const run = await runChild({ script, timeoutMs: 15_000 });
-    assert.doesNotMatch(
-      run.stderr,
-      /no longer needed this answer/,
-      `an unrelated rejection was absorbed as a leftover confirm poll: ${run.stderr}`,
-    );
-    assert.notEqual(run.code, 0, `process carried on as if nothing happened: stdout=${run.stdout} stderr=${run.stderr}`);
-  },
-);
-
-test(
-  "critic r1: a programming error under the installed handler still ends the process with its stack",
-  { timeout: 20_000 },
-  async () => {
-    const dir = mkdtempSync(join(tmpdir(), "veto-c66-typeerror-"));
-    const script = join(dir, "typeerror.mts");
-    writeFileSync(
-      script,
-      [
-        `import { installUnhandledRejectionHandler } from ${JSON.stringify(pathToFileURL(join(SRC_DIR, "confirm.ts")).href)};`,
-        `installUnhandledRejectionHandler();`,
-        `setInterval(() => {}, 100); // the run loop`,
-        `Promise.reject(new TypeError("journal.append is not a function"));`,
-        "",
-      ].join("\n"),
-    );
-    const run = await runChild({ script, timeoutMs: 4_000 });
-    assert.equal(run.timedOut, false, `process kept running after a programming error: stderr=${run.stderr}`);
-    assert.equal(run.code, 1);
-    assert.match(run.stderr, /TypeError: journal\.append is not a function/);
-    assert.match(run.stderr, /^\s+at /m, `no stack frame to act on: ${run.stderr}`);
   },
 );
 

@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { type Connection } from "@solana/web3.js";
-import {
-  confirmSignature,
-  consumeConfirmAnswer,
-  handleUnhandledRejection,
-} from "./confirm.js";
+import { confirmSignature } from "./confirm.js";
 import { RateLimitedError } from "./rpc.js";
 
 function mockConnection(args: {
@@ -79,39 +75,3 @@ test("a status poll that refuses to answer fails with that refusal when the webs
   );
 });
 
-test("a clean confirm leaves no leftover answer for a process handler to consume", async () => {
-  await confirmSignature(mockConnection({ wsDelayMs: 10, status: "confirmed" }), "clean-sig", {
-    log: () => {},
-  });
-  assert.equal(consumeConfirmAnswer(), false);
-});
-
-test("an unhandled rejection is fatal even after a confirm that already answered", () => {
-  const lines: string[] = [];
-  const disposition = handleUnhandledRejection(new RateLimitedError("rpc rate limited on http://127.0.0.1:1"), {
-    confirmAlreadyAnswered: true,
-    log: (line) => lines.push(line),
-  });
-  assert.equal(disposition, "fatal");
-  assert.ok(lines.some((line) => line.includes("unhandled rejection: rpc rate limited on http://127.0.0.1:1")));
-});
-
-test("an unhandled rejection that is not a leftover confirm poll is fatal", () => {
-  const lines: string[] = [];
-  const disposition = handleUnhandledRejection(new Error("socket hang up"), {
-    confirmAlreadyAnswered: true,
-    log: (line) => lines.push(line),
-  });
-  assert.equal(disposition, "fatal");
-  assert.ok(lines.some((line) => line.includes("unhandled rejection: socket hang up")), `logged: ${lines.join(" | ")}`);
-});
-
-test("a rate-limit with no confirm answer is fatal", () => {
-  const lines: string[] = [];
-  const disposition = handleUnhandledRejection(new RateLimitedError("rpc rate limited on http://127.0.0.1:1"), {
-    confirmAlreadyAnswered: false,
-    log: (line) => lines.push(line),
-  });
-  assert.equal(disposition, "fatal");
-  assert.ok(lines.some((line) => line.includes("unhandled rejection: rpc rate limited on http://127.0.0.1:1")));
-});
