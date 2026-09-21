@@ -69,13 +69,21 @@ export function assertPurposeMayOpen(purpose: string, applying: boolean): void {
   }
 }
 
+export const RULESET_ENVELOPE =
+  'A ruleset is the spending envelope you reuse across agents: cap, per-payment maximum, expiry and purpose.';
+
+export const PAYEE_NOT_IN_RULESET =
+  'The payee is chosen per agent and is not part of the ruleset.';
+
+export const PAYEE_PREFILL =
+  'Applying a ruleset prefills the payee so you do not retype an address.';
+
 export type StampAlignment = 'match' | 'limits-differ' | 'missing';
 
 export function stampAlignment(args: {
   purpose: string;
   cap: bigint;
   perTxMax: bigint;
-  merchant: string;
   decimals: number;
   rulesets: readonly Ruleset[];
 }): { id: string; version: number; alignment: StampAlignment } | null {
@@ -97,8 +105,7 @@ export function stampAlignment(args: {
   } catch {
     return { id: parsed.rulesetId, version: parsed.version, alignment: 'limits-differ' };
   }
-  const same =
-    cap === args.cap && perTxMax === args.perTxMax && found.merchant === args.merchant;
+  const same = cap === args.cap && perTxMax === args.perTxMax;
   return {
     id: parsed.rulesetId,
     version: parsed.version,

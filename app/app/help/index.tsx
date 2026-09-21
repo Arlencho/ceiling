@@ -5,6 +5,7 @@ import { Button } from '../../components/Button';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
+import { PAYEE_NOT_IN_RULESET, PAYEE_PREFILL, RULESET_ENVELOPE } from '../../lib/ruleset';
 
 export default function HelpRuleScreen() {
   const router = useRouter();
@@ -28,6 +29,9 @@ export default function HelpRuleScreen() {
         One owner can hold several rules at once. Each rule has its own agent key, its own limits,
         and its own decision history. Switching a rule changes what Overview and Decisions are
         about.
+      </Text>
+      <Text style={styles.body}>
+        {`${RULESET_ENVELOPE} ${PAYEE_NOT_IN_RULESET} ${PAYEE_PREFILL} A rule you open still names a payee, because the program enforces it.`}
       </Text>
       <View style={styles.actions}>
         <Button label="Next" onPress={() => router.push('/help/refusal')} />

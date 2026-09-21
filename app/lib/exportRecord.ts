@@ -344,6 +344,9 @@ export function parseDecisionId(
   };
 }
 
+export const SHARE_RULE_MISMATCH =
+  'This decision belongs to a rule that is not selected. Switch on the Rules tab first.';
+
 export function loadedRuleMatchesDecision(
   loadedMandate: string | null | undefined,
   parsedMandate: string | null,
