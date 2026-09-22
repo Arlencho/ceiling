@@ -34,7 +34,7 @@ names the rate limit, so it stays visible after midnight and `status` can
 count it. A gap is not terminal.
 
 The `PriceFeed` interface exists because the feed may be revisited
-(`docs/DECISIONS.md`, 2026-09-20). The only implementation is `EnergySpotFeed`.
+(`docs/internal/DECISIONS.md`, 2026-09-20). The only implementation is `EnergySpotFeed`.
 
 ## Setup
 

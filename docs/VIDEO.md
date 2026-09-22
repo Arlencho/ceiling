@@ -1,20 +1,18 @@
 # The three-minute video
 
 Completion is judged from this, and the brief is explicit that it has to run on a device: a video
-nobody can install is not a submission. Shot list written 2026-09-20 so the recording day is a
-recording day, not a writing day. Aligned 2026-09-21 to the shipped screens: Overview, Rules,
-Decisions. The quoted refusal is the 18:00 SE3 decision the README already links. The card
-opens from Decisions, not Overview. Overview is today only.
+nobody can install is not a submission. The screens are Overview, Rules, and Decisions. The quoted
+refusal is the 18:00 SE3 decision the README already links. The card opens from Decisions, not
+Overview. Overview is today only.
 
-Two phones on a desk, both visibly phones. Screen recording alone is weaker: a judge is scoring a
-mobile product and needs to see hardware.
+Two phones on a desk, both visibly phones. Both stay in frame.
 
 ## What must be true before recording
 
 - Program on **devnet**, not a local validator. Every explorer link in this video has to open on a
   judge's laptop, and nobody can click localhost.
-- The watcher has been running for days, so the Decisions screen is a diary rather than three rows
-  made that morning. This is the only item that cannot be fixed on the day.
+- The watcher has been running for days, so the Decisions screen is a multi-day diary. This is the
+  only item that cannot be fixed on the day.
 - Both Seekers have the release APK installed, not a dev client.
 - One charging rule throughout: cap 100, per-payment maximum 0.5. That is the watcher rule behind
   the 18:00 SE3 refusal the README already links. Do not open a second rule for the demo.
@@ -87,10 +85,10 @@ this refusal. Override 6232500 is the amount, because 6.2325 is over 0.5 and sti
 remaining cap.
 
 Voice: *"The transaction confirmed and the balance did not move. It succeeded at deciding no.
-Every other design stops this too, and then leaves nothing behind: no reason, no trail, nothing an
-auditor could look at. This one leaves a record."*
+Every other design stops this too, and then leaves nothing behind: no reason, no trail. This one
+leaves a record."*
 
-This is the shot the entry lives or dies on. Rehearse it most.
+Rehearse this shot.
 
 **01:35 to 02:00. A real week.**
 
@@ -99,10 +97,7 @@ of 0.2145 and the refused row of 6.2325 the video already opened on.
 
 Voice: *"The agent has been running for days against a public electricity price feed. It paid when
 power was cheap and refused when the evening price spiked. The price is real and you can check it
-at the same URL we do. The merchant terminal is ours, because no charge point takes USDC, and we
-say so."*
-
-Say the honesty boundary out loud. It turns the obvious objection into a credibility moment.
+at the same URL we do. The merchant terminal is ours, because no charge point takes USDC."*
 
 **02:00 to 02:20. Take one off the phone.**
 

@@ -1,8 +1,7 @@
 # Deck
 
-Slide by slide, written 2026-09-20 so M5 is a build job rather than a writing job. Aligned
-2026-09-21 to the app that shipped: rule and decision, the fleet folded into existing slides,
-scope as it is now. Presentation is 25% of the score and clarity of vision is one of the five
+Slide by slide. The app that shipped has a rule and a decision, and the fleet sits in the
+existing slides. Presentation is 25% of the score and clarity of vision is one of the five
 things the evaluation process names.
 
 Ten slides. Nothing here needs a screenshot that does not exist yet, except where marked.
@@ -22,8 +21,7 @@ made." Then the why line from the 18:00 SE3 refusal the [README](../README.md) a
 Never styled as an error. That card, the explorer log on slide 6, and the verify beat in the
 video are the same recorded decision. Not a second rule.
 
-No logo slide, no team slide, no agenda. The first thing a judge sees is the product doing the one
-thing nothing else does.
+No logo slide, no team slide, no agenda. The first slide is the refusal card.
 
 ---
 
@@ -32,8 +30,7 @@ thing nothing else does.
 > AI can already decide what to buy. Crypto gives you two options: sign every transaction, or hand
 > an agent a blank check.
 
-Left: a wall of approval prompts. Right: a drained wallet. This is thirty seconds, not a market
-analysis.
+Left: a wall of approval prompts. Right: a drained wallet. Thirty seconds.
 
 ---
 
@@ -55,9 +52,7 @@ One human, several agents, one rule each. A ruleset is written once and reused o
 
 ## 4. Prior art, named
 
-**Do not skip this slide.** Two of the seven judges are security researchers and one runs an RPC
-company. They know this landscape. Naming it first is worth more than any claim of novelty, and
-almost no hackathon deck does it.
+These are the limits that already exist.
 
 | | What it does |
 |---|---|
@@ -77,14 +72,12 @@ almost no hackathon deck does it.
 > They all stop it. So do we.
 >
 > The difference is what is left behind. Everywhere else a blocked overspend is a failed
-> transaction: no artifact, no reason, no trail, nothing an auditor could ever look at.
+> transaction: no artifact, no reason, no trail.
 
 Quote SolAgent Pay's own README on screen, verbatim, in their words: an overspend "is not a policy
 violation logged after the fact, it is an impossible transaction."
 
-They are right that it should be impossible, and it is impossible here too. What they treat as the
-end of the story is where this one starts: they are choosing to leave nothing behind, and saying so
-in their own words is far more persuasive than asserting our side of it.
+Here the transfer is not executed. The decline is recorded.
 
 ---
 
@@ -104,7 +97,7 @@ Same decision as slide 1.
 > The transaction succeeded at deciding no. The payment did not happen. The balance is unchanged,
 > and neither party can edit the record.
 >
-> And it tells you what would have worked. No prior art does anything but decline.
+> The last field is the override that would have cleared the charge.
 
 ---
 
@@ -116,23 +109,17 @@ Same decision as slide 1.
 > A rule is the Seed Vault-shaped answer: the key never leaves the vault, and the agent gets
 > bounded authority beside it rather than a copy of the key.
 
-Squads cannot make this argument. AP2 cannot. It is the only "why here" that is not
-interchangeable, and it is the reason this is a phone product and not another README.
-
 ---
 
-## 8. A real week, not a staged morning
+## 8. A real week
 
 Screenshot: the Decisions screen with multi-day history. **Needs the watcher to have been running.**
 
 > The agent watches a public electricity price feed and pays for charging under the ceiling. The
 > price is real and you can check it at the same URL we do. The merchant terminal is ours, because
-> no charge point takes USDC, and we say so.
+> no charge point takes USDC.
 >
-> Which means the refusals happened because power got expensive, not because we pressed a button
-> on camera.
-
-Say the honesty boundary out loud. It converts the obvious objection into a credibility moment.
+> Refusals in this demo happen because electricity got expensive.
 
 ---
 
@@ -144,14 +131,13 @@ Say the honesty boundary out loud. It converts the obvious objection into a cred
 > AP2 standardised the record of a yes. This is the missing half.
 
 Eventually that record is what lets someone underwrite agent spend, dispute a drained wallet with
-a trail, or compare agents by how they behave at a limit. Nobody is buying it in 2026 and we say
-so.
+a trail, or compare agents by how they behave at a limit. Nobody is buying it in 2026.
 
-**Thirty seconds. This slide never becomes the spine.**
+**Thirty seconds.**
 
 ---
 
-## 10. Scope, honestly
+## 10. Scope
 
 > One rule type. Delegate, not vault. Several rules, one agent each. A ruleset written once and
 > applied to the next agent. One pay path. One refusal path with a reason and an override hint.

@@ -15,52 +15,47 @@ AP2 standardised the record of a yes. This is the missing half.
 > Status: in development for the Solana Mobile "Clock In" hackathon, submissions close
 > 2026-10-09. See [docs/PLAN.md](docs/PLAN.md) for the build plan,
 > [docs/PITCH.md](docs/PITCH.md) for the positioning, and
-> [docs/DECISIONS.md](docs/DECISIONS.md) for why each choice was made and what would reverse it.
+> [docs/internal/DECISIONS.md](docs/internal/DECISIONS.md) for why each choice was made and what would reverse it.
 
-## What is and is not new here
+## Prior art
 
-Capped agent spending on Solana is not new, and this project does not claim it. Being specific
-about that is the point:
+Capped agent spending on Solana is not new, and this project does not claim it.
 
-| Prior art | What it does | Why this is different |
+| Prior art | What it does | What Veto adds |
 |---|---|---|
-| [Squads v4 spending limits](https://squads.xyz/blog/spending-limits) | Pre-approved allowances, roles, per-member caps. Audited by Neodyme, OtterSec and Trail of Bits, two formal verifications underway | Treasury operations for humans. It stops the overspend, as this does, and keeps no record of having stopped it |
+| [Squads v4 spending limits](https://squads.xyz/blog/spending-limits) | Pre-approved allowances, roles, per-member caps. Audited by Neodyme, OtterSec and Trail of Bits, two formal verifications underway | Treasury operations for humans. An overspend stops, and the stop leaves no record |
 | SPL `approve` / delegate | Caps what a delegate may pull | Cap only. No purpose, no expiry, no reason, no record |
-| [LazorKit](https://github.com/lazor-kit/lazor-kit) | Passkey smart wallet, session keys with slot-height expiry, on-chain RBAC and spending limits | Wallet infrastructure for app developers, not a product about trust |
-| [SolAgent Pay](https://github.com/altaranexus-ship-it/solagent-pay) | Session PDA with lifetime and per-request ceilings, merchant allowlist, TTL, revoke and sweep | Closest on the numbers, and states outright that an overspend "is not a policy violation logged after the fact, it is an impossible transaction". Opposite thesis. It also escrows into a vault; we never move the funds |
-| [Oculus](https://github.com/useoculusagent/useoculusagent) | On-chain policy check per transaction, a USDC reserve reimburses a breach within 60 seconds | Insurance after the fact. We decline before money moves, then explain |
+| [LazorKit](https://github.com/lazor-kit/lazor-kit) | Passkey smart wallet, session keys with slot-height expiry, on-chain RBAC and spending limits | Wallet infrastructure for app developers |
+| [SolAgent Pay](https://github.com/altaranexus-ship-it/solagent-pay) | Session PDA with lifetime and per-request ceilings, merchant allowlist, TTL, revoke and sweep | An overspend "is not a policy violation logged after the fact, it is an impossible transaction". Funds are escrowed into a vault. Veto records the decline and leaves the funds in the owner's wallet |
+| [Oculus](https://github.com/useoculusagent/useoculusagent) | On-chain policy check per transaction, a USDC reserve reimburses a breach within 60 seconds | Reimburses a breach after the fact. Veto declines before money moves, and the decline is a record |
 | [x402](https://metamask.io/news/what-is-x402) / [AP2](https://www.cobo.com/post/ap2-protocol-complete-guide-to-agent-payments-for-web3-developers-2026) | HTTP 402 settlement; signed Intent, Cart and Payment mandates as verifiable credentials | The record of a yes, held off chain as the merchant's evidence |
 
 Capped on-chain agent budgets are documented well enough that infrastructure vendors publish
-tutorials on them. Treat the primitive as commodity. The claim here is narrower: **the refusal is
-an artifact.**
+tutorials on them. The claim here is narrower: **the refusal is an artifact.**
 
 ## The refusal is the product
 
-**The spend is stopped either way.** When a rule fails, the token transfer instruction is never
-executed, so zero tokens move, and the SPL delegation underneath is a second hard ceiling the
-program itself cannot exceed.
+When a rule fails, the token transfer instruction is never executed, so zero tokens move. The SPL
+delegation underneath is a second ceiling the program itself cannot exceed.
 
-The question is only what survives. When `charge` declines it does not return an error, because an
-error would roll back every account write and the refusal would leave no trace, indistinguishable
-from nothing having happened.
-Instead the instruction transfers nothing, writes a refusal to an on-chain ledger with a reason
-code and the override that would have cleared it, logs a readable line, and returns `Ok`.
+When `charge` declines it does not return an error. An error would roll back every account write,
+and the refusal would leave no trace. The instruction transfers nothing, writes a refusal to an
+on-chain ledger with a reason code and the override that would have cleared it, logs a readable
+line, and returns `Ok`.
 
-So a refusal has a signature you can open in an explorer. This is the 18:00 SE3 refusal linked
-below, not a second mandate:
+A refusal has a signature you can open in an explorer. This is the 18:00 SE3 refusal linked below:
 
 ```
 VETO REFUSED reason=5 (over per-payment maximum) amount=6232500 per_tx_max=500000 remaining=99339500 override_to_clear=6232500
 ```
 
-Read those two lines together, because they are the whole idea. The **transaction** succeeded: it
-succeeded at deciding no. The **payment** did not happen: the balance is unchanged. A refusal is a
-transaction that worked and a payment that did not, and neither party can edit the record of it.
+The **transaction** succeeded: it succeeded at deciding no. The **payment** did not happen: the
+balance is unchanged. A refusal is a transaction that worked and a payment that did not, and
+neither party can edit the record of it.
 
-That last field is the part no prior art has: a decline that tells you what would have worked.
+The last field is the override that would have cleared the charge.
 
-## See it yourself, without installing anything
+## See it on devnet
 
 Live on Solana devnet. Open this transaction:
 
@@ -75,21 +70,26 @@ Program log: VETO REFUSED reason=5 (over per-payment maximum)
 ```
 
 The agent tried to pay 6.2325 tokens for electricity at an evening spike price. The mandate allows
-0.5 per payment. It did not pay, it said why, and it said what would have cleared it. Nobody can
-edit that, including us.
+0.5 per payment. It did not pay, it said why, and it said what would have cleared it. That
+transaction is the record.
 
-For contrast, the same mandate paid three times earlier the same day, when power was cheap:
+Four later decisions on the same mandate confirmed on the six-hour cadence. Each was refused.
+The per-payment maximum is 0.5, and each charge was over it. Token balances are unchanged on
+all four.
 
-| Window | Spot price | Decision |
-|---|---|---|
-| 00:00 | 0.00892 SEK/kWh | [paid](https://explorer.solana.com/tx/4N13AokSVj2A9fJyCZiypzhG9P6mdpMvpjcnDvzVUi2Qp6jUx1Ud34tHUDt1TQENzXu7TFWTfrKHHCLfrpKTBJ9a?cluster=devnet) |
-| 06:00 | 0.00429 SEK/kWh | [paid](https://explorer.solana.com/tx/5heSaH7LCYKAUXcPo9M2167oxLPvJSuTDmtyRboPv4pbif2ndNqgNJ9DagWeT2T2XKa5BU9erjfw7wjS6wyxM7xb?cluster=devnet) |
-| 12:00 | 0.00011 SEK/kWh | [paid](https://explorer.solana.com/tx/289RQXJW2vkvXxiVM13vwSEWb1SuRAxPKTHCgkF5kqPYWPQ2hFGsq13PUrDTMZ8ibApq9BBJz2u2zpzjkRV92swU?cluster=devnet) |
-| 18:00 | 0.12465 SEK/kWh | [refused](https://explorer.solana.com/tx/3rTpyrHEScEPhjHL3cUDYSGwGAxU6JVzbdWVZbr4YMHt3wAM7ad9JGPC26R8aQMH9aqYVzrFqbEogX1CquNcWqib?cluster=devnet) |
+| Recorded (UTC) | Stockholm hour on 2026-09-21 | Spot price | Charge | Decision |
+|---|---|---|---|---|
+| 2026-09-20 22:00:00 | 00:00 | 0.16326 SEK/kWh | 8.163 | [refused](https://explorer.solana.com/tx/5MJLtM92foysaWgfqs6x6oBYxyES2Ra2st8UK47dRX8h1F2wo43qQxJt4GFycEWiLSKJQjWbUBhotHMhkHymLoBU?cluster=devnet) |
+| 2026-09-21 04:00:08 | 06:00 | 0.43085 SEK/kWh | 21.5425 | [refused](https://explorer.solana.com/tx/47PZmcRp85U5s3S9GjKekJ7BYcfLeCvY3MKhcDyhyn8Rt5YRdLL5MviymKfFKBeiswn3owx8P6VianW4MRLfU97N?cluster=devnet) |
+| 2026-09-21 10:00:00 | 12:00 | 0.15807 SEK/kWh | 7.9035 | [refused](https://explorer.solana.com/tx/5HTd7nhtGvz2zpxxbszgVBhRAjcv52MTBRLvVoxRt98LXJvaVsEDRcLSbsAzx1SMdRoxekzhTBtmx6T6xTfDVMdr?cluster=devnet) |
+| 2026-09-21 16:00:09 | 18:00 | 1.27877 SEK/kWh | 63.9385 | [refused](https://explorer.solana.com/tx/59ePBRRBGdu51J7aURacABWNtzqhvpWLFzsSfEcFA5eJd4Zn2y2gtY9MtG6fF6dgG8CdFKbWDzvnKGJRSmZKngyq?cluster=devnet) |
 
-Those prices are the real Nordic day-ahead spot for SE3 on 2026-09-20 and you can check them at
-the [same public URL the agent reads](https://www.elprisetjustnu.se/). Nobody arranged that
-refusal: electricity got twenty nine times more expensive in the evening and the rule did the rest.
+The recorded time is the block time. The Stockholm hour is the SE3 window the price belongs to,
+the 15-minute window that starts at that hour. Those prices are the Nordic day-ahead spot for
+SE3 on 2026-09-21, on the [same public URL the agent reads](https://www.elprisetjustnu.se/).
+Each charge is that price times 50 kWh. The program log on each transaction is `reason=5 (over
+per-payment maximum)` with `per_tx_max=500000` and these base-unit amounts: 8163000, 21542500,
+7903500, 63938500.
 
 To take one off chain and check it independently:
 
@@ -117,9 +117,6 @@ exactly why unattended agent spend has nowhere to live on this platform. A manda
 Vault-shaped answer: the key never leaves the vault, and the agent gets bounded authority beside
 it rather than a copy of the key.
 
-Squads cannot make that argument. AP2 cannot. It is the only "why here" that is not
-interchangeable.
-
 ## How authority is split
 
 | | Owner key | Agent key |
@@ -139,9 +136,9 @@ Four limits, all on chain, checked on every charge: **cap**, **per-payment maxim
 and a single allowed **merchant**. Plus replay protection: only a paid charge advances the nonce,
 so a settled payment cannot be replayed while a refused one can still be retried after an override.
 
-The human-readable purpose is stored on chain as written and cannot be edited afterwards. Be
-precise about what that means: the chain does not understand the word "groceries". The purpose is
-an immutable statement of intent, bound to a merchant the chain does enforce.
+The human-readable purpose is stored on chain as written and cannot be edited afterwards. The
+chain does not understand the word "groceries". The purpose is an immutable statement of intent,
+bound to a merchant the chain does enforce.
 
 ### Refusal reasons
 
@@ -165,17 +162,14 @@ signature, applies to exactly one nonce, and is written to the ledger as an over
 raises the per-payment ceiling only. It can never raise the total cap, so the number the owner
 committed to stays absolute.
 
-Blind autopilot is the failure mode this removes. Overriding is allowed. Overriding silently is not.
-
-## The demo data is real, and here is exactly how real
+## The demo
 
 The agent watches [Nordic day-ahead electricity spot prices](https://www.elprisetjustnu.se/) and
 pays for charging when power is under the ceiling the owner set. That feed is public, needs no key,
 and anyone can verify the same numbers against the same URL.
 
 **The counterparty is a terminal we run**, because no charge point operator accepts USDC. We are
-not claiming a real merchant. What the real feed buys is the property that matters: refusals happen
-because electricity got expensive, not because someone pressed a button on camera.
+not claiming a real merchant. Refusals in the demo happen because electricity got expensive.
 
 ## Repository layout
 
@@ -184,16 +178,15 @@ programs/veto/            the Anchor program: state, policy, zero-copy ledger
 app/                      the Android app: Expo, custom dev client, Seed Vault via MWA
 watcher/                  unattended agent: live SE3 feed, charge, JSONL diary
 indexer/                  rebuild Paid and Refused history from transaction logs
-tools/                    export one decision and verify it against the chain
+tools/                    export one decision as JSON and verify it against the chain
 scripts/devnet-setup.sh   recreate the chain deploy and demo fixtures from nothing
-tools/                    export one decision as JSON; verify it off the phone
 docs/DECISION_RECORD.md   stable schema for that JSON
-docs/PROBLEM.md           who this is for, and why a burner wallet is not enough
-docs/PLAN.md              build plan, milestones, verified event rules, prior art
-docs/PITCH.md             positioning, the sixty seconds, judge Q&A
+docs/PROBLEM.md           the problem, who has it, what they do today, what Veto does
+docs/PLAN.md              build plan, milestones, and prior art
+docs/PITCH.md             the pitch: position and the sixty seconds
 docs/DECK.md              the deck, slide by slide
-docs/DECISIONS.md         architecture decisions and what would reverse them
 docs/GCP_SETUP.md         the watcher GCP project, checked by scripts/gcp-verify.sh
+docs/internal/            working notes: decisions, self-review, design brief, design decision
 ```
 
 ## Build and run
@@ -204,7 +197,7 @@ Requires Rust, the Solana CLI and Anchor. From a fresh clone:
 make test
 ```
 
-That builds the program and runs the suite, including the test that matters: a
+That builds the program and runs the suite, including the refusal test: a
 refused charge produces a transaction that confirms, moves nothing, and records why.
 
 `make test` rather than `anchor build && cargo test` for two reasons, both documented in the
@@ -240,8 +233,7 @@ never over attempts.
 
 ## Threat model
 
-Written out because "the agent cannot overspend" is a claim that has to survive reading rather than
-be taken on faith.
+What a key can do under a mandate.
 
 - **A compromised agent key** can submit charges to the named merchant, up to the per-payment
   maximum, up to the remaining cap, until the expiry. That is the blast radius, and it is the point:
@@ -255,13 +247,12 @@ be taken on faith.
   charge at all; only the named agent signs `charge`.
 - **A forged mandate account cannot be substituted.** `charge` re-derives the mandate address from
   the fields stored inside it and rejects a mismatch, and the CPI signs as that PDA.
-- **Known limit, stated rather than hidden.** The ledger records every decision this program
-  reaches. A frozen source or destination is inspected in `evaluate` and recorded as a refusal.
-  Anchor account validation failures (wrong mint, wrong source, wrong ledger) and token-program
-  declines this program does not inspect are errors with no entry. It cannot record a charge the
-  agent never attempted, and nothing on chain can. What is guaranteed is narrower and still worth
-  having: no payment happens without a record, and no attempt is judged by the agent instead of by
-  the chain. The alternative design records nothing in either case.
+- **Known limit.** The ledger records every decision this program reaches. A frozen source or
+  destination is inspected in `evaluate` and recorded as a refusal. Anchor account validation
+  failures (wrong mint, wrong source, wrong ledger) and token-program declines this program does
+  not inspect are errors with no entry. It cannot record a charge the agent never attempted, and
+  nothing on chain can. No payment happens without a record, and no submitted attempt is judged by
+  the agent instead of by the chain.
 
 ## License
 

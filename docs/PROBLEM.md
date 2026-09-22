@@ -1,41 +1,24 @@
 # The problem
 
-Written 2026-09-20, after the plan and the program, which is the wrong order. It exists because
-the value proposition was inherited as a finished pitch and never interrogated. Everything here is
-the answer to three questions: who has this problem this month, what do they do today instead, and
-why is a burner wallet not enough.
+Software is already spending from wallets people own. The person running it needs a bound
+fixed before the money moves, and a record of what happened inside that bound.
 
-## The claim, in one paragraph
+A refusal on its own is one declined attempt. The bound is the mandate: a total cap, a
+per-payment maximum, an expiry, and one merchant, written down before the charge. The record
+is the ledger of payments and refusals under that mandate. The mandate is the prior claim.
+The ledger is the evidence. Neither is worth anything alone.
 
-> A complete record of every payment made under this authority, a worst case fixed in advance by
-> the mandate, and every refusal the agent surfaced.
->
-> The mandate is the prior claim. The ledger is the evidence. Neither is worth anything alone.
+## Who has it today
 
-This is deliberately narrower than "proof of restraint", which does not survive a hostile reading.
-A refusal on its own proves that one attempt was declined. It does not prove the agent had no other
-funding path, that it did not simply avoid trying, or that the limit was restrictive at all: anyone
-can set a one million ceiling and mint beautiful evidence of restraint on a five dollar charge.
-Restraint only means something measured against a commitment made before the fact.
+The person already running something automated against their own funds. A trading script, a
+mint bot, an agent paying per call.
 
-## Who has this problem this month
+A consumer whose assistant buys groceries is not that person yet.
 
-The person already running something automated against their own funds. A trading script, a mint
-bot, an agent paying per call. Today they solve it by pasting a private key into a `.env` file or
-by funding a burner wallet. They know the first is bad. They do it anyway, because the alternative
-is not doing the thing.
+## What they do instead
 
-That is a real, present, slightly embarrassing problem, and it is the honest answer to "who, this
-month."
-
-The consumer with an AI agent buying groceries is not the user yet. Being clear about that
-internally matters, because it is the difference between building for a person and building for a
-press release.
-
-## Why a burner wallet is not enough
-
-The burner is the real competitor, not Squads and not AP2. It is free, instant, universally
-understood and requires no program at all. Anything in this space has to beat it explicitly.
+They paste a private key into a `.env` file, or they fund a burner wallet and top it up. The
+burner is free, instant, and needs no program.
 
 | | Burner wallet | Mandate |
 |---|---|---|
@@ -47,42 +30,54 @@ understood and requires no program at all. Anything in this space has to beat it
 | Record of a decline | None. A refused attempt is a silent bot error in a log file nobody keeps | A confirmed transaction with a reason code and the override that would have cleared it |
 | Third party can verify | Only that transfers happened | The limits agreed in advance, and every payment made against them |
 
-The first four rows are conveniences. The last two are the ones that are not reproducible with a
-burner at any price, and it is the reason this is a product rather than a settings screen.
+A third party can check the limits that were agreed in advance, and every payment made against
+them. A burner wallet cannot show that.
 
-## What the record is for, after the hackathon
+## What Veto does about it
 
-Behind the product, not in front of it. The hero is the phone app. This is the last thirty seconds
-of the pitch, not its spine, because an infrastructure pitch scores badly against mobile criteria
-and insurers do not install APKs.
+Veto is that mandate on Solana, and the record of the decisions under it.
 
-AP2 standardised the record of a yes: signed mandates that prove to a merchant that a human
-authorised a purchase. The matching half does not exist. Nobody can show that an agent operated
-inside a bound it agreed to in advance, which means nobody can underwrite agent spend, dispute
-"the bot drained me" with anything, or compare agents by how they behave at a limit.
+The owner sets the four limits and a purpose string. The purpose is stored on chain as written.
+Funds stay in the owner's wallet. The mandate account is an SPL delegate on that wallet. The
+owner key stays in Seed Vault and is reached through Mobile Wallet Adapter. A separate agent
+key can submit a charge. It cannot change a limit, change the merchant, extend the expiry, or
+move funds outside the mandate.
 
-The people who eventually want that record are insurers, agent platforms, compliance functions and
-counterparties. None of them are buying anything in 2026. Say so if asked, rather than implying a
-market that does not exist yet.
+When a charge is inside the limits, the program pays the merchant and writes the payment. When
+a charge breaks a limit, the transfer instruction is not executed, no tokens move, and the
+program writes a refusal: a reason code, and the override that would have cleared that one
+payment. The instruction returns success, so the write is kept. The owner can allow that one
+payment with an override. The override is a ledger entry, it applies to one nonce, and it
+cannot raise the total cap. The owner can revoke the mandate in one signature, or revoke the
+SPL delegation directly.
 
-## What we are not claiming
+A decision can be exported and checked against the chain from another machine. The schema is
+[DECISION_RECORD.md](DECISION_RECORD.md).
 
-- **Not** a complete record of every attempt that ever existed. That is unprovable and nothing on
-  chain can provide it. An agent that never submits a charge leaves no trace, here or anywhere.
-- **What is** complete: every payment made under this authority, because a spend under the mandate
-  has to pass through the program to happen at all. Plus every refusal the agent surfaced.
-- **Not** a verifiable credential. No W3C VC profile, no signing ceremony, no verifier service by
-  Oct 9. A stable documented schema and an export anyone can re-read from the chain. The word
-  "credential" does not appear in the deck.
-- **Not** novel in having limits on chain. That is commodity and the deck names the prior art.
+## What this does not claim
 
-## How we would know we were wrong
+The record is every payment made under the mandate, and every refusal the agent submitted. A
+charge the agent never submitted leaves no entry, and nothing on chain can record one. A
+refusal is one declined attempt against the mandate. It does not show that the agent had no
+other funding path, or that the ceiling was tight: a one million ceiling on a five dollar
+charge is a record of a five dollar charge.
 
-Worth writing down now, while it is cheap to be honest.
+The export is the documented schema. Anyone can re-read it from the chain. It is not a W3C
+verifiable credential. There is no signing ceremony and no verifier service.
 
-- If a judge asks "who uses this on a Tuesday" and the best answer is still a hypothetical, the
-  consumer framing is wrong and the product is developer infrastructure wearing an app.
-- If the export beat lands as a curiosity rather than an "oh", the record is not the wedge and the
-  differentiator is only mobile UX on limits, which is a much weaker position.
-- If someone ships a recorded on-chain refusal on mobile before Oct 9, the wedge is gone and the
-  entry needs a different one.
+Capped agent spending on chain is not new. The prior art is named in the [README](../README.md).
+
+Insurers, agent platforms, compliance functions, and counterparties are the people who would
+use a record like this to underwrite agent spend, to dispute a drained wallet, or to compare
+agents at a limit. Nobody is buying that record in 2026.
+
+## How we would know this was wrong
+
+Three outcomes would show the claim does not hold.
+
+- If the person using this on a Tuesday is still a hypothetical, the consumer framing is wrong
+  and the product is developer infrastructure wearing an app.
+- If the export lands as a curiosity, the record is not the wedge and the differentiator is only
+  mobile UX on limits, which is a much weaker position.
+- If someone else ships a recorded on-chain refusal on mobile before 2026-10-09, that wedge is
+  gone and the entry needs a different one.

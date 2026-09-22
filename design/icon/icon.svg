@@ -11,7 +11,7 @@
     stroke touched the rule and read as log out, one where the stroke was
     shortened to a block and the pair read as pause. Sized and checked at 48px
     first, never for balance at 1024. The rule stays full and unbroken, because
-    the boundary held. Palette from docs/DESIGN_DECISION.md.
+    the boundary held. Palette from docs/internal/DESIGN_DECISION.md.
   -->
   <rect width="1024" height="1024" fill="#0F1A16"/>
   <rect x="322" y="284" width="380" height="456" rx="16" fill="#EDE6D6"/>
