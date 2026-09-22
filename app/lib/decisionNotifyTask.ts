@@ -124,6 +124,11 @@ async function scanOnce(): Promise<void> {
   const seenByMandate = new Map<string, Set<string>>();
   for (const ledger of ledgers) {
     const raw = await secureStore.getItem(seenStorageKey(ledger.mandate));
+    // A missing key is not an empty seen set. deliverDecisionNotices stores
+    // the rows already on that rule and does not announce them.
+    if (raw === null) {
+      continue;
+    }
     seenByMandate.set(ledger.mandate, parseSeenIds(ledger.mandate, raw));
   }
   await deliverDecisionNotices({
@@ -141,6 +146,7 @@ async function scanOnce(): Promise<void> {
 
 export async function presentDecisionNotice(notice: DecisionNotice): Promise<void> {
   await Notifications.scheduleNotificationAsync({
+    identifier: notice.id,
     content: {
       title: notice.title,
       body: notice.body,
@@ -199,9 +205,9 @@ async function askOnce(): Promise<void> {
     if (!current.granted) {
       return;
     }
-    await ensureDecisionChannel();
+    // The layout hook reads the chain on mount and when the app resumes.
+    // Opening another rule only makes sure the background worker is registered.
     await registerQuietly();
-    await runDecisionNotifyScan();
     return;
   }
   await ensureDecisionChannel();

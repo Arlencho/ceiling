@@ -19,17 +19,12 @@ export function useDecisionNotifications(): void {
     if (handled.current === key) {
       return;
     }
-    const data: unknown = last.notification.request.content.data;
-    const path = decisionPathFromNoticeData(data);
-    if (!path || typeof data !== 'object' || data === null || !('decisionId' in data)) {
-      return;
-    }
-    const id = (data as { decisionId?: unknown }).decisionId;
-    if (typeof id !== 'string') {
+    const path = decisionPathFromNoticeData(last.notification.request.content.data);
+    if (!path) {
       return;
     }
     handled.current = key;
-    router.push(`/decision/${encodeURIComponent(id)}`);
+    router.push(path);
     void Notifications.clearLastNotificationResponseAsync();
   }, [last, router]);
 

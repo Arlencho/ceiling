@@ -130,6 +130,13 @@ export async function deliverDecisionNotices(args: {
   let failure: unknown = null;
   try {
     for (const notice of plan.notices) {
+      const mandate = parseDecisionId(notice.id)?.mandate;
+      // No stored key: this is the first read after permission was granted,
+      // or the first read of a rule added later. Keep the row, do not announce it.
+      // An empty set means the key exists, so a later row is announced.
+      if (mandate != null && !args.seenByMandate.has(mandate)) {
+        continue;
+      }
       await args.present(notice);
       presented.add(notice.id);
     }
@@ -137,6 +144,10 @@ export async function deliverDecisionNotices(args: {
     failure = err;
   }
   for (const [mandate, target] of plan.seenByMandate) {
+    if (!args.seenByMandate.has(mandate)) {
+      await args.saveSeen(mandate, target);
+      continue;
+    }
     const previous = args.seenByMandate.get(mandate) ?? new Set<string>();
     const keep = target.filter((id) => previous.has(id) || presented.has(id));
     await args.saveSeen(mandate, keep);

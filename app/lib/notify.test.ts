@@ -173,7 +173,7 @@ test('a decision the phone already announced stays quiet, including on a second 
   const shown: DecisionNotice[] = [];
   await deliverDecisionNotices({
     ledgers: firstLedgers,
-    seenByMandate: new Map(),
+    seenByMandate: new Map([[MANDATE_A, new Set()]]),
     present: async (notice) => {
       shown.push(notice);
     },
@@ -193,7 +193,10 @@ test('a decision the phone already announced stays quiet, including on a second 
   const again: DecisionNotice[] = [];
   await deliverDecisionNotices({
     ledgers: [ledger(MANDATE_A, [refused, paid]), ledger(MANDATE_B, [refusalRow()])],
-    seenByMandate: new Map([[MANDATE_A, remembered]]),
+    seenByMandate: new Map([
+      [MANDATE_A, remembered],
+      [MANDATE_B, new Set()],
+    ]),
     present: async (notice) => {
       again.push(notice);
     },
@@ -215,7 +218,7 @@ test('a failed announcement does not mark that decision as announced', async () 
   await assert.rejects(
     deliverDecisionNotices({
       ledgers: [ledger(MANDATE_A, [paid, refused])],
-      seenByMandate: new Map(),
+      seenByMandate: new Map([[MANDATE_A, new Set()]]),
       present: async (notice) => {
         if (notice.title === 'Refused') {
           throw new Error('notification tray rejected the refusal');
@@ -297,4 +300,81 @@ test('a full ring of remembered decisions fits in one secure-store value', () =>
 
 test('the background read waits at least 15 minutes, the Android floor', () => {
   assert.equal(DECISION_NOTIFY_INTERVAL_MINUTES, 15);
+});
+
+test('the first read of a rule stores every decision already on it and announces none', async () => {
+  const refused = refusalRow();
+  const paid = row({ ts: 40n, kind: KIND_PAID, nonce: 3n, amount: 100_000n });
+  const stored = new Map<string, string>();
+  const shown: DecisionNotice[] = [];
+  await deliverDecisionNotices({
+    ledgers: [ledger(MANDATE_A, [refused, paid])],
+    seenByMandate: new Map(),
+    present: async (notice) => {
+      shown.push(notice);
+    },
+    saveSeen: async (mandate, ids) => {
+      stored.set(mandate, serializeSeenIds(mandate, ids));
+    },
+  });
+  assert.equal(shown.length, 0);
+  const remembered = parseSeenIds(MANDATE_A, stored.get(MANDATE_A) ?? null);
+  assert.equal(remembered.has(encodeDecisionId(MANDATE_A, refused)), true);
+  assert.equal(remembered.has(encodeDecisionId(MANDATE_A, paid)), true);
+});
+
+test('a rule added later stores the decisions already on it and announces none', async () => {
+  const refused = refusalRow();
+  const paid = row({ ts: 40n, kind: KIND_PAID, nonce: 3n, amount: 100_000n });
+  const already = refusalRow();
+  const stored = new Map<string, string>();
+  const shown: DecisionNotice[] = [];
+  await deliverDecisionNotices({
+    ledgers: [ledger(MANDATE_A, [refused, paid]), ledger(MANDATE_B, [already])],
+    seenByMandate: new Map([
+      [
+        MANDATE_A,
+        new Set([encodeDecisionId(MANDATE_A, refused), encodeDecisionId(MANDATE_A, paid)]),
+      ],
+    ]),
+    present: async (notice) => {
+      shown.push(notice);
+    },
+    saveSeen: async (mandate, ids) => {
+      stored.set(mandate, serializeSeenIds(mandate, ids));
+    },
+  });
+  assert.equal(shown.length, 0);
+  const rememberedB = parseSeenIds(MANDATE_B, stored.get(MANDATE_B) ?? null);
+  assert.equal(rememberedB.has(encodeDecisionId(MANDATE_B, already)), true);
+});
+
+test('a rule that was empty on its first read announces a decision that arrives later', async () => {
+  const stored = new Map<string, string>();
+  const shown: DecisionNotice[] = [];
+  await deliverDecisionNotices({
+    ledgers: [ledger(MANDATE_A, [])],
+    seenByMandate: new Map(),
+    present: async (notice) => {
+      shown.push(notice);
+    },
+    saveSeen: async (mandate, ids) => {
+      stored.set(mandate, serializeSeenIds(mandate, ids));
+    },
+  });
+  assert.equal(shown.length, 0);
+  assert.equal(stored.has(MANDATE_A), true);
+  const refused = refusalRow();
+  const later: DecisionNotice[] = [];
+  await deliverDecisionNotices({
+    ledgers: [ledger(MANDATE_A, [refused])],
+    seenByMandate: new Map([[MANDATE_A, parseSeenIds(MANDATE_A, stored.get(MANDATE_A) ?? null)]]),
+    present: async (notice) => {
+      later.push(notice);
+    },
+    saveSeen: async () => undefined,
+  });
+  assert.equal(later.length, 1);
+  assert.equal(later[0]?.id, encodeDecisionId(MANDATE_A, refused));
+  assert.equal(later[0]?.body, refusalWhyLine(refusalArgs));
 });
