@@ -102,8 +102,9 @@ Decisions screen, scroll a multi-day history under this same charging rule. Stop
 of 0.2145 and the refused row of 6.2325 the video already opened on.
 
 Voice: *"The agent has been running for days, unattended, paying a bill repriced by a public
-index, against an on-chain rule. It paid when the index was under the ceiling and refused when
-the index crossed it. That price is the only input we do not control, and you can check it at
+index, against an on-chain rule. It paid when the amount was under the per-payment maximum and
+refused when the amount was over it.
+That price is the only input we do not control, and you can check it at
 the same URL we do. Solana devnet, our token, our counterparty."*
 
 **02:00 to 02:20. Take one off the phone.**

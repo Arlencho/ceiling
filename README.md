@@ -69,8 +69,8 @@ Program log: VETO REFUSED reason=5 (over per-payment maximum)
              amount=6232500 per_tx_max=500000 remaining=99339500 override_to_clear=6232500
 ```
 
-The agent tried to pay a bill of 6.2325 tokens, repriced by the public spot at an evening
-spike. That price is the only input we do not control, which is why the refusal counts. The
+The bill was 6.2325 tokens because 50 kWh was repriced at 0.12465 SEK/kWh. That price is the
+only input we do not control. The
 mandate allows 0.5 per payment. It did not pay, it said why, and it said what would have cleared
 it. That transaction is the record. Solana devnet, our token, our counterparty: when a rule
 allows a bill, the program executes an SPL transfer of that token to a token account we created.
