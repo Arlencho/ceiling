@@ -283,3 +283,56 @@ test("critic r1: two refusals of one nonce in the same second both verify", asyn
   assert.equal(one.ok, true, `genuine first refusal is rejected:\n${one.text}`);
   assert.equal(two.ok, true, `genuine second refusal is rejected:\n${two.text}`);
 });
+
+// Regression check named for this round: the attacks the fix does close, on
+// an unwrapped ring. Reordering rows is not a forgery and still confirms; a
+// row added from another mandate, or a copied row under an invented
+// signature, is rejected; a rule export relabelled as a date_range that
+// still spans every row is rejected when a paid row is missing.
+test("critic r1 regression: reordered rows confirm, an added row rejects, a full-span date_range with a row missing rejects", async () => {
+  const rows: Row[] = [
+    { kind: "paid", amount: 446_000, nonce: 1, timestamp: T0, signature: "r-paid-1" },
+    { kind: "refused", amount: 6_232_500, nonce: 2, timestamp: T0 + 9, signature: "r-refused-2" },
+    { kind: "paid", amount: 214_500, nonce: 3, timestamp: T0 + 167, signature: "r-paid-3" },
+  ];
+  const other: Row[] = [{ kind: "paid", amount: 10_000_000, nonce: 1, timestamp: T0 + 100, signature: "o-paid-1" }];
+  const { conn, records, mandates } = chain([
+    { mandateId: 11n, rows },
+    { mandateId: 12n, rows: other },
+  ]);
+  const mandate = mandates[0]!.toBase58();
+  const all = records.get(mandate)!;
+  const foreign = records.get(mandates[1]!.toBase58())![0]!;
+  const rule = { type: "rule" as const, mandate, from: null, to: null };
+  const span = { type: "date_range" as const, mandate, from: T0 - 1, to: T0 + 1000 };
+  const copied = parseRecord({
+    schema_version: 1,
+    cluster: "devnet",
+    genesis_hash: DEVNET_GENESIS,
+    program_id: REAL_PROGRAM.toBase58(),
+    mandate,
+    limits: LIMITS,
+    kind: "paid",
+    amount: 446_000,
+    counterparty: DEST.toBase58(),
+    timestamp: T0,
+    nonce: 1,
+    reason_code: 0,
+    reason_text: reasonText(0),
+    suggested_override: 0,
+    signature: "r-paid-1-invented",
+  });
+  const cases: Array<{ name: string; bundle: DecisionBundle; expectOk: boolean }> = [
+    { name: "rule, rows reversed", bundle: bundle(rule, [...all].reverse()), expectOk: true },
+    { name: "rule, row added from another mandate", bundle: bundle(rule, [...all, foreign]), expectOk: false },
+    { name: "rule, row copied under an invented signature", bundle: bundle(rule, [...all, copied]), expectOk: false },
+    { name: "date_range spanning every row, one paid row deleted", bundle: bundle(span, all.slice(1)), expectOk: false },
+    { name: "date_range spanning every row, rows reversed", bundle: bundle(span, [...all].reverse()), expectOk: true },
+  ];
+  const wrong: string[] = [];
+  for (const item of cases) {
+    const result = await assessBundle(item.bundle, RPC, conn, OPTS);
+    if (result.ok !== item.expectOk) wrong.push(`${item.name}: expected ok=${item.expectOk}\n${result.text}`);
+  }
+  assert.deepEqual(wrong, [], wrong.join("\n---\n"));
+});
