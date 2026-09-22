@@ -6,6 +6,27 @@ const RETRY_RE =
 const SKIP_RE =
   /cleaned up|does not exist on node|Block not available|Slot \d+ was skipped|was skipped, or missing/i;
 
+export function redactRpcUrl(raw: string): string {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return "invalid-rpc-url";
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return "invalid-rpc-url";
+  if (url.username.length === 0 && url.password.length === 0 && url.search.length === 0 && url.hash.length === 0) {
+    return raw;
+  }
+  const host = url.hostname.includes(":") ? `[${url.hostname}]` : url.hostname;
+  const port = url.port.length > 0 ? `:${url.port}` : "";
+  const path = url.pathname === "/" ? "" : url.pathname;
+  return `${url.protocol}//${host}${port}${path}`;
+}
+
+export function redactRpcUrls(urls: readonly string[]): string {
+  return urls.map((url) => redactRpcUrl(url)).join(",");
+}
+
 export class RateLimitedError extends Error {
   readonly endpoints: readonly string[];
 
@@ -153,8 +174,9 @@ export function makeFailoverFetch(
         try {
           const res = await doFetch(url, init);
           if (res.status === 429) {
-            log(`rpc rate limited on ${endpoint}`);
-            lastErr = new RateLimitedError(`rpc rate limited on ${endpoint}`, list);
+            const shown = redactRpcUrl(endpoint);
+            log(`rpc rate limited on ${shown}`);
+            lastErr = new RateLimitedError(`rpc rate limited on ${shown}`, list);
             if (!hasMore) throw lastErr;
             if (delay > 0) await sleepFn(delay);
             delay = nextDelay(delay, maxDelayMs);
@@ -166,7 +188,7 @@ export function makeFailoverFetch(
           lastErr = err;
           if (isRateLimitError(err)) {
             if (!(err instanceof RateLimitedError)) {
-              log(`rpc rate limited on ${endpoint}`);
+              log(`rpc rate limited on ${redactRpcUrl(endpoint)}`);
             }
             if (!hasMore) {
               throw err instanceof RateLimitedError

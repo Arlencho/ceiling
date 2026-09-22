@@ -1,10 +1,22 @@
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { Connection, PublicKey } from "@solana/web3.js";
-import { COMPLETENESS, formatBulkReport, parseExportText, type RowVerdict } from "./bulk.js";
 import {
+  COMPLETENESS,
+  formatBulkReport,
+  parseExportText,
+  type DecisionBundle,
+  type RowVerdict,
+} from "./bulk.js";
+import {
+  KIND_PAID,
+  KIND_REFUSED,
+  REPO_DIR,
+  clusterForGenesis,
   connection,
   fetchLedger,
   fetchMandate,
+  flagString,
   indexedEntries,
   kindByte,
   ledgerPda,
@@ -12,25 +24,43 @@ import {
   parseChargeFromTx,
   parseChargeLogs,
   reasonText,
+  redactRpcUrls,
+  resolveProgramId,
   resolveRpcList,
   tokenAccountOwner,
   type DecisionRecord,
+  type IndexedEntry,
+  type LedgerEntry,
 } from "./lib.js";
+
+export type Verdict = {
+  ok: boolean;
+  failures: string[];
+  text: string;
+};
+
+export type AssessOpts = {
+  env?: NodeJS.ProcessEnv;
+  programId?: PublicKey;
+};
 
 function usage(): never {
   console.error(`verify a Veto decision record against the chain
 
 Usage:
-  npx tsx verify.ts <file.json|file.csv> [--rpc url[,url...]]
+  npx tsx verify.ts <file.json|file.csv> [--rpc url[,url...]] [--program-id <pubkey>]
   npx tsx export.ts --signature <tx> | npx tsx verify.ts
   npx tsx export.ts --mandate <addr> | npx tsx verify.ts
 
 A single version-1 JSON object prints one verdict.
 A bulk JSON bundle or CSV prints how many rows were confirmed and names every
 row that was not, with the reason. Exit 0 only when every row confirms.
+A rule export must also contain every paid and refused ledger row once.
 
 Exit 0 on CONFIRMED, 1 on REJECTED, 2 on usage error.
 Does not need a keypair. Re-reads the cluster independently of the phone.
+The program id is 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV unless
+--program-id or VETO_PROGRAM_ID is set. The program_id in the file is not used.
 `);
   process.exit(2);
 }
@@ -59,11 +89,92 @@ function eq(a: bigint | string | number, b: bigint | string | number, field: str
 
 type CheckCache = {
   conn: Connection;
+  expectedProgramId: PublicKey;
   genesis?: string;
   mandates: Map<string, Awaited<ReturnType<typeof fetchMandate>>>;
   ledgers: Map<string, Awaited<ReturnType<typeof fetchLedger>>>;
   destOwners: Map<string, PublicKey>;
 };
+
+function txBlockTime(tx: { blockTime?: number | null }): number | null {
+  return typeof tx.blockTime === "number" ? tx.blockTime : null;
+}
+
+function ringEntryForSignature(
+  rows: IndexedEntry[],
+  blockTime: number | null,
+  signature: string,
+): { entry: LedgerEntry } | { error: string } {
+  if (blockTime === null) {
+    return { entry: rows[rows.length - 1]!.entry };
+  }
+  const target = BigInt(blockTime);
+  const distance = (row: IndexedEntry): bigint => {
+    const ts = row.entry.ts;
+    return ts >= target ? ts - target : target - ts;
+  };
+  const ranked = [...rows].sort((a, b) => {
+    const delta = distance(a) - distance(b);
+    if (delta !== 0n) return delta < 0n ? -1 : 1;
+    return b.sequence - a.sequence;
+  });
+  const best = ranked[0]!;
+  const next = ranked[1];
+  if (next && distance(next) === distance(best)) {
+    return {
+      error: `signature ${signature} matches ${rows.length} ledger rows for nonce ${best.entry.nonce.toString()} equally; refusing to bind to the newest`,
+    };
+  }
+  return { entry: best.entry };
+}
+
+function recordKey(record: DecisionRecord): string {
+  return [
+    record.kind,
+    record.nonce.toString(),
+    record.timestamp.toString(),
+    record.amount.toString(),
+    record.counterparty,
+    String(record.reason_code),
+    record.suggested_override.toString(),
+  ].join("|");
+}
+
+function entryKey(entry: LedgerEntry): string {
+  const kind = entry.kind === KIND_PAID ? "paid" : "refused";
+  return [
+    kind,
+    entry.nonce.toString(),
+    entry.ts.toString(),
+    entry.amount.toString(),
+    entry.counterparty.toBase58(),
+    String(entry.reason),
+    entry.suggestedOverride.toString(),
+  ].join("|");
+}
+
+function describeKey(key: string): string {
+  const [kind, nonce, timestamp, amount] = key.split("|");
+  return `${kind} amount=${amount} nonce=${nonce} timestamp=${timestamp}`;
+}
+
+function times(n: number): string {
+  return `${n} ${n === 1 ? "time" : "times"}`;
+}
+
+function shownRpc(rpc: string): string {
+  return redactRpcUrls(
+    rpc
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0),
+  );
+}
+
+function programFor(opts?: AssessOpts): PublicKey {
+  if (opts?.programId) return opts.programId;
+  return resolveProgramId(REPO_DIR, opts?.env ?? process.env);
+}
 
 async function checkRecord(
   record: DecisionRecord,
@@ -73,11 +184,21 @@ async function checkRecord(
   const failures: string[] = [];
   const notes: string[] = [];
   const conn = cache.conn;
-  const programId = new PublicKey(record.program_id);
+  const programId = cache.expectedProgramId;
+  if (record.program_id !== programId.toBase58()) {
+    failures.push(
+      `program_id: record has ${record.program_id}, this tool checks ${programId.toBase58()}`,
+    );
+    return { failures, notes };
+  }
   const mandatePk = new PublicKey(record.mandate);
 
   const genesis = cache.genesis ?? (cache.genesis = await conn.getGenesisHash());
   eq(record.genesis_hash, genesis, "genesis_hash", failures);
+  const derivedCluster = clusterForGenesis(genesis);
+  if (record.cluster !== derivedCluster) {
+    failures.push(`cluster: record has ${record.cluster}, genesis ${genesis} is ${derivedCluster}`);
+  }
 
   if (record.reason_text !== reasonText(record.reason_code)) {
     failures.push(
@@ -100,7 +221,7 @@ async function checkRecord(
   });
   if (!tx) {
     failures.push(
-      `signature ${record.signature} not found on ${rpc} (wrong cluster, tampered signature, or history pruned)`,
+      `signature ${record.signature} not found on ${shownRpc(rpc)} (wrong cluster, tampered signature, or history pruned)`,
     );
     return { failures, notes };
   }
@@ -170,6 +291,7 @@ async function checkRecord(
     (row) => row.entry.nonce === record.nonce && row.entry.kind === wantKind,
   );
   const logs = parseChargeLogs(tx.meta?.logMessages ?? []);
+  const blockTime = txBlockTime(tx);
   if (rows.length === 0) {
     if (!logs) {
       failures.push("ledger ring has no matching row and transaction logs have neither PAID nor REFUSED");
@@ -182,17 +304,25 @@ async function checkRecord(
       if (record.reason_text !== logs.reasonText) {
         failures.push(`reason_text: record has "${record.reason_text}", logs have "${logs.reasonText}"`);
       }
+      if (blockTime !== null) {
+        eq(record.timestamp, BigInt(blockTime), "timestamp (transaction)", failures);
+      }
     }
   } else {
-    const entry = rows[rows.length - 1]!.entry;
-    eq(record.amount, entry.amount, "amount (ledger)", failures);
-    eq(record.nonce, entry.nonce, "nonce (ledger)", failures);
-    eq(record.timestamp, entry.ts, "timestamp (ledger)", failures);
-    eq(record.counterparty, entry.counterparty.toBase58(), "counterparty (ledger)", failures);
-    eq(record.suggested_override, entry.suggestedOverride, "suggested_override (ledger)", failures);
-    eq(record.reason_code, entry.reason, "reason_code (ledger)", failures);
-    const chainKind = entry.kind === 1 ? "paid" : entry.kind === 2 ? "refused" : String(entry.kind);
-    eq(record.kind, chainKind, "kind (ledger)", failures);
+    const picked = ringEntryForSignature(rows, blockTime, record.signature);
+    if ("error" in picked) {
+      failures.push(picked.error);
+    } else {
+      const entry = picked.entry;
+      eq(record.amount, entry.amount, "amount (ledger)", failures);
+      eq(record.nonce, entry.nonce, "nonce (ledger)", failures);
+      eq(record.timestamp, entry.ts, "timestamp (ledger)", failures);
+      eq(record.counterparty, entry.counterparty.toBase58(), "counterparty (ledger)", failures);
+      eq(record.suggested_override, entry.suggestedOverride, "suggested_override (ledger)", failures);
+      eq(record.reason_code, entry.reason, "reason_code (ledger)", failures);
+      const chainKind = entry.kind === 1 ? "paid" : entry.kind === 2 ? "refused" : String(entry.kind);
+      eq(record.kind, chainKind, "kind (ledger)", failures);
+    }
   }
 
   if (logs) {
@@ -203,49 +333,200 @@ async function checkRecord(
   return { failures, notes };
 }
 
-function printConfirmed(record: DecisionRecord, rpc: string): void {
-  console.log("VERDICT: CONFIRMED");
-  console.log("");
-  console.log(`rpc                 ${rpc}`);
-  console.log(`cluster             ${record.cluster}`);
-  console.log(`genesis_hash        ${record.genesis_hash}`);
-  console.log(`program_id          ${record.program_id}`);
-  console.log(`mandate             ${record.mandate}`);
-  console.log(`signature           ${record.signature}`);
-  console.log(`kind                ${record.kind}`);
-  console.log(`amount              ${record.amount.toString()}`);
-  console.log(`counterparty        ${record.counterparty}`);
-  console.log(`timestamp           ${record.timestamp.toString()}`);
-  console.log(`nonce               ${record.nonce.toString()}`);
-  console.log(`reason              ${record.reason_code} (${record.reason_text})`);
-  console.log(`suggested_override  ${record.suggested_override.toString()}`);
-  console.log(
+function confirmedLines(record: DecisionRecord, rpc: string, genesis: string): string[] {
+  return [
+    "VERDICT: CONFIRMED",
+    "",
+    `rpc                 ${shownRpc(rpc)}`,
+    `cluster             ${clusterForGenesis(genesis)}`,
+    `genesis_hash        ${genesis}`,
+    `program_id          ${record.program_id}`,
+    `mandate             ${record.mandate}`,
+    `signature           ${record.signature}`,
+    `kind                ${record.kind}`,
+    `amount              ${record.amount.toString()}`,
+    `counterparty        ${record.counterparty}`,
+    `timestamp           ${record.timestamp.toString()}`,
+    `nonce               ${record.nonce.toString()}`,
+    `reason              ${record.reason_code} (${record.reason_text})`,
+    `suggested_override  ${record.suggested_override.toString()}`,
     `limits              cap=${record.limits.cap.toString()} per_tx_max=${record.limits.per_tx_max.toString()} expires_at=${record.limits.expires_at.toString()}`,
-  );
-  console.log(`merchant            ${record.limits.merchant}`);
-  console.log(`purpose             ${record.limits.purpose}`);
-  console.log("");
-  console.log("Mandate limits, ledger entry, and charge transaction agree.");
+    `merchant            ${record.limits.merchant}`,
+    `purpose             ${record.limits.purpose}`,
+    "",
+    "Mandate limits, ledger entry, and charge transaction agree.",
+  ];
 }
 
-async function verifySingle(record: DecisionRecord, rpc: string, cache: CheckCache): Promise<void> {
-  const { failures, notes } = await checkRecord(record, rpc, cache);
-  for (const note of notes) {
-    console.log(`note: ${note}`);
+function rejectedText(failures: string[], notes: string[] = []): string {
+  const lines = [...notes.map((note) => `note: ${note}`), "VERDICT: REJECTED", ""];
+  for (const line of failures) lines.push(`- ${line}`);
+  return `${lines.join("\n")}\n`;
+}
+
+function inScope(ts: bigint, bundle: DecisionBundle): boolean {
+  if (bundle.scope.type !== "date_range") return true;
+  if (bundle.scope.from !== null && ts < BigInt(bundle.scope.from)) return false;
+  if (bundle.scope.to !== null && ts > BigInt(bundle.scope.to)) return false;
+  return true;
+}
+
+async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promise<string[]> {
+  const failures: string[] = [];
+  const expected = cache.expectedProgramId.toBase58();
+  if (bundle.program_id !== expected) {
+    failures.push(`program_id: envelope has ${bundle.program_id}, this tool checks ${expected}`);
   }
-  if (failures.length > 0) fail(failures);
-  printConfirmed(record, rpc);
+  const genesis = cache.genesis ?? (cache.genesis = await cache.conn.getGenesisHash());
+  if (bundle.genesis_hash !== genesis) {
+    failures.push(`genesis_hash: envelope has ${bundle.genesis_hash}, chain has ${genesis}`);
+  }
+  const cluster = clusterForGenesis(genesis);
+  if (bundle.cluster !== cluster) {
+    failures.push(`cluster: envelope has ${bundle.cluster}, genesis ${genesis} is ${cluster}`);
+  }
+  const seen = new Set<string>();
+  for (const record of bundle.decisions) {
+    if (seen.has(record.signature)) {
+      failures.push(`signature ${record.signature} appears more than once`);
+    }
+    seen.add(record.signature);
+    if (record.program_id !== bundle.program_id) {
+      failures.push(
+        `program_id: row ${record.signature} has ${record.program_id}, envelope has ${bundle.program_id}`,
+      );
+    }
+    if (record.genesis_hash !== bundle.genesis_hash) {
+      failures.push(
+        `genesis_hash: row ${record.signature} has ${record.genesis_hash}, envelope has ${bundle.genesis_hash}`,
+      );
+    }
+    if (record.cluster !== bundle.cluster) {
+      failures.push(`cluster: row ${record.signature} has ${record.cluster}, envelope has ${bundle.cluster}`);
+    }
+    if (bundle.scope.mandate && record.mandate !== bundle.scope.mandate) {
+      failures.push(`mandate: row ${record.signature} has ${record.mandate}, scope has ${bundle.scope.mandate}`);
+    }
+  }
+  if (!bundle.scope.mandate) {
+    failures.push(
+      `${bundle.scope.type} scope names no mandate, so completeness cannot be checked against a ledger`,
+    );
+    return failures;
+  }
+  let mandatePk: PublicKey;
+  try {
+    mandatePk = new PublicKey(bundle.scope.mandate);
+  } catch {
+    failures.push(`scope.mandate ${bundle.scope.mandate} is not a pubkey`);
+    return failures;
+  }
+  let mandate = cache.mandates.get(bundle.scope.mandate);
+  if (!mandate) {
+    try {
+      mandate = await fetchMandate(cache.conn, mandatePk);
+      cache.mandates.set(bundle.scope.mandate, mandate);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      failures.push(message);
+      return failures;
+    }
+  }
+  const ledgerKey = ledgerPda(cache.expectedProgramId, mandatePk);
+  let ledger = cache.ledgers.get(ledgerKey.toBase58());
+  if (!ledger) {
+    try {
+      ledger = await fetchLedger(cache.conn, ledgerKey);
+      cache.ledgers.set(ledgerKey.toBase58(), ledger);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      failures.push(message);
+      return failures;
+    }
+  }
+  const chainRows = indexedEntries(ledger).filter(
+    (row) =>
+      (row.entry.kind === KIND_PAID || row.entry.kind === KIND_REFUSED) && inScope(row.entry.ts, bundle),
+  );
+  const chainCounts = new Map<string, number>();
+  for (const row of chainRows) {
+    const key = entryKey(row.entry);
+    chainCounts.set(key, (chainCounts.get(key) ?? 0) + 1);
+  }
+  const fileRows =
+    bundle.scope.type === "date_range"
+      ? bundle.decisions.filter((row) => inScope(row.timestamp, bundle))
+      : bundle.decisions;
+  const fileCounts = new Map<string, number>();
+  for (const row of fileRows) {
+    const key = recordKey(row);
+    fileCounts.set(key, (fileCounts.get(key) ?? 0) + 1);
+  }
+  for (const [key, chainCount] of chainCounts) {
+    const fileCount = fileCounts.get(key) ?? 0;
+    if (fileCount !== chainCount) {
+      failures.push(
+        `ledger row ${describeKey(key)} appears ${times(fileCount)} in the file and ${times(chainCount)} on the ledger`,
+      );
+    }
+  }
+  if (bundle.scope.type === "rule") {
+    const paid = bundle.decisions.filter((row) => row.kind === "paid").length;
+    const refused = bundle.decisions.filter((row) => row.kind === "refused").length;
+    if (paid !== mandate.spendCount) {
+      failures.push(`paid rows: file has ${paid}, mandate spend_count is ${mandate.spendCount}`);
+    }
+    if (refused !== mandate.refusalCount) {
+      failures.push(`refused rows: file has ${refused}, mandate refusal_count is ${mandate.refusalCount}`);
+    }
+  } else {
+    for (const [key, fileCount] of fileCounts) {
+      const chainCount = chainCounts.get(key) ?? 0;
+      if (fileCount !== chainCount) {
+        failures.push(
+          `file row ${describeKey(key)} appears ${times(fileCount)} in the file and ${times(chainCount)} on the ledger`,
+        );
+      }
+    }
+  }
+  return failures;
 }
 
-async function verifyBulk(
-  bundle: { completeness: string; decisions: DecisionRecord[] },
+export async function assessRecord(
+  record: DecisionRecord,
   rpc: string,
-  cache: CheckCache,
-): Promise<void> {
+  conn: Connection,
+  opts?: AssessOpts,
+): Promise<Verdict> {
+  const cache = makeCache(conn, programFor(opts));
+  const { failures, notes } = await checkRecord(record, rpc, cache);
+  if (failures.length > 0) {
+    return { ok: false, failures, text: rejectedText(failures, notes) };
+  }
+  const genesis = cache.genesis ?? record.genesis_hash;
+  const lines = [...notes.map((note) => `note: ${note}`), ...confirmedLines(record, rpc, genesis)];
+  return { ok: true, failures: [], text: `${lines.join("\n")}\n` };
+}
+
+export async function assessBundle(
+  bundle: DecisionBundle,
+  rpc: string,
+  conn: Connection,
+  opts?: AssessOpts,
+): Promise<Verdict> {
   if (bundle.completeness !== COMPLETENESS) {
-    fail([
+    const failures = [
       `completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${JSON.stringify(bundle.completeness)}`,
-    ]);
+    ];
+    return { ok: false, failures, text: rejectedText(failures) };
+  }
+  const cache = makeCache(conn, programFor(opts));
+  let envelope: string[] = [];
+  try {
+    envelope = await bundleFailures(bundle, cache);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    envelope = [message];
   }
   const rows: RowVerdict[] = [];
   for (const [i, record] of bundle.decisions.entries()) {
@@ -266,8 +547,39 @@ async function verifyBulk(
     });
   }
   const report = formatBulkReport(rows);
-  process.stdout.write(report.text);
-  process.exit(report.ok ? 0 : 1);
+  if (envelope.length === 0) {
+    return {
+      ok: report.ok,
+      failures: rows.flatMap((row) => row.failures),
+      text: report.text,
+    };
+  }
+  const lines = ["VERDICT: REJECTED", ""];
+  for (const failure of envelope) lines.push(`- ${failure}`);
+  if (!report.ok) {
+    for (const row of rows) {
+      if (row.ok) continue;
+      lines.push("");
+      lines.push(`REJECTED row ${row.index} signature=${row.signature} kind=${row.kind} nonce=${row.nonce}`);
+      for (const failure of row.failures) lines.push(`- ${failure}`);
+    }
+  }
+  lines.push("");
+  return {
+    ok: false,
+    failures: [...envelope, ...rows.flatMap((row) => row.failures)],
+    text: `${lines.join("\n")}\n`,
+  };
+}
+
+function makeCache(conn: Connection, expectedProgramId: PublicKey): CheckCache {
+  return {
+    conn,
+    expectedProgramId,
+    mandates: new Map(),
+    ledgers: new Map(),
+    destOwners: new Map(),
+  };
 }
 
 async function main(): Promise<void> {
@@ -284,21 +596,34 @@ async function main(): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     fail([`record is not valid schema version 1 JSON or CSV: ${message}`]);
   }
-  const cache: CheckCache = {
-    conn: connection(rpcs),
-    mandates: new Map(),
-    ledgers: new Map(),
-    destOwners: new Map(),
-  };
+  const conn = connection(rpcs);
+  const flagged = flagString(cli, "program-id");
+  const opts: AssessOpts = flagged ? { programId: new PublicKey(flagged) } : {};
   if (parsed.kind === "single") {
-    await verifySingle(parsed.record, rpc, cache);
+    const result = await assessRecord(parsed.record, rpc, conn, opts);
+    process.stdout.write(result.text);
+    if (!result.ok) process.exit(1);
     return;
   }
-  await verifyBulk(parsed.bundle, rpc, cache);
+  const result = await assessBundle(parsed.bundle, rpc, conn, opts);
+  process.stdout.write(result.text);
+  if (!result.ok) process.exit(1);
 }
 
-main().catch((err: unknown) => {
-  const message = err instanceof Error ? err.message : String(err);
-  console.error(`verify failed: ${message}`);
-  process.exit(1);
-});
+function invokedAsCli(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return pathToFileURL(entry).href === import.meta.url;
+  } catch {
+    return false;
+  }
+}
+
+if (invokedAsCli()) {
+  main().catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`verify failed: ${message}`);
+    process.exit(1);
+  });
+}

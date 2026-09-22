@@ -2,7 +2,7 @@
 import { PublicKey } from "@solana/web3.js";
 import { compareRingToHistory } from "./compare.js";
 import { requiredIdentity } from "./config.js";
-import { parseRpcList } from "./rpc.js";
+import { parseRpcList, redactRpcUrls } from "./rpc.js";
 import { formatComparison, formatTable, decisionToJson } from "./format.js";
 import { fetchDecisionHistory } from "./history.js";
 import { fetchLedgerRing } from "./ring.js";
@@ -144,7 +144,7 @@ async function main(): Promise<void> {
   }
 
   process.stdout.write(
-    `rpc ${rpc}\nprogram ${program}\n` +
+    `rpc ${redactRpcUrls(rpc.split(",").map((part) => part.trim()).filter((part) => part.length > 0))}\nprogram ${program}\n` +
       `signatures ${result.signatureCount} across ${result.signaturePages} page(s)` +
       `${result.usedBlockScan ? ` (signature index empty, scanned ${result.slotsScanned} slots)` : ""}\n` +
       `${result.decisions.length} Paid/Refused event(s)\n\n`,

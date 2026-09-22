@@ -33,6 +33,7 @@ import {
   mandatePda,
   parseArgs,
   resolveClusterName,
+  redactRpcUrls,
   resolveProgramId,
   resolveRpcList,
 } from "./lib.js";
@@ -69,7 +70,6 @@ async function main(): Promise<void> {
   if (cli.flags.help || cli.flags.h) usage();
 
   const rpcs = resolveRpcList(cli);
-  const rpc = rpcs.join(",");
   const programId = resolveProgramId();
   const cluster = resolveClusterName();
   const dir = flagString(cli, "keys-dir") ?? keysDir();
@@ -180,7 +180,7 @@ async function main(): Promise<void> {
 
   const summary = {
     cluster,
-    rpc,
+    rpc: redactRpcUrls(rpcs),
     program_id: programId.toBase58(),
     mandate: mandate.toBase58(),
     ledger: ledger.toBase58(),
@@ -202,7 +202,7 @@ async function main(): Promise<void> {
   process.stdout.write(
     [
       `cluster     ${cluster}`,
-      `rpc         ${rpc}`,
+      `rpc         ${redactRpcUrls(rpcs)}`,
       `mandate     ${mandate.toBase58()}`,
       `paid        ${paidSig}`,
       `refused     ${refusedSig}`,

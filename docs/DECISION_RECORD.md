@@ -57,7 +57,7 @@ added to it for this export.
 | Field | JSON type | On-chain source |
 |---|---|---|
 | `schema_version` | integer | This document. Always `1` for this shape. |
-| `cluster` | string | Cluster name from [DEVNET.md](DEVNET.md) (`devnet` or `localnet`). Hint for humans, not a proof. |
+| `cluster` | string | Cluster the genesis hash belongs to: `mainnet-beta`, `devnet`, `testnet`, or `localnet` for any other hash. Verify rejects a label that names a different cluster. |
 | `genesis_hash` | string | `getGenesisHash`. Pins the record to one chain so a copy-paste from another cluster fails verify. |
 | `program_id` | string | The program invoked by the transaction, which must match `declare_id` / [DEVNET.md](DEVNET.md). |
 | `mandate` | string | Mandate PDA. Seeds: `["mandate", owner, mandate_id_le_bytes]`. |
@@ -172,9 +172,12 @@ it does not trust `reason_text` without checking it against the code table.
 
 It confirms, independently:
 
-1. `getGenesisHash` matches `genesis_hash`.
+1. `getGenesisHash` matches `genesis_hash`, and `cluster` is the cluster that
+   hash belongs to (`mainnet-beta`, `devnet`, `testnet`, or `localnet`).
 2. `getTransaction(signature)` exists, succeeded (`err` is null), and invoked
-   this `program_id`.
+   program `3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV` (or `--program-id` /
+   `VETO_PROGRAM_ID` when a reader names another deployment). The `program_id`
+   in the file is not trusted.
 3. The `charge` instruction amount and nonce match the record.
 4. The mandate account in that transaction matches `mandate`, and its
    `cap` / `per_tx_max` / `expires_at` / `merchant` / `purpose` match `limits`.
@@ -190,8 +193,17 @@ A genuine record prints `VERDICT: CONFIRMED` and exit status 0.
 
 A bulk JSON bundle or CSV is checked the same way, one row at a time. The
 verdict names how many rows were confirmed and lists every row that was not,
-with the signature and the reason. Exit 0 only when every row confirms. A
-tampered amount on one row rejects that row and leaves the others confirmed.
+with the signature and the reason. Exit 0 only when every row confirms and
+the envelope matches the chain. A tampered amount on one row rejects that
+row and leaves the others confirmed.
+
+The envelope `program_id`, `genesis_hash`, and `cluster` are checked against
+the chain, not copied from the file. Every row must carry the same values,
+and every row's `mandate` must equal `scope.mandate`. For a rule scope, verify
+walks that mandate's ledger and rejects the file unless every paid row and
+every refused row on the ledger appears once. The paid count must equal
+`spend_count` and the refused count must equal `refusal_count`. A missing row
+is a reject.
 
 RPC, in order: `--rpc`, then `VETO_RPC`, then `keys/devnet-addresses.env`
 `RPC=`. If none of those is set, the tool exits and names `VETO_RPC`. There

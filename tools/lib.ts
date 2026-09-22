@@ -3,7 +3,9 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PublicKey } from "@solana/web3.js";
 import type { Connection } from "@solana/web3.js";
-import { createFailoverConnection, parseRpcList } from "../indexer/src/rpc.js";
+import { createFailoverConnection, parseRpcList, redactRpcUrl, redactRpcUrls } from "../indexer/src/rpc.js";
+
+export { redactRpcUrl, redactRpcUrls };
 
 export const TOOLS_DIR = dirname(fileURLToPath(import.meta.url));
 export const REPO_DIR = join(TOOLS_DIR, "..");
@@ -283,6 +285,16 @@ export function resolveClusterName(repoRoot = REPO_DIR): string {
   if (fromFile && fromFile.length > 0) return fromFile;
   // A cluster label, not an endpoint, program, mint, or account.
   return "devnet";
+}
+
+const CLUSTER_BY_GENESIS: Readonly<Record<string, string>> = {
+  "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d": "mainnet-beta",
+  EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG: "devnet",
+  "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY": "testnet",
+};
+
+export function clusterForGenesis(genesis: string): string {
+  return CLUSTER_BY_GENESIS[genesis] ?? "localnet";
 }
 
 export function keysDir(repoRoot = REPO_DIR): string {

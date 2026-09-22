@@ -5,7 +5,7 @@ import { amountBaseUnits, sekPerKwhToScaled } from "./money.js";
 import { nonceFromWindowStart } from "./nonce.js";
 import type { ChargeReceipt, RecoveredCharge } from "./chain.js";
 import { REASON_STALE_NONCE } from "./reasons.js";
-import { RateLimitedError, isRateLimitError } from "./rpc.js";
+import { RateLimitedError, isRateLimitError, redactRpcUrlsInText } from "./rpc.js";
 
 export type SubmitCharge = (amount: bigint, nonce: bigint) => Promise<ChargeReceipt>;
 
@@ -31,7 +31,7 @@ export async function withRpcBackoff<T>(
     try {
       return await fn();
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = redactRpcUrlsInText(err instanceof Error ? err.message : String(err));
       if (isRateLimitError(err)) {
         log(`${label}: rpc rate limited: ${message}`);
         throw err instanceof RateLimitedError ? err : new RateLimitedError(`${label}: ${message}`);
