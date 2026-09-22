@@ -66,12 +66,21 @@ function rowBase(args: {
 
 const RATE_LIMIT_GAP_REASON = "rpc rate limited on all endpoints";
 const FEED_GAP_REASON = "feed unavailable";
+const SLOT_MISMATCH_REASON = "window start does not match slot";
 const PAID_UNRECOVERED_REASON = "chain shows this window paid; signature could not be recovered";
 const STALE_UNCONFIRMED_REASON = "stale nonce; chain did not confirm this window paid";
 
 function journalSignature(signature: string | null | undefined): string | null {
   if (signature === null || signature === undefined || signature.length === 0) return null;
   return signature;
+}
+
+function windowStartsAtSlot(window: PriceWindow, at: Date): boolean {
+  try {
+    return nonceFromWindowStart(window.timeStart) === nonceFromWindowStart(at.toISOString());
+  } catch {
+    return false;
+  }
 }
 
 export async function processWindow(args: {
@@ -86,6 +95,8 @@ export async function processWindow(args: {
   feedRetryMs?: number;
   chainLastNonce?: () => Promise<bigint>;
   recoverSettled?: (nonce: bigint) => Promise<RecoveredCharge | null>;
+  /** Paid or refused row already on the chain ledger for this nonce. A refusal does not move last_nonce. */
+  recordedCharge?: (nonce: bigint) => Promise<RecoveredCharge | null>;
 }): Promise<ProcessResult> {
   const log = args.log ?? logLine;
   const feedAttempts = args.feedAttempts ?? FEED_ATTEMPTS;
@@ -98,7 +109,8 @@ export async function processWindow(args: {
     if (attempt < feedAttempts) await sleep(feedRetryMs);
   }
 
-  const nonce = nonceFromWindowStart(window === null ? args.at.toISOString() : window.timeStart);
+  // The nonce is the cadence slot the watcher chose. The feed does not name it.
+  const nonce = nonceFromWindowStart(args.at.toISOString());
   if (args.journal.hasNonce(nonce)) {
     if (window !== null) {
       log(`skipped already decided nonce=${nonce.toString()} window=${window.timeStart}`);
@@ -138,6 +150,22 @@ export async function processWindow(args: {
       `paid recovered amount=${recovered.amount.toString()} nonce=${nonce.toString()} sig=${recovered.signature.length > 0 ? recovered.signature : "-"}`,
     );
     return "submitted";
+  };
+
+  const writeRecoveredRefusal = (recovered: RecoveredCharge): ProcessResult => {
+    args.journal.append({
+      ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: recovered.amount }),
+      ...(window === null ? { window_start: args.at.toISOString() } : {}),
+      decision: "refused",
+      reason: recovered.reason,
+      reason_code: recovered.reasonCode,
+      signature: journalSignature(recovered.signature),
+      suggested_override: recovered.suggestedOverride === null ? null : recovered.suggestedOverride.toString(),
+    });
+    log(
+      `refused recovered reason=${recovered.reason} amount=${recovered.amount.toString()} nonce=${nonce.toString()} window=${window?.timeStart ?? args.at.toISOString()}`,
+    );
+    return "skipped";
   };
 
   const writePaidUnrecovered = (amount: bigint): ProcessResult => {
@@ -227,6 +255,22 @@ export async function processWindow(args: {
     }
   }
 
+  if (args.recordedCharge) {
+    let recorded: RecoveredCharge | null;
+    try {
+      recorded = await withRpcBackoff("recorded charge", () => args.recordedCharge!(nonce), log);
+    } catch (err) {
+      if (isRateLimitError(err)) return deferRateLimit();
+      throw err;
+    }
+    if (recorded !== null && recorded.decision === "paid") {
+      return writeRecoveredPaid(recorded);
+    }
+    if (recorded !== null && recorded.decision === "refused") {
+      return writeRecoveredRefusal(recorded);
+    }
+  }
+
   if (window === null) {
     // Record the outage once, then leave the window retryable so a later cycle
     // can still submit it when the feed comes back.
@@ -244,6 +288,25 @@ export async function processWindow(args: {
       suggested_override: null,
     });
     log(`gap feed unavailable at=${args.at.toISOString()}`);
+    return "gap";
+  }
+
+  if (!windowStartsAtSlot(window, args.at)) {
+    if (args.journal.hasGap(nonce, SLOT_MISMATCH_REASON)) {
+      log(
+        `gap window start does not match slot at=${args.at.toISOString()} window=${window.timeStart}, window stays due`,
+      );
+      return "gap";
+    }
+    args.journal.append({
+      ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: 0n }),
+      decision: "gap",
+      reason: SLOT_MISMATCH_REASON,
+      reason_code: null,
+      signature: null,
+      suggested_override: null,
+    });
+    log(`gap window start does not match slot at=${args.at.toISOString()} window=${window.timeStart}`);
     return "gap";
   }
 

@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import { mandatePda, u64Le } from "./chain.js";
+import { ledgerPda, mandatePda, u64Le } from "./chain.js";
 import { JsonlJournal } from "./journal.js";
 
 const require = createRequire(import.meta.url);
@@ -87,6 +87,7 @@ async function startFakeRpc(args: {
   let sentAt: number | null = null;
   let wsConfirmedAt: number | null = null;
   const mandate = mandatePda(programId, args.owner, 1n);
+  const ledger = ledgerPda(programId, mandate);
   const account = {
     executable: false,
     owner: PROGRAM_ID,
@@ -140,8 +141,13 @@ async function startFakeRpc(args: {
         });
       case "getBlockHeight":
         return ok(req.id, 1);
-      case "getAccountInfo":
+      case "getAccountInfo": {
+        const asked = String(req.params[0] ?? "");
+        if (asked === ledger.toBase58()) {
+          return ok(req.id, { context: { slot: 1 }, value: null });
+        }
         return ok(req.id, { context: { slot: 1 }, value: account });
+      }
       case "sendTransaction":
         sends += 1;
         sentAt = sentAt ?? Date.now();

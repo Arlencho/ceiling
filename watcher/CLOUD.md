@@ -259,6 +259,7 @@ required to stop spend.
 ## Local journal behaviour
 
 `VETO_JOURNAL` still defaults to `watcher/data/decisions.jsonl`. Cloud Storage
-is used only when `VETO_JOURNAL_GCS` is set to a `gs://bucket/object` URI. The
-laptop `npm start` / `npm run once` path is unchanged when that variable is
-unset.
+is used only when `VETO_JOURNAL_GCS` is set to a `gs://bucket/object` URI.
+With or without that URI, `once` and `run` rebuild paid and refused rows from
+the chain ledger before they submit, so a lost local file does not send a
+window the chain already refused.
