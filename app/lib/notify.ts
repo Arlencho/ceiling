@@ -1,0 +1,200 @@
+import { KIND_PAID, KIND_REFUSED } from './constants';
+import { encodeDecisionId, parseDecisionId } from './exportRecord';
+import { formatBaseUnits } from './format';
+import { refusalWhyLine } from './reasons';
+import { truncateAddress } from './wallet';
+
+/**
+ * Minutes between on-device ledger reads. Android WorkManager will not repeat
+ * a periodic task sooner than 15 minutes, and it may wait longer. This is not
+ * a real-time watch.
+ */
+export const DECISION_NOTIFY_INTERVAL_MINUTES = 15;
+
+export const PAID_NOTICE_TITLE = 'Paid within rule';
+export const REFUSED_NOTICE_TITLE = 'Refused';
+
+export type NotifyLedgerRow = {
+  ts: bigint;
+  kind: number;
+  nonce: bigint;
+  reason: number;
+  amount: bigint;
+  suggestedOverride: bigint;
+};
+
+export type NotifyMandateLedger = {
+  mandate: string;
+  merchant: string;
+  perTxMax: bigint;
+  decimals: number;
+  rows: readonly NotifyLedgerRow[];
+};
+
+export type DecisionNotice = {
+  id: string;
+  path: string;
+  title: string;
+  body: string;
+};
+
+export type NoticePlan = {
+  notices: DecisionNotice[];
+  seenByMandate: Map<string, string[]>;
+};
+
+export function paidDecisionBody(args: {
+  amount: bigint;
+  decimals: number;
+  perTxMax: bigint;
+  merchant: string;
+}): string {
+  const amount = formatBaseUnits(args.amount, args.decimals);
+  const limit = formatBaseUnits(args.perTxMax, args.decimals);
+  const payee = truncateAddress(args.merchant);
+  return `${amount}, under ${limit} per payment. The payee for this rule is ${payee}.`;
+}
+
+export function seenStorageKey(mandate: string): string {
+  return `veto.notify.seen.${mandate}`;
+}
+
+function isNotifiable(kind: number): boolean {
+  return kind === KIND_PAID || kind === KIND_REFUSED;
+}
+
+function noticeFor(ledger: NotifyMandateLedger, row: NotifyLedgerRow, id: string): DecisionNotice {
+  const refused = row.kind === KIND_REFUSED;
+  const body = refused
+    ? refusalWhyLine({
+        reason: row.reason,
+        amount: row.amount,
+        suggestedOverride: row.suggestedOverride,
+        decimals: ledger.decimals,
+        perTxMax: ledger.perTxMax,
+      })
+    : paidDecisionBody({
+        amount: row.amount,
+        decimals: ledger.decimals,
+        perTxMax: ledger.perTxMax,
+        merchant: ledger.merchant,
+      });
+  return {
+    id,
+    path: `/decision/${encodeURIComponent(id)}`,
+    title: refused ? REFUSED_NOTICE_TITLE : PAID_NOTICE_TITLE,
+    body,
+  };
+}
+
+export function planDecisionNotices(
+  ledgers: readonly NotifyMandateLedger[],
+  seenByMandate: ReadonlyMap<string, ReadonlySet<string>>,
+): NoticePlan {
+  const notices: DecisionNotice[] = [];
+  const next = new Map<string, string[]>();
+  for (const ledger of ledgers) {
+    const seen = seenByMandate.get(ledger.mandate) ?? new Set<string>();
+    const queued = new Set<string>();
+    const retain: string[] = [];
+    for (const row of ledger.rows) {
+      if (!isNotifiable(row.kind)) {
+        continue;
+      }
+      const id = encodeDecisionId(ledger.mandate, row);
+      if (!parseDecisionId(id)) {
+        continue;
+      }
+      if (!retain.includes(id)) {
+        retain.push(id);
+      }
+      if (seen.has(id) || queued.has(id)) {
+        continue;
+      }
+      queued.add(id);
+      notices.push(noticeFor(ledger, row, id));
+    }
+    next.set(ledger.mandate, retain);
+  }
+  return { notices, seenByMandate: next };
+}
+
+export async function deliverDecisionNotices(args: {
+  ledgers: readonly NotifyMandateLedger[];
+  seenByMandate: ReadonlyMap<string, ReadonlySet<string>>;
+  present: (notice: DecisionNotice) => Promise<void>;
+  saveSeen: (mandate: string, ids: readonly string[]) => Promise<void>;
+}): Promise<void> {
+  const plan = planDecisionNotices(args.ledgers, args.seenByMandate);
+  const presented = new Set<string>();
+  let failure: unknown = null;
+  try {
+    for (const notice of plan.notices) {
+      await args.present(notice);
+      presented.add(notice.id);
+    }
+  } catch (err) {
+    failure = err;
+  }
+  for (const [mandate, target] of plan.seenByMandate) {
+    const previous = args.seenByMandate.get(mandate) ?? new Set<string>();
+    const keep = target.filter((id) => previous.has(id) || presented.has(id));
+    await args.saveSeen(mandate, keep);
+  }
+  if (failure) {
+    throw failure;
+  }
+}
+
+export function serializeSeenIds(mandate: string, ids: readonly string[]): string {
+  const prefix = `${mandate}:`;
+  const compact: string[] = [];
+  for (const id of ids) {
+    if (!id.startsWith(prefix)) {
+      continue;
+    }
+    const rest = id.slice(prefix.length);
+    if (!parseDecisionId(id)) {
+      continue;
+    }
+    compact.push(rest);
+  }
+  return JSON.stringify(compact);
+}
+
+export function parseSeenIds(mandate: string, raw: string | null): Set<string> {
+  if (!raw) {
+    return new Set();
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return new Set();
+  }
+  if (!Array.isArray(parsed)) {
+    return new Set();
+  }
+  const out = new Set<string>();
+  for (const item of parsed) {
+    if (typeof item !== 'string' || item.length === 0) {
+      continue;
+    }
+    const id = item.startsWith(`${mandate}:`) ? item : `${mandate}:${item}`;
+    if (parseDecisionId(id)) {
+      out.add(id);
+    }
+  }
+  return out;
+}
+
+export function decisionPathFromNoticeData(data: unknown): string | null {
+  if (typeof data !== 'object' || data === null || !('decisionId' in data)) {
+    return null;
+  }
+  const id = (data as { decisionId?: unknown }).decisionId;
+  if (typeof id !== 'string' || !parseDecisionId(id)) {
+    return null;
+  }
+  return `/decision/${encodeURIComponent(id)}`;
+}

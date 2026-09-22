@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../../components/Button';
@@ -10,6 +10,7 @@ import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
 import { STATUS_REVOKED } from '../../lib/constants';
+import { askAfterFirstRuleOpened } from '../../lib/decisionNotifyTask';
 import { formatBaseUnits, formatTimeLeft } from '../../lib/format';
 import { mayClaimAbsence } from '../../lib/mandateRead';
 import { notActiveHint } from '../../lib/reasons';
@@ -50,6 +51,14 @@ export default function RuleDetailScreen() {
   const onRefresh = useCallback(() => {
     void chain.refresh();
   }, [chain]);
+
+  const openedAddress = mandate?.address ?? null;
+  useEffect(() => {
+    if (!openedAddress) {
+      return;
+    }
+    void askAfterFirstRuleOpened().catch(() => undefined);
+  }, [openedAddress]);
 
   const onRevoke = async () => {
     setFormError(null);
