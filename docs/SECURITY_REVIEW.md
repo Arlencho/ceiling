@@ -146,6 +146,12 @@ Test: `finding_7_refusal_spam_evicts_paid_entries_from_the_ring`.
 
 ### F8: LOW, the threat model does not name the upgrade authority
 
+> **Status: decided in #110.** Devnet keeps the single deployer key as upgrade authority and the
+> README threat model now names it as the assumption behind every bound and every verified
+> record. Mainnet: the upgrade authority is burned before the first mandate is opened, after the
+> external audit; a fix to a frozen program is a new program id. Multisig was considered and not
+> chosen, because a verified record has to outlive the signers' goodwill.
+
 Category: Infra. File: `README.md` "Threat model", `docs/DEVNET.md` "Deployer (fee payer, upgrade
 authority, mint authority)". The program is deployed with the upgradeable loader and a single-key
 upgrade authority. Every bound the README lists is a bound on the program as deployed; whoever holds
