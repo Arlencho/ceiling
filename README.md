@@ -268,6 +268,17 @@ What a key can do under a mandate.
   charge at all; only the named agent signs `charge`.
 - **A forged mandate account cannot be substituted.** `charge` re-derives the mandate address from
   the fields stored inside it and rejects a mismatch, and the CPI signs as that PDA.
+- **The upgrade authority is a single key on devnet, and will be burned on mainnet.** The
+  devnet program is deployed with the upgradeable loader; its upgrade authority is the deployer
+  key listed in [docs/DEVNET.md](docs/DEVNET.md). Whoever holds that key can replace the program
+  logic and, through it, move anything still delegated to a mandate PDA. Every bound in this list
+  is a bound on the program as deployed, under that assumption, and every devnet record verified
+  by `tools/verify.ts` rests on it. Decision: on mainnet the upgrade authority is set to none
+  before the first mandate is opened, after the external audit. A record is only worth checking
+  if the program that wrote it cannot be changed underneath it, and a multisig shrinks the set of
+  people who can do that without removing it. A fix to a frozen mainnet program is a new program
+  id and a new mandate, which is the honest story for an immutable ledger. Devnet stays
+  upgradeable under the single deployer key so findings can be fixed in place.
 - **Known limit.** The ledger records every decision this program reaches. A frozen source or
   destination is inspected in `evaluate` and recorded as a refusal. Anchor account validation
   failures (wrong mint, wrong source, wrong ledger) and token-program declines this program does
