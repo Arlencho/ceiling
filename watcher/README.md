@@ -18,8 +18,9 @@ Four times per Stockholm day (00:00, 06:00, 12:00, 18:00) the process:
    15-minute window that starts on that hour.
 2. Converts a fixed 50 kWh volume to mint base units with integer arithmetic only.
    1 token is treated as 1 SEK. The test mint has 6 decimals (see `docs/DEVNET.md`).
-3. Derives the on-chain nonce from the unix seconds of the window start, so a
-   restart cannot double-charge a settled window.
+3. Derives the on-chain nonce from the unix seconds of the cadence slot it
+   chose, so a restart cannot double-charge a settled window and a feed that
+   moves its window start cannot mint a second nonce for that slot.
 4. Submits `charge`, signed by `keys/agent.json`.
 5. Appends one JSONL row (signature, amount, decision, reason) and prints a
    one-line summary.
@@ -188,7 +189,7 @@ jq . data/decisions.jsonl | less
 | `reason` | `ok`, the on-chain reason text, `feed unavailable`, `zero amount`, `negative price` |
 | `reason_code` | on-chain u8, or null when the chain was not called |
 | `amount` | mint base units, decimal string of an integer |
-| `nonce` | unix seconds of `window_start` |
+| `nonce` | unix seconds of the cadence slot |
 | `signature` | confirmed transaction, or null for a gap/skip |
 | `sek_per_kwh` | decimal string copied from the feed body |
 

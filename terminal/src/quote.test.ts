@@ -12,7 +12,7 @@ const WINDOW: PriceWindow = {
 test("quoteForWindow quotes the documented 50 kWh example as integer base units", () => {
   // The watcher journal recorded this exact window on 2026-09-20: 50 kWh at
   // 0.00892 SEK/kWh is 0.446 tokens, which is 446000 base units at 6 decimals.
-  const quote = quoteForWindow({ window: WINDOW, kwhMilli: 50_000n, mintDecimals: 6 });
+  const quote = quoteForWindow({ window: WINDOW, kwhMilli: 50_000n, mintDecimals: 6, at: WINDOW.timeStart });
   assert.ok(quote !== null);
   assert.equal(quote.amount, 446000n);
   assert.equal(typeof quote.amount, "bigint");
@@ -27,6 +27,7 @@ test("quoteForWindow keeps the price text as the feed sent it, never a float", (
     window: { ...WINDOW, sekPerKwh: "1.23456789" },
     kwhMilli: 50_000n,
     mintDecimals: 6,
+    at: WINDOW.timeStart,
   });
   assert.ok(quote !== null);
   // 50 * 1.23456789 = 61.7283945 tokens, rounded down to base units.
@@ -39,6 +40,7 @@ test("quoteForWindow refuses a negative price instead of inventing a charge", ()
     window: { ...WINDOW, sekPerKwh: "-0.5" },
     kwhMilli: 50_000n,
     mintDecimals: 6,
+    at: WINDOW.timeStart,
   });
   assert.equal(quote, null);
 });
@@ -48,6 +50,7 @@ test("quoteForWindow refuses a zero amount", () => {
     window: { ...WINDOW, sekPerKwh: "0" },
     kwhMilli: 50_000n,
     mintDecimals: 6,
+    at: WINDOW.timeStart,
   });
   assert.equal(quote, null);
 });
@@ -58,6 +61,7 @@ test("quoteForWindow propagates an unreadable price as an error, not a fallback"
       window: { ...WINDOW, sekPerKwh: "not-a-number" },
       kwhMilli: 50_000n,
       mintDecimals: 6,
+      at: WINDOW.timeStart,
     }),
   );
 });

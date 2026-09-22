@@ -19,6 +19,7 @@ import type { WatcherConfig } from "./config.js";
 import type { Veto } from "./idl.js";
 import { logLine } from "./log.js";
 import { parseChargeLogs, type ChargeOutcome } from "./parse.js";
+import { reasonText } from "./reasons.js";
 import { createFailoverConnection, isRateLimitError } from "./rpc.js";
 
 export const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
@@ -82,7 +83,9 @@ const LEDGER_CAPACITY = 32;
 const LEDGER_HEADER_SIZE = 40;
 const ENTRY_SIZE = 72;
 const KIND_PAID = 1;
+const KIND_REFUSED = 2;
 const MANDATE_LAST_NONCE_OFFSET = 224;
+const RECOVERED_SIGNATURE = "recovered-from-chain";
 
 export async function submitCharge(args: {
   cfg: WatcherConfig;
@@ -225,6 +228,74 @@ export function findPaidInLedgerBytes(data: Uint8Array, nonce: bigint): RingPaid
     };
   }
   return null;
+}
+
+type RingRefused = { amount: bigint; reason: number; suggestedOverride: bigint };
+
+/** Last refused ring row for this nonce. A paid row is not a refusal. */
+export function findRefusedInLedgerBytes(data: Uint8Array, nonce: bigint): RingRefused | null {
+  const minSize = 8 + LEDGER_HEADER_SIZE + ENTRY_SIZE;
+  if (data.length < minSize) return null;
+  if (!LEDGER_DISCRIMINATOR.equals(Buffer.from(data.subarray(0, 8)))) return null;
+  const body = data.subarray(8);
+  const total = Buffer.from(body.subarray(32, 36)).readUInt32LE(0);
+  const head = Buffer.from(body.subarray(36, 38)).readUInt16LE(0);
+  const occupied = Math.min(total, LEDGER_CAPACITY);
+  const start = total >= LEDGER_CAPACITY ? head % LEDGER_CAPACITY : 0;
+  let found: RingRefused | null = null;
+  for (let i = 0; i < occupied; i += 1) {
+    const idx = (start + i) % LEDGER_CAPACITY;
+    const off = LEDGER_HEADER_SIZE + idx * ENTRY_SIZE;
+    const raw = body.subarray(off, off + ENTRY_SIZE);
+    if (raw.length < ENTRY_SIZE) continue;
+    const entryNonce = Buffer.from(raw.subarray(48, 56)).readBigUInt64LE(0);
+    const kind = raw[64] ?? 0;
+    if (entryNonce !== nonce || kind !== KIND_REFUSED) continue;
+    found = {
+      amount: Buffer.from(raw.subarray(8, 16)).readBigUInt64LE(0),
+      reason: raw[65] ?? 0,
+      suggestedOverride: Buffer.from(raw.subarray(56, 64)).readBigUInt64LE(0),
+    };
+  }
+  return found;
+}
+
+/** Ring row for this nonce. A payment wins over a refusal of the same nonce. One account read, no history walk. */
+export function recordedFromLedgerBytes(data: Uint8Array, nonce: bigint): RecoveredCharge | null {
+  const paid = findPaidInLedgerBytes(data, nonce);
+  if (paid !== null) {
+    return {
+      decision: "paid",
+      reason: "ok",
+      reasonCode: 0,
+      suggestedOverride: paid.suggestedOverride === 0n ? null : paid.suggestedOverride,
+      signature: RECOVERED_SIGNATURE,
+      amount: paid.amount,
+    };
+  }
+  const refused = findRefusedInLedgerBytes(data, nonce);
+  if (refused === null) return null;
+  return {
+    decision: "refused",
+    reason: reasonText(refused.reason),
+    reasonCode: refused.reason,
+    suggestedOverride: refused.suggestedOverride === 0n ? null : refused.suggestedOverride,
+    signature: RECOVERED_SIGNATURE,
+    amount: refused.amount,
+  };
+}
+
+export async function readRecordedCharge(args: {
+  cfg: WatcherConfig;
+  agent: Keypair;
+  nonce: bigint;
+}): Promise<RecoveredCharge | null> {
+  const { connection, programId } = connect(args.cfg, args.agent);
+  const owner = new PublicKey(args.cfg.owner);
+  const mandate = mandatePda(programId, owner, args.cfg.mandateId);
+  const info = await connection.getAccountInfo(ledgerPda(programId, mandate), "confirmed");
+  if (!info) return null;
+  return recordedFromLedgerBytes(info.data, args.nonce);
 }
 
 export function chargeFromTx(

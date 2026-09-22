@@ -1,13 +1,13 @@
 /** Quoting for the merchant terminal.
  *
  * All arithmetic is imported from the watcher: the same feed parsing, the same
- * integer money conversion, the same window-start nonce. Nothing here parses a
+ * integer money conversion, the same charge nonce. Nothing here parses a
  * price into a float, and every amount is a bigint of mint base units.
  */
 
 import type { PriceWindow } from "../../watcher/src/feed.js";
 import { amountBaseUnits, sekPerKwhToScaled } from "../../watcher/src/money.js";
-import { nonceFromWindowStart } from "../../watcher/src/nonce.js";
+import { nonceFromSlot, nonceFromWindowStart } from "../../watcher/src/nonce.js";
 
 export type Quote = {
   windowStart: string;
@@ -15,7 +15,8 @@ export type Quote = {
   sekPerKwh: string;
   kwhMilli: bigint;
   amount: bigint;
-  nonce: bigint;
+  /** Cadence slot being quoted. Null when the feed window does not start on that slot. */
+  nonce: bigint | null;
 };
 
 /** Price a fixed kWh volume for one feed window.
@@ -23,11 +24,15 @@ export type Quote = {
  * Returns null when the fetched price cannot become a charge (negative or
  * zero amount), matching the watcher's skip rule. An unreadable price throws,
  * because a quote built on a guessed number is worse than no quote.
+ *
+ * `at` is the cadence instant being acted on. The nonce is that slot, never
+ * the feed window. A window that does not start on the slot carries no nonce.
  */
 export function quoteForWindow(args: {
   window: PriceWindow;
   kwhMilli: bigint;
   mintDecimals: number;
+  at: Date | string;
 }): Quote | null {
   const scaled = sekPerKwhToScaled(args.window.sekPerKwh);
   if (scaled < 0n) return null;
@@ -37,13 +42,15 @@ export function quoteForWindow(args: {
     mintDecimals: args.mintDecimals,
   });
   if (amount === 0n) return null;
+  const slot = nonceFromSlot(args.at);
+  const startsOnSlot = nonceFromWindowStart(args.window.timeStart) === slot;
   return {
     windowStart: args.window.timeStart,
     windowEnd: args.window.timeEnd,
     sekPerKwh: args.window.sekPerKwh,
     kwhMilli: args.kwhMilli,
     amount,
-    nonce: nonceFromWindowStart(args.window.timeStart),
+    nonce: startsOnSlot ? slot : null,
   };
 }
 

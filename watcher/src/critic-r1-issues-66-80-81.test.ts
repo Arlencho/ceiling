@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import { mandatePda, readLastNonce, recoverSettledCharge, submitCharge, u64Le } from "./chain.js";
+import { ledgerPda, mandatePda, readLastNonce, recoverSettledCharge, submitCharge, u64Le } from "./chain.js";
 import { loadConfig } from "./config.js";
 import type { PriceFeed } from "./feed.js";
 import { JsonlJournal } from "./journal.js";
@@ -93,6 +93,7 @@ async function startFakeRpc(args: {
   let statusPolls = 0;
   let wsSubscribes = 0;
   const mandate = mandatePda(programId, args.owner, 1n);
+  const ledger = ledgerPda(programId, mandate);
   const account = {
     executable: false,
     owner: PROGRAM_ID,
@@ -148,8 +149,13 @@ async function startFakeRpc(args: {
         });
       case "getBlockHeight":
         return ok(req.id, 1);
-      case "getAccountInfo":
+      case "getAccountInfo": {
+        const asked = String(req.params[0] ?? "");
+        if (asked === ledger.toBase58()) {
+          return ok(req.id, { context: { slot: 1 }, value: null });
+        }
         return ok(req.id, { context: { slot: 1 }, value: account });
+      }
       case "sendTransaction":
         sends += 1;
         return ok(req.id, args.paidSig);

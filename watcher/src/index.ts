@@ -7,13 +7,14 @@ import {
   mandatePda,
   openMandate,
   readLastNonce,
+  readRecordedCharge,
   recoverSettledCharge,
   submitCharge,
 } from "./chain.js";
 import { keyPath, loadConfig } from "./config.js";
 import { EnergySpotFeed } from "./feed.js";
 import { JsonlJournal, type JournalRow } from "./journal.js";
-import { fetchChainDecisions, repairJournalFromChain } from "./journalRepair.js";
+import { fetchChainDecisions, repairJournalFromChain, type ChainDecision } from "./journalRepair.js";
 import {
   hydrateLocalJournal,
   objectUpdatedAt,
@@ -22,8 +23,9 @@ import {
   type JournalObjectStore,
 } from "./journalStore.js";
 import { logError, logLine } from "./log.js";
-import { nonceFromWindowStart } from "./nonce.js";
-import { processWindow, sleep, type ProcessResult } from "./run.js";
+import { nonceFromSlot } from "./nonce.js";
+import { isRateLimitError } from "./rpc.js";
+import { processWindow, sleep, withRpcBackoff, type ProcessResult } from "./run.js";
 import { isJournalStale, lastDecisionAt } from "./stale.js";
 import { PublicKey } from "@solana/web3.js";
 
@@ -61,20 +63,27 @@ async function withJournalAndFeed() {
   const journal = new JsonlJournal(cfg.journalPath);
   const feed = new EnergySpotFeed();
   const agent = loadKeypair(keyPath(cfg, "agent"));
-  if (store !== null) {
-    const { connection, programId } = connect(cfg, agent);
-    // Tell the walk which nonces the journal already holds. A ring that is
-    // already complete reads no transaction.
-    const entries = await fetchChainDecisions({
-      connection,
-      programId,
-      owner: new PublicKey(cfg.owner),
-      mandateId: cfg.mandateId,
-      hasNonce: (nonce) => journal.hasNonce(nonce),
-    });
-    const repaired = repairJournalFromChain(journal, entries);
-    if (repaired > 0) {
-      logLine(`journal repaired ${repaired} row(s) from chain history`);
+  // The chain ledger is the record of paid and refused windows. A refusal does
+  // not move last_nonce, so this runs whether or not a remote journal exists.
+  const { connection, programId } = connect(cfg, agent);
+  let entries: ChainDecision[] = [];
+  try {
+    entries = await withRpcBackoff("journal repair", () =>
+      fetchChainDecisions({
+        connection,
+        programId,
+        owner: new PublicKey(cfg.owner),
+        mandateId: cfg.mandateId,
+        hasNonce: (nonce) => journal.hasNonce(nonce),
+      }),
+    );
+  } catch (err) {
+    if (!isRateLimitError(err)) throw err;
+  }
+  const repaired = repairJournalFromChain(journal, entries);
+  if (repaired > 0) {
+    logLine(`journal repaired ${repaired} row(s) from chain history`);
+    if (store !== null) {
       const rows = journal.load();
       await persistJournal(cfg.journalPath, store, rows[rows.length - 1] ?? null);
     }
@@ -82,7 +91,8 @@ async function withJournalAndFeed() {
   const submit = (amount: bigint, nonce: bigint) => submitCharge({ cfg, agent, amount, nonce });
   const chainLastNonce = () => readLastNonce({ cfg, agent });
   const recoverSettled = (nonce: bigint) => recoverSettledCharge({ cfg, agent, nonce });
-  return { cfg, journal, feed, submit, agent, store, chainLastNonce, recoverSettled };
+  const recordedCharge = (nonce: bigint) => readRecordedCharge({ cfg, agent, nonce });
+  return { cfg, journal, feed, submit, agent, store, chainLastNonce, recoverSettled, recordedCharge };
 }
 
 async function lastAppendedAfter<T>(
@@ -97,7 +107,7 @@ async function lastAppendedAfter<T>(
 }
 
 async function processAt(at: Date): Promise<ProcessResult> {
-  const { cfg, journal, feed, submit, store, chainLastNonce, recoverSettled } =
+  const { cfg, journal, feed, submit, store, chainLastNonce, recoverSettled, recordedCharge } =
     await withJournalAndFeed();
   const { result, row } = await lastAppendedAfter(journal, () =>
     processWindow({
@@ -109,6 +119,7 @@ async function processAt(at: Date): Promise<ProcessResult> {
       mintDecimals: cfg.mintDecimals,
       chainLastNonce,
       recoverSettled,
+      recordedCharge,
     }),
   );
   await persistJournal(cfg.journalPath, store, row);
@@ -116,12 +127,12 @@ async function processAt(at: Date): Promise<ProcessResult> {
 }
 
 async function processDue(now: Date, announceIdle = false): Promise<boolean> {
-  const { cfg, journal, feed, submit, store, chainLastNonce, recoverSettled } =
+  const { cfg, journal, feed, submit, store, chainLastNonce, recoverSettled, recordedCharge } =
     await withJournalAndFeed();
   let acted = false;
   let deferred = false;
   for (const slot of dueSlots(now)) {
-    const nonce = nonceFromWindowStart(slot.toISOString());
+    const nonce = nonceFromSlot(slot);
     if (journal.hasNonce(nonce)) continue;
     acted = true;
     const { result, row } = await lastAppendedAfter(journal, () =>
@@ -134,6 +145,7 @@ async function processDue(now: Date, announceIdle = false): Promise<boolean> {
         mintDecimals: cfg.mintDecimals,
         chainLastNonce,
         recoverSettled,
+        recordedCharge,
       }),
     );
     await persistJournal(cfg.journalPath, store, row);

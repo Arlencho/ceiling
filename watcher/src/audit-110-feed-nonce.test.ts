@@ -1,12 +1,9 @@
-// Security fixture for issue #110, area 3 (the watcher).
+// Security fixture for issue #110, area 3 (the watcher), closed by #118 and #119.
 //
-// The nonce that identifies a window on chain is derived from the feed's own
-// `time_start`, not from the cadence slot the watcher set out to pay
-// (run.ts:101). A feed that answers the same slot with a shifting
-// `time_start` therefore hands the watcher a fresh, strictly higher nonce each
-// time, and every one of them is submitted as a new charge. The journal cannot
-// stop it (it keys on the feed nonce) and the chain cannot stop it (each nonce
-// is above last_nonce). The only bound left is the mandate itself.
+// The nonce that identifies a window on chain is the cadence slot the watcher
+// chose (`at`), not the feed's `time_start`. A feed that answers the same slot
+// with a shifting `time_start` is a gap (`window start does not match slot`)
+// until an answer starts on that slot, and that slot is paid once.
 //
 // The control below is the honest feed: the same slot twice yields one submit.
 import assert from "node:assert/strict";
@@ -71,36 +68,37 @@ test("control: an honest feed pays one slot once", async () => {
   assert.deepEqual(submitted, [1790092800n]);
 });
 
-test("finding: a feed that shifts time_start pays the same slot once per answer", async () => {
+test("a feed that shifts time_start pays the cadence slot once", async () => {
   const journal = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-")), "decisions.jsonl"));
   const submitted: bigint[] = [];
   const settled = { value: 0n };
-  // Every window still contains the slot (start <= 16:00:00 < end), so
-  // windowContaining accepts each one. The starts rise by one second, so each
-  // nonce is above the chain's last_nonce and nothing refuses it.
+  // Every window still contains the slot (start <= 16:00:00 < end). The starts
+  // rise by one second. Only the answer that starts on the slot is a charge,
+  // and its nonce is the slot.
   const feed = shiftingFeed([
     "2026-09-22T15:59:57Z",
     "2026-09-22T15:59:58Z",
     "2026-09-22T15:59:59Z",
     "2026-09-22T16:00:00Z",
   ]);
+  const results: string[] = [];
   for (let i = 0; i < 4; i += 1) {
-    assert.equal(await run(feed, journal, submitted, settled), "submitted");
+    results.push(await run(feed, journal, submitted, settled));
   }
-  assert.deepEqual(submitted, [1790092797n, 1790092798n, 1790092799n, 1790092800n]);
+  assert.deepEqual(results, ["gap", "gap", "gap", "submitted"]);
+  assert.deepEqual(submitted, [1790092800n]);
   const paidRows = journal.load().filter((row) => row.decision === "paid");
-  assert.equal(paidRows.length, 4, "four paid rows for one cadence slot");
+  assert.equal(paidRows.length, 1, "one paid row for one cadence slot");
+  assert.equal(paidRows[0]?.nonce, "1790092800");
 });
 
-// Second, smaller point from the same area. A refusal does not advance
-// last_nonce on chain, so the journal is the only thing that stops a refused
-// window from being submitted again. With the local file gone and no object
-// store configured (index.ts runs the ring repair only when a store exists),
-// the same window is refused twice: two transactions, two ledger rows, no
-// funds moved. A paid window is protected by the chain's last_nonce.
-test("finding: a refused window is submitted again when the local journal is lost", async () => {
+// A refusal does not advance last_nonce. A fresh journal and a last_nonce of
+// zero are not enough to send the nonce again: processWindow reads the
+// refusal before it submits, whether or not the caller passed a ledger reader.
+test("a refused window is not submitted again when the local journal is lost", async () => {
   const feed = shiftingFeed(["2026-09-22T16:00:00Z"]);
   const submitted: bigint[] = [];
+  const results: string[] = [];
   const refusedReceipt = () => ({
     decision: "refused" as const,
     reason: "over per-payment maximum",
@@ -110,22 +108,24 @@ test("finding: a refused window is submitted again when the local journal is los
   });
   for (let restart = 0; restart < 2; restart += 1) {
     const journal = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-")), "decisions.jsonl"));
-    const result = await processWindow({
-      at: SLOT,
-      feed,
-      journal,
-      submit: async (_amount, nonce) => {
-        submitted.push(nonce);
-        return refusedReceipt();
-      },
-      kwhMilli: 50_000n,
-      mintDecimals: 6,
-      log: () => {},
-      feedAttempts: 1,
-      feedRetryMs: 0,
-      chainLastNonce: async () => 0n,
-    });
-    assert.equal(result, "submitted");
+    results.push(
+      await processWindow({
+        at: SLOT,
+        feed,
+        journal,
+        submit: async (_amount, nonce) => {
+          submitted.push(nonce);
+          return refusedReceipt();
+        },
+        kwhMilli: 50_000n,
+        mintDecimals: 6,
+        log: () => {},
+        feedAttempts: 1,
+        feedRetryMs: 0,
+        chainLastNonce: async () => 0n,
+      }),
+    );
   }
-  assert.deepEqual(submitted, [1790092800n, 1790092800n]);
+  assert.deepEqual(results, ["submitted", "skipped"]);
+  assert.deepEqual(submitted, [1790092800n]);
 });
