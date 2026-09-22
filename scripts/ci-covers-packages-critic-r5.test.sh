@@ -7,9 +7,8 @@
 # written. A flow map, a quoted key, the key on the push trigger, and an
 # empty list are all the same key.
 #
-# info-escape (reported, not counted): ways to leave a package's checks
-# unrun on a pull request that are not a paths key. None sit in the fix
-# diff; the review says for each whether it matters and where it is filed.
+# counted rejections, any failure reason: ways to leave a package's checks
+# unrun on a pull request that are not a paths key. The edit text is unchanged.
 #   esc-pr-target        pull_request_target in place of pull_request, so
 #                        the checks run against the base branch's code
 #   esc-job-shell-noop   a job-level defaults.run.shell of bash -n, which
@@ -31,7 +30,6 @@ GUARD=ci-covers-packages.test.sh
 pass=0; fail=0
 ok()   { printf 'ok - %s\n' "$1"; pass=$((pass+1)); }
 bad()  { printf 'not ok - %s\n' "$1"; fail=$((fail+1)); }
-info() { printf 'info - %s\n' "$1"; }
 
 scratch() {
     local dir name pkg
@@ -126,9 +124,9 @@ for mode in $INFO_ESCAPE; do
     dir=$(scratch)
     if ! edit "$dir" "$mode"; then bad "could not apply edit $mode"; rm -rf "$dir"; continue; fi
     if guard_passes "$dir"; then
-        info "guard stays green with $mode (see review for whether it matters)"
+        bad "guard stays green with $mode; a construct that can stop a check is still allowed"
     else
-        info "guard rejects $mode: $(guard_reason "$dir")"
+        ok "guard fails with $mode"
     fi
     rm -rf "$dir"
 done
