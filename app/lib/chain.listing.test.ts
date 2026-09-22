@@ -224,3 +224,51 @@ test('a failed signature listing is not treated as an empty list, so override co
     },
   );
 });
+
+test('owner mandate listing keeps a second mint when config names only the first', async () => {
+  const { fetchOwnerMandates } = await chainModule;
+  const firstMint = key(5).toBase58();
+  const secondMint = key(11).toBase58();
+  const first = mandate({
+    address: key(9).toBase58(),
+    mint: firstMint,
+    mandateId: 3n,
+    purpose: 'Charging top-ups at the SE3 spot rate',
+  });
+  const second = mandate({
+    address: key(10).toBase58(),
+    mint: secondMint,
+    source: key(12).toBase58(),
+    agent: key(13).toBase58(),
+    mandateId: 4n,
+    purpose: 'second devnet asset',
+  });
+  const connection = {
+    getProgramAccounts: async () => [
+      { pubkey: new PublicKey(first.address), account: { data: encodeMandate(first) } },
+      { pubkey: new PublicKey(second.address), account: { data: encodeMandate(second) } },
+    ],
+  };
+  const client: ChainClient = {
+    config: {
+      rpcUrl: 'https://api.devnet.solana.com',
+      programId: PROGRAM_ID.toBase58(),
+      mint: firstMint,
+      explorerCluster: 'devnet',
+      mintDecimals: 6,
+    },
+    connection: connection as unknown as Connection,
+    programId: PROGRAM_ID,
+  };
+
+  const found = await fetchOwnerMandates(client, OWNER);
+  assert.equal(found.length, 2);
+  assert.deepEqual(
+    found.map((row) => row.mint).sort(),
+    [firstMint, secondMint].sort(),
+  );
+  assert.equal(
+    found.find((row) => row.mint === secondMint)?.purpose,
+    'second devnet asset',
+  );
+});
