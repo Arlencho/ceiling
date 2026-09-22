@@ -115,11 +115,16 @@ Same decision as slide 1.
 
 Screenshot: the Decisions screen with multi-day history. **Needs the watcher to have been running.**
 
-> The agent watches a public electricity price feed and pays for charging under the ceiling. The
-> price is real and you can check it at the same URL we do. The merchant terminal is ours, because
-> no charge point takes USDC.
+> The agent pays a bill repriced by a public index, unattended, against an on-chain rule, when
+> that bill is under the ceiling. The price is the only input we do not control, which is why the
+> refusal counts, and you can check it at the same URL we do.
 >
-> Refusals in this demo happen because electricity got expensive.
+> Solana devnet. Our token. Our counterparty: a terminal we run. When the rule allows the bill,
+> the program executes an SPL transfer of that token to an account we created.
+
+The index is the Nordic day-ahead spot. The mint and the counterparty account are created by
+[scripts/devnet-setup.sh](../scripts/devnet-setup.sh). [tools/produce.ts](../tools/produce.ts)
+mints further supply of that same mint. Addresses are in [DEVNET.md](DEVNET.md).
 
 ---
 
