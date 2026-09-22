@@ -2,7 +2,7 @@ import type { PriceFeed, PriceWindow } from "./feed.js";
 import type { JournalRow, JsonlJournal } from "./journal.js";
 import { logError, logLine } from "./log.js";
 import { amountBaseUnits, sekPerKwhToScaled } from "./money.js";
-import { nonceFromWindowStart } from "./nonce.js";
+import { nonceFromSlot, nonceFromWindowStart } from "./nonce.js";
 import type { ChargeReceipt, RecoveredCharge } from "./chain.js";
 import { REASON_STALE_NONCE } from "./reasons.js";
 import { RateLimitedError, isRateLimitError } from "./rpc.js";
@@ -32,6 +32,8 @@ export async function withRpcBackoff<T>(
       return await fn();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      // A ledger that does not decode will not decode on a later attempt.
+      if (isLedgerDecodeError(err)) throw err;
       if (isRateLimitError(err)) {
         log(`${label}: rpc rate limited: ${message}`);
         throw err instanceof RateLimitedError ? err : new RateLimitedError(`${label}: ${message}`);
@@ -75,9 +77,15 @@ function journalSignature(signature: string | null | undefined): string | null {
   return signature;
 }
 
+function isLedgerDecodeError(err: unknown): boolean {
+  return err instanceof Error && err.name === "LedgerDecodeError";
+}
+
 function windowStartsAtSlot(window: PriceWindow, at: Date): boolean {
   try {
-    return nonceFromWindowStart(window.timeStart) === nonceFromWindowStart(at.toISOString());
+    // The feed must start on the charge nonce. One second earlier is a
+    // different window, even when that window still contains the slot.
+    return nonceFromWindowStart(window.timeStart) === nonceFromSlot(at);
   } catch {
     return false;
   }
@@ -110,7 +118,7 @@ export async function processWindow(args: {
   }
 
   // The nonce is the cadence slot the watcher chose. The feed does not name it.
-  const nonce = nonceFromWindowStart(args.at.toISOString());
+  const nonce = nonceFromSlot(args.at);
   if (args.journal.hasNonce(nonce)) {
     if (window !== null) {
       log(`skipped already decided nonce=${nonce.toString()} window=${window.timeStart}`);

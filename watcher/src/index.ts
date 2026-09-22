@@ -23,7 +23,7 @@ import {
   type JournalObjectStore,
 } from "./journalStore.js";
 import { logError, logLine } from "./log.js";
-import { nonceFromWindowStart } from "./nonce.js";
+import { nonceFromSlot } from "./nonce.js";
 import { isRateLimitError } from "./rpc.js";
 import { processWindow, sleep, withRpcBackoff, type ProcessResult } from "./run.js";
 import { isJournalStale, lastDecisionAt } from "./stale.js";
@@ -132,7 +132,7 @@ async function processDue(now: Date, announceIdle = false): Promise<boolean> {
   let acted = false;
   let deferred = false;
   for (const slot of dueSlots(now)) {
-    const nonce = nonceFromWindowStart(slot.toISOString());
+    const nonce = nonceFromSlot(slot);
     if (journal.hasNonce(nonce)) continue;
     acted = true;
     const { result, row } = await lastAppendedAfter(journal, () =>

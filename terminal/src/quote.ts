@@ -1,13 +1,13 @@
 /** Quoting for the merchant terminal.
  *
  * All arithmetic is imported from the watcher: the same feed parsing, the same
- * integer money conversion, the same window-start nonce. Nothing here parses a
+ * integer money conversion, the same charge nonce. Nothing here parses a
  * price into a float, and every amount is a bigint of mint base units.
  */
 
 import type { PriceWindow } from "../../watcher/src/feed.js";
 import { amountBaseUnits, sekPerKwhToScaled } from "../../watcher/src/money.js";
-import { nonceFromWindowStart } from "../../watcher/src/nonce.js";
+import { nonceFromSlot } from "../../watcher/src/nonce.js";
 
 export type Quote = {
   windowStart: string;
@@ -43,7 +43,7 @@ export function quoteForWindow(args: {
     sekPerKwh: args.window.sekPerKwh,
     kwhMilli: args.kwhMilli,
     amount,
-    nonce: nonceFromWindowStart(args.window.timeStart),
+    nonce: nonceFromSlot(args.window.timeStart),
   };
 }
 
