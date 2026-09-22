@@ -11,6 +11,12 @@ Two phones on a desk, both visibly phones. Both stay in frame.
 
 - Program on **devnet**, not a local validator. Every explorer link in this video has to open on a
   judge's laptop, and nobody can click localhost.
+- The narration says what the payment is: a bill repriced by a public price index, unattended,
+  against the on-chain rule. Solana devnet, our token, our counterparty. The price is the only
+  input we do not control. The mint and the counterparty account come from
+  [scripts/devnet-setup.sh](../scripts/devnet-setup.sh). [tools/produce.ts](../tools/produce.ts)
+  mints further supply of that same mint. When the rule allows the bill, the program executes an
+  SPL transfer of that token to the account we created.
 - The watcher has been running for days, so the Decisions screen is a multi-day diary. This is the
   only item that cannot be fixed on the day.
 - Both Seekers have the release APK installed, not a dev client.
@@ -60,17 +66,17 @@ ownership, and it cannot widen any of these."*
 
 **00:35 to 01:00. The yes.**
 
-A payment under this same rule, under the 0.5 per-payment maximum, at a real cheap-window
-electricity price. The paid row of 0.2145 on this rule. Agent phone: no tap, no prompt.
-Paid. Both screens agree.
+A payment under this same rule, under the 0.5 per-payment maximum. The amount is a bill repriced
+by a real cheap-window spot price. The paid row of 0.2145 on this rule. Agent phone: no tap, no
+prompt. Paid. Both screens agree.
 
-Voice: *"Inside the box it just pays. Nobody approved that."*
+Voice: *"Inside the box it pays the bill. Nobody approved that."*
 
 **01:00 to 01:35. The no, and the explorer.**
 
 Cut back to the same 18:00 refusal the video opened on. Same agent, same rule, no tap. The evening
-window priced 50 kWh at 0.12465 SEK/kWh, which is 6.2325, over the 0.5 per-payment maximum. The
-phone already said why, with the override that would have cleared it.
+window reprices a bill of 50 kWh at 0.12465 SEK/kWh, which is 6.2325, over the 0.5 per-payment
+maximum. The phone already said why, with the override that would have cleared it.
 
 Then cut to a laptop, open that transaction in the explorer (the signature in the README), and
 read the log line on screen:
@@ -95,9 +101,10 @@ Rehearse this shot.
 Decisions screen, scroll a multi-day history under this same charging rule. Stop on the paid row
 of 0.2145 and the refused row of 6.2325 the video already opened on.
 
-Voice: *"The agent has been running for days against a public electricity price feed. It paid when
-power was cheap and refused when the evening price spiked. The price is real and you can check it
-at the same URL we do. The merchant terminal is ours, because no charge point takes USDC."*
+Voice: *"The agent has been running for days, unattended, paying a bill repriced by a public
+index, against an on-chain rule. It paid when the index was under the ceiling and refused when
+the index crossed it. That price is the only input we do not control, and you can check it at
+the same URL we do. Solana devnet, our token, our counterparty."*
 
 **02:00 to 02:20. Take one off the phone.**
 

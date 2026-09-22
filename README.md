@@ -69,9 +69,11 @@ Program log: VETO REFUSED reason=5 (over per-payment maximum)
              amount=6232500 per_tx_max=500000 remaining=99339500 override_to_clear=6232500
 ```
 
-The agent tried to pay 6.2325 tokens for electricity at an evening spike price. The mandate allows
-0.5 per payment. It did not pay, it said why, and it said what would have cleared it. That
-transaction is the record.
+The agent tried to pay a bill of 6.2325 tokens, repriced by the public spot at an evening
+spike. That price is the only input we do not control, which is why the refusal counts. The
+mandate allows 0.5 per payment. It did not pay, it said why, and it said what would have cleared
+it. That transaction is the record. Solana devnet, our token, our counterparty: when a rule
+allows a bill, the program executes an SPL transfer of that token to a token account we created.
 
 Four later decisions on the same mandate confirmed on the six-hour cadence. Each was refused.
 The per-payment maximum is 0.5, and each charge was over it. Token balances are unchanged on
@@ -87,7 +89,8 @@ all four.
 The recorded time is the block time. The Stockholm hour is the SE3 window the price belongs to,
 the 15-minute window that starts at that hour. Those prices are the Nordic day-ahead spot for
 SE3 on 2026-09-21, on the [same public URL the agent reads](https://www.elprisetjustnu.se/).
-Each charge is that price times 50 kWh. The program log on each transaction is `reason=5 (over
+Each charge is that price times 50 kWh, the kWh figure the bill is repriced against. The program
+log on each transaction is `reason=5 (over
 per-payment maximum)` with `per_tx_max=500000` and these base-unit amounts: 8163000, 21542500,
 7903500, 63938500.
 
@@ -164,12 +167,17 @@ committed to stays absolute.
 
 ## The demo
 
-The agent watches [Nordic day-ahead electricity spot prices](https://www.elprisetjustnu.se/) and
-pays for charging when power is under the ceiling the owner set. That feed is public, needs no key,
-and anyone can verify the same numbers against the same URL.
+An agent pays a bill repriced by a public index, unattended, against an on-chain rule. The index
+is the [Nordic day-ahead electricity spot](https://www.elprisetjustnu.se/). The feed is public,
+needs no key, and anyone can verify the same numbers against the same URL. The price is the only
+input we do not control, which is why the refusal counts.
 
-**The counterparty is a terminal we run**, because no charge point operator accepts USDC. We are
-not claiming a real merchant. Refusals in the demo happen because electricity got expensive.
+Solana devnet. Our token. Our counterparty. [scripts/devnet-setup.sh](scripts/devnet-setup.sh)
+creates the mint, mints the supply the watcher spends, and creates the counterparty token
+account. [tools/produce.ts](tools/produce.ts) mints further supply of that same mint into a
+separate source account. When the rule allows the bill, the program executes an SPL transfer of
+that token to the account we created. The counterparty is a terminal we run. Public addresses
+are in [docs/DEVNET.md](docs/DEVNET.md).
 
 ## Repository layout
 

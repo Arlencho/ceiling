@@ -19,8 +19,9 @@ override that would clear it, on a phone, with the key in Seed Vault.
 > designs are infrastructure. This one is on a phone.
 >
 > The demo: one payment under the rule. One refusal over it, on chain and readable. Seven days of
-> history from a live price feed. Then one refusal taken off the phone and verified against the
-> chain from somewhere else.
+> history: an agent paying a bill repriced by a public index, unattended, against the on-chain
+> rule. Solana devnet, our token, our counterparty. Then one refusal taken off the phone and
+> verified against the chain from somewhere else.
 >
 > That record is the point. A worst case fixed in advance, every payment made against it, and
 > every refusal the agent surfaced. AP2 standardised the record of a yes. This is the missing half.
@@ -49,10 +50,17 @@ limits that were agreed in advance and every payment made against them. The comp
 
 ## The demo
 
-The price feed is the Nordic day-ahead electricity spot: public, no key, independently
-verifiable against the same URL. The counterparty is a terminal we run, because no charge point
-operator takes USDC. Refusals happen because electricity got expensive. The recording uses
-history the watcher has already produced.
+An agent pays a bill repriced by a public index, unattended, against an on-chain rule. The index
+is the Nordic day-ahead electricity spot: public, no key, independently verifiable against the
+same URL. The price is the only input we do not control, which is why the refusal counts. The
+recording uses history the watcher has already produced.
+
+Solana devnet. Our token. Our counterparty. [scripts/devnet-setup.sh](../scripts/devnet-setup.sh)
+creates the mint, mints the supply the watcher spends, and creates the counterparty token
+account. [tools/produce.ts](../tools/produce.ts) mints further supply of that same mint into a
+separate source account. When the rule allows the bill, the program executes an SPL transfer of
+that token to the account we created. The counterparty is a terminal we run. Public addresses
+are in [DEVNET.md](DEVNET.md).
 
 ## Limits
 
