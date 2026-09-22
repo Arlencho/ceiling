@@ -179,6 +179,19 @@ separate source account. When the rule allows the bill, the program executes an 
 that token to the account we created. The counterparty is a terminal we run. Public addresses
 are in [docs/DEVNET.md](docs/DEVNET.md).
 
+## A second mint
+
+The second mandate on devnet (`7Bns2EMrzw9T8apGLRGynean4mkFMwHsEWoXbeTGnNtj`) is not an SKR
+integration. Solana Mobile's SKR mint is `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`. That
+account is on mainnet, and the same address is absent on devnet, which is the only cluster this
+program is deployed to. The second mandate is open against
+`Dcbba8YzbTXM1HQ9EeHW7M21T1Ce5PiBsY1Bpxx5K3Kq`, a classic SPL mint created on devnet at 6
+decimals, with its own token account (`66RkDwxF51Vzx6Yc7PAGoqkMY6X6bn74gXjT1CiMLhaV`) and its
+own delegate, the new mandate account. It is a second asset. `open_mandate` and `charge` already
+take the mint they are given, and [tools/second-mint.ts](tools/second-mint.ts) only configures
+that path. SKR is the mainnet asset that mint field would name. This mint is not SKR, and it is
+not the demo mint `2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU`.
+
 ## Repository layout
 
 ```
