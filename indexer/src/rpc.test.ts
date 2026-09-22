@@ -58,6 +58,30 @@ test("parseRpcList keeps order and splits a comma-separated VETO_RPC list", () =
   ]);
 });
 
+test("a malformed rpc entry names its position and does not echo the value", () => {
+  const secret = "rpc.example.test/?api-key=SECRET123";
+  assert.throws(
+    () => parseRpcList(secret),
+    (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      assert.equal(message.includes("SECRET123"), false, message);
+      assert.equal(message.includes("rpc.example.test"), false, message);
+      assert.match(message, /position 1/);
+      return true;
+    },
+  );
+  assert.throws(
+    () => parseRpcList(`http://ok.example, ws://rpc.example.test/?api-key=SECRET123`),
+    (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      assert.equal(message.includes("SECRET123"), false, message);
+      assert.equal(message.includes("rpc.example.test"), false, message);
+      assert.match(message, /position 2/);
+      return true;
+    },
+  );
+});
+
 test("a 429 is retried on the next endpoint rather than treated as a dead read", async () => {
   const calls: string[] = [];
   const fetchImpl = async (input: RequestInfo | URL) => {

@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { Connection, PublicKey } from "@solana/web3.js";
+import { fetchDecisionHistory } from "../indexer/src/index.js";
 import {
   COMPLETENESS,
+  filterIndexed,
   formatBulkReport,
   parseExportText,
   type DecisionBundle,
@@ -25,12 +27,13 @@ import {
   parseChargeLogs,
   reasonText,
   redactRpcUrls,
-  resolveProgramId,
   resolveRpcList,
+  resolveVerifyProgramId,
   tokenAccountOwner,
   type DecisionRecord,
   type IndexedEntry,
   type LedgerEntry,
+  type MandateAccount,
 } from "./lib.js";
 
 export type Verdict = {
@@ -42,6 +45,8 @@ export type Verdict = {
 export type AssessOpts = {
   env?: NodeJS.ProcessEnv;
   programId?: PublicKey;
+  allowBlockScan?: boolean;
+  pageSize?: number;
 };
 
 function usage(): never {
@@ -54,13 +59,20 @@ Usage:
 
 A single version-1 JSON object prints one verdict.
 A bulk JSON bundle or CSV prints how many rows were confirmed and names every
-row that was not, with the reason. Exit 0 only when every row confirms.
+row that was not, with the reason. The verdict also prints the scope, program,
+cluster, mandate, and range it checked. Exit 0 only when every row confirms.
 A rule export must also contain every paid and refused ledger row once.
+A date_range export must match the indexer's signature set for that range
+(the whole program, when the scope names no mandate). --page-size and
+--block-scan are passed through to the indexer. Block scan is off unless
+--block-scan is set.
 
 Exit 0 on CONFIRMED, 1 on REJECTED, 2 on usage error.
 Does not need a keypair. Re-reads the cluster independently of the phone.
-The program id is 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV unless
---program-id or VETO_PROGRAM_ID is set. The program_id in the file is not used.
+The program id is the address in tools/idl/veto.json
+(3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV) unless --program-id or
+VETO_PROGRAM_ID is set. keys/devnet-addresses.env is not read.
+The program_id in the file is not used.
 `);
   process.exit(2);
 }
@@ -90,8 +102,12 @@ function eq(a: bigint | string | number, b: bigint | string | number, field: str
 type CheckCache = {
   conn: Connection;
   expectedProgramId: PublicKey;
+  programSource: string;
+  rpc: string;
+  allowBlockScan: boolean;
+  pageSize?: number;
   genesis?: string;
-  mandates: Map<string, Awaited<ReturnType<typeof fetchMandate>>>;
+  mandates: Map<string, MandateAccount>;
   ledgers: Map<string, Awaited<ReturnType<typeof fetchLedger>>>;
   destOwners: Map<string, PublicKey>;
 };
@@ -100,13 +116,31 @@ function txBlockTime(tx: { blockTime?: number | null }): number | null {
   return typeof tx.blockTime === "number" ? tx.blockTime : null;
 }
 
+function sameComparedFields(a: LedgerEntry, b: LedgerEntry): boolean {
+  return (
+    a.kind === b.kind &&
+    a.nonce === b.nonce &&
+    a.ts === b.ts &&
+    a.amount === b.amount &&
+    a.counterparty.equals(b.counterparty) &&
+    a.reason === b.reason &&
+    a.suggestedOverride === b.suggestedOverride
+  );
+}
+
 function ringEntryForSignature(
   rows: IndexedEntry[],
   blockTime: number | null,
   signature: string,
 ): { entry: LedgerEntry } | { error: string } {
+  const nonce = rows[0]!.entry.nonce.toString();
   if (blockTime === null) {
-    return { entry: rows[rows.length - 1]!.entry };
+    if (rows.length > 1) {
+      return {
+        error: `signature ${signature} matches ${rows.length} ledger rows for nonce ${nonce} equally; refusing to bind to the newest`,
+      };
+    }
+    return { entry: rows[0]!.entry };
   }
   const target = BigInt(blockTime);
   const distance = (row: IndexedEntry): bigint => {
@@ -119,10 +153,11 @@ function ringEntryForSignature(
     return b.sequence - a.sequence;
   });
   const best = ranked[0]!;
-  const next = ranked[1];
-  if (next && distance(next) === distance(best)) {
+  const bestDistance = distance(best);
+  const tied = ranked.filter((row) => distance(row) === bestDistance);
+  if (tied.length > 1 && tied.some((row) => !sameComparedFields(row.entry, best.entry))) {
     return {
-      error: `signature ${signature} matches ${rows.length} ledger rows for nonce ${best.entry.nonce.toString()} equally; refusing to bind to the newest`,
+      error: `signature ${signature} matches ${tied.length} ledger rows for nonce ${best.entry.nonce.toString()} equally; refusing to bind to the newest`,
     };
   }
   return { entry: best.entry };
@@ -171,9 +206,10 @@ function shownRpc(rpc: string): string {
   );
 }
 
-function programFor(opts?: AssessOpts): PublicKey {
-  if (opts?.programId) return opts.programId;
-  return resolveProgramId(REPO_DIR, opts?.env ?? process.env);
+function programChoice(opts?: AssessOpts): { programId: PublicKey; source: string } {
+  if (opts?.programId) return { programId: opts.programId, source: "flag" };
+  const resolved = resolveVerifyProgramId(REPO_DIR, opts?.env ?? process.env);
+  return { programId: resolved.programId, source: resolved.source };
 }
 
 async function checkRecord(
@@ -333,7 +369,7 @@ async function checkRecord(
   return { failures, notes };
 }
 
-function confirmedLines(record: DecisionRecord, rpc: string, genesis: string): string[] {
+function confirmedLines(record: DecisionRecord, rpc: string, genesis: string, programSource: string): string[] {
   return [
     "VERDICT: CONFIRMED",
     "",
@@ -341,6 +377,7 @@ function confirmedLines(record: DecisionRecord, rpc: string, genesis: string): s
     `cluster             ${clusterForGenesis(genesis)}`,
     `genesis_hash        ${genesis}`,
     `program_id          ${record.program_id}`,
+    `checked against program ${record.program_id} (${programSource})`,
     `mandate             ${record.mandate}`,
     `signature           ${record.signature}`,
     `kind                ${record.kind}`,
@@ -408,41 +445,74 @@ async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promis
       failures.push(`mandate: row ${record.signature} has ${record.mandate}, scope has ${bundle.scope.mandate}`);
     }
   }
-  if (!bundle.scope.mandate) {
-    failures.push(
-      `${bundle.scope.type} scope names no mandate, so completeness cannot be checked against a ledger`,
-    );
-    return failures;
+  if (bundle.scope.type === "rule") {
+    failures.push(...(await rulePopulationFailures(bundle, cache)));
+  } else {
+    failures.push(...(await dateRangePopulationFailures(bundle, cache)));
   }
-  let mandatePk: PublicKey;
+  return failures;
+}
+
+function mandatePubkey(mandate: string, failures: string[]): PublicKey | null {
   try {
-    mandatePk = new PublicKey(bundle.scope.mandate);
+    return new PublicKey(mandate);
   } catch {
-    failures.push(`scope.mandate ${bundle.scope.mandate} is not a pubkey`);
+    failures.push(`scope.mandate ${mandate} is not a pubkey`);
+    return null;
+  }
+}
+
+function missingAccountMessage(err: unknown): string | null {
+  const message = err instanceof Error ? err.message : String(err);
+  if (message.startsWith("mandate account not found") || message.startsWith("ledger account not found")) {
+    return message;
+  }
+  return null;
+}
+
+async function cachedMandate(cache: CheckCache, mandate: string, mandatePk: PublicKey): Promise<MandateAccount> {
+  const cached = cache.mandates.get(mandate);
+  if (cached) return cached;
+  const loaded = await fetchMandate(cache.conn, mandatePk);
+  cache.mandates.set(mandate, loaded);
+  return loaded;
+}
+
+async function cachedLedger(cache: CheckCache, mandatePk: PublicKey) {
+  const ledgerKey = ledgerPda(cache.expectedProgramId, mandatePk);
+  const key = ledgerKey.toBase58();
+  const cached = cache.ledgers.get(key);
+  if (cached) return cached;
+  const loaded = await fetchLedger(cache.conn, ledgerKey);
+  cache.ledgers.set(key, loaded);
+  return loaded;
+}
+
+async function rulePopulationFailures(bundle: DecisionBundle, cache: CheckCache): Promise<string[]> {
+  const failures: string[] = [];
+  if (!bundle.scope.mandate) {
+    failures.push("rule scope names no mandate, so completeness cannot be checked against a ledger");
     return failures;
   }
-  let mandate = cache.mandates.get(bundle.scope.mandate);
-  if (!mandate) {
-    try {
-      mandate = await fetchMandate(cache.conn, mandatePk);
-      cache.mandates.set(bundle.scope.mandate, mandate);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      failures.push(message);
-      return failures;
-    }
+  const mandatePk = mandatePubkey(bundle.scope.mandate, failures);
+  if (!mandatePk) return failures;
+  let mandate: MandateAccount;
+  try {
+    mandate = await cachedMandate(cache, bundle.scope.mandate, mandatePk);
+  } catch (err) {
+    const missing = missingAccountMessage(err);
+    if (!missing) throw err;
+    failures.push(missing);
+    return failures;
   }
-  const ledgerKey = ledgerPda(cache.expectedProgramId, mandatePk);
-  let ledger = cache.ledgers.get(ledgerKey.toBase58());
-  if (!ledger) {
-    try {
-      ledger = await fetchLedger(cache.conn, ledgerKey);
-      cache.ledgers.set(ledgerKey.toBase58(), ledger);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      failures.push(message);
-      return failures;
-    }
+  let ledger: Awaited<ReturnType<typeof cachedLedger>>;
+  try {
+    ledger = await cachedLedger(cache, mandatePk);
+  } catch (err) {
+    const missing = missingAccountMessage(err);
+    if (!missing) throw err;
+    failures.push(missing);
+    return failures;
   }
   const chainRows = indexedEntries(ledger).filter(
     (row) =>
@@ -453,12 +523,8 @@ async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promis
     const key = entryKey(row.entry);
     chainCounts.set(key, (chainCounts.get(key) ?? 0) + 1);
   }
-  const fileRows =
-    bundle.scope.type === "date_range"
-      ? bundle.decisions.filter((row) => inScope(row.timestamp, bundle))
-      : bundle.decisions;
   const fileCounts = new Map<string, number>();
-  for (const row of fileRows) {
+  for (const row of bundle.decisions) {
     const key = recordKey(row);
     fileCounts.set(key, (fileCounts.get(key) ?? 0) + 1);
   }
@@ -470,23 +536,56 @@ async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promis
       );
     }
   }
-  if (bundle.scope.type === "rule") {
-    const paid = bundle.decisions.filter((row) => row.kind === "paid").length;
-    const refused = bundle.decisions.filter((row) => row.kind === "refused").length;
-    if (paid !== mandate.spendCount) {
-      failures.push(`paid rows: file has ${paid}, mandate spend_count is ${mandate.spendCount}`);
+  const paid = bundle.decisions.filter((row) => row.kind === "paid").length;
+  const refused = bundle.decisions.filter((row) => row.kind === "refused").length;
+  if (paid !== mandate.spendCount) {
+    failures.push(`paid rows: file has ${paid}, mandate spend_count is ${mandate.spendCount}`);
+  }
+  if (refused !== mandate.refusalCount) {
+    failures.push(`refused rows: file has ${refused}, mandate refusal_count is ${mandate.refusalCount}`);
+  }
+  return failures;
+}
+
+async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckCache): Promise<string[]> {
+  const failures: string[] = [];
+  if (bundle.scope.mandate) {
+    const mandatePk = mandatePubkey(bundle.scope.mandate, failures);
+    if (!mandatePk) return failures;
+    try {
+      await cachedMandate(cache, bundle.scope.mandate, mandatePk);
+    } catch (err) {
+      const missing = missingAccountMessage(err);
+      if (!missing) throw err;
+      failures.push(missing);
+      return failures;
     }
-    if (refused !== mandate.refusalCount) {
-      failures.push(`refused rows: file has ${refused}, mandate refusal_count is ${mandate.refusalCount}`);
+  }
+  const history = await fetchDecisionHistory({
+    rpcUrl: cache.rpc,
+    programId: cache.expectedProgramId.toBase58(),
+    mandate: bundle.scope.mandate ?? undefined,
+    connection: cache.conn,
+    allowBlockScan: cache.allowBlockScan,
+    pageSize: cache.pageSize,
+  });
+  const indexed = filterIndexed(history.decisions, {
+    mandate: bundle.scope.mandate ?? undefined,
+    from: bundle.scope.from,
+    to: bundle.scope.to,
+  });
+  const population = new Set(indexed.map((row) => row.signature));
+  const fileSigs = new Set(
+    bundle.decisions.filter((row) => inScope(row.timestamp, bundle)).map((row) => row.signature),
+  );
+  for (const signature of [...population].sort()) {
+    if (!fileSigs.has(signature)) {
+      failures.push(`signature ${signature} is in the indexed date_range and missing from the file`);
     }
-  } else {
-    for (const [key, fileCount] of fileCounts) {
-      const chainCount = chainCounts.get(key) ?? 0;
-      if (fileCount !== chainCount) {
-        failures.push(
-          `file row ${describeKey(key)} appears ${times(fileCount)} in the file and ${times(chainCount)} on the ledger`,
-        );
-      }
+  }
+  for (const signature of [...fileSigs].sort()) {
+    if (!population.has(signature)) {
+      failures.push(`signature ${signature} is in the file and not in the indexed date_range`);
     }
   }
   return failures;
@@ -498,13 +597,13 @@ export async function assessRecord(
   conn: Connection,
   opts?: AssessOpts,
 ): Promise<Verdict> {
-  const cache = makeCache(conn, programFor(opts));
+  const cache = makeCache(conn, rpc, opts);
   const { failures, notes } = await checkRecord(record, rpc, cache);
   if (failures.length > 0) {
     return { ok: false, failures, text: rejectedText(failures, notes) };
   }
   const genesis = cache.genesis ?? record.genesis_hash;
-  const lines = [...notes.map((note) => `note: ${note}`), ...confirmedLines(record, rpc, genesis)];
+  const lines = [...notes.map((note) => `note: ${note}`), ...confirmedLines(record, rpc, genesis, cache.programSource)];
   return { ok: true, failures: [], text: `${lines.join("\n")}\n` };
 }
 
@@ -520,14 +619,8 @@ export async function assessBundle(
     ];
     return { ok: false, failures, text: rejectedText(failures) };
   }
-  const cache = makeCache(conn, programFor(opts));
-  let envelope: string[] = [];
-  try {
-    envelope = await bundleFailures(bundle, cache);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    envelope = [message];
-  }
+  const cache = makeCache(conn, rpc, opts);
+  const envelope = await bundleFailures(bundle, cache);
   const rows: RowVerdict[] = [];
   for (const [i, record] of bundle.decisions.entries()) {
     let failures: string[];
@@ -547,14 +640,15 @@ export async function assessBundle(
     });
   }
   const report = formatBulkReport(rows);
+  const context = populationLines(bundle, cache);
   if (envelope.length === 0) {
     return {
       ok: report.ok,
       failures: rows.flatMap((row) => row.failures),
-      text: report.text,
+      text: insertContext(report.text, context),
     };
   }
-  const lines = ["VERDICT: REJECTED", ""];
+  const lines = ["VERDICT: REJECTED", "", ...context, ""];
   for (const failure of envelope) lines.push(`- ${failure}`);
   if (!report.ok) {
     for (const row of rows) {
@@ -572,10 +666,45 @@ export async function assessBundle(
   };
 }
 
-function makeCache(conn: Connection, expectedProgramId: PublicKey): CheckCache {
+function populationLines(bundle: DecisionBundle, cache: CheckCache): string[] {
+  const scope = bundle.scope;
+  const lines = [
+    `scope               ${scope.type}`,
+    `mandate             ${scope.mandate ?? "none"}`,
+    `from                ${scope.from === null ? "none" : String(scope.from)}`,
+    `to                  ${scope.to === null ? "none" : String(scope.to)}`,
+    `program_id          ${cache.expectedProgramId.toBase58()}`,
+    `cluster             ${cache.genesis ? clusterForGenesis(cache.genesis) : bundle.cluster}`,
+    `checked against program ${cache.expectedProgramId.toBase58()} (${cache.programSource})`,
+  ];
+  if (scope.mandate) {
+    const mandate = cache.mandates.get(scope.mandate);
+    if (mandate) {
+      const paid = bundle.decisions.filter((row) => row.kind === "paid").length;
+      const refused = bundle.decisions.filter((row) => row.kind === "refused").length;
+      lines.push(
+        `ledger              spend_count=${mandate.spendCount} refusal_count=${mandate.refusalCount}, file: paid=${paid} refused=${refused}`,
+      );
+    }
+  }
+  return lines;
+}
+
+function insertContext(text: string, context: string[]): string {
+  const lines = text.split("\n");
+  lines.splice(2, 0, ...context, "");
+  return lines.join("\n");
+}
+
+function makeCache(conn: Connection, rpc: string, opts?: AssessOpts): CheckCache {
+  const program = programChoice(opts);
   return {
     conn,
-    expectedProgramId,
+    expectedProgramId: program.programId,
+    programSource: program.source,
+    rpc,
+    allowBlockScan: opts?.allowBlockScan === true,
+    pageSize: opts?.pageSize,
     mandates: new Map(),
     ledgers: new Map(),
     destOwners: new Map(),
@@ -598,7 +727,13 @@ async function main(): Promise<void> {
   }
   const conn = connection(rpcs);
   const flagged = flagString(cli, "program-id");
-  const opts: AssessOpts = flagged ? { programId: new PublicKey(flagged) } : {};
+  const pageSizeStr = flagString(cli, "page-size");
+  const pageSize = pageSizeStr !== undefined ? Number(pageSizeStr) : undefined;
+  const opts: AssessOpts = {
+    ...(flagged ? { programId: new PublicKey(flagged) } : {}),
+    allowBlockScan: cli.flags["block-scan"] === true,
+    ...(pageSize !== undefined ? { pageSize } : {}),
+  };
   if (parsed.kind === "single") {
     const result = await assessRecord(parsed.record, rpc, conn, opts);
     process.stdout.write(result.text);

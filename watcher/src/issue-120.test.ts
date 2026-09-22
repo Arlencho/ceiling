@@ -33,7 +33,8 @@ test("issue 120: a keyed RPC URL is logged without its query string or userinfo"
     assert.equal(line.includes("user:"), false, line);
     assert.equal(line.includes("api-key"), false, line);
   }
-  assert.match(lines.join("\n"), /https:\/\/rpc\.example\.test\/v1/);
+  assert.match(lines.join("\n"), /https:\/\/rpc\.example\.test\b/);
+  assert.equal(lines.join("\n").includes("/v1"), false);
   assert.equal(fetched.includes("SECRET123"), true, "the request itself still carries the key");
 
   const dir = mkdtempSync(join(tmpdir(), "veto-issue-120-"));

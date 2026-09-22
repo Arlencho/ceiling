@@ -17,6 +17,9 @@ test("critic sec r1: a key in the URL path is redacted by the helper", () => {
   const wrong: string[] = [];
   for (const raw of PATH_KEYED) {
     const shown = redactRpcUrl(raw);
+    if (raw.startsWith("https://solana-devnet.g.alchemy.com")) {
+      if (shown !== "https://solana-devnet.g.alchemy.com") wrong.push(`${raw} -> ${shown}`);
+    }
     if (shown.includes("SECRET123")) wrong.push(`${raw} -> ${shown}`);
     const inText = redactRpcUrlsInText(`rpc rate limited: fetch failed on ${raw}.`);
     if (inText.includes("SECRET123")) wrong.push(`in text: ${inText}`);

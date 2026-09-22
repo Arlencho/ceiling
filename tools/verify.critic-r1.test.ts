@@ -197,6 +197,20 @@ function chain(specs: MandateSpec[]): { conn: Connection; records: Map<string, D
       if (!hit) return null;
       return { data: hit.data, owner: hit.owner, executable: false, lamports: 1 };
     },
+    async getSignaturesForAddress(_address: PublicKey, config?: { before?: string }) {
+      if (config?.before) return [];
+      return [...txs.entries()].map(([signature, tx]) => {
+        const body = tx as { slot?: number; blockTime?: number | null };
+        return {
+          signature,
+          slot: body.slot ?? 1,
+          err: null,
+          memo: null,
+          blockTime: body.blockTime ?? null,
+          confirmationStatus: "confirmed" as const,
+        };
+      });
+    },
   } as unknown as Connection;
   return { conn, records, mandates };
 }
@@ -282,6 +296,18 @@ test("critic r1: two refusals of one nonce in the same second both verify", asyn
   const two = await assessRecord(second!, RPC, conn, OPTS);
   assert.equal(one.ok, true, `genuine first refusal is rejected:\n${one.text}`);
   assert.equal(two.ok, true, `genuine second refusal is rejected:\n${two.text}`);
+});
+
+test("critic r1: two same-second refusals that differ on amount are not bound", async () => {
+  const rows: Row[] = [
+    { kind: "refused", amount: 600_000, nonce: 5, timestamp: T0, signature: "tie-differ-1" },
+    { kind: "refused", amount: 700_000, nonce: 5, timestamp: T0, signature: "tie-differ-2" },
+  ];
+  const { conn, records, mandates } = chain([{ mandateId: 6n, rows }]);
+  const first = records.get(mandates[0]!.toBase58())![0]!;
+  const result = await assessRecord(first, RPC, conn, OPTS);
+  assert.equal(result.ok, false, result.text);
+  assert.match(result.text, /equally/);
 });
 
 // Regression check named for this round: the attacks the fix does close, on

@@ -191,6 +191,20 @@ function chain(mandateId: bigint, rows: Row[]): { conn: Connection; mandate: Pub
       if (!hit) return null;
       return { data: hit.data, owner: hit.owner, executable: false, lamports: 1 };
     },
+    async getSignaturesForAddress(_address: PublicKey, config?: { before?: string }) {
+      if (config?.before) return [];
+      return [...txs.entries()].map(([signature, tx]) => {
+        const body = tx as { slot?: number; blockTime?: number | null };
+        return {
+          signature,
+          slot: body.slot ?? 1,
+          err: null,
+          memo: null,
+          blockTime: body.blockTime ?? null,
+          confirmationStatus: "confirmed" as const,
+        };
+      });
+    },
   } as unknown as Connection;
   return { conn, mandate, records: rows.map((row) => record(mandate, row)) };
 }
@@ -215,6 +229,11 @@ test("critic sec r1: a key in the RPC URL path does not reach the verify output"
   const { conn, records } = chain(21n, THREE);
   const confirmed = await assessRecord(records[0]!, PATH_KEYED_RPC, conn, OPTS);
   assert.equal(confirmed.ok, true, confirmed.text);
+  assert.match(confirmed.text, /rpc\s+https:\/\/solana-devnet\.g\.alchemy\.com\n/);
+  assert.match(
+    confirmed.text,
+    /checked against program 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV \(idl\)/,
+  );
   const missing = await assessRecord(
     record(mandatePda(REAL_PROGRAM, OWNER, 21n), { ...THREE[0]!, signature: "not-on-chain" }),
     PATH_KEYED_RPC,
@@ -235,6 +254,9 @@ test("critic sec r1: a bulk verdict states the population it checked", async () 
   const missing: string[] = [];
   if (!text.includes("date_range")) missing.push("scope type");
   if (!text.includes(String(narrowed.from)) || !text.includes(String(narrowed.to))) missing.push("scope bounds");
+  if (!text.includes(mandate.toBase58())) missing.push("mandate");
+  if (!text.includes(REAL_PROGRAM.toBase58())) missing.push("program");
+  if (!text.includes("cluster")) missing.push("cluster");
   if (!/spend_count|paid on chain|paid rows on the ledger/i.test(text)) missing.push("chain paid count");
   if (!/refusal_count|refused on chain|refused rows on the ledger/i.test(text)) missing.push("chain refused count");
   assert.deepEqual(missing, [], `verdict block names nothing about the population it checked (${missing.join(", ")}):\n${text}`);

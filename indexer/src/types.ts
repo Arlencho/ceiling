@@ -1,3 +1,5 @@
+import type { Connection } from "@solana/web3.js";
+
 export type DecisionKind = "paid" | "refused";
 
 export type Decision = {
@@ -65,6 +67,9 @@ export type FetchHistoryOptions = {
   pageSize?: number;
   allowBlockScan?: boolean;
   maxSlots?: number;
+  // Reader's connection. Verify passes the connection it already opened so a
+  // date_range check hits the same RPC the rest of the verdict used.
+  connection?: Connection;
 };
 
 export type OverlapRow = {

@@ -262,6 +262,24 @@ function programIdFromIdl(repoRoot: string): string | undefined {
   return undefined;
 }
 
+export type VerifyProgramSource = "VETO_PROGRAM_ID" | "idl";
+
+// Verify does not read keys/devnet-addresses.env. A local devnet setup must
+// not silently change the program a record is checked against.
+export function resolveVerifyProgramId(
+  repoRoot = REPO_DIR,
+  env: NodeJS.ProcessEnv = process.env,
+): { programId: PublicKey; source: VerifyProgramSource } {
+  if (env.VETO_PROGRAM_ID && env.VETO_PROGRAM_ID.length > 0) {
+    return { programId: new PublicKey(env.VETO_PROGRAM_ID), source: "VETO_PROGRAM_ID" };
+  }
+  const fromIdl = programIdFromIdl(repoRoot);
+  if (fromIdl) return { programId: new PublicKey(fromIdl), source: "idl" };
+  throw new Error(
+    "lib.resolveVerifyProgramId: missing program id; pass --program-id or set VETO_PROGRAM_ID",
+  );
+}
+
 export function resolveProgramId(
   repoRoot = REPO_DIR,
   env: NodeJS.ProcessEnv = process.env,

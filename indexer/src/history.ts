@@ -37,9 +37,7 @@ type MetaLike = {
 } | null;
 
 export async function fetchDecisionHistory(opts: FetchHistoryOptions): Promise<HistoryResult> {
-  const endpoints = parseRpcList(opts.rpcUrl);
-  if (endpoints.length === 0) throw new Error("no rpc endpoints configured");
-  const connection = createFailoverConnection(endpoints);
+  const connection = opts.connection ?? connectionFromRpc(opts.rpcUrl);
   if (!opts.programId || opts.programId.length === 0) {
     throw new Error(
       "history.fetchDecisionHistory: missing programId; set VETO_PROGRAM_ID in the environment, keys/devnet-addresses.env, or indexer/.env",
@@ -78,6 +76,12 @@ export async function fetchDecisionHistory(opts: FetchHistoryOptions): Promise<H
     usedBlockScan,
     slotsScanned,
   };
+}
+
+function connectionFromRpc(rpcUrl: string): Connection {
+  const endpoints = parseRpcList(rpcUrl);
+  if (endpoints.length === 0) throw new Error("no rpc endpoints configured");
+  return createFailoverConnection(endpoints);
 }
 
 export async function listProgramSignatures(

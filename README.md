@@ -101,7 +101,7 @@ cd indexer && npm ci
 cd ../tools && npm ci
 VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --signature 3rTpyrHEScEPhjHL3cUDYSGwGAxU6JVzbdWVZbr4YMHt3wAM7ad9JGPC26R8aQMH9aqYVzrFqbEogX1CquNcWqib --out refusal.json
 VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts refusal.json
-# Program 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV on https://api.devnet.solana.com.
+# checked against program 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV (idl)
 # Mandate limits, ledger entry, and charge transaction agree.
 ```
 

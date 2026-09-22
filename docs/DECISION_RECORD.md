@@ -175,9 +175,12 @@ It confirms, independently:
 1. `getGenesisHash` matches `genesis_hash`, and `cluster` is the cluster that
    hash belongs to (`mainnet-beta`, `devnet`, `testnet`, or `localnet`).
 2. `getTransaction(signature)` exists, succeeded (`err` is null), and invoked
-   program `3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV` (or `--program-id` /
-   `VETO_PROGRAM_ID` when a reader names another deployment). The `program_id`
-   in the file is not trusted.
+   program `3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV`, the address in
+   `tools/idl/veto.json`, unless `--program-id` or `VETO_PROGRAM_ID` names
+   another deployment. `keys/devnet-addresses.env` is not read. The
+   `program_id` in the file is not trusted. A confirmed record prints
+   `checked against program <id> (<source>)`, where the source is `flag`,
+   `VETO_PROGRAM_ID`, or `idl`.
 3. The `charge` instruction amount and nonce match the record.
 4. The mandate account in that transaction matches `mandate`, and its
    `cap` / `per_tx_max` / `expires_at` / `merchant` / `purpose` match `limits`.
@@ -198,12 +201,17 @@ the envelope matches the chain. A tampered amount on one row rejects that
 row and leaves the others confirmed.
 
 The envelope `program_id`, `genesis_hash`, and `cluster` are checked against
-the chain, not copied from the file. Every row must carry the same values,
-and every row's `mandate` must equal `scope.mandate`. For a rule scope, verify
-walks that mandate's ledger and rejects the file unless every paid row and
-every refused row on the ledger appears once. The paid count must equal
-`spend_count` and the refused count must equal `refusal_count`. A missing row
-is a reject.
+the chain, not copied from the file. Every row must carry the same values.
+When `scope.mandate` is set, every row's `mandate` must equal it. For a rule
+scope, verify walks that mandate's ledger and rejects the file unless every
+paid row and every refused row on the ledger appears once. The paid count
+must equal `spend_count` and the refused count must equal `refusal_count`.
+For a date_range scope, verify rebuilds the population with the indexer over
+that same range (and that mandate, when one is named) and rejects the file
+unless the signature set matches. A date_range with no mandate is every
+charge on the program in that range. The bulk verdict prints the scope,
+program, cluster, mandate, and range it checked. A missing row is a reject.
+An RPC transport error prints `verify failed` and no verdict.
 
 RPC, in order: `--rpc`, then `VETO_RPC`, then `keys/devnet-addresses.env`
 `RPC=`. If none of those is set, the tool exits and names `VETO_RPC`. There

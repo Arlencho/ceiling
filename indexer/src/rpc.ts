@@ -14,13 +14,9 @@ export function redactRpcUrl(raw: string): string {
     return "invalid-rpc-url";
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") return "invalid-rpc-url";
-  if (url.username.length === 0 && url.password.length === 0 && url.search.length === 0 && url.hash.length === 0) {
-    return raw;
-  }
-  const host = url.hostname.includes(":") ? `[${url.hostname}]` : url.hostname;
-  const port = url.port.length > 0 ? `:${url.port}` : "";
-  const path = url.pathname === "/" ? "" : url.pathname;
-  return `${url.protocol}//${host}${port}${path}`;
+  // Scheme and host only. Alchemy, QuickNode, and Ankr put the key in the path.
+  // url.host is hostname plus port, and it already brackets IPv6.
+  return `${url.protocol}//${url.host}`;
 }
 
 export function redactRpcUrls(urls: readonly string[]): string {
@@ -57,9 +53,17 @@ export function parseRpcList(raw: string | undefined | null): string[] {
     .filter((s) => s.length > 0);
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const part of parts) {
+  for (let i = 0; i < parts.length; i += 1) {
+    const part = parts[i]!;
     if (seen.has(part)) continue;
-    assertHttpUrl(part);
+    try {
+      assertHttpUrl(part);
+    } catch (err) {
+      if (err instanceof Error && err.message === "invalid rpc endpoint") {
+        throw new Error(`invalid rpc endpoint at position ${i + 1}`);
+      }
+      throw err;
+    }
     seen.add(part);
     out.push(part);
   }
@@ -71,13 +75,13 @@ function assertHttpUrl(part: string): void {
   try {
     url = new URL(part);
   } catch {
-    throw new Error(`invalid rpc endpoint: ${part}`);
+    throw new Error("invalid rpc endpoint");
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error(`invalid rpc endpoint: ${part}`);
+    throw new Error("invalid rpc endpoint");
   }
   if (url.hostname.length === 0) {
-    throw new Error(`invalid rpc endpoint: ${part}`);
+    throw new Error("invalid rpc endpoint");
   }
 }
 
