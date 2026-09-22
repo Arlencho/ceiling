@@ -48,7 +48,14 @@
 # workflow file.
 #
 # The program is not a package.json package. A job must run `make test` from
-# the repo root, not switched off, and not behind a paths filter.
+# the repo root, not switched off, and not behind a paths filter. The job
+# that runs `make test-scripts` is held to that same rule: it must exist, it
+# must not be switched off, and a paths filter must not skip it.
+#
+# The guard reads the workflow as written and the .npmrc files the tree
+# commits. What a step, a composite action, or a container image does at run
+# time is outside its reach. That needs a check proving a test ran. Issue
+# 108 tracks that class.
 #
 # A suite nobody runs is worse than no suite, because it is quoted as evidence.
 # No network, no cloud, no vendor CLIs. Python stdlib only.
@@ -838,23 +845,28 @@ def job_problem(job, pkg: str, check: str, doc=None) -> str:
     return "a command CI happens to carry is not scripts." + check
 
 
-def make_test_step(step) -> bool:
+def command_step(step, command: str) -> bool:
     if not isinstance(step, dict):
         return False
     run = step.get("run")
-    return isinstance(run, str) and run.strip() == "make test"
+    return isinstance(run, str) and run.strip() == command
 
 
-def program_job_problem(doc) -> str:
+def repo_root_command_problem(doc, command: str) -> str:
+    """A live repo-root step whose run text is exactly command.
+
+    The same rule covers `make test` and `make test-scripts`: the job must
+    exist, must not be switched off, and must not sit behind a paths filter.
+    """
     if not isinstance(doc, dict):
-        return "workflow is not a mapping, so make test never runs"
+        return "workflow is not a mapping, so " + command + " never runs"
     events = event_map(doc.get("on")) if "on" in doc else {}
     filtered = path_filter_problem(events)
     if filtered:
         return "not admitted by every change (" + filtered + ")"
     jobs = doc.get("jobs")
     if not isinstance(jobs, dict):
-        return "no job runs make test from the repo root"
+        return "no job runs " + command + " from the repo root"
     wf = blocking_surface(doc)
     reasons = []
     for name, job in jobs.items():
@@ -864,7 +876,7 @@ def program_job_problem(doc) -> str:
         if not isinstance(steps, list):
             continue
         for step in steps:
-            if not make_test_step(step):
+            if not command_step(step, command):
                 continue
             label = name if isinstance(name, str) else "job"
             if wf:
@@ -889,7 +901,7 @@ def program_job_problem(doc) -> str:
             if step_keys:
                 step_bits.append("env " + ", ".join(step_keys))
             if step_bits:
-                reasons.append(label + " step " + ", ".join(step_bits) + " can stop make test")
+                reasons.append(label + " step " + ", ".join(step_bits) + " can stop " + command)
                 continue
             wd = effective_workdir(doc, job, step)
             if not is_repo_root(wd):
@@ -897,8 +909,16 @@ def program_job_problem(doc) -> str:
                 continue
             return ""
     if reasons:
-        return "make test is present but not a live repo-root check (" + "; ".join(reasons) + ")"
-    return "no job runs make test from the repo root"
+        return command + " is present but not a live repo-root check (" + "; ".join(reasons) + ")"
+    return "no job runs " + command + " from the repo root"
+
+
+def program_job_problem(doc) -> str:
+    return repo_root_command_problem(doc, "make test")
+
+
+def scripts_job_problem(doc) -> str:
+    return repo_root_command_problem(doc, "make test-scripts")
 
 
 _NPMRC_SKIP = {".git", "node_modules", "target", "dist", ".next", "coverage", ".anchor"}
@@ -1001,6 +1021,13 @@ def main():
             print(problem)
             sys.exit(1)
         sys.exit(0)
+    if mode == "scripts":
+        doc = parse_document(open(sys.argv[2]).read())
+        problem = scripts_job_problem(doc)
+        if problem:
+            print(problem)
+            sys.exit(1)
+        sys.exit(0)
     if mode == "npmrc":
         problem = npmrc_problem(sys.argv[2])
         if problem:
@@ -1046,6 +1073,12 @@ if reason=$(ci_py program "$CI"); then
   ok "a job runs make test from the repo root"
 else
   bad "program check: ${reason}"
+fi
+
+if reason=$(ci_py scripts "$CI"); then
+  ok "a job runs make test-scripts from the repo root"
+else
+  bad "scripts check: ${reason}"
 fi
 
 if reason=$(ci_py npmrc "$ROOT"); then
