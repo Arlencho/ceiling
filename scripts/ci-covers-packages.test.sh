@@ -20,7 +20,7 @@
 # The step can also stay perfect while the job or the workflow never runs it:
 # a job `if:`, `continue-on-error:`, or `needs:` of a skipped job, a default
 # working directory pointed at another package, a `shell:` that discards the
-# script, or an `on:` that is not a pull request or a push.
+# script, or an `on:` that does not run on pull_request.
 #
 # Those keys are read from the workflow as a structure. Key order does not
 # matter, a quoted key is the same key, and a nested key is not the step's
@@ -32,6 +32,23 @@
 # branches list must admit a branch push names. When push names no branch,
 # that name is the repository default branch. The placeholder a push glob
 # expands to is not a branch that list may name.
+#
+# The guard refuses a construct that can stop a check. It does not decide
+# whether that construct actually stops one. push without pull_request does
+# not gate review. pull_request_target in place of pull_request runs the base
+# branch and still paints the pull request green. A YAML anchor or alias on
+# the trigger body is refused, because the guard would be reading a different
+# trigger from the one that runs. A push branches list, or a push
+# branches-ignore list, that skips the default branch skips the merge push.
+#
+# defaults.run.shell at workflow or job level is refused whatever the string
+# says. So is any env key whose name starts with npm_config_, in any case, at
+# those same levels, and on the step that runs the check. A committed .npmrc
+# anywhere in the tree that sets script-shell is the same switch outside the
+# workflow file.
+#
+# The program is not a package.json package. A job must run `make test` from
+# the repo root, not switched off, and not behind a paths filter.
 #
 # A suite nobody runs is worse than no suite, because it is quoted as evidence.
 # No network, no cloud, no vendor CLIs. Python stdlib only.
@@ -55,6 +72,7 @@ ci_py() {
     python3 - "$@" <<'PY'
 import os
 import re
+import subprocess
 import sys
 
 # The workflow is a mapping, not a sequence of lines. A key after steps:,
@@ -597,12 +615,107 @@ def path_filter_problem(events) -> str:
     return ""
 
 
-def trigger_problem(doc, workflow_path: str) -> str:
+def is_root_on_line(line: str) -> bool:
+    if line.startswith(" ") or line.startswith("\t"):
+        return False
+    content = strip_comment(line).strip()
+    if content == "":
+        return False
+    split = try_split_key(content)
+    if split is None:
+        return False
+    key, _val = split
+    return unquote(key) == "on"
+
+
+def on_block_text(text: str) -> str:
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    chunks = []
+    i = 0
+    while i < len(lines):
+        if not is_root_on_line(lines[i]):
+            i += 1
+            continue
+        start = i
+        i += 1
+        while i < len(lines):
+            raw = lines[i]
+            if raw.strip() == "":
+                i += 1
+                continue
+            if content_indent(raw) == 0:
+                break
+            i += 1
+        chunks.append("\n".join(lines[start:i]))
+    return "\n".join(chunks)
+
+
+def has_yaml_anchor_or_alias(text: str) -> bool:
+    """An unquoted &name anchor or *name alias. Quoted globs are not aliases."""
+    quote = None
+    i = 0
+    while i < len(text):
+        c = text[i]
+        if quote:
+            if c == quote and text[i - 1] != "\\":
+                quote = None
+            i += 1
+            continue
+        if c in "\"'":
+            quote = c
+            i += 1
+            continue
+        if c == "#" and (i == 0 or text[i - 1].isspace()):
+            nl = text.find("\n", i)
+            if nl < 0:
+                break
+            i = nl + 1
+            continue
+        if c in "&*" and (i == 0 or text[i - 1] in " \t\n\r:[{,"):
+            nxt = text[i + 1] if i + 1 < len(text) else ""
+            if nxt.isalpha() or nxt == "_":
+                return True
+        i += 1
+    return False
+
+
+def trigger_anchor_problem(text: str) -> str:
+    block = on_block_text(text)
+    if block and has_yaml_anchor_or_alias(block):
+        return "on: uses a YAML anchor or alias, so the trigger that runs is not the one the guard reads"
+    return ""
+
+
+def push_branch_filter_problem(events, workflow_path: str) -> str:
+    """Refuse a push filter that skips the default branch.
+
+    Absent branches means every branch, which is not a skip. A list that is
+    present and does not admit the default branch skips the merge push.
+    """
+    push = events.get("push")
+    if not isinstance(push, dict):
+        return ""
+    default = repository_default_branch(workflow_path)
+    if "branches" in push and not list_matches(as_list(push.get("branches")), default):
+        return "on: push branches skip " + default + ", so the merge push does not run the checks"
+    if "branches-ignore" in push and list_matches(as_list(push.get("branches-ignore")), default):
+        return "on: push branches-ignore skips " + default + ", so the merge push does not run the checks"
+    return ""
+
+
+def trigger_problem(doc, workflow_path: str, text: str) -> str:
+    anchored = trigger_anchor_problem(text)
+    if anchored:
+        return anchored
     if not isinstance(doc, dict) or "on" not in doc:
         return "has no on: block, so it never runs on a pull request"
     on = doc["on"]
     events = event_map(on)
-    if "pull_request" not in events and "push" not in events:
+    if "pull_request" not in events:
+        if "pull_request_target" in events:
+            return "on: pull_request_target stands in for pull_request, so review runs the base branch"
+        if "push" in events:
+            return "on: push without pull_request, so a pull request never runs the checks"
         return "on: has neither pull_request nor push, so a pull request never runs the checks"
     filtered = path_filter_problem(events)
     if filtered:
@@ -610,7 +723,10 @@ def trigger_problem(doc, workflow_path: str) -> str:
     problem = pull_request_filter_problem(events, workflow_path)
     if problem:
         return problem
-    if "pull_request" in events and not pull_request_gates(on):
+    pushed = push_branch_filter_problem(events, workflow_path)
+    if pushed:
+        return pushed
+    if not pull_request_gates(on):
         return "on: pull_request types do not include a review event, so a pull request is not gated"
     return ""
 
@@ -619,13 +735,71 @@ def last_segment(wd: str) -> str:
     return wd.rstrip("/").split("/")[-1]
 
 
-def job_problem(job, pkg: str, check: str) -> str:
+def run_defaults_of(node):
+    if not isinstance(node, dict):
+        return {}
+    defaults = node.get("defaults")
+    if not isinstance(defaults, dict):
+        return {}
+    run = defaults.get("run")
+    if not isinstance(run, dict):
+        return {}
+    return run
+
+
+def npm_config_keys(env):
+    if not isinstance(env, dict):
+        return []
+    found = []
+    for key in env:
+        if isinstance(key, str) and key.lower().startswith("npm_config_"):
+            found.append(key)
+    found.sort()
+    return found
+
+
+def blocking_surface(node) -> str:
+    """defaults.run.shell or an npm_config_ env key. The value is not read."""
+    if not isinstance(node, dict):
+        return ""
+    if "shell" in run_defaults_of(node):
+        return "defaults.run.shell can stop the script from executing"
+    keys = npm_config_keys(node.get("env"))
+    if keys:
+        return "env " + ", ".join(keys) + " can stop the script from executing"
+    return ""
+
+
+def is_repo_root(wd: str) -> bool:
+    text = wd.strip()
+    while text.endswith("/"):
+        text = text[:-1]
+    return text in {"", "."}
+
+
+def effective_workdir(doc, job, step) -> str:
+    wd = ""
+    wf = run_defaults_of(doc)
+    if "working-directory" in wf:
+        wd = item_text(wf.get("working-directory"))
+    job_run = run_defaults_of(job)
+    if "working-directory" in job_run:
+        wd = item_text(job_run.get("working-directory"))
+    if isinstance(step, dict) and "working-directory" in step:
+        wd = item_text(step.get("working-directory"))
+    return wd
+
+
+def job_problem(job, pkg: str, check: str, doc=None) -> str:
     commands = ["npm test", "npm run test"] if check == "test" else [f"npm run {check}"]
     if not isinstance(job, dict):
         return "job is not a mapping"
     problems = [key for key in ("if", "continue-on-error", "needs") if key in job]
     if problems:
         return "job " + ", ".join(problems) + " disables the check before the step runs"
+    surface = blocking_surface(doc) or blocking_surface(job)
+    if surface:
+        return surface
     default_wd = ""
     defaults = job.get("defaults")
     if isinstance(defaults, dict):
@@ -647,6 +821,10 @@ def job_problem(job, pkg: str, check: str) -> str:
         if "shell" in step:
             disabled.append("shell")
             continue
+        step_env = npm_config_keys(step.get("env"))
+        if step_env:
+            disabled.append("env " + ", ".join(step_env))
+            continue
         if "if" in step or "continue-on-error" in step:
             disabled.append("step if or continue-on-error")
             continue
@@ -660,11 +838,171 @@ def job_problem(job, pkg: str, check: str) -> str:
     return "a command CI happens to carry is not scripts." + check
 
 
+def make_test_step(step) -> bool:
+    if not isinstance(step, dict):
+        return False
+    run = step.get("run")
+    return isinstance(run, str) and run.strip() == "make test"
+
+
+def program_job_problem(doc) -> str:
+    if not isinstance(doc, dict):
+        return "workflow is not a mapping, so make test never runs"
+    events = event_map(doc.get("on")) if "on" in doc else {}
+    filtered = path_filter_problem(events)
+    if filtered:
+        return "not admitted by every change (" + filtered + ")"
+    jobs = doc.get("jobs")
+    if not isinstance(jobs, dict):
+        return "no job runs make test from the repo root"
+    wf = blocking_surface(doc)
+    reasons = []
+    for name, job in jobs.items():
+        if not isinstance(job, dict):
+            continue
+        steps = job.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            if not make_test_step(step):
+                continue
+            label = name if isinstance(name, str) else "job"
+            if wf:
+                reasons.append(label + " " + wf)
+                continue
+            switched = [key for key in ("if", "continue-on-error", "needs") if key in job]
+            if switched:
+                reasons.append(
+                    label + " job " + ", ".join(switched) + " disables the check before the step runs"
+                )
+                continue
+            job_surface = blocking_surface(job)
+            if job_surface:
+                reasons.append(label + " " + job_surface)
+                continue
+            step_bits = []
+            if "shell" in step:
+                step_bits.append("shell")
+            if "if" in step or "continue-on-error" in step:
+                step_bits.append("if or continue-on-error")
+            step_keys = npm_config_keys(step.get("env"))
+            if step_keys:
+                step_bits.append("env " + ", ".join(step_keys))
+            if step_bits:
+                reasons.append(label + " step " + ", ".join(step_bits) + " can stop make test")
+                continue
+            wd = effective_workdir(doc, job, step)
+            if not is_repo_root(wd):
+                reasons.append(label + " working-directory " + (wd or "empty") + " is not the repo root")
+                continue
+            return ""
+    if reasons:
+        return "make test is present but not a live repo-root check (" + "; ".join(reasons) + ")"
+    return "no job runs make test from the repo root"
+
+
+_NPMRC_SKIP = {".git", "node_modules", "target", "dist", ".next", "coverage", ".anchor"}
+
+
+def committed_npmrc_paths(root: str):
+    if _git_dir(root):
+        try:
+            out = subprocess.check_output(
+                ["git", "-C", root, "ls-files", "-z"],
+                stderr=subprocess.DEVNULL,
+            )
+        except (OSError, subprocess.CalledProcessError):
+            out = None
+        if out is not None:
+            paths = []
+            for rel in out.decode("utf-8", "replace").split("\0"):
+                if rel and os.path.basename(rel) == ".npmrc":
+                    paths.append(os.path.join(root, rel))
+            return paths
+    found = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [name for name in dirnames if name not in _NPMRC_SKIP]
+        if ".npmrc" in filenames:
+            found.append(os.path.join(dirpath, ".npmrc"))
+    return found
+
+
+def npmrc_sets_script_shell(path: str) -> bool:
+    try:
+        lines = open(path, encoding="utf-8", errors="replace").read().splitlines()
+    except OSError:
+        return False
+    for raw in lines:
+        line = raw.strip()
+        if line == "" or line.startswith("#") or line.startswith(";"):
+            continue
+        cut = []
+        quote = None
+        i = 0
+        while i < len(line):
+            c = line[i]
+            if quote:
+                cut.append(c)
+                if c == quote:
+                    quote = None
+                i += 1
+                continue
+            if c in "\"'":
+                quote = c
+                cut.append(c)
+                i += 1
+                continue
+            if c in "#;" and (i == 0 or line[i - 1].isspace()):
+                break
+            cut.append(c)
+            i += 1
+        body = "".join(cut).strip()
+        if "=" not in body:
+            continue
+        key, _, _val = body.partition("=")
+        if key.strip().lower() == "script-shell":
+            return True
+    return False
+
+
+def npmrc_problem(root: str) -> str:
+    if not os.path.isdir(root):
+        return "npmrc scan root is not a directory"
+    hits = []
+    for path in committed_npmrc_paths(root):
+        if npmrc_sets_script_shell(path):
+            hits.append(os.path.relpath(path, root))
+    if not hits:
+        return ""
+    return "committed .npmrc sets script-shell (" + ", ".join(hits) + "), so npm scripts can spawn nothing"
+
+
 def main():
     mode = sys.argv[1]
     if mode == "trigger":
+        text = open(sys.argv[2]).read()
+        doc = parse_document(text)
+        problem = trigger_problem(doc, sys.argv[2], text)
+        if problem:
+            print(problem)
+            sys.exit(1)
+        sys.exit(0)
+    if mode == "workflow":
         doc = parse_document(open(sys.argv[2]).read())
-        problem = trigger_problem(doc, sys.argv[2])
+        problem = blocking_surface(doc)
+        if problem:
+            print(problem)
+            sys.exit(1)
+        sys.exit(0)
+    if mode == "program":
+        doc = parse_document(open(sys.argv[2]).read())
+        problem = program_job_problem(doc)
+        if problem:
+            print(problem)
+            sys.exit(1)
+        sys.exit(0)
+    if mode == "npmrc":
+        problem = npmrc_problem(sys.argv[2])
         if problem:
             print(problem)
             sys.exit(1)
@@ -681,7 +1019,7 @@ def main():
         jobs = doc.get("jobs") if isinstance(doc, dict) else None
         pkg, check = sys.argv[3], sys.argv[4]
         job = jobs.get(pkg) if isinstance(jobs, dict) else None
-        problem = job_problem(job, pkg, check)
+        problem = job_problem(job, pkg, check, doc)
         if problem:
             print(problem)
             sys.exit(1)
@@ -693,9 +1031,27 @@ PY
 }
 
 if reason=$(ci_py trigger "$CI"); then
-  ok "workflow runs on pull_request or push"
+  ok "workflow runs on pull_request"
 else
   bad "workflow ${reason}"
+fi
+
+if reason=$(ci_py workflow "$CI"); then
+  ok "workflow defaults and env cannot stop a run step"
+else
+  bad "workflow ${reason}"
+fi
+
+if reason=$(ci_py program "$CI"); then
+  ok "a job runs make test from the repo root"
+else
+  bad "program check: ${reason}"
+fi
+
+if reason=$(ci_py npmrc "$ROOT"); then
+  ok "no committed .npmrc sets script-shell"
+else
+  bad "${reason}"
 fi
 
 for pkg in "$ROOT"/*/package.json; do
