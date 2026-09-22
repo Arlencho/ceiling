@@ -43,7 +43,7 @@ export function viewFromState(state: TerminalState, snap: PaymentsSnapshot, cfg:
     kwh: formatKwh(cfg.kwhMilli),
     amountTokens: state.quote === null ? null : formatBaseUnits(state.quote.amount, cfg.mintDecimals),
     amountBaseUnits: state.quote === null ? null : state.quote.amount.toString(),
-    nonce: state.quote === null ? null : state.quote.nonce.toString(),
+    nonce: state.quote === null || state.quote.nonce === null ? null : state.quote.nonce.toString(),
     note: state.note,
     merchantTokenAccount: cfg.merchantTokenAccount,
     mint: cfg.mint,

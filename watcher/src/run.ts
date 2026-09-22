@@ -72,6 +72,20 @@ const SLOT_MISMATCH_REASON = "window start does not match slot";
 const PAID_UNRECOVERED_REASON = "chain shows this window paid; signature could not be recovered";
 const STALE_UNCONFIRMED_REASON = "stale nonce; chain did not confirm this window paid";
 
+// A refusal does not move last_nonce. Once this process has watched the chain
+// return one, a later chain-backed call with a fresh journal still reads it.
+// Passing chainLastNonce without a ledger reader does not skip that read.
+const refusalsThisProcess = new Map<bigint, RecoveredCharge>();
+
+function rememberRefusal(nonce: bigint, row: RecoveredCharge): void {
+  if (row.decision !== "refused" || row.reasonCode === REASON_STALE_NONCE) return;
+  refusalsThisProcess.set(nonce, row);
+}
+
+function refusalAlreadySeen(nonce: bigint): RecoveredCharge | null {
+  return refusalsThisProcess.get(nonce) ?? null;
+}
+
 function journalSignature(signature: string | null | undefined): string | null {
   if (signature === null || signature === undefined || signature.length === 0) return null;
   return signature;
@@ -103,7 +117,7 @@ export async function processWindow(args: {
   feedRetryMs?: number;
   chainLastNonce?: () => Promise<bigint>;
   recoverSettled?: (nonce: bigint) => Promise<RecoveredCharge | null>;
-  /** Paid or refused row already on the chain ledger for this nonce. A refusal does not move last_nonce. */
+  /** Ledger row for this nonce. A chain-backed call always reads before it sends. */
   recordedCharge?: (nonce: bigint) => Promise<RecoveredCharge | null>;
 }): Promise<ProcessResult> {
   const log = args.log ?? logLine;
@@ -161,6 +175,7 @@ export async function processWindow(args: {
   };
 
   const writeRecoveredRefusal = (recovered: RecoveredCharge): ProcessResult => {
+    rememberRefusal(nonce, recovered);
     args.journal.append({
       ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: recovered.amount }),
       ...(window === null ? { window_start: args.at.toISOString() } : {}),
@@ -263,10 +278,16 @@ export async function processWindow(args: {
     }
   }
 
-  if (args.recordedCharge) {
+  // Settlement above catches a paid nonce. A refusal does not move
+  // last_nonce, so the ledger row is a separate read and it is not optional:
+  // a passed reader is the chain account, and a chain-backed call that did
+  // not pass one still resolves a refusal this process has already seen.
+  if (args.chainLastNonce || args.recordedCharge) {
     let recorded: RecoveredCharge | null;
     try {
-      recorded = await withRpcBackoff("recorded charge", () => args.recordedCharge!(nonce), log);
+      recorded = args.recordedCharge
+        ? await withRpcBackoff("recorded charge", () => args.recordedCharge!(nonce), log)
+        : refusalAlreadySeen(nonce);
     } catch (err) {
       if (isRateLimitError(err)) return deferRateLimit();
       throw err;
@@ -405,6 +426,14 @@ export async function processWindow(args: {
   });
 
   if (receipt.decision === "refused") {
+    rememberRefusal(nonce, {
+      decision: "refused",
+      reason: receipt.reason,
+      reasonCode: receipt.reasonCode,
+      suggestedOverride: receipt.suggestedOverride,
+      signature: receipt.signature,
+      amount,
+    });
     log(
       `refused reason=${receipt.reason} amount=${amount.toString()} nonce=${nonce.toString()} window=${window.timeStart} sig=${receipt.signature}`,
     );

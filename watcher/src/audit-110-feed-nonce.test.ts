@@ -92,14 +92,13 @@ test("a feed that shifts time_start pays the cadence slot once", async () => {
   assert.equal(paidRows[0]?.nonce, "1790092800");
 });
 
-// A refusal does not advance last_nonce. processWindow, given only that read
-// and a fresh journal, still submits: nothing in this call can see the ledger.
-// index.ts repairs paid and refused rows before it calls processWindow, with
-// or without a remote journal, and passes recordedCharge so the pre-submit
-// read sees the refusal. This case is the bare call, which has neither.
-test("finding: a refused window is submitted again when the local journal is lost", async () => {
+// A refusal does not advance last_nonce. A fresh journal and a last_nonce of
+// zero are not enough to send the nonce again: processWindow reads the
+// refusal before it submits, whether or not the caller passed a ledger reader.
+test("a refused window is not submitted again when the local journal is lost", async () => {
   const feed = shiftingFeed(["2026-09-22T16:00:00Z"]);
   const submitted: bigint[] = [];
+  const results: string[] = [];
   const refusedReceipt = () => ({
     decision: "refused" as const,
     reason: "over per-payment maximum",
@@ -109,22 +108,24 @@ test("finding: a refused window is submitted again when the local journal is los
   });
   for (let restart = 0; restart < 2; restart += 1) {
     const journal = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-")), "decisions.jsonl"));
-    const result = await processWindow({
-      at: SLOT,
-      feed,
-      journal,
-      submit: async (_amount, nonce) => {
-        submitted.push(nonce);
-        return refusedReceipt();
-      },
-      kwhMilli: 50_000n,
-      mintDecimals: 6,
-      log: () => {},
-      feedAttempts: 1,
-      feedRetryMs: 0,
-      chainLastNonce: async () => 0n,
-    });
-    assert.equal(result, "submitted");
+    results.push(
+      await processWindow({
+        at: SLOT,
+        feed,
+        journal,
+        submit: async (_amount, nonce) => {
+          submitted.push(nonce);
+          return refusedReceipt();
+        },
+        kwhMilli: 50_000n,
+        mintDecimals: 6,
+        log: () => {},
+        feedAttempts: 1,
+        feedRetryMs: 0,
+        chainLastNonce: async () => 0n,
+      }),
+    );
   }
-  assert.deepEqual(submitted, [1790092800n, 1790092800n]);
+  assert.deepEqual(results, ["submitted", "skipped"]);
+  assert.deepEqual(submitted, [1790092800n]);
 });

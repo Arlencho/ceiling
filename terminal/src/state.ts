@@ -106,6 +106,7 @@ export async function buildState(args: {
         window: read.window,
         kwhMilli: args.kwhMilli,
         mintDecimals: args.mintDecimals,
+        at: args.at,
       });
     } catch {
       unreadable = true;
@@ -156,7 +157,7 @@ export function quoteResponse(
     status: 200,
     body: {
       amount: state.quote.amount.toString(),
-      nonce: state.quote.nonce.toString(),
+      nonce: state.quote.nonce === null ? null : state.quote.nonce.toString(),
       window_start: state.quote.windowStart,
       window_end: state.quote.windowEnd,
       sek_per_kwh: state.quote.sekPerKwh,
