@@ -1,3 +1,7 @@
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import type { PriceFeed, PriceWindow } from "./feed.js";
 import type { JournalRow, JsonlJournal } from "./journal.js";
 import { logError, logLine } from "./log.js";
@@ -72,19 +76,57 @@ const SLOT_MISMATCH_REASON = "window start does not match slot";
 const PAID_UNRECOVERED_REASON = "chain shows this window paid; signature could not be recovered";
 const STALE_UNCONFIRMED_REASON = "stale nonce; chain did not confirm this window paid";
 
-// A refusal does not move last_nonce. The typed call passes `reader`, and
-// recordedCharge on that reader is required, so production cannot fall through
-// to this map. A fixture that still passes only chainLastNonce keeps the
-// refusal here, keyed by its own nonce, until this process exits.
-const refusalsThisProcess = new Map<bigint, RecoveredCharge>();
+type StoredRefusal = {
+  decision: "refused";
+  reason: string;
+  reasonCode: number;
+  suggestedOverride: string | null;
+  signature: string;
+  amount: string;
+};
 
-function rememberRefusal(nonce: bigint, row: RecoveredCharge): void {
-  if (row.decision !== "refused" || row.reasonCode === REASON_STALE_NONCE) return;
-  refusalsThisProcess.set(nonce, row);
+// A transpiled caller can still put chainLastNonce on the argument. The typed
+// parameter does not include it. The refusal is stored beside that process's
+// entry script so a second process running the same entry does not send it.
+function legacyRefusalPath(nonce: bigint): string {
+  const scope = createHash("sha256").update(process.argv.slice(1).join("\0")).digest("hex");
+  return join(tmpdir(), "veto-legacy-window-refusal", scope, `${nonce.toString()}.json`);
 }
 
-function refusalAlreadySeen(nonce: bigint): RecoveredCharge | null {
-  return refusalsThisProcess.get(nonce) ?? null;
+function isLegacyFlat(args: ProcessWindowArgs): boolean {
+  if (args.reader !== undefined) return false;
+  const raw = args as ProcessWindowArgs & Record<string, unknown>;
+  return typeof raw.chainLastNonce === "function" && typeof raw.recordedCharge !== "function";
+}
+
+function readLegacyRefusal(nonce: bigint): RecoveredCharge | null {
+  const path = legacyRefusalPath(nonce);
+  if (!existsSync(path)) return null;
+  const parsed = JSON.parse(readFileSync(path, "utf8")) as StoredRefusal;
+  if (parsed.decision !== "refused" || parsed.reasonCode === REASON_STALE_NONCE) return null;
+  return {
+    decision: "refused",
+    reason: parsed.reason,
+    reasonCode: parsed.reasonCode,
+    suggestedOverride: parsed.suggestedOverride === null ? null : BigInt(parsed.suggestedOverride),
+    signature: parsed.signature,
+    amount: BigInt(parsed.amount),
+  };
+}
+
+function writeLegacyRefusal(nonce: bigint, row: RecoveredCharge): void {
+  if (row.decision !== "refused" || row.reasonCode === REASON_STALE_NONCE) return;
+  const path = legacyRefusalPath(nonce);
+  mkdirSync(dirname(path), { recursive: true });
+  const stored: StoredRefusal = {
+    decision: "refused",
+    reason: row.reason,
+    reasonCode: row.reasonCode,
+    suggestedOverride: row.suggestedOverride === null ? null : row.suggestedOverride.toString(),
+    signature: row.signature,
+    amount: row.amount.toString(),
+  };
+  writeFileSync(path, `${JSON.stringify(stored)}\n`);
 }
 
 function journalSignature(signature: string | null | undefined): string | null {
@@ -130,20 +172,21 @@ type ProcessWindowArgs = ProcessWindowFields & {
   reader?: ChainReader;
 };
 
-type ProcessWindowRuntime = ProcessWindowArgs & {
-  chainLastNonce?: () => Promise<bigint>;
-  recoverSettled?: (nonce: bigint) => Promise<RecoveredCharge | null>;
-  recordedCharge?: (nonce: bigint) => Promise<RecoveredCharge | null>;
-};
+// A non-literal argument can carry chainLastNonce and still match a plain
+// parameter. Keys outside ProcessWindowArgs are `never`, so that shape does
+// not type-check.
+type NoFlatChain<T> = Record<Exclude<keyof T, keyof ProcessWindowArgs>, never>;
 
-export async function processWindow(args: ProcessWindowArgs): Promise<ProcessResult>;
-export async function processWindow(args: ProcessWindowRuntime): Promise<ProcessResult> {
+export async function processWindow<T extends ProcessWindowArgs>(
+  args: T & NoFlatChain<T>,
+): Promise<ProcessResult> {
   const log = args.log ?? logLine;
   const feedAttempts = args.feedAttempts ?? FEED_ATTEMPTS;
   const feedRetryMs = args.feedRetryMs ?? FEED_RETRY_MS;
-  const chainLastNonce = args.reader?.chainLastNonce ?? args.chainLastNonce;
-  const recoverSettled = args.reader?.recoverSettled ?? args.recoverSettled;
-  const recordedCharge = args.reader?.recordedCharge ?? args.recordedCharge;
+  const chainLastNonce = args.reader?.chainLastNonce;
+  const recoverSettled = args.reader?.recoverSettled;
+  const recordedCharge = args.reader?.recordedCharge;
+  const legacyFlat = isLegacyFlat(args);
 
   let window: PriceWindow | null = null;
   for (let attempt = 1; attempt <= feedAttempts; attempt += 1) {
@@ -196,7 +239,6 @@ export async function processWindow(args: ProcessWindowRuntime): Promise<Process
   };
 
   const writeRecoveredRefusal = (recovered: RecoveredCharge): ProcessResult => {
-    rememberRefusal(nonce, recovered);
     args.journal.append({
       ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: recovered.amount }),
       ...(window === null ? { window_start: args.at.toISOString() } : {}),
@@ -300,15 +342,11 @@ export async function processWindow(args: ProcessWindowRuntime): Promise<Process
   }
 
   // Settlement above catches a paid nonce. A refusal does not move
-  // last_nonce, so the ledger row is a separate read. `reader.recordedCharge`
-  // is that row. A fixture that passed only chainLastNonce still resolves a
-  // refusal this process has already seen.
-  if (chainLastNonce || recordedCharge) {
+  // last_nonce, so the ledger row is a separate read on the reader.
+  if (recordedCharge) {
     let recorded: RecoveredCharge | null;
     try {
-      recorded = recordedCharge
-        ? await withRpcBackoff("recorded charge", () => recordedCharge(nonce), log)
-        : refusalAlreadySeen(nonce);
+      recorded = await withRpcBackoff("recorded charge", () => recordedCharge(nonce), log);
     } catch (err) {
       if (isRateLimitError(err)) return deferRateLimit();
       throw err;
@@ -319,6 +357,9 @@ export async function processWindow(args: ProcessWindowRuntime): Promise<Process
     if (recorded !== null && recorded.decision === "refused") {
       return writeRecoveredRefusal(recorded);
     }
+  } else if (legacyFlat) {
+    const recorded = readLegacyRefusal(nonce);
+    if (recorded !== null) return writeRecoveredRefusal(recorded);
   }
 
   if (window === null) {
@@ -447,14 +488,16 @@ export async function processWindow(args: ProcessWindowRuntime): Promise<Process
   });
 
   if (receipt.decision === "refused") {
-    rememberRefusal(nonce, {
-      decision: "refused",
-      reason: receipt.reason,
-      reasonCode: receipt.reasonCode,
-      suggestedOverride: receipt.suggestedOverride,
-      signature: receipt.signature,
-      amount,
-    });
+    if (legacyFlat) {
+      writeLegacyRefusal(nonce, {
+        decision: "refused",
+        reason: receipt.reason,
+        reasonCode: receipt.reasonCode,
+        suggestedOverride: receipt.suggestedOverride,
+        signature: receipt.signature,
+        amount,
+      });
+    }
     log(
       `refused reason=${receipt.reason} amount=${amount.toString()} nonce=${nonce.toString()} window=${window.timeStart} sig=${receipt.signature}`,
     );

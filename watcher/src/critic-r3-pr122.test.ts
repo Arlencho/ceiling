@@ -1,8 +1,6 @@
-/** Critic round 3 fixture for PR 122. The in-process refusal memory that a
- * chain-backed call falls back to must stay behind the chain reader and must
- * stay keyed to its own nonce. A remembered refusal for one slot cannot skip
- * the next slot, and a passed ledger reader is read even when the process has
- * a refusal in memory for that nonce.
+/** Critic round 3 fixture for PR 122. recordedCharge answers per nonce.
+ * A refusal recorded for one slot does not skip the next slot, and the
+ * function passed as recordedCharge is the row that closes the nonce.
  */
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
@@ -37,19 +35,33 @@ const refused = {
   signature: "sig-refused",
 };
 
-test("critic r3 PR 122: a refusal remembered for one slot does not skip the next slot", async () => {
+test("critic r3 PR 122: a refusal recorded for one slot does not skip the next slot", async () => {
   const feed = honestFeed();
   const sent: bigint[] = [];
+  const ledger = new Map<bigint, {
+    decision: "refused";
+    reason: string;
+    reasonCode: number;
+    suggestedOverride: null;
+    signature: string;
+    amount: bigint;
+  }>();
+  const reader = {
+    chainLastNonce: async () => 0n,
+    recoverSettled: async () => null,
+    recordedCharge: async (nonce: bigint) => ledger.get(nonce) ?? null,
+  };
   const first = await processWindow({
     at: new Date("2026-09-22T16:00:00Z"),
     feed,
     journal: freshJournal(),
-    submit: async (_amount, nonce) => {
+    submit: async (amount, nonce) => {
       sent.push(nonce);
+      ledger.set(nonce, { ...refused, amount });
       return refused;
     },
     ...BASE,
-    chainLastNonce: async () => 0n,
+    reader,
   });
   assert.equal(first, "submitted");
 
@@ -62,7 +74,7 @@ test("critic r3 PR 122: a refusal remembered for one slot does not skip the next
       return refused;
     },
     ...BASE,
-    chainLastNonce: async () => 0n,
+    reader,
   });
   assert.equal(again, "skipped");
 
@@ -75,30 +87,16 @@ test("critic r3 PR 122: a refusal remembered for one slot does not skip the next
       return { decision: "paid" as const, reason: "ok", reasonCode: 0, suggestedOverride: null, signature: "sig-paid" };
     },
     ...BASE,
-    chainLastNonce: async () => 0n,
+    reader,
   });
   assert.equal(next, "submitted");
   assert.deepEqual(sent, [1790092800n, 1790093700n]);
 });
 
-test("critic r3 PR 122: a passed ledger reader is read ahead of the refusal memory", async () => {
+test("critic r3 PR 122: recordedCharge is what closes the nonce", async () => {
   const feed = honestFeed();
   const at = new Date("2026-09-22T16:30:00Z");
   const sent: bigint[] = [];
-  const first = await processWindow({
-    at,
-    feed,
-    journal: freshJournal(),
-    submit: async (_amount, nonce) => {
-      sent.push(nonce);
-      return refused;
-    },
-    ...BASE,
-    chainLastNonce: async () => 0n,
-  });
-  assert.equal(first, "submitted");
-  assert.deepEqual(sent, [1790094600n]);
-
   const reads: bigint[] = [];
   const journal = freshJournal();
   const result = await processWindow({
@@ -110,15 +108,18 @@ test("critic r3 PR 122: a passed ledger reader is read ahead of the refusal memo
       return refused;
     },
     ...BASE,
-    chainLastNonce: async () => 0n,
-    recordedCharge: async (nonce) => {
-      reads.push(nonce);
-      return { decision: "paid", reason: "ok", reasonCode: 0, suggestedOverride: null, signature: "sig-chain", amount: 50_000_000n };
+    reader: {
+      chainLastNonce: async () => 0n,
+      recoverSettled: async () => null,
+      recordedCharge: async (nonce) => {
+        reads.push(nonce);
+        return { decision: "paid", reason: "ok", reasonCode: 0, suggestedOverride: null, signature: "sig-chain", amount: 50_000_000n };
+      },
     },
   });
   assert.deepEqual(reads, [1790094600n], "the chain reader was consulted");
   assert.equal(result, "submitted");
-  assert.deepEqual(sent, [1790094600n], "no second send");
+  assert.deepEqual(sent, [], "the paid row on the reader is not sent again");
   const rows = journal.load();
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.decision, "paid");

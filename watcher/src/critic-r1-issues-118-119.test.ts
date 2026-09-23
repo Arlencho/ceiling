@@ -401,9 +401,11 @@ test("critic r1: a clock that moves backwards across a slot boundary pays that s
           log: () => {},
           feedAttempts: 1,
           feedRetryMs: 0,
-          chainLastNonce: async () => settled.value,
-          recoverSettled: async (nonce) => (nonce === settled.value ? { ...paid(), amount: 446_000n } : null),
-          recordedCharge: async () => null,
+          reader: {
+            chainLastNonce: async () => settled.value,
+            recoverSettled: async (nonce) => (nonce === settled.value ? { ...paid(), amount: 446_000n } : null),
+            recordedCharge: async () => null,
+          },
         }),
       );
     }
@@ -449,7 +451,11 @@ test("critic r1: overlapping feed windows cannot pay a slot twice or under a sec
           log: () => {},
           feedAttempts: 1,
           feedRetryMs: 0,
-          chainLastNonce: async () => settled.value,
+          reader: {
+            chainLastNonce: async () => settled.value,
+            recoverSettled: async () => null,
+            recordedCharge: async () => null,
+          },
         }),
       );
     }

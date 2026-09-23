@@ -53,7 +53,11 @@ async function run(feed: PriceFeed, journal: JsonlJournal, submitted: bigint[], 
     log: () => {},
     feedAttempts: 1,
     feedRetryMs: 0,
-    chainLastNonce: async () => settled.value,
+    reader: {
+      chainLastNonce: async () => settled.value,
+      recoverSettled: async () => null,
+      recordedCharge: async () => null,
+    },
   });
 }
 
@@ -93,12 +97,20 @@ test("a feed that shifts time_start pays the cadence slot once", async () => {
 });
 
 // A refusal does not advance last_nonce. A fresh journal and a last_nonce of
-// zero are not enough to send the nonce again: processWindow reads the
-// refusal before it submits, whether or not the caller passed a ledger reader.
+// zero are not enough to send the nonce again: recordedCharge still has the
+// refusal, so the second call does not submit.
 test("a refused window is not submitted again when the local journal is lost", async () => {
   const feed = shiftingFeed(["2026-09-22T16:00:00Z"]);
   const submitted: bigint[] = [];
   const results: string[] = [];
+  const ledger = new Map<bigint, {
+    decision: "refused";
+    reason: string;
+    reasonCode: number;
+    suggestedOverride: bigint | null;
+    signature: string;
+    amount: bigint;
+  }>();
   const refusedReceipt = () => ({
     decision: "refused" as const,
     reason: "over per-payment maximum",
@@ -106,6 +118,11 @@ test("a refused window is not submitted again when the local journal is lost", a
     suggestedOverride: 446_000n,
     signature: "fake-sig",
   });
+  const reader = {
+    chainLastNonce: async () => 0n,
+    recoverSettled: async () => null,
+    recordedCharge: async (nonce: bigint) => ledger.get(nonce) ?? null,
+  };
   for (let restart = 0; restart < 2; restart += 1) {
     const journal = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-")), "decisions.jsonl"));
     results.push(
@@ -113,16 +130,18 @@ test("a refused window is not submitted again when the local journal is lost", a
         at: SLOT,
         feed,
         journal,
-        submit: async (_amount, nonce) => {
+        submit: async (amount, nonce) => {
           submitted.push(nonce);
-          return refusedReceipt();
+          const receipt = refusedReceipt();
+          ledger.set(nonce, { ...receipt, amount });
+          return receipt;
         },
         kwhMilli: 50_000n,
         mintDecimals: 6,
         log: () => {},
         feedAttempts: 1,
         feedRetryMs: 0,
-        chainLastNonce: async () => 0n,
+        reader,
       }),
     );
   }
