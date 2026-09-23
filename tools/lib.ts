@@ -518,10 +518,19 @@ export async function fetchLedger(conn: Connection, address: PublicKey): Promise
 
 type AccountKeyLike = string | { pubkey: string } | { toBase58: () => string };
 
+type RpcInnerIx = {
+  programIdIndex: number;
+  accounts?: number[];
+  accountKeyIndexes?: number[];
+  data?: string | Uint8Array | number[];
+};
+
 type RpcTx = {
   meta: {
     err: unknown;
     logMessages?: string[] | null;
+    loadedAddresses?: { writable: AccountKeyLike[]; readonly: AccountKeyLike[] };
+    innerInstructions?: Array<{ instructions?: RpcInnerIx[] }> | null;
   } | null;
   transaction: {
     message: {
@@ -540,6 +549,12 @@ type RpcTx = {
     };
   };
 };
+
+function ixData(data: string | Uint8Array | number[] | undefined): Buffer {
+  if (typeof data === "string") return decodeBase58(data);
+  if (data === undefined) return Buffer.alloc(0);
+  return Buffer.from(data);
+}
 
 function toPublicKey(k: unknown): PublicKey {
   if (k instanceof PublicKey) return k;
@@ -567,10 +582,182 @@ function flattenAccountKeys(tx: RpcTx, loaded?: { writable: AccountKeyLike[]; re
   ];
 }
 
+type IdlShape = {
+  instructions: { name: string; discriminator: number[]; accounts: { name: string }[] }[];
+  types: { name: string; type: { kind: string; fields: { name: string; type: string }[] } }[];
+};
+
+function bundledIdl(): IdlShape {
+  return JSON.parse(readFileSync(IDL_PATH, "utf8")) as IdlShape;
+}
+
+function idlInstruction(name: string): { disc: Buffer; accounts: string[] } {
+  const ix = bundledIdl().instructions.find((item) => item.name === name);
+  if (!ix) throw new Error(`lib.idlInstruction: bundled IDL has no ${name}`);
+  return { disc: Buffer.from(ix.discriminator), accounts: ix.accounts.map((account) => account.name) };
+}
+
+export type OpenedMandate = {
+  owner: PublicKey;
+  mandateId: bigint;
+  merchant: PublicKey;
+  cap: bigint;
+  perTxMax: bigint;
+  expiresAt: bigint;
+  purpose: string;
+};
+
+function decodeOpenMandateArgs(data: Buffer): Omit<OpenedMandate, "owner"> {
+  const layout = idlInstruction("open_mandate");
+  if (data.length < layout.disc.length || !data.subarray(0, layout.disc.length).equals(layout.disc)) {
+    throw new Error("open_mandate discriminator mismatch");
+  }
+  const defined = bundledIdl().types.find((item) => item.name === "OpenMandateArgs");
+  if (!defined) throw new Error("lib.decodeOpenMandateArgs: bundled IDL has no OpenMandateArgs");
+  let o = layout.disc.length;
+  const values: Record<string, bigint | PublicKey | string> = {};
+  for (const field of defined.type.fields) {
+    const type = field.type;
+    if (type === "u64") {
+      if (o + 8 > data.length) throw new Error(`OpenMandateArgs field ${field.name} overruns the instruction`);
+      values[field.name] = data.readBigUInt64LE(o);
+      o += 8;
+    } else if (type === "i64") {
+      if (o + 8 > data.length) throw new Error(`OpenMandateArgs field ${field.name} overruns the instruction`);
+      values[field.name] = data.readBigInt64LE(o);
+      o += 8;
+    } else if (type === "pubkey") {
+      if (o + 32 > data.length) throw new Error(`OpenMandateArgs field ${field.name} overruns the instruction`);
+      values[field.name] = new PublicKey(data.subarray(o, o + 32));
+      o += 32;
+    } else if (type === "string") {
+      if (o + 4 > data.length) throw new Error(`OpenMandateArgs field ${field.name} overruns the instruction`);
+      const len = data.readUInt32LE(o);
+      o += 4;
+      if (o + len > data.length) throw new Error(`OpenMandateArgs field ${field.name} overruns the instruction`);
+      values[field.name] = data.subarray(o, o + len).toString("utf8");
+      o += len;
+    } else {
+      throw new Error(`OpenMandateArgs field ${field.name} is not a scalar in the bundled IDL`);
+    }
+  }
+  if (o !== data.length) throw new Error("OpenMandateArgs did not consume the instruction");
+  const mandateId = values.mandate_id;
+  const merchant = values.merchant;
+  const cap = values.cap;
+  const perTxMax = values.per_tx_max;
+  const expiresAt = values.expires_at;
+  const purpose = values.purpose;
+  if (
+    typeof mandateId !== "bigint" ||
+    !(merchant instanceof PublicKey) ||
+    typeof cap !== "bigint" ||
+    typeof perTxMax !== "bigint" ||
+    typeof expiresAt !== "bigint" ||
+    typeof purpose !== "string"
+  ) {
+    throw new Error("OpenMandateArgs is missing a field in the bundled IDL");
+  }
+  return { mandateId, merchant, cap, perTxMax, expiresAt, purpose };
+}
+
+function resolvedProgramIxs(tx: RpcTx, programId: PublicKey): { data: Buffer; accounts: PublicKey[]; inner: boolean }[] {
+  const keys = flattenAccountKeys(tx, tx.meta?.loadedAddresses ?? undefined);
+  const msg = tx.transaction.message;
+  const compiled = msg.compiledInstructions;
+  const legacy = msg.instructions;
+  const top =
+    compiled?.map((ix) => ({
+      programIdIndex: ix.programIdIndex,
+      accounts: ix.accountKeyIndexes,
+      data: Buffer.from(ix.data),
+      inner: false,
+    })) ??
+    legacy?.map((ix) => ({
+      programIdIndex: ix.programIdIndex,
+      accounts: ix.accounts,
+      data: decodeBase58(ix.data),
+      inner: false,
+    })) ??
+    [];
+  const inner = (tx.meta?.innerInstructions ?? []).flatMap((group) =>
+    (group.instructions ?? []).map((ix) => ({
+      programIdIndex: ix.programIdIndex,
+      accounts: ix.accounts ?? ix.accountKeyIndexes ?? [],
+      data: ixData(ix.data),
+      inner: true,
+    })),
+  );
+  const out: { data: Buffer; accounts: PublicKey[]; inner: boolean }[] = [];
+  for (const ix of [...top, ...inner]) {
+    const pid = keys[ix.programIdIndex];
+    if (!pid || !pid.equals(programId)) continue;
+    const accounts: PublicKey[] = [];
+    for (const idx of ix.accounts) {
+      const key = keys[idx];
+      if (!key) throw new Error(`instruction account index ${idx} missing`);
+      accounts.push(key);
+    }
+    out.push({ data: ix.data, accounts, inner: ix.inner });
+  }
+  return out;
+}
+
+function knownProgramInstruction(data: Buffer, discriminators: Buffer[]): boolean {
+  if (data.length < 8) return false;
+  const head = data.subarray(0, 8);
+  return discriminators.some((disc) => head.equals(disc));
+}
+
+function accountNamed(accounts: PublicKey[], names: string[], name: string): PublicKey | null {
+  const index = names.indexOf(name);
+  if (index < 0) throw new Error(`bundled IDL has no ${name} account`);
+  return accounts[index] ?? null;
+}
+
+export type MandateLifecycle = {
+  opens: OpenedMandate[];
+  closes: number;
+};
+
+// open_mandate and close_mandate instructions that name this mandate, including
+// ones reached by CPI. Inner instruction data is base58 over the same flattened
+// account keys. An inner instruction whose data is not a known program
+// instruction can hide an open or a close, so the caller fails closed. Anything
+// else in the transaction is ignored. A second open or a close in the same
+// transaction is left for the caller to reject.
+export function mandateLifecycle(tx: RpcTx, programId: PublicKey, mandate: PublicKey): MandateLifecycle {
+  const opens: OpenedMandate[] = [];
+  let closes = 0;
+  const openLayout = idlInstruction("open_mandate");
+  const closeLayout = idlInstruction("close_mandate");
+  const discriminators = bundledIdl().instructions.map((item) => Buffer.from(item.discriminator));
+  for (const ix of resolvedProgramIxs(tx, programId)) {
+    if (ix.inner && !knownProgramInstruction(ix.data, discriminators)) {
+      throw new Error("an inner instruction to the program could not be read");
+    }
+    if (ix.data.length >= openLayout.disc.length && ix.data.subarray(0, openLayout.disc.length).equals(openLayout.disc)) {
+      const named = accountNamed(ix.accounts, openLayout.accounts, "mandate");
+      if (!named || !named.equals(mandate)) continue;
+      const owner = accountNamed(ix.accounts, openLayout.accounts, "owner");
+      if (!owner) throw new Error("open_mandate instruction is missing the owner account");
+      const args = decodeOpenMandateArgs(ix.data);
+      opens.push({ owner, ...args });
+      continue;
+    }
+    if (ix.data.length >= closeLayout.disc.length && ix.data.subarray(0, closeLayout.disc.length).equals(closeLayout.disc)) {
+      const named = accountNamed(ix.accounts, closeLayout.accounts, "mandate");
+      if (!named || !named.equals(mandate)) continue;
+      closes += 1;
+    }
+  }
+  return { opens, closes };
+}
+
 export function parseChargeFromTx(
   tx: RpcTx & { meta?: { loadedAddresses?: { writable: AccountKeyLike[]; readonly: AccountKeyLike[] } } | null },
   programId: PublicKey,
-): ChargeIx | null {
+): ChargeIx[] {
   const keys = flattenAccountKeys(tx, tx.meta?.loadedAddresses ?? undefined);
   const msg = tx.transaction.message;
   const compiled = msg.compiledInstructions;
@@ -588,6 +775,7 @@ export function parseChargeFromTx(
     })) ??
     [];
 
+  const charges: ChargeIx[] = [];
   for (const ix of ixs) {
     const pid = keys[ix.programIdIndex];
     if (!pid || !pid.equals(programId)) continue;
@@ -604,7 +792,7 @@ export function parseChargeFromTx(
       if (!key) throw new Error(`charge account index ${idx} missing`);
       return key;
     };
-    return {
+    charges.push({
       amount,
       nonce,
       agent: pick(0),
@@ -613,9 +801,9 @@ export function parseChargeFromTx(
       source: pick(3),
       destination: pick(4),
       mint: pick(5),
-    };
+    });
   }
-  return null;
+  return charges;
 }
 
 export type ChargeLogDecision = {

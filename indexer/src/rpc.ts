@@ -47,6 +47,21 @@ export class TransportError extends Error {
   }
 }
 
+// getSignaturesForAddress listed the signature and getTransaction then
+// answered null. That is not proof the transaction is absent.
+export class ListedTransactionMissingError extends TransportError {
+  readonly signatures: readonly string[];
+
+  constructor(signatures: readonly string[]) {
+    super(
+      signatures
+        .map((signature) => `the RPC returned no transaction for a listed signature ${signature}`)
+        .join("; "),
+    );
+    this.signatures = signatures;
+  }
+}
+
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 export type FailoverFetchOpts = {

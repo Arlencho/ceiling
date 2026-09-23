@@ -7,9 +7,10 @@
 //       (overlayRing -> matchingRingEntry) and verify (checkRecord) bind a
 //       signature to a ring row through the one ringEntryForSignature in
 //       lib.ts; verify.ts no longer defines its own.
-//   N2. A date_range verify pages signatures only until it crosses `from`,
-//       fetches getTransaction only for signatures inside [from, to], and the
-//       per-row checks reuse those transactions instead of fetching again.
+//   N2. A date_range verify pages signatures only until it crosses `from`.
+//       Population fetches getTransaction for signatures inside [from, to],
+//       and per-row checks reuse those. The live tenure check also reads
+//       signatures newer than the record when population did not.
 //   132. Log lines count only inside the expected program's own frame:
 //        a Memo "VETO PAID" ahead of a refused charge no longer makes a paid
 //        record confirm (ring holds the row, and after the ring wrapped),
@@ -389,7 +390,8 @@ test("critic r3 N2: a date_range verify over the newest 3 of 40 fetches 3 transa
   );
   assert.equal(verdict.ok, true, verdict.text);
   assert.equal(counts.getTransaction, 3, `getTransaction called ${counts.getTransaction} times for a 3-row range`);
-  assert.equal(counts.getSignaturesForAddress, 1, `paged ${counts.getSignaturesForAddress} times past the from bound`);
+  // The range is one signature page. The live tenure check lists the mandate once and does not fetch again.
+  assert.equal(counts.getSignaturesForAddress, 2, `paged ${counts.getSignaturesForAddress} times past the from bound`);
 });
 
 test("critic r3 N2: a date_range in the middle skips signatures newer than `to` and stops at `from`", async () => {
@@ -409,10 +411,14 @@ test("critic r3 N2: a date_range in the middle skips signatures newer than `to` 
     { ...OPTS, pageSize: 10 },
   );
   assert.equal(verdict.ok, true, verdict.text);
-  assert.equal(counts.getTransaction, 3, `getTransaction called ${counts.getTransaction} times for a 3-row range`);
+  // Population fetches the 3 signatures inside the window. The live tenure
+  // check then reads the 7 signatures newer than that window, each a charge,
+  // and does not walk the 30 older ones.
+  assert.equal(counts.getTransaction, 10, `getTransaction called ${counts.getTransaction} times for a 3-row range`);
   // Page 1 (rows 39..30) ends exactly on `from`; the walk needs page 2 to
-  // see a signature older than `from` before it can stop. Two pages, not four.
-  assert.equal(counts.getSignaturesForAddress, 2, `paged ${counts.getSignaturesForAddress} times`);
+  // see a signature older than `from` before it can stop. Two population pages,
+  // plus one mandate listing for the live tenure check.
+  assert.equal(counts.getSignaturesForAddress, 3, `paged ${counts.getSignaturesForAddress} times`);
 });
 
 test("critic r3 N2 control: the population check still sees a row missing from the file", async () => {
@@ -593,10 +599,23 @@ test("critic r3 N3: the genuine record of the first of two same-nonce charges in
       if (!hit) return null;
       return { data: hit.data, owner: hit.owner, executable: false, lamports: 1 };
     },
+    async getSignaturesForAddress() {
+      return [
+        {
+          signature: first.signature,
+          slot: 1,
+          err: null,
+          memo: null,
+          blockTime: first.timestamp,
+          confirmationStatus: "confirmed" as const,
+        },
+      ];
+    },
   } as unknown as Connection;
   const genuine = await assessRecord(record(mandate, first), RPC, conn, OPTS);
   assert.equal(genuine.ok, true, `genuine record of the first charge is rejected:\n${genuine.text}`);
-  // Control: the second (paid) charge claimed under the first's record still rejects.
-  const claimPaid = await assessRecord(record(mandate, { ...second, amount: 100_000 }), RPC, conn, OPTS);
-  assert.equal(claimPaid.ok, false, claimPaid.text);
+  // The paid second charge is genuine. Claiming that same charge was refused binds the paid row and fails on kind.
+  const claimRefused = await assessRecord(record(mandate, { ...second, kind: "refused" }), RPC, conn, OPTS);
+  assert.equal(claimRefused.ok, false, claimRefused.text);
+  assert.match(claimRefused.text, /kind \(ledger\)/);
 });

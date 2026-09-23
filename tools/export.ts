@@ -36,6 +36,7 @@ import {
   ringEntryForSignature,
   ringRowForLogKind,
   type DecisionRecord,
+  type DecisionTriple,
   type LedgerAccount,
   type LedgerEntry,
   type MandateAccount,
@@ -50,6 +51,7 @@ Usage:
   npx tsx export.ts --from <when> --to <when> [--mandate <addr>] [--format json|csv] [--out file] [--rpc url[,url...]]
 
 --signature writes one version-1 record (the demo beat).
+A transaction with more than one charge also needs --mandate, --nonce, and --amount.
 --mandate writes everything under that rule.
 --from / --to writes the date range (UTC calendar day or unix seconds). Combine with
 --mandate to bound one rule.
@@ -87,14 +89,35 @@ export async function recordFromSignature(
   programId: PublicKey,
   cluster: string,
   genesisHash: string,
+  want?: DecisionTriple,
 ) {
   const tx = await getTx(conn, signature);
   if (tx.meta?.err) {
     throw new Error(`transaction ${signature} failed on chain: ${JSON.stringify(tx.meta.err)}`);
   }
-  const charge = parseChargeFromTx(tx, programId);
-  if (!charge) {
+  const charges = parseChargeFromTx(tx, programId);
+  if (charges.length === 0) {
     throw new Error(`transaction ${signature} does not invoke charge on ${programId.toBase58()}`);
+  }
+  let charge;
+  if (want) {
+    const matched = bindByTriple(charges, want, (item) => ({
+      mandate: item.mandate.toBase58(),
+      nonce: item.nonce,
+      amount: item.amount,
+    }));
+    if (matched.length !== 1) {
+      throw new Error(
+        `transaction ${signature} carries ${matched.length} charges matching mandate, nonce, and amount`,
+      );
+    }
+    charge = matched[0]!;
+  } else if (charges.length === 1) {
+    charge = charges[0]!;
+  } else {
+    throw new Error(
+      `transaction ${signature} carries ${charges.length} charges; pass mandate, nonce, and amount`,
+    );
   }
   const mandateAccount = await fetchMandate(conn, charge.mandate);
   const ledgerAddress = ledgerPda(programId, charge.mandate);
@@ -104,18 +127,18 @@ export async function recordFromSignature(
   const ledger = await fetchLedger(conn, ledgerAddress);
   // Same candidate set verify uses: mandate, nonce, and amount. Log kind is not
   // a filter. Two rows can share a nonce when a refusal does not advance it.
-  const want = {
+  const ringWant = {
     mandate: charge.mandate.toBase58(),
     nonce: charge.nonce,
     amount: charge.amount,
   };
-  const matches = bindByTriple(indexedEntries(ledger), want, (row) => ({
+  const matches = bindByTriple(indexedEntries(ledger), ringWant, (row) => ({
     mandate: ledger.mandate.toBase58(),
     nonce: row.entry.nonce,
     amount: row.entry.amount,
   }));
   const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
-  const bound = boundVetoDecision(tx.meta?.logMessages ?? [], programId, want);
+  const bound = boundVetoDecision(tx.meta?.logMessages ?? [], programId, ringWant);
   let entry: LedgerEntry;
   if (matches.length === 0) {
     if (!logs) {
@@ -254,7 +277,15 @@ async function main(): Promise<void> {
   const to = toStr !== undefined ? parseTimeBound(toStr, true) : undefined;
 
   if (signature) {
-    const record = await recordFromSignature(conn, signature, programId, cluster, genesisHash);
+    const amountStr = flagString(cli, "amount");
+    let want: DecisionTriple | undefined;
+    if (mandateStr !== undefined || nonce !== undefined || amountStr !== undefined) {
+      if (mandateStr === undefined || nonce === undefined || amountStr === undefined) {
+        throw new Error("--signature needs --mandate, --nonce, and --amount together");
+      }
+      want = { mandate: mandateStr, nonce, amount: BigInt(amountStr) };
+    }
+    const record = await recordFromSignature(conn, signature, programId, cluster, genesisHash, want);
     if (format === "csv") {
       const bundle = makeBundle({
         cluster,

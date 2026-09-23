@@ -213,7 +213,9 @@ test("parseChargeFromTx reads account keys from another web3.js copy", () => {
       },
     },
   };
-  const charge = parseChargeFromTx(tx, program);
+  const charges = parseChargeFromTx(tx, program);
+  assert.equal(charges.length, 1);
+  const charge = charges[0]!;
   assert.ok(charge, "a charge instruction with foreign PublicKey account keys must parse");
   assert.equal(charge.amount, 6232500n);
   assert.equal(charge.nonce, 1789920000n);

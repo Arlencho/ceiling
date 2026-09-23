@@ -128,6 +128,21 @@ export function counterpartyFromCharge(tx: TxView, mandate: string): string {
   return charge?.accounts[4] ?? "";
 }
 
+const LOG_TRUNCATED = "Log truncated";
+
+// The runtime appends this exact line when it drops the rest of the log.
+// A program cannot write it: its own lines are prefixed with "Program log:".
+export function decisionLogTruncated(decisions: readonly Decision[]): boolean {
+  return (decisions as { truncated?: boolean }).truncated === true;
+}
+
+function markTruncation(tx: TxView, decisions: Decision[]): Decision[] {
+  if (tx.logs.includes(LOG_TRUNCATED)) {
+    Object.defineProperty(decisions, "truncated", { value: true });
+  }
+  return decisions;
+}
+
 export function decisionsFromTx(tx: TxView, programId: string, mandateFilter?: string): Decision[] {
   if (tx.err) return [];
   const events = decodeEventsFromLogs(tx.logs, programId);
@@ -149,12 +164,12 @@ export function decisionsFromTx(tx: TxView, programId: string, mandateFilter?: s
         suggestedOverride: event.suggestedOverride,
       });
     }
-    return out;
+    return markTruncation(tx, out);
   }
   const fromLog = decisionFromChargeLog(tx, programId);
-  if (!fromLog) return [];
-  if (mandateFilter && fromLog.mandate !== mandateFilter) return [];
-  return [fromLog];
+  if (!fromLog) return markTruncation(tx, []);
+  if (mandateFilter && fromLog.mandate !== mandateFilter) return markTruncation(tx, []);
+  return markTruncation(tx, [fromLog]);
 }
 
 // A charge that landed before event logs were available, or a fixture that
