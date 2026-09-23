@@ -520,7 +520,7 @@ const STAGE_ERRORS = [
 ] as const;
 
 for (const stage of STAGE_ERRORS) {
-  test(`T5 ${stage.name} on getTransaction for row 2 of 2: code 3, no CONFIRMED, honest row 1 not reported`, async () => {
+  test(`T5 ${stage.name} on getTransaction for a newer mandate signature: code 3, no CONFIRMED, the earlier row is not checked`, async () => {
     const rows: Row[] = [
       { kind: "paid", amount: 10, nonce: 1, timestamp: T, signature: "sig-honest" },
       { kind: "paid", amount: 20, nonce: 2, timestamp: T + 1, signature: "sig-unread" },
@@ -535,8 +535,10 @@ for (const stage of STAGE_ERRORS) {
     });
     const result = await assessBundle(ruleBundle(mandate.toBase58(), rows.map((row) => recordOf(mandate.toBase58(), row))), RPC, conn, OPTS);
     neverConfirmed(result);
-    notChecked(result, "sig-unread");
-    assert.doesNotMatch(result.text, /sig-honest/);
+    // sig-honest reads sig-unread before it can treat the live account as its
+    // tenure. The transport failure is not a verdict.
+    notChecked(result, "sig-honest");
+    assert.doesNotMatch(result.text, /VERDICT/);
   });
 
   test(`T5 ${stage.name} on the destination token account load: code 3, no CONFIRMED`, async () => {

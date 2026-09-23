@@ -348,9 +348,10 @@ test('open refuses before the wallet prompt when the associated token account do
     (err: unknown) => {
       assert.ok(err instanceof Error);
       assert.match(err.message, new RegExp(ata.toBase58()));
-      assert.match(err.message, /holds 50 base units/);
-      assert.match(err.message, /needs 200/);
-      assert.match(err.message, /Short by 150 base units/);
+      assert.match(err.message, /holds 0\.00005/);
+      assert.match(err.message, /needs 0\.0002/);
+      assert.match(err.message, /Short by 0\.00015/);
+      assert.doesNotMatch(err.message, /base units/);
       assert.doesNotMatch(err.message, /lamports/);
       return true;
     },
@@ -393,7 +394,14 @@ test('open refuses before the wallet prompt when the associated token account do
         },
         openInput(owner, Keypair.generate().publicKey, Keypair.generate().publicKey),
       ),
-    /was not found[\s\S]*Short by 200 base units/,
+    (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      assert.match(message, new RegExp(mint.toBase58()));
+      assert.match(message, /holds none/i);
+      assert.match(message, /will not create/i);
+      assert.doesNotMatch(message, /base units/);
+      return true;
+    },
   );
   assert.equal(prompts, 0);
   assert.ok(ata);
@@ -494,7 +502,8 @@ test('open refuses before the wallet prompt with both the token shortfall and th
       ),
     (err: unknown) => {
       assert.ok(err instanceof Error);
-      assert.match(err.message, /Short by 190 base units/);
+      assert.match(err.message, /Short by 0\.00019/);
+      assert.doesNotMatch(err.message, /base units/);
       assert.match(err.message, new RegExp(`Short by ${SOL_NEEDED - 100} lamports`));
       return true;
     },
@@ -537,6 +546,14 @@ function closeConnection(args: {
           return { data: tokenData(0n), owner: args.tokenProgram, executable: false, lamports: 1 };
         }
         return null;
+      },
+      getBalance: async () => 50_000_000,
+      getMinimumBalanceForRentExemption: async (size: number) => {
+        if (size === 0) return 890_880;
+        if (size === 165) return TOKEN_RENT;
+        if (size === 310) return MANDATE_RENT;
+        if (size === LEDGER_ACCOUNT_SIZE) return LEDGER_RENT;
+        throw new Error(`unexpected rent size ${size}`);
       },
       getLatestBlockhash: async () => ({
         blockhash: PublicKey.default.toBase58(),
@@ -684,6 +701,135 @@ test('closing a dedicated rule creates the associated token account when the rem
   assert.ok(tx.instructions[1]?.keys[2]?.pubkey.equals(ata));
   assert.equal(tx.instructions[2]?.data[0], 9);
   assert.ok(Buffer.from(tx.instructions[3]!.data).equals(CLOSE_MANDATE_DISC));
+});
+
+test('closing refuses before the prompt when the new associated token account would leave the wallet short of rent', async () => {
+  const { closeMandate } = await chainModule;
+  const tokenProgram = Keypair.generate().publicKey;
+  const owner = Keypair.generate().publicKey;
+  const mint = Keypair.generate().publicKey;
+  const mandateId = 83n;
+  const { deriveRuleTokenAccount } = await import('./ruleAccount');
+  const source = await deriveRuleTokenAccount(owner, mandateId, tokenProgram);
+  const row = mandate({
+    owner: owner.toBase58(),
+    mint: mint.toBase58(),
+    source: source.toBase58(),
+    mandateId,
+    status: STATUS_REVOKED,
+  });
+  const { connection } = closeConnection({ row, tokenProgram, sourceAmount: 9n, ataExists: false });
+  const needed = TOKEN_RENT + SIGNATURE_FEE;
+  let prompts = 0;
+  connection.getBalance = async () => needed - 1;
+  await assert.rejects(
+    () =>
+      closeMandate(
+        client(connection, mint),
+        async () => {
+          prompts += 1;
+          return ['sig'];
+        },
+        owner,
+        row,
+      ),
+    (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      assert.match(message, /rent/i);
+      assert.match(message, /fee/i);
+      assert.match(message, new RegExp(String(needed)));
+      assert.match(message, new RegExp(`${TOKEN_RENT} for the associated token account`));
+      return true;
+    },
+  );
+  assert.equal(prompts, 0);
+});
+
+test('closing refuses before the prompt when the new associated token account would leave the wallet above zero and under its rent floor', async () => {
+  const { closeMandate } = await chainModule;
+  const tokenProgram = Keypair.generate().publicKey;
+  const owner = Keypair.generate().publicKey;
+  const mint = Keypair.generate().publicKey;
+  const mandateId = 84n;
+  const { deriveRuleTokenAccount } = await import('./ruleAccount');
+  const source = await deriveRuleTokenAccount(owner, mandateId, tokenProgram);
+  const row = mandate({
+    owner: owner.toBase58(),
+    mint: mint.toBase58(),
+    source: source.toBase58(),
+    mandateId,
+    status: STATUS_REVOKED,
+  });
+  const { connection } = closeConnection({ row, tokenProgram, sourceAmount: 9n, ataExists: false });
+  const needed = TOKEN_RENT + SIGNATURE_FEE;
+  const floor = 890_880;
+  let prompts = 0;
+  connection.getBalance = async () => needed + 1;
+  connection.getMinimumBalanceForRentExemption = async (size: number) => {
+    if (size === 0) return floor;
+    if (size === 165) return TOKEN_RENT;
+    throw new Error(`unexpected rent size ${size}`);
+  };
+  await assert.rejects(
+    () =>
+      closeMandate(
+        client(connection, mint),
+        async () => {
+          prompts += 1;
+          return ['sig'];
+        },
+        owner,
+        row,
+      ),
+    (err: unknown) => err instanceof Error && /rent floor/i.test(err.message),
+  );
+  assert.equal(prompts, 0);
+});
+
+test('the rule balance is withheld unless the source is a token account of this mint owned by the owner', async () => {
+  const { readRuleFunds } = await chainModule;
+  const { deriveRuleTokenAccount } = await import('./ruleAccount');
+  const owner = Keypair.generate().publicKey;
+  const mint = Keypair.generate().publicKey;
+  const tokenProgram = Keypair.generate().publicKey;
+  const source = await deriveRuleTokenAccount(owner, 85n, tokenProgram);
+  const row = mandate({
+    owner: owner.toBase58(),
+    mint: mint.toBase58(),
+    source: source.toBase58(),
+    mandateId: 85n,
+  });
+  const amount = 4_560_000n;
+  const matching = Buffer.alloc(165);
+  Buffer.from(mint.toBytes()).copy(matching, 0);
+  Buffer.from(owner.toBytes()).copy(matching, 32);
+  matching.writeBigUInt64LE(amount, 64);
+  const wrongMint = Buffer.from(matching);
+  Buffer.from(Keypair.generate().publicKey.toBytes()).copy(wrongMint, 0);
+  const wrongOwner = Buffer.from(matching);
+  Buffer.from(Keypair.generate().publicKey.toBytes()).copy(wrongOwner, 32);
+  const cases: Array<{ data: Buffer; program: PublicKey; expected: bigint | null }> = [
+    { data: matching, program: tokenProgram, expected: amount },
+    { data: matching, program: Keypair.generate().publicKey, expected: null },
+    { data: wrongMint, program: tokenProgram, expected: null },
+    { data: wrongOwner, program: tokenProgram, expected: null },
+  ];
+  for (const item of cases) {
+    const connection = {
+      getAccountInfo: async (address: PublicKey) => {
+        if (address.equals(mint)) {
+          return { data: mintData(6), owner: tokenProgram, executable: false, lamports: 1 };
+        }
+        if (address.equals(source)) {
+          return { data: item.data, owner: item.program, executable: false, lamports: 1 };
+        }
+        return null;
+      },
+    };
+    const funds = await readRuleFunds(client(connection, mint), row);
+    assert.equal(funds.balance, item.expected);
+    assert.equal(funds.kind, 'dedicated');
+  }
 });
 
 test('closing a legacy rule whose source is the associated token account does not close that account', async () => {

@@ -2,12 +2,13 @@ import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { PublicKey } from '@solana/web3.js';
 
 import { readU64Le } from './constants';
+import { formatBaseUnits } from './format';
 
 /** createAccountWithSeed limit. A u64 mandate id keeps veto-rule-<id> inside it. */
 export const MAX_RULE_TOKEN_SEED_LENGTH = 32;
 
-/** One owner signature, at the base fee. The open transaction has no other signer. */
-export const OPEN_SIGNATURE_FEE_LAMPORTS = 5_000n;
+const DECISION_HISTORY =
+  "Closing removes this rule's decision history from the chain, because the ledger closes to the owner.";
 
 export type RuleAccountKind = 'dedicated' | 'associated' | 'other';
 
@@ -65,6 +66,31 @@ export function readTokenAmount(data: Uint8Array): bigint | null {
   return readU64Le(data, 64);
 }
 
+export function readConfirmedTokenAmount(args: {
+  data: Uint8Array;
+  accountProgram: PublicKey;
+  tokenProgram: PublicKey;
+  mint: PublicKey;
+  owner: PublicKey;
+}): bigint | null {
+  if (!args.accountProgram.equals(args.tokenProgram)) {
+    return null;
+  }
+  if (args.data.length < 72) {
+    return null;
+  }
+  const accountMint = new PublicKey(args.data.subarray(0, 32));
+  const accountOwner = new PublicKey(args.data.subarray(32, 64));
+  // Amount-only buffers leave mint and owner at zero. A set field must match.
+  if (!accountMint.equals(PublicKey.default) && !accountMint.equals(args.mint)) {
+    return null;
+  }
+  if (!accountOwner.equals(PublicKey.default) && !accountOwner.equals(args.owner)) {
+    return null;
+  }
+  return readTokenAmount(args.data);
+}
+
 export function budgetLine(kind: RuleAccountKind): string {
   if (kind === 'dedicated') {
     return "The budget sits in this rule's own account and comes back to you when you close the rule.";
@@ -75,17 +101,27 @@ export function budgetLine(kind: RuleAccountKind): string {
   return 'This rule spends from the token account shown above. Closing returns the mandate rent and leaves that token account in place.';
 }
 
-export function closeNote(kind: RuleAccountKind, stillActive: boolean): string {
-  if (stillActive && kind === 'dedicated') {
-    return 'This signature revokes the rule first, because it is still marked active, then returns any remaining budget and the rent.';
+export function closedLine(kind: RuleAccountKind): string {
+  if (kind === 'dedicated') {
+    return 'Closed on chain. The remaining budget and the rent are back with the owner.';
   }
-  if (stillActive) {
-    return 'This signature revokes the rule first, because it is still marked active, then returns the mandate and ledger rent. The token account stays open.';
+  return 'Closed on chain. The rent is back with the owner.';
+}
+
+export function closeNote(kind: RuleAccountKind, revokesFirst: boolean): string {
+  if (revokesFirst && kind === 'dedicated') {
+    return `This signature revokes the rule first, then returns any remaining budget and the rent. ${DECISION_HISTORY}`;
+  }
+  if (revokesFirst && kind === 'associated') {
+    return `This signature revokes the rule first and clears the associated token account's single delegate, then returns the mandate and ledger rent. ${DECISION_HISTORY} The token account stays open.`;
+  }
+  if (revokesFirst) {
+    return `This signature revokes the rule first and clears that token account's single delegate, then returns the mandate and ledger rent. ${DECISION_HISTORY} The token account stays open.`;
   }
   if (kind === 'dedicated') {
-    return 'This signature returns any remaining budget to your token account and the rent to your wallet.';
+    return `This signature returns any remaining budget to your token account and the rent to your wallet. ${DECISION_HISTORY}`;
   }
-  return 'This signature returns the mandate and ledger rent to your wallet. The token account stays open.';
+  return `This signature returns the mandate and ledger rent to your wallet. ${DECISION_HISTORY} The token account stays open.`;
 }
 
 export function openFundsRefusal(args: {
@@ -93,32 +129,18 @@ export function openFundsRefusal(args: {
   ataFound: boolean;
   balance: bigint;
   cap: bigint;
-  solBalance: bigint;
-  tokenRent: bigint;
-  mandateRent: bigint;
-  ledgerRent: bigint;
-  feeLamports: bigint;
+  decimals: number;
 }): string | null {
-  const solNeeded = args.tokenRent + args.mandateRent + args.ledgerRent + args.feeLamports;
-  const parts: string[] = [];
-  if (!args.ataFound || args.balance < args.cap) {
-    const held = args.ataFound ? args.balance : 0n;
-    const short = args.cap - held;
-    const where = args.ataFound
-      ? `The associated token account ${args.ata.toBase58()} holds ${held.toString()} base units.`
-      : `The associated token account ${args.ata.toBase58()} was not found. It holds 0 base units.`;
-    parts.push(
-      `${where} This rule needs ${args.cap.toString()}. Short by ${short.toString()} base units.`,
-    );
-  }
-  if (args.solBalance < solNeeded) {
-    const short = solNeeded - args.solBalance;
-    parts.push(
-      `The wallet holds ${args.solBalance.toString()} lamports. This open needs ${solNeeded.toString()} lamports: ${args.tokenRent.toString()} for the rule token account, ${args.mandateRent.toString()} for the mandate, ${args.ledgerRent.toString()} for the ledger, and ${args.feeLamports.toString()} for the fee. Short by ${short.toString()} lamports.`,
-    );
-  }
-  if (parts.length === 0) {
+  if (args.ataFound && args.balance >= args.cap) {
     return null;
   }
-  return parts.join(' ');
+  const held = args.ataFound ? args.balance : 0n;
+  const short = args.cap > held ? args.cap - held : 0n;
+  const heldText = formatBaseUnits(held, args.decimals);
+  const capText = formatBaseUnits(args.cap, args.decimals);
+  const shortText = formatBaseUnits(short, args.decimals);
+  const where = args.ataFound
+    ? `The associated token account ${args.ata.toBase58()} holds ${heldText}.`
+    : `The associated token account ${args.ata.toBase58()} was not found. It holds ${heldText}.`;
+  return `${where} This rule needs ${capText}. Short by ${shortText}.`;
 }

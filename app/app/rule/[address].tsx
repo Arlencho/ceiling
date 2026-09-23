@@ -12,16 +12,16 @@ import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
 import { copyAgentAddress } from '../../lib/agentAddress';
 import { createClient, readRuleFunds, type RuleFunds } from '../../lib/chain';
-import { STATUS_ACTIVE, STATUS_REVOKED } from '../../lib/constants';
-import { askAfterFirstRuleOpened } from '../../lib/decisionNotifyTask';
+import { STATUS_REVOKED } from '../../lib/constants';
 import { formatBaseUnits, formatTimeLeft } from '../../lib/format';
 import { isActive } from '../../lib/mandate';
 import { mayClaimAbsence } from '../../lib/mandateRead';
 import { notActiveHint } from '../../lib/reasons';
-import { budgetLine, closeNote } from '../../lib/ruleAccount';
+import { budgetLine, closedLine, closeNote } from '../../lib/ruleAccount';
 import { displayPurpose, formatExpiryDate, ruleSentence, stampedRulesetLine } from '../../lib/ruleView';
 import { PAYEE_NOT_IN_RULESET, stampAlignment, stampAlignmentLine } from '../../lib/ruleset';
 import { useChain } from '../../lib/useChain';
+import { useNotificationExplanation } from '../../lib/useNotificationExplanation';
 import { useRulesets } from '../../lib/useRulesets';
 import { truncateAddress } from '../../lib/wallet';
 
@@ -64,12 +64,7 @@ export default function RuleDetailScreen() {
   }, [chain]);
 
   const openedAddress = mandate?.address ?? null;
-  useEffect(() => {
-    if (!openedAddress) {
-      return;
-    }
-    void askAfterFirstRuleOpened().catch(() => undefined);
-  }, [openedAddress]);
+  const notify = useNotificationExplanation(openedAddress);
 
   useEffect(() => {
     if (!mandate || !chain.config) {
@@ -123,9 +118,10 @@ export default function RuleDetailScreen() {
     setFormError(null);
     setMessage(null);
     setClosing(true);
+    const kind = funds?.kind ?? 'other';
     try {
       await chain.close(address);
-      setClosedNote('Closed on chain. The remaining budget and the rent are back with the owner.');
+      setClosedNote(closedLine(kind));
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Close failed');
     } finally {
@@ -165,6 +161,19 @@ export default function RuleDetailScreen() {
           </EmptyState>
         ) : (
           <View style={styles.block}>
+            {notify.explanation ? (
+              <View style={styles.explain}>
+                <Text style={styles.explainCopy}>{notify.explanation}</Text>
+                <Button
+                  label="Continue"
+                  accessibilityLabel="Continue to notification permission"
+                  invert={false}
+                  onPress={notify.onContinue}
+                />
+              </View>
+            ) : notify.statusLine ? (
+              <Text style={styles.explainCopy}>{notify.statusLine}</Text>
+            ) : null}
             <Text style={styles.h2}>The rule</Text>
             <Text style={styles.sentence}>{ruleSentence(mandate, chain.decimals)}</Text>
 
@@ -260,33 +269,42 @@ export default function RuleDetailScreen() {
                   }}
                 />
               )}
-              {!isActive(mandate, nowSec) ? (
-                <View style={styles.actions}>
-                  <Button
-                    label="Close this rule"
-                    quiet
-                    invert={false}
-                    busy={closing || chain.loading}
-                    onPress={() => {
-                      void onClose();
-                    }}
-                  />
-                  {funds ? (
-                    <Text style={styles.note}>
-                      {closeNote(funds.kind, mandate.status === STATUS_ACTIVE)}
-                    </Text>
-                  ) : (
-                    <Text style={styles.note}>
-                      {fundsError ?? 'Reading where this rule keeps its budget.'}
-                    </Text>
-                  )}
-                </View>
-              ) : null}
             </View>
-            <Text style={styles.note}>
-              Revoking ends authority for the agent now and is recorded on chain. Nothing already paid
-              changes. The decisions stay readable. {notActiveHint()}
-            </Text>
+            {isActive(mandate, nowSec) ? (
+              <Text style={styles.note}>
+                Revoking ends authority for the agent now and is recorded on chain. Nothing already paid
+                changes. The decisions stay readable. {notActiveHint()}
+              </Text>
+            ) : null}
+            {!isActive(mandate, nowSec) ? (
+              <View style={styles.actions}>
+                {funds?.closeCreatesAssociated && (
+                  <Text style={styles.note}>
+                    Closing creates the associated token account at your cost. That rent is paid by this
+                    signature.
+                  </Text>
+                )}
+                <Button
+                  label="Close this rule"
+                  quiet
+                  invert={false}
+                  busy={closing || chain.loading}
+                  onPress={() => {
+                    void onClose();
+                  }}
+                />
+                {funds ? (
+                  <Text style={styles.note}>
+                    {closeNote(funds.kind, mandate.status !== STATUS_REVOKED)}
+                  </Text>
+                ) : (
+                  <Text style={styles.note}>
+                    {fundsError ?? 'Reading where this rule keeps its budget.'}
+                  </Text>
+                )}
+                <Text style={styles.note}>{notActiveHint()}</Text>
+              </View>
+            ) : null}
             {message ? <Text style={styles.ok}>{message}</Text> : null}
             {formError ? <Text style={styles.ok}>{formError}</Text> : null}
           </View>
@@ -331,6 +349,14 @@ const styles = StyleSheet.create({
   block: {
     gap: 12,
     alignSelf: 'stretch',
+  },
+  explain: {
+    gap: 10,
+  },
+  explainCopy: {
+    color: colors.body,
+    fontSize: 15,
+    lineHeight: 22,
   },
   h2: {
     color: colors.text,

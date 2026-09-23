@@ -7,7 +7,6 @@ import {
   AGENT_SECRET_STORE_KEY,
   AGENTS_STORE_KEY,
   APP_IDENTITY,
-  MWA_CHAIN,
   SESSION_STORE_KEY,
   authorize,
   connect,
@@ -141,7 +140,7 @@ test('authorize returns the owner public key and does not require a stored token
   assert.equal(session.authToken, 'fresh-token');
   assert.equal(session.ownerPublicKey, owner.publicKey.toBase58());
   assert.equal(authCalls[0]?.auth_token, undefined);
-  assert.equal(authCalls[0]?.chain, MWA_CHAIN);
+  assert.equal(authCalls[0]?.chain, 'solana:devnet');
   assert.equal(authCalls[0]?.identity.name, APP_IDENTITY.name);
 });
 

@@ -35,6 +35,12 @@ export default function HelpRuleScreen() {
         {`${RULESET_ENVELOPE} ${PAYEE_NOT_IN_RULESET} ${PAYEE_PREFILL} A rule you open still names a payee, because the program enforces it.`}
       </Text>
       <View style={styles.actions}>
+        <Button
+          label="Show the introduction"
+          accessibilityLabel="Show the introduction"
+          invert={false}
+          onPress={() => router.push('/onboarding')}
+        />
         <Button label="Next" onPress={() => router.push('/help/refusal')} />
       </View>
     </Screen>
@@ -62,5 +68,6 @@ const styles = StyleSheet.create({
   },
   actions: {
     marginTop: 12,
+    gap: 10,
   },
 });

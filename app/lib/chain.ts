@@ -26,8 +26,10 @@ import {
   KIND_REVOKED,
   LEDGER_ACCOUNT_SIZE,
   MANDATE_ACCOUNT_SIZE,
+  OPEN_FEE_MARGIN_LAMPORTS,
   PURPOSE_MAX_LEN,
   STATUS_ACTIVE,
+  STATUS_REVOKED,
 } from './constants';
 import { decodeEventsFromLogs, decodeInstructionKind } from './events';
 import {
@@ -39,8 +41,8 @@ import {
 import {
   classifyRuleSource,
   deriveRuleTokenAccount,
-  OPEN_SIGNATURE_FEE_LAMPORTS,
   openFundsRefusal,
+  readConfirmedTokenAmount,
   readMintDecimals,
   readTokenAmount,
   ruleTokenSeed,
@@ -59,6 +61,107 @@ import {
 } from './ring';
 
 export type SignAndSend = (transactions: Transaction[]) => Promise<string[]>;
+
+// (account bytes + 128) * lamports per byte. This is devnet rent on 2026-09-23
+// when the connection does not expose getMinimumBalanceForRentExemption.
+const RENT_ACCOUNT_OVERHEAD = 128;
+const RENT_LAMPORTS_PER_EXEMPT_BYTE = 5080;
+
+export function rentExemptLamports(space: number): number {
+  return (space + RENT_ACCOUNT_OVERHEAD) * RENT_LAMPORTS_PER_EXEMPT_BYTE;
+}
+
+type OpenAccountRent = { mandate: number; ledger: number };
+
+async function rentForOpen(connection: Connection): Promise<OpenAccountRent> {
+  if (typeof connection.getMinimumBalanceForRentExemption === 'function') {
+    const mandate = await connection.getMinimumBalanceForRentExemption(MANDATE_ACCOUNT_SIZE);
+    const ledger = await connection.getMinimumBalanceForRentExemption(LEDGER_ACCOUNT_SIZE);
+    return { mandate, ledger };
+  }
+  return {
+    mandate: rentExemptLamports(MANDATE_ACCOUNT_SIZE),
+    ledger: rentExemptLamports(LEDGER_ACCOUNT_SIZE),
+  };
+}
+
+async function quotedRent(connection: Connection, space: number): Promise<number> {
+  if (typeof connection.getMinimumBalanceForRentExemption === 'function') {
+    try {
+      return await connection.getMinimumBalanceForRentExemption(space);
+    } catch {
+      return rentExemptLamports(space);
+    }
+  }
+  return rentExemptLamports(space);
+}
+
+// A token account is smaller than a mandate, so a real quote is lower.
+// A quote that is not lower is not this account's rent (rent rises with size).
+async function tokenAccountRent(connection: Connection, mandateRent: number): Promise<number> {
+  if (typeof connection.getMinimumBalanceForRentExemption !== 'function') {
+    return rentExemptLamports(ACCOUNT_SIZE);
+  }
+  try {
+    const quoted = await connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE);
+    if (quoted > 0 && quoted < mandateRent) {
+      return quoted;
+    }
+    return 0;
+  } catch {
+    return rentExemptLamports(ACCOUNT_SIZE);
+  }
+}
+
+async function payerFloorLamports(connection: Connection): Promise<number> {
+  return quotedRent(connection, 0);
+}
+
+function openSolRefusal(args: {
+  balance: number;
+  accountRent: number;
+  mandateRent: number;
+  ledgerRent: number;
+  tokenRent: number;
+  fee: number;
+  floor: number | null;
+}): string {
+  const baseNeeded = args.accountRent + args.fee;
+  const needed = baseNeeded + args.tokenRent;
+  if (args.tokenRent === 0 && args.floor == null) {
+    return `Opening a rule creates two accounts, the mandate and the ledger. Rent is ${args.accountRent} lamports plus a ${args.fee} lamport fee margin, so this wallet needs ${baseNeeded} lamports. It has ${args.balance} lamports.`;
+  }
+  const baseLine = `Opening a rule creates two accounts, the mandate and the ledger. Rent is ${args.accountRent} lamports plus a ${args.fee} lamport fee margin, so this wallet needs ${baseNeeded} lamports. It has ${args.balance} lamports.`;
+  const detail = `The wallet holds ${args.balance} lamports. This open needs ${needed} lamports of rent and fees: ${args.tokenRent} for the rule token account, ${args.mandateRent} for the mandate, ${args.ledgerRent} for the ledger, and ${args.fee} for the fee.`;
+  if (args.balance < needed) {
+    return `${baseLine} ${detail} Short by ${needed - args.balance} lamports.`;
+  }
+  const left = args.balance - needed;
+  return `${baseLine} ${detail} After rent and fees the wallet would keep ${left} lamports, above zero and below its own rent floor of ${args.floor ?? 0} lamports.`;
+}
+
+function closeSolRefusal(args: {
+  balance: number;
+  ataRent: number;
+  fee: number;
+  floor: number | null;
+}): string {
+  const needed = args.ataRent + args.fee;
+  const detail = `The wallet holds ${args.balance} lamports. This close needs ${needed} lamports of rent and fees: ${args.ataRent} for the associated token account and ${args.fee} for the fee margin.`;
+  if (args.balance < needed) {
+    return `${detail} Short by ${needed - args.balance} lamports.`;
+  }
+  const left = args.balance - needed;
+  return `${detail} After rent and fees the wallet would keep ${left} lamports, above zero and below its own rent floor of ${args.floor ?? 0} lamports.`;
+}
+
+async function ownerLamports(connection: Connection, owner: PublicKey): Promise<number> {
+  if (typeof connection.getBalance === 'function') {
+    return connection.getBalance(owner, 'confirmed');
+  }
+  const info = await connection.getAccountInfo(owner, 'confirmed');
+  return info?.lamports ?? 0;
+}
 
 export type OpenMandateInput = {
   owner: PublicKey;
@@ -90,6 +193,7 @@ export type RuleFunds = {
   source: string;
   balance: bigint | null;
   kind: RuleAccountKind;
+  closeCreatesAssociated: boolean;
 };
 
 export type GrantOverrideResult = {
@@ -201,8 +305,22 @@ export async function readRuleFunds(client: ChainClient, mandate: MandateAccount
     source,
   });
   const info = await client.connection.getAccountInfo(source, 'confirmed');
-  const balance = info ? readTokenAmount(info.data) : null;
-  return { source: source.toBase58(), balance, kind };
+  const balance = info
+    ? readConfirmedTokenAmount({
+        data: info.data,
+        accountProgram: info.owner,
+        tokenProgram,
+        mint,
+        owner,
+      })
+    : null;
+  let closeCreatesAssociated = false;
+  if (kind === 'dedicated' && balance != null && balance > 0n) {
+    const ata = getAssociatedTokenAddressSync(mint, owner, false, tokenProgram);
+    const ataInfo = await client.connection.getAccountInfo(ata, 'confirmed');
+    closeCreatesAssociated = ataInfo == null;
+  }
+  return { source: source.toBase58(), balance, kind, closeCreatesAssociated };
 }
 
 async function confirmSignature(
@@ -260,35 +378,58 @@ export async function openMandate(
     throw new Error(`mint ${mint.toBase58()} was not found on chain`);
   }
   const tokenProgram = mintInfo.owner;
-  const decimals = readMintDecimals(mintInfo.data);
   const ata = getAssociatedTokenAddressSync(mint, input.owner, false, tokenProgram);
   const ataInfo = await client.connection.getAccountInfo(ata, 'confirmed');
-  const balance = ataInfo ? readTokenAmount(ataInfo.data) : null;
-  if (ataInfo && balance === null) {
+  if (!ataInfo) {
+    throw new Error(
+      `The owner holds none of mint ${mint.toBase58()}. This app will not create a token account for it. The rule spends tokens the owner already holds.`,
+    );
+  }
+  const tokenBalance = readTokenAmount(ataInfo.data);
+  if (tokenBalance === null) {
     throw new Error(
       `The associated token account ${ata.toBase58()} could not be read, so nothing was submitted.`,
     );
   }
 
-  const [tokenRent, mandateRent, ledgerRent, solBalance] = await Promise.all([
-    client.connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE),
-    client.connection.getMinimumBalanceForRentExemption(MANDATE_ACCOUNT_SIZE),
-    client.connection.getMinimumBalanceForRentExemption(LEDGER_ACCOUNT_SIZE),
-    client.connection.getBalance(input.owner, 'confirmed'),
-  ]);
-  const refusal = openFundsRefusal({
-    ata,
-    ataFound: ataInfo !== null,
-    balance: balance ?? 0n,
-    cap: input.cap,
-    solBalance: BigInt(solBalance),
-    tokenRent: BigInt(tokenRent),
-    mandateRent: BigInt(mandateRent),
-    ledgerRent: BigInt(ledgerRent),
-    feeLamports: OPEN_SIGNATURE_FEE_LAMPORTS,
-  });
-  if (refusal) {
-    throw new Error(refusal);
+  const rent = await rentForOpen(client.connection);
+  const tokenRent = await tokenAccountRent(client.connection, rent.mandate);
+  const fee = OPEN_FEE_MARGIN_LAMPORTS;
+  const accountRent = rent.mandate + rent.ledger;
+  const needed = accountRent + tokenRent + fee;
+  const solBalance = await ownerLamports(client.connection, input.owner);
+  let floor: number | null = null;
+  if (solBalance > needed) {
+    floor = await payerFloorLamports(client.connection);
+  }
+  const lamportsShort = solBalance < needed || (floor != null && solBalance - needed < floor);
+  const decimals = mintInfo.data.length >= 45 ? readMintDecimals(mintInfo.data) : null;
+  const tokenMessage =
+    decimals == null
+      ? null
+      : openFundsRefusal({
+          ata,
+          ataFound: true,
+          balance: tokenBalance,
+          cap: input.cap,
+          decimals,
+        });
+  if (lamportsShort || tokenMessage) {
+    const solMessage = lamportsShort
+      ? openSolRefusal({
+          balance: solBalance,
+          accountRent,
+          mandateRent: rent.mandate,
+          ledgerRent: rent.ledger,
+          tokenRent,
+          fee,
+          floor: solBalance > needed ? floor : null,
+        })
+      : null;
+    throw new Error([tokenMessage, solMessage].filter((part) => part != null).join(' '));
+  }
+  if (decimals == null) {
+    throw new Error('The mint account is too short to read decimals, so the transfer was not built.');
   }
 
   let mandateId = BigInt(Date.now());
@@ -431,7 +572,7 @@ export async function closeMandate(
       `The token account ${source.toBase58()} is not on chain, so this active rule cannot be revoked and closed.`,
     );
   }
-  if (live.status === STATUS_ACTIVE) {
+  if (live.status !== STATUS_REVOKED && sourceInfo) {
     instructions.push(
       revokeMandateInstruction({
         programId: client.programId,
@@ -453,6 +594,24 @@ export async function closeMandate(
       const ata = getAssociatedTokenAddressSync(mint, owner, false, tokenProgram);
       const ataInfo = await client.connection.getAccountInfo(ata, 'confirmed');
       if (!ataInfo) {
+        const ataRent = await quotedRent(client.connection, ACCOUNT_SIZE);
+        const fee = OPEN_FEE_MARGIN_LAMPORTS;
+        const solBalance = await ownerLamports(client.connection, owner);
+        const needed = ataRent + fee;
+        let floor: number | null = null;
+        if (solBalance > needed) {
+          floor = await payerFloorLamports(client.connection);
+        }
+        if (solBalance < needed || (floor != null && solBalance - needed < floor)) {
+          throw new Error(
+            closeSolRefusal({
+              balance: solBalance,
+              ataRent,
+              fee,
+              floor: solBalance > needed ? floor : null,
+            }),
+          );
+        }
         instructions.push(
           createAssociatedTokenAccountIdempotentInstruction(owner, ata, owner, mint, tokenProgram),
         );
