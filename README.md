@@ -228,7 +228,12 @@ SBPF v0. And `target/` is gitignored, so a fresh clone has no program keypair an
 `--ignore-keys` rather than rewriting the program id to match a throwaway key.
 
 To provision a chain and the demo fixtures, `make setup` for devnet or `make localnet` against a
-local validator.
+local validator. Both deploy. Both refuse unless `keys/program.json` is restored from the
+maintainer backup (the keypair for program `3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV`). That
+file is gitignored, and the script does not create it. Reading devnet does not run those targets
+and does not need the keypair: use the verify commands in [docs/DEVNET.md](docs/DEVNET.md), or
+export / verify below. `npx tsx produce.ts` is not a read. It needs `keys/owner.json` from the
+same backup. See [docs/DEVNET.md](docs/DEVNET.md).
 
 The history indexer lives in `indexer/`. It walks program logs rather than trusting the 32-entry
 ring, because a busy week wraps the ring and the full trail has to survive that. `make

@@ -77,12 +77,12 @@ test-scripts: ## Run deploy-script checks that do not need a cluster
 # (the recorded cluster). `make localnet` names a local validator. The script
 # still refuses if VETO_RPC is unset, so a direct invocation must name it.
 VETO_RPC ?= https://api.devnet.solana.com
-setup: ## Provision the demo cluster and token fixtures
+setup: ## Deploy devnet fixtures; needs the maintainer backup of keys/program.json
 	VETO_RPC=$(VETO_RPC) ./scripts/devnet-setup.sh
 
 LOCALNET_RPC ?= http://127.0.0.1:8899
 
-localnet: ## Provision fixtures against a local validator
+localnet: ## Deploy localnet fixtures; needs the maintainer backup of keys/program.json
 	VETO_RPC=$(LOCALNET_RPC) VETO_CLUSTER=localnet ./scripts/devnet-setup.sh
 
 # Off-phone decision record (schema in docs/DECISION_RECORD.md).

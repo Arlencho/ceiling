@@ -311,6 +311,10 @@ git status --ignored -- keys
 
 ## Recreate from nothing
 
+Reading the program on this cluster does not use this section. The verify commands below call `{rpc}` and do not need a keypair.
+
+`make setup` and `make localnet` deploy. Both run this script. They need the maintainer backup of `keys/program.json`, the keypair for `declare_id` `{program_id}`. That file is not in git (`keys/` is gitignored). If it is missing, the script stops with `keys/program.json is missing; the program keypair must be restored from backup` and does not mint a replacement. A fresh clone cannot run either target until that backup is restored. `npx tsx produce.ts` is also not a read: it needs `keys/owner.json` from the same backup.
+
 Toolchain used when this file was written: anchor-cli 1.2.0, solana-cli 4.1.2.
 
 ```bash
@@ -322,7 +326,7 @@ The script does not choose an RPC. It refuses and names `VETO_RPC` if that varia
 The script:
 
 1. Points the Solana CLI at `{rpc}` and refuses to continue if the URL looks like mainnet.
-2. Creates `keys/` and the keypairs above when they are missing.
+2. Requires `keys/program.json` from the maintainer backup. A missing file is an error. It creates `keys/` and the other keypairs in the table when they are missing.
 3. Airdrops SOL to the deployer, retrying on rate limits.
 4. Builds the program. It copies `keys/program.json` to `target/deploy/veto-keypair.json`, runs `anchor keys sync` so the bytecode ID check matches the deploy address, then restores `programs/veto/src` so program source is not left dirty and is not committed.
 5. Runs `anchor deploy --provider.cluster {cluster}`.
