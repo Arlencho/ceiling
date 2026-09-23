@@ -319,7 +319,7 @@ export function makeFailoverFetch(
           if (!res.ok) {
             const body = await readBody(res);
             throw new TransportError(
-              `${res.status} ${res.statusText}: ${cappedTransportBody(body)}`.trim(),
+              `${res.status} ${cappedTransportBody(res.statusText)}: ${cappedTransportBody(body)}`.trim(),
               res.status,
             );
           }

@@ -572,6 +572,13 @@ export function parseExportText(raw: string): ParsedExport {
   return { kind: "single", record: parseRecord(json) };
 }
 
+// File text is echoed into the report. A control character would open a new
+// line, so a value that contains one is printed as a JSON string.
+export function echoFile(value: string): string {
+  if (/[\u0000-\u001F\u007F]/.test(value)) return JSON.stringify(value);
+  return value;
+}
+
 export function formatBulkReport(rows: readonly RowVerdict[]): {
   text: string;
   confirmed: number;
@@ -594,7 +601,7 @@ export function formatBulkReport(rows: readonly RowVerdict[]): {
   for (const row of rows) {
     if (row.ok) continue;
     lines.push("");
-    lines.push(`REJECTED row ${row.index} signature=${row.signature} kind=${row.kind} nonce=${row.nonce}`);
+    lines.push(`REJECTED row ${row.index} signature=${echoFile(row.signature)} kind=${row.kind} nonce=${row.nonce}`);
     for (const failure of row.failures) {
       lines.push(`- ${failure}`);
     }

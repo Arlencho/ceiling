@@ -6,6 +6,7 @@ import { ListedTransactionMissingError, TransportError, asTransportError, isTran
 import {
   COMPLETENESS,
   filterIndexed,
+  echoFile,
   formatBulkReport,
   parseExportText,
   type DecisionBundle,
@@ -430,13 +431,13 @@ async function limitSource(
   try {
     if (live) {
       if (typeof cache.conn.getSignaturesForAddress !== "function") {
-        failures.push(`mandate history does not list signature ${record.signature}`);
+        failures.push(`mandate history does not list signature ${echoFile(record.signature)}`);
         return undefined;
       }
       const pages = await listMandateSignatures(cache, mandatePk);
       const listed = pages.some((page) => page.signature === record.signature);
       if (!listed) {
-        failures.push(`mandate history does not list signature ${record.signature}`);
+        failures.push(`mandate history does not list signature ${echoFile(record.signature)}`);
         return undefined;
       }
       if (!(await mustReadMandateTenure(cache, mandatePk, record.signature))) {
@@ -460,7 +461,7 @@ async function limitSource(
   if (live && history.openCount < 2 && !belowLatest) return liveLimits(live);
   const opened = history.covered.get(record.signature);
   if (!opened) {
-    failures.push(`mandate history does not cover signature ${record.signature}`);
+    failures.push(`mandate history does not cover signature ${echoFile(record.signature)}`);
     return undefined;
   }
   // The open object still current is the live tenure, so its ring is evidence.
@@ -500,12 +501,12 @@ async function checkRecord(
   eq(record.genesis_hash, genesis, "genesis_hash", failures);
   const derivedCluster = clusterForGenesis(genesis);
   if (record.cluster !== derivedCluster) {
-    failures.push(`cluster: record has ${record.cluster}, genesis ${genesis} is ${derivedCluster}`);
+    failures.push(`cluster: record has ${echoFile(record.cluster)}, genesis ${genesis} is ${derivedCluster}`);
   }
 
   if (record.reason_text !== reasonText(record.reason_code)) {
     failures.push(
-      `reason_text: record has "${record.reason_text}", canonical text for code ${record.reason_code} is "${reasonText(record.reason_code)}"`,
+      `reason_text: record has ${JSON.stringify(record.reason_text)}, canonical text for code ${record.reason_code} is ${JSON.stringify(reasonText(record.reason_code))}`,
     );
   }
   if (record.kind === "paid" && record.reason_code !== 0) {
@@ -521,7 +522,7 @@ async function checkRecord(
   const tx = await cachedTransaction(cache, record.signature);
   if (!tx) {
     failures.push(
-      `signature ${record.signature} not found on ${shownRpc(rpc)} (wrong cluster, tampered signature, or history pruned)`,
+      `signature ${echoFile(record.signature)} not found on ${shownRpc(rpc)} (wrong cluster, tampered signature, or history pruned)`,
     );
     return { failures, notes };
   }
@@ -568,7 +569,9 @@ async function checkRecord(
   eq(record.limits.expires_at, limits.expiresAt, "limits.expires_at", failures);
   eq(record.limits.merchant, limits.merchant.toBase58(), "limits.merchant", failures);
   if (record.limits.purpose !== limits.purpose) {
-    failures.push(`limits.purpose: record has "${record.limits.purpose}", chain has "${limits.purpose}"`);
+    failures.push(
+      `limits.purpose: record has ${JSON.stringify(record.limits.purpose)}, chain has ${JSON.stringify(limits.purpose)}`,
+    );
   }
   const derived = mandatePda(programId, limits.owner, limits.mandateId);
   if (!derived.equals(mandatePk)) {
@@ -649,7 +652,9 @@ async function checkRecord(
       eq(record.amount, logs.amount, "amount (logs)", failures);
       eq(record.suggested_override, logs.suggestedOverride, "suggested_override (logs)", failures);
       if (record.reason_text !== logs.reasonText) {
-        failures.push(`reason_text: record has "${record.reason_text}", logs have "${logs.reasonText}"`);
+        failures.push(
+          `reason_text: record has ${JSON.stringify(record.reason_text)}, logs have ${JSON.stringify(logs.reasonText)}`,
+        );
       }
       if (blockTime !== null) {
         eq(record.timestamp, BigInt(blockTime), "timestamp (transaction)", failures);
@@ -711,17 +716,17 @@ function confirmedLines(record: DecisionRecord, rpc: string, genesis: string, pr
     `program_id          ${record.program_id}`,
     `checked against program ${record.program_id} (${programSource})`,
     `mandate             ${record.mandate}`,
-    `signature           ${record.signature}`,
+    `signature           ${echoFile(record.signature)}`,
     `kind                ${record.kind}`,
     `amount              ${record.amount.toString()}`,
     `counterparty        ${record.counterparty}`,
     `timestamp           ${record.timestamp.toString()}`,
     `nonce               ${record.nonce.toString()}`,
-    `reason              ${record.reason_code} (${record.reason_text})`,
+    `reason              ${record.reason_code} (${echoFile(record.reason_text)})`,
     `suggested_override  ${record.suggested_override.toString()}`,
     `limits              cap=${record.limits.cap.toString()} per_tx_max=${record.limits.per_tx_max.toString()} expires_at=${record.limits.expires_at.toString()}`,
     `merchant            ${record.limits.merchant}`,
-    `purpose             ${record.limits.purpose}`,
+    `purpose             ${echoFile(record.limits.purpose)}`,
     "",
     "Mandate limits, ledger entry, and charge transaction agree.",
   ];
@@ -760,29 +765,31 @@ async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promis
   }
   const cluster = clusterForGenesis(genesis);
   if (bundle.cluster !== cluster) {
-    failures.push(`cluster: envelope has ${bundle.cluster}, genesis ${genesis} is ${cluster}`);
+    failures.push(`cluster: envelope has ${echoFile(bundle.cluster)}, genesis ${genesis} is ${cluster}`);
   }
   const seen = new Set<string>();
   for (const record of bundle.decisions) {
     if (seen.has(record.signature)) {
-      failures.push(`signature ${record.signature} appears more than once`);
+      failures.push(`signature ${echoFile(record.signature)} appears more than once`);
     }
     seen.add(record.signature);
     if (record.program_id !== bundle.program_id) {
       failures.push(
-        `program_id: row ${record.signature} has ${record.program_id}, envelope has ${bundle.program_id}`,
+        `program_id: row ${echoFile(record.signature)} has ${record.program_id}, envelope has ${bundle.program_id}`,
       );
     }
     if (record.genesis_hash !== bundle.genesis_hash) {
       failures.push(
-        `genesis_hash: row ${record.signature} has ${record.genesis_hash}, envelope has ${bundle.genesis_hash}`,
+        `genesis_hash: row ${echoFile(record.signature)} has ${echoFile(record.genesis_hash)}, envelope has ${echoFile(bundle.genesis_hash)}`,
       );
     }
     if (record.cluster !== bundle.cluster) {
-      failures.push(`cluster: row ${record.signature} has ${record.cluster}, envelope has ${bundle.cluster}`);
+      failures.push(`cluster: row ${echoFile(record.signature)} has ${echoFile(record.cluster)}, envelope has ${echoFile(bundle.cluster)}`);
     }
     if (bundle.scope.mandate && record.mandate !== bundle.scope.mandate) {
-      failures.push(`mandate: row ${record.signature} has ${record.mandate}, scope has ${bundle.scope.mandate}`);
+      failures.push(
+        `mandate: row ${echoFile(record.signature)} has ${record.mandate}, scope has ${echoFile(bundle.scope.mandate)}`,
+      );
     }
   }
   if (bundle.scope.type === "rule") {
@@ -798,7 +805,7 @@ function mandatePubkey(mandate: string, failures: string[]): PublicKey | null {
   try {
     return new PublicKey(mandate);
   } catch {
-    failures.push(`scope.mandate ${mandate} is not a pubkey`);
+    failures.push(`scope.mandate ${echoFile(mandate)} is not a pubkey`);
     return null;
   }
 }
@@ -1029,7 +1036,7 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
   for (const row of bundle.decisions) {
     if (inScope(row.timestamp, bundle)) continue;
     failures.push(
-      `signature ${row.signature} has timestamp ${row.timestamp.toString()} outside scope ${fromLabel}..${toLabel}`,
+      `signature ${echoFile(row.signature)} has timestamp ${row.timestamp.toString()} outside scope ${fromLabel}..${toLabel}`,
     );
   }
   const fileSigs = new Set(
@@ -1042,7 +1049,7 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
   }
   for (const signature of [...fileSigs].sort()) {
     if (!population.has(signature)) {
-      failures.push(`signature ${signature} is in the file and not in the indexed date_range`);
+      failures.push(`signature ${echoFile(signature)} is in the file and not in the indexed date_range`);
     }
   }
   // The ring cannot be truncated by a log flood. A date_range that names a
@@ -1118,7 +1125,7 @@ export async function assessBundle(
     } catch (err) {
       if (isTransportError(err)) {
         const detail = err instanceof Error ? err.message : String(err);
-        const line = `verify failed: row ${i + 1} signature=${record.signature} was not checked: ${detail}`;
+        const line = `verify failed: row ${i + 1} signature=${echoFile(record.signature)} was not checked: ${detail}`;
         return { ok: false, failures: [line], text: `${line}\n`, code: 3 };
       }
       const message = err instanceof Error ? err.message : String(err);
@@ -1149,7 +1156,7 @@ export async function assessBundle(
     for (const row of rows) {
       if (row.ok) continue;
       lines.push("");
-      lines.push(`REJECTED row ${row.index} signature=${row.signature} kind=${row.kind} nonce=${row.nonce}`);
+      lines.push(`REJECTED row ${row.index} signature=${echoFile(row.signature)} kind=${row.kind} nonce=${row.nonce}`);
       for (const failure of row.failures) lines.push(`- ${failure}`);
     }
   }
@@ -1166,7 +1173,7 @@ function populationLines(bundle: DecisionBundle, cache: CheckCache): string[] {
   const scope = bundle.scope;
   const lines = [
     `scope               ${scope.type}`,
-    `mandate             ${scope.mandate ?? "none"}`,
+    `mandate             ${scope.mandate === null ? "none" : echoFile(scope.mandate)}`,
     `from                ${scope.from === null ? "none" : String(scope.from)}`,
     `to                  ${scope.to === null ? "none" : String(scope.to)}`,
     `program_id          ${cache.expectedProgramId.toBase58()}`,
