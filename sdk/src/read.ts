@@ -1,0 +1,124 @@
+import type { Connection } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
+import { compareDecisions, decisionsFromTx, viewFromRpc, type Decision, type RpcTransaction } from "./events.js";
+import { PROGRAM_ID } from "./idl.js";
+import {
+  decodeLedger,
+  decodeMandate,
+  toPublicKey,
+  type LedgerAccount,
+  type MandateAccount,
+} from "./layout.js";
+
+export type { Decision, LedgerAccount, MandateAccount };
+
+const PAGE_MAX = 1000;
+
+async function accountData(connection: Connection, address: PublicKey, what: string): Promise<Buffer> {
+  const info = await connection.getAccountInfo(address, "confirmed");
+  if (!info) throw new Error(`${what}: account not found: ${address.toBase58()}`);
+  return Buffer.from(info.data);
+}
+
+export async function fetchMandate(
+  connection: Connection,
+  address: PublicKey | string,
+): Promise<MandateAccount> {
+  const key = toPublicKey(address, "fetchMandate");
+  try {
+    return decodeMandate(await accountData(connection, key, "fetchMandate"));
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("fetchMandate:")) throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`fetchMandate: ${message}`, { cause: err });
+  }
+}
+
+export async function fetchLedger(
+  connection: Connection,
+  address: PublicKey | string,
+): Promise<LedgerAccount> {
+  const key = toPublicKey(address, "fetchLedger");
+  try {
+    return decodeLedger(await accountData(connection, key, "fetchLedger"));
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("fetchLedger:")) throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`fetchLedger: ${message}`, { cause: err });
+  }
+}
+
+export type DecisionPage = {
+  signature: string;
+  slot: number;
+  err: unknown;
+  blockTime: number | null;
+};
+
+/**
+ * Decisions whose transaction touched this mandate.
+ * Attribution matches indexer/src/events.ts: program-data events on the Veto
+ * frame win, and a text line counts only when that transaction has no event.
+ */
+export async function decisionsForMandate(
+  connection: Connection,
+  mandate: PublicKey | string,
+  options?: { pageSize?: number; programId?: PublicKey | string },
+): Promise<Decision[]> {
+  const key = toPublicKey(mandate, "decisionsForMandate");
+  const programId = options?.programId
+    ? toPublicKey(options.programId, "decisionsForMandate programId").toBase58()
+    : PROGRAM_ID.toBase58();
+  const pageSize = clampPage(options?.pageSize);
+  const pages = await listSignatures(connection, key, pageSize);
+  const decisions: Decision[] = [];
+  for (const page of pages) {
+    if (page.err) continue;
+    const tx = await connection.getTransaction(page.signature, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 0,
+    });
+    if (!tx) continue;
+    const view = viewFromRpc(tx as RpcTransaction, page);
+    decisions.push(...decisionsFromTx(view, programId, key.toBase58()));
+  }
+  decisions.sort(compareDecisions);
+  return decisions;
+}
+
+function clampPage(pageSize: number | undefined): number {
+  if (pageSize === undefined) return PAGE_MAX;
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > PAGE_MAX) {
+    throw new Error(`decisionsForMandate: pageSize must be an integer from 1 to ${PAGE_MAX}`);
+  }
+  return pageSize;
+}
+
+async function listSignatures(
+  connection: Connection,
+  mandate: PublicKey,
+  pageSize: number,
+): Promise<DecisionPage[]> {
+  const items: DecisionPage[] = [];
+  let before: string | undefined;
+  const seen = new Set<string>();
+  for (;;) {
+    const batch = await connection.getSignaturesForAddress(mandate, { limit: pageSize, before });
+    if (batch.length === 0) break;
+    for (const item of batch) {
+      if (seen.has(item.signature)) continue;
+      seen.add(item.signature);
+      items.push({
+        signature: item.signature,
+        slot: item.slot,
+        err: item.err,
+        blockTime: item.blockTime ?? null,
+      });
+    }
+    if (batch.length < pageSize) break;
+    const last = batch[batch.length - 1];
+    if (!last || last.signature === before) break;
+    before = last.signature;
+  }
+  return items;
+}
