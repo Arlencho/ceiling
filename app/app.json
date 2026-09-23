@@ -43,6 +43,12 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "209836ed-6053-4607-9654-05ffb3f7f408"
+      }
+    },
+    "owner": "arlenzo"
   }
 }
