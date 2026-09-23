@@ -11,11 +11,14 @@ import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
 import { copyAgentAddress } from '../../lib/agentAddress';
-import { STATUS_REVOKED } from '../../lib/constants';
+import { createClient, readRuleFunds, type RuleFunds } from '../../lib/chain';
+import { STATUS_ACTIVE, STATUS_REVOKED } from '../../lib/constants';
 import { askAfterFirstRuleOpened } from '../../lib/decisionNotifyTask';
 import { formatBaseUnits, formatTimeLeft } from '../../lib/format';
+import { isActive } from '../../lib/mandate';
 import { mayClaimAbsence } from '../../lib/mandateRead';
 import { notActiveHint } from '../../lib/reasons';
+import { budgetLine, closeNote } from '../../lib/ruleAccount';
 import { displayPurpose, formatExpiryDate, ruleSentence, stampedRulesetLine } from '../../lib/ruleView';
 import { PAYEE_NOT_IN_RULESET, stampAlignment, stampAlignmentLine } from '../../lib/ruleset';
 import { useChain } from '../../lib/useChain';
@@ -29,6 +32,12 @@ export default function RuleDetailScreen() {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [loadedFunds, setLoadedFunds] = useState<RuleFunds | null>(null);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const [loadedError, setLoadedError] = useState<string | null>(null);
+  const [errorFor, setErrorFor] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
+  const [closedNote, setClosedNote] = useState<string | null>(null);
   const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
   const mandate = chain.mandates.find((row) => row.address === address) ?? null;
   const index = mandate ? chain.mandates.findIndex((row) => row.address === mandate.address) : -1;
@@ -62,6 +71,38 @@ export default function RuleDetailScreen() {
     void askAfterFirstRuleOpened().catch(() => undefined);
   }, [openedAddress]);
 
+  useEffect(() => {
+    if (!mandate || !chain.config) {
+      return;
+    }
+    let cancelled = false;
+    const ruleAddress = mandate.address;
+    const client = createClient(chain.config);
+    void readRuleFunds(client, mandate)
+      .then((next) => {
+        if (!cancelled) {
+          setLoadedFunds(next);
+          setLoadedFor(ruleAddress);
+          setLoadedError(null);
+          setErrorFor(null);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setLoadedFunds(null);
+          setLoadedFor(null);
+          setLoadedError(err instanceof Error ? err.message : 'Could not read the rule account');
+          setErrorFor(ruleAddress);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mandate, chain.config]);
+
+  const funds = mandate && loadedFor === mandate.address ? loadedFunds : null;
+  const fundsError = mandate && errorFor === mandate.address ? loadedError : null;
+
   const onCopyAgent = async () => {
     if (!mandate) {
       return;
@@ -75,6 +116,20 @@ export default function RuleDetailScreen() {
       setMessage('Agent address copied.');
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Copy failed');
+    }
+  };
+
+  const onClose = async () => {
+    setFormError(null);
+    setMessage(null);
+    setClosing(true);
+    try {
+      await chain.close(address);
+      setClosedNote('Closed on chain. The remaining budget and the rent are back with the owner.');
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Close failed');
+    } finally {
+      setClosing(false);
     }
   };
 
@@ -98,6 +153,7 @@ export default function RuleDetailScreen() {
         meta={mandate ? `${index + 1} of ${chain.mandates.length}` : undefined}
       />
       <ConnectGate>
+        {closedNote ? <Text style={styles.ok}>{closedNote}</Text> : null}
         {!mayClaimAbsence(chain.mandateStatus) ? (
           <ReadState
             status={chain.mandateStatus}
@@ -125,6 +181,19 @@ export default function RuleDetailScreen() {
               />
               <Def label="Time left" value={formatTimeLeft(mandate.expiresAt, nowSec)} />
               <Def
+                label="Balance"
+                value={
+                  !funds
+                    ? fundsError
+                      ? 'unavailable'
+                      : 'Reading the account'
+                    : funds.balance === null
+                      ? 'not on chain'
+                      : formatBaseUnits(funds.balance, chain.decimals)
+                }
+              />
+              <Def label="Account" value={mandate.source} stacked />
+              <Def
                 label="Agent"
                 value={mandate.agent}
                 stacked
@@ -142,6 +211,13 @@ export default function RuleDetailScreen() {
                 }
               />
             </View>
+            {funds ? (
+              <Text style={styles.note}>{budgetLine(funds.kind)}</Text>
+            ) : (
+              <Text style={styles.note}>
+                {fundsError ?? 'Reading where this rule keeps its budget.'}
+              </Text>
+            )}
 
             <Text style={styles.keys}>
               <Text style={styles.bold}>Owner key</Text> lives in Seed Vault and is the only key that
@@ -184,6 +260,28 @@ export default function RuleDetailScreen() {
                   }}
                 />
               )}
+              {!isActive(mandate, nowSec) ? (
+                <View style={styles.actions}>
+                  <Button
+                    label="Close this rule"
+                    quiet
+                    invert={false}
+                    busy={closing || chain.loading}
+                    onPress={() => {
+                      void onClose();
+                    }}
+                  />
+                  {funds ? (
+                    <Text style={styles.note}>
+                      {closeNote(funds.kind, mandate.status === STATUS_ACTIVE)}
+                    </Text>
+                  ) : (
+                    <Text style={styles.note}>
+                      {fundsError ?? 'Reading where this rule keeps its budget.'}
+                    </Text>
+                  )}
+                </View>
+              ) : null}
             </View>
             <Text style={styles.note}>
               Revoking ends authority for the agent now and is recorded on chain. Nothing already paid

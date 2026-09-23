@@ -5,12 +5,15 @@ export const LEDGER_CAPACITY = 32;
 export const ENTRY_SIZE = 72;
 export const LEDGER_HEADER_SIZE = 40;
 export const LEDGER_ACCOUNT_SIZE = 8 + LEDGER_HEADER_SIZE + LEDGER_CAPACITY * ENTRY_SIZE;
+/** Discriminator plus Mandate::INIT_SPACE (302). Open pays rent for this many bytes. */
+export const MANDATE_ACCOUNT_SIZE = 310;
 
 export const LEDGER_DISCRIMINATOR = Buffer.from([43, 41, 21, 213, 180, 176, 95, 32]);
 export const MANDATE_DISCRIMINATOR = Buffer.from([113, 216, 98, 159, 185, 63, 55, 18]);
 
 export const OPEN_MANDATE_DISC = Buffer.from([116, 145, 190, 28, 86, 223, 105, 74]);
 export const REVOKE_MANDATE_DISC = Buffer.from([252, 97, 140, 119, 67, 43, 177, 108]);
+export const CLOSE_MANDATE_DISC = Buffer.from([117, 87, 189, 5, 254, 125, 248, 180]);
 export const GRANT_OVERRIDE_DISC = Buffer.from([225, 146, 123, 110, 56, 16, 99, 141]);
 export const CHARGE_IX_DISC = Buffer.from([26, 55, 197, 209, 93, 77, 242, 15]);
 

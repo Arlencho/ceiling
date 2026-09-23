@@ -53,8 +53,8 @@ export default function RulesScreen() {
           <View style={styles.block}>
             <Text style={styles.h2}>{heading}</Text>
             <EmptyState>
-              Each rule has its own agent key and its own history. Pick one and Overview and Decisions
-              are about it.
+              Each rule has its own agent key and its own history. A rule opened from this app keeps its
+              budget in its own token account. Pick one and Overview and Decisions are about it.
             </EmptyState>
 
             <View>

@@ -27,8 +27,9 @@ export default function HelpRuleScreen() {
       </Text>
       <Text style={styles.body}>
         One owner can hold several rules at once. Each rule has its own agent key, its own limits,
-        and its own decision history. Switching a rule changes what Overview and Decisions are
-        about.
+        and its own decision history. A rule opened from this app keeps its budget in its own token
+        account, so another rule on the same mint keeps its own delegate. Switching a rule changes
+        what Overview and Decisions are about.
       </Text>
       <Text style={styles.body}>
         {`${RULESET_ENVELOPE} ${PAYEE_NOT_IN_RULESET} ${PAYEE_PREFILL} A rule you open still names a payee, because the program enforces it.`}

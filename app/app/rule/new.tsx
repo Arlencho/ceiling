@@ -235,8 +235,9 @@ function RuleCompose({
           </EmptyState>
         ) : (
           <EmptyState>
-            One Seed Vault signature opens the rule and delegates the cap in the same transaction.
-            Confirmation is read back from chain, not from this form.
+            One Seed Vault signature opens the rule, moves the cap into a token account that belongs
+            only to this rule, and delegates that account. Confirmation is read back from chain, not
+            from this form.
           </EmptyState>
         )}
 
