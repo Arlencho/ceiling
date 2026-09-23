@@ -77,12 +77,12 @@ test('the production config does not apply the dev client and still blocks unuse
     };
   };
   const blocked = app.expo.android?.blockedPermissions ?? [];
-  for (const permission of [
-    'android.permission.VIBRATE',
-    'android.permission.RECEIVE_BOOT_COMPLETED',
-  ]) {
-    assert.ok(blocked.includes(permission), permission);
-  }
+  assert.ok(blocked.includes('android.permission.VIBRATE'), 'android.permission.VIBRATE');
+  assert.equal(
+    blocked.includes('android.permission.RECEIVE_BOOT_COMPLETED'),
+    false,
+    'RECEIVE_BOOT_COMPLETED stays declared so the decision scan can be rescheduled after a reboot',
+  );
   const prod = shapeConfig(app.expo, { EAS_BUILD_PROFILE: 'production' });
   const names = prod.plugins.map((plugin) => (Array.isArray(plugin) ? plugin[0] : plugin));
   assert.equal(names.includes('expo-dev-client'), false);

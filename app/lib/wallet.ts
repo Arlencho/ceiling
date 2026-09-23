@@ -8,8 +8,6 @@ export const APP_IDENTITY = {
   uri: 'https://github.com/Arlencho/veto',
 } as const;
 
-export const MWA_CHAIN = walletChainForCluster('devnet');
-
 export const SESSION_STORE_KEY = 'veto.wallet.session';
 export const AGENT_SECRET_STORE_KEY = 'veto.wallet.agentSecret';
 export const AGENTS_STORE_KEY = 'veto.wallet.agents';

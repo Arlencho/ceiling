@@ -5,14 +5,19 @@ import test from 'node:test';
 import { DECISION_NOTIFICATION_EXPLANATION, explainOnceThenAsk } from './notificationAsk';
 
 const ruleScreen = readFileSync(new URL('../app/rule/[address].tsx', import.meta.url), 'utf8');
+const explanationHook = readFileSync(
+  new URL('./useNotificationExplanation.ts', import.meta.url),
+  'utf8',
+);
 
 test('the rule screen explains notifications once, before the permission dialog', () => {
   assert.match(DECISION_NOTIFICATION_EXPLANATION, /notification permission/i);
   assert.match(DECISION_NOTIFICATION_EXPLANATION, /15 minutes/);
   assert.match(DECISION_NOTIFICATION_EXPLANATION, /battery optimisation/);
-  assert.match(ruleScreen, /\{DECISION_NOTIFICATION_EXPLANATION\}/);
-  assert.match(ruleScreen, /explainOnceThenAsk/);
-  assert.doesNotMatch(ruleScreen, /void askAfterFirstRuleOpened\(\)/);
+  assert.match(explanationHook, /explainOnceThenAsk/);
+  assert.match(ruleScreen, /useNotificationExplanation\(/);
+  assert.match(ruleScreen, /\{notify\.explanation\}/);
+  assert.doesNotMatch(ruleScreen, /askAfterFirstRuleOpened/);
 });
 
 test('the explanation is shown once and the permission ask waits for it', async () => {
