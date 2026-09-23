@@ -1,9 +1,12 @@
 // Issue 130. A per-row transport error is not a verdict: the row was not checked.
+// Issue 131. A date_range file that keeps a row outside its own range fails.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PublicKey, type Connection } from "@solana/web3.js";
+import { encodePaidLog } from "../indexer/src/events.js";
 import { makeBundle } from "./bulk.js";
 import {
+  CHARGE_DISCRIMINATOR,
   KIND_PAID,
   KIND_REFUSED,
   LEDGER_CAPACITY,
@@ -14,6 +17,7 @@ import {
   mandatePda,
   parseRecord,
   reasonText,
+  u64Le,
   type DecisionRecord,
 } from "./lib.js";
 import { assessBundle, type AssessOpts, type Verdict } from "./verify.js";
@@ -209,4 +213,79 @@ test("a missing signature is still a rejected row", async () => {
   assert.match(result.text, /VERDICT: REJECTED/);
   assert.match(result.text, /missing-sig not found on/);
   assert.doesNotMatch(result.text, /was not checked/);
+});
+
+function chargeTx(mandate: PublicKey, ledger: PublicKey, row: Row): unknown {
+  const logs = [
+    `Program ${REAL_PROGRAM.toBase58()} invoke [1]`,
+    "Program log: Instruction: Charge",
+    `Program log: VETO PAID amount=${row.amount} spent=${row.amount} of cap=${LIMITS.cap} remaining=1`,
+    encodePaidLog({ mandate, amount: BigInt(row.amount), nonce: BigInt(row.nonce), spent: BigInt(row.amount) }),
+    `Program ${REAL_PROGRAM.toBase58()} success`,
+  ];
+  return {
+    slot: 1,
+    blockTime: row.timestamp,
+    transaction: {
+      message: {
+        staticAccountKeys: [AGENT, DEST, ledger, mandate, SOURCE, MINT, REAL_PROGRAM, TOKEN_PROGRAM_ID],
+        compiledInstructions: [
+          {
+            programIdIndex: 6,
+            accountKeyIndexes: [0, 3, 2, 4, 1, 5, 7],
+            data: Buffer.concat([CHARGE_DISCRIMINATOR, u64Le(BigInt(row.amount)), u64Le(BigInt(row.nonce))]),
+          },
+        ],
+      },
+    },
+    meta: { err: null, logMessages: logs },
+  };
+}
+
+test("a date_range file that keeps a row outside its own range is rejected", async () => {
+  const rows: Row[] = [
+    { kind: "paid", amount: 10, nonce: 1, timestamp: 100, signature: "in-1" },
+    { kind: "paid", amount: 10, nonce: 2, timestamp: 110, signature: "in-2" },
+    { kind: "paid", amount: 10, nonce: 3, timestamp: 200, signature: "out-1" },
+  ];
+  const mandate = mandatePda(REAL_PROGRAM, OWNER, 131n);
+  const ledger = ledgerPda(REAL_PROGRAM, mandate);
+  const txs = new Map(rows.map((row) => [row.signature, chargeTx(mandate, ledger, row)]));
+  const { conn } = chain({
+    mandateId: 131n,
+    rows,
+    async getTransaction(signature: string) {
+      return txs.get(signature) ?? null;
+    },
+  });
+  const newestFirst = [...rows].reverse();
+  const listing = conn as unknown as {
+    getSignaturesForAddress: (address: PublicKey, config?: { before?: string; limit?: number }) => Promise<unknown[]>;
+  };
+  listing.getSignaturesForAddress = async (_address, config) => {
+    const start = config?.before ? newestFirst.findIndex((row) => row.signature === config.before) + 1 : 0;
+    const limit = config?.limit ?? newestFirst.length;
+    return newestFirst.slice(start, start + limit).map((row) => ({
+      signature: row.signature,
+      slot: 1,
+      err: null,
+      memo: null,
+      blockTime: row.timestamp,
+      confirmationStatus: "confirmed" as const,
+    }));
+  };
+  const bundle = makeBundle({
+    cluster: "devnet",
+    genesisHash: DEVNET_GENESIS,
+    programId: REAL_PROGRAM.toBase58(),
+    scope: { type: "date_range", mandate: mandate.toBase58(), from: 100, to: 150 },
+    decisions: rows.map((row) => recordOf(mandate, row)),
+  });
+  const result = await assessBundle(bundle, RPC, conn, OPTS);
+  assert.equal(result.ok, false, result.text);
+  assert.equal(result.code, 1);
+  assert.match(result.text, /VERDICT: REJECTED/);
+  assert.match(result.text, /signature out-1 has timestamp 200 outside scope 100\.\.150/);
+  assert.doesNotMatch(result.text, /VERDICT: CONFIRMED/);
+  assert.doesNotMatch(result.text, /confirmed: 3/);
 });

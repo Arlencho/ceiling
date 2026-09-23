@@ -592,6 +592,14 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
     to: bundle.scope.to,
   });
   const population = new Set(indexed.map((row) => row.signature));
+  const fromLabel = bundle.scope.from === null ? "none" : String(bundle.scope.from);
+  const toLabel = bundle.scope.to === null ? "none" : String(bundle.scope.to);
+  for (const row of bundle.decisions) {
+    if (inScope(row.timestamp, bundle)) continue;
+    failures.push(
+      `signature ${row.signature} has timestamp ${row.timestamp.toString()} outside scope ${fromLabel}..${toLabel}`,
+    );
+  }
   const fileSigs = new Set(
     bundle.decisions.filter((row) => inScope(row.timestamp, bundle)).map((row) => row.signature),
   );

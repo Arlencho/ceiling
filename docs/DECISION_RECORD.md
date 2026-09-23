@@ -208,8 +208,9 @@ paid row and every refused row on the ledger appears once. The paid count
 must equal `spend_count` and the refused count must equal `refusal_count`.
 For a date_range scope, verify rebuilds the population with the indexer over
 that same range (and that mandate, when one is named) and rejects the file
-unless the signature set matches. A date_range with no mandate is every
-charge on the program in that range. The bulk verdict prints the scope,
+unless the signature set matches. A row whose timestamp is outside that
+range is a failure, even when the row itself is genuine. A date_range with
+no mandate is every charge on the program in that range. The bulk verdict prints the scope,
 program, cluster, mandate, and range it checked. A missing row is a reject.
 An RPC transport error prints `verify failed` and no verdict, and exits 3. On a bulk file the line names the row that was not checked.
 
