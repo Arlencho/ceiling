@@ -45,9 +45,11 @@ import {
   readConfirmedTokenAmount,
   readMintDecimals,
   readTokenAmount,
+  readTokenDelegate,
   ruleTokenSeed,
   type RuleAccountKind,
 } from './ruleAccount';
+import { displayPurpose } from './ruleView';
 import { assessOverride, type OverrideAssessment } from './override';
 import { decodeMandateAccount, type MandateAccount } from './mandate';
 import {
@@ -96,21 +98,8 @@ async function quotedRent(connection: Connection, space: number): Promise<number
   return rentExemptLamports(space);
 }
 
-// A token account is smaller than a mandate, so a real quote is lower.
-// A quote that is not lower is not this account's rent (rent rises with size).
-async function tokenAccountRent(connection: Connection, mandateRent: number): Promise<number> {
-  if (typeof connection.getMinimumBalanceForRentExemption !== 'function') {
-    return rentExemptLamports(ACCOUNT_SIZE);
-  }
-  try {
-    const quoted = await connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE);
-    if (quoted > 0 && quoted < mandateRent) {
-      return quoted;
-    }
-    return 0;
-  } catch {
-    return rentExemptLamports(ACCOUNT_SIZE);
-  }
+async function tokenAccountRent(connection: Connection): Promise<number> {
+  return quotedRent(connection, ACCOUNT_SIZE);
 }
 
 async function payerFloorLamports(connection: Connection): Promise<number> {
@@ -119,25 +108,19 @@ async function payerFloorLamports(connection: Connection): Promise<number> {
 
 function openSolRefusal(args: {
   balance: number;
-  accountRent: number;
   mandateRent: number;
   ledgerRent: number;
   tokenRent: number;
   fee: number;
   floor: number | null;
 }): string {
-  const baseNeeded = args.accountRent + args.fee;
-  const needed = baseNeeded + args.tokenRent;
-  if (args.tokenRent === 0 && args.floor == null) {
-    return `Opening a rule creates two accounts, the mandate and the ledger. Rent is ${args.accountRent} lamports plus a ${args.fee} lamport fee margin, so this wallet needs ${baseNeeded} lamports. It has ${args.balance} lamports.`;
-  }
-  const baseLine = `Opening a rule creates two accounts, the mandate and the ledger. Rent is ${args.accountRent} lamports plus a ${args.fee} lamport fee margin, so this wallet needs ${baseNeeded} lamports. It has ${args.balance} lamports.`;
-  const detail = `The wallet holds ${args.balance} lamports. This open needs ${needed} lamports of rent and fees: ${args.tokenRent} for the rule token account, ${args.mandateRent} for the mandate, ${args.ledgerRent} for the ledger, and ${args.fee} for the fee.`;
+  const needed = args.tokenRent + args.mandateRent + args.ledgerRent + args.fee;
+  const head = `Opening a rule needs ${needed} lamports of rent and fees: ${args.tokenRent} for the rule token account, ${args.mandateRent} for the mandate, ${args.ledgerRent} for the ledger, and ${args.fee} for the fee margin, and the wallet holds ${args.balance} lamports`;
   if (args.balance < needed) {
-    return `${baseLine} ${detail} Short by ${needed - args.balance} lamports.`;
+    return `${head}, short by ${needed - args.balance} lamports.`;
   }
   const left = args.balance - needed;
-  return `${baseLine} ${detail} After rent and fees the wallet would keep ${left} lamports, above zero and below its own rent floor of ${args.floor ?? 0} lamports.`;
+  return `${head}, which would leave ${left} lamports, above zero and below its own rent floor of ${args.floor ?? 0} lamports.`;
 }
 
 function closeSolRefusal(args: {
@@ -194,6 +177,8 @@ export type RuleFunds = {
   balance: bigint | null;
   kind: RuleAccountKind;
   closeCreatesAssociated: boolean;
+  decimals: number | null;
+  otherRule: string | null;
 };
 
 export type GrantOverrideResult = {
@@ -292,11 +277,31 @@ export async function tokenProgramOfMint(
   return info.owner;
 }
 
+async function delegatedRuleName(client: ChainClient, delegate: PublicKey): Promise<string> {
+  const address = delegate.toBase58();
+  try {
+    const info = await client.connection.getAccountInfo(delegate, 'confirmed');
+    if (!info) {
+      return address;
+    }
+    const other = decodeMandateAccount(address, info.data);
+    const purpose = displayPurpose(other.purpose).trim();
+    return purpose.length > 0 ? `${purpose} (${address})` : address;
+  } catch {
+    return address;
+  }
+}
+
 export async function readRuleFunds(client: ChainClient, mandate: MandateAccount): Promise<RuleFunds> {
   const owner = new PublicKey(mandate.owner);
   const mint = new PublicKey(mandate.mint);
   const source = new PublicKey(mandate.source);
-  const tokenProgram = await tokenProgramOfMint(client, mint);
+  const mintInfo = await client.connection.getAccountInfo(mint, 'confirmed');
+  if (!mintInfo) {
+    throw new Error(`mint ${mint.toBase58()} was not found on chain`);
+  }
+  const tokenProgram = mintInfo.owner;
+  const decimals = mintInfo.data.length >= 45 ? readMintDecimals(mintInfo.data) : null;
   const kind = await classifyRuleSource({
     owner,
     mandateId: mandate.mandateId,
@@ -320,7 +325,19 @@ export async function readRuleFunds(client: ChainClient, mandate: MandateAccount
     const ataInfo = await client.connection.getAccountInfo(ata, 'confirmed');
     closeCreatesAssociated = ataInfo == null;
   }
-  return { source: source.toBase58(), balance, kind, closeCreatesAssociated };
+  let otherRule: string | null = null;
+  if (
+    kind === 'associated' &&
+    mandate.status !== STATUS_REVOKED &&
+    info &&
+    info.owner.equals(tokenProgram)
+  ) {
+    const delegate = readTokenDelegate(info.data);
+    if (delegate && !delegate.equals(new PublicKey(mandate.address))) {
+      otherRule = await delegatedRuleName(client, delegate);
+    }
+  }
+  return { source: source.toBase58(), balance, kind, closeCreatesAssociated, decimals, otherRule };
 }
 
 async function confirmSignature(
@@ -393,7 +410,7 @@ export async function openMandate(
   }
 
   const rent = await rentForOpen(client.connection);
-  const tokenRent = await tokenAccountRent(client.connection, rent.mandate);
+  const tokenRent = await tokenAccountRent(client.connection);
   const fee = OPEN_FEE_MARGIN_LAMPORTS;
   const accountRent = rent.mandate + rent.ledger;
   const needed = accountRent + tokenRent + fee;
@@ -418,7 +435,6 @@ export async function openMandate(
     const solMessage = lamportsShort
       ? openSolRefusal({
           balance: solBalance,
-          accountRent,
           mandateRent: rent.mandate,
           ledgerRent: rent.ledger,
           tokenRent,

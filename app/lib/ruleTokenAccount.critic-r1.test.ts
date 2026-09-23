@@ -507,8 +507,9 @@ test('critic r1: the rule screen balance is the amount the chain holds in the so
   ]);
   const funds = await readRuleFunds(client(connectionFor(ledger), mint), m);
   assert.equal(funds.balance, 4_560_000n);
+  assert.equal(funds.decimals, 6);
   assert.equal(funds.kind, 'dedicated');
   assert.equal(funds.source, source.toBase58());
   const src = readFileSync(`${ROOT}/app/rule/[address].tsx`, 'utf8');
-  assert.match(src, /formatBaseUnits\(funds\.balance, chain\.decimals\)/, 'the screen formats that number, not the cap');
+  assert.match(src, /formatBaseUnits\(funds\.balance, funds\.decimals\)/, 'the screen formats that number, not the cap');
 });

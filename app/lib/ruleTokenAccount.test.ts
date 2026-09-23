@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import test, { mock } from 'node:test';
 import { Buffer } from 'buffer';
 import {
+  AccountLayout,
+  AccountState,
   createInitializeAccount3Instruction,
   createTransferCheckedInstruction,
   getAssociatedTokenAddressSync,
@@ -28,6 +30,7 @@ import {
   writeU64Le,
 } from './constants';
 import type { ChainClient, SignAndSend } from './chain';
+import { formatBaseUnits } from './format';
 import type { MandateAccount } from './mandate';
 import { ledgerPda } from './ring';
 
@@ -454,7 +457,7 @@ test('open refuses before the wallet prompt when the wallet cannot pay the rule 
       assert.match(err.message, new RegExp(`${MANDATE_RENT} for the mandate`));
       assert.match(err.message, new RegExp(`${LEDGER_RENT} for the ledger`));
       assert.match(err.message, new RegExp(`${SIGNATURE_FEE} for the fee`));
-      assert.match(err.message, /Short by 1 lamports/);
+      assert.match(err.message, /short by 1 lamports/);
       assert.doesNotMatch(err.message, /base units/);
       return true;
     },
@@ -504,7 +507,7 @@ test('open refuses before the wallet prompt with both the token shortfall and th
       assert.ok(err instanceof Error);
       assert.match(err.message, /Short by 0\.00019/);
       assert.doesNotMatch(err.message, /base units/);
-      assert.match(err.message, new RegExp(`Short by ${SOL_NEEDED - 100} lamports`));
+      assert.match(err.message, new RegExp(`short by ${SOL_NEEDED - 100} lamports`));
       return true;
     },
   );
@@ -890,4 +893,151 @@ test('the rule screen shows each rule balance, where it lives, and close when th
   assert.match(branch, /closeNote\(/);
   assert.match(src, /chain\.close\(/);
   assert.match(chain, /closeMandate\(/);
+});
+
+function tokenAccountWithDelegate(amount: bigint, delegate: PublicKey | null): Buffer {
+  const data = Buffer.alloc(AccountLayout.span);
+  AccountLayout.encode(
+    {
+      mint: PublicKey.default,
+      owner: PublicKey.default,
+      amount,
+      delegateOption: delegate ? 1 : 0,
+      delegate: delegate ?? PublicKey.default,
+      state: AccountState.Initialized,
+      isNativeOption: 0,
+      isNative: 0n,
+      delegatedAmount: 0n,
+      closeAuthorityOption: 0,
+      closeAuthority: PublicKey.default,
+    },
+    data,
+  );
+  return data;
+}
+
+test('the rule screen balance uses the rule mint decimals, so one token of a 9-decimal mint reads as 1', async () => {
+  const { readRuleFunds } = await chainModule;
+  const { deriveRuleTokenAccount } = await import('./ruleAccount');
+  const owner = Keypair.generate().publicKey;
+  const mint = Keypair.generate().publicKey;
+  const tokenProgram = Keypair.generate().publicKey;
+  const source = await deriveRuleTokenAccount(owner, 90n, tokenProgram);
+  const row = mandate({
+    owner: owner.toBase58(),
+    mint: mint.toBase58(),
+    source: source.toBase58(),
+    mandateId: 90n,
+  });
+  const balance = 1_000_000_000n;
+  const connection = {
+    getAccountInfo: async (address: PublicKey) => {
+      if (address.equals(mint)) {
+        return { data: mintData(9), owner: tokenProgram, executable: false, lamports: 1 };
+      }
+      if (address.equals(source)) {
+        const data = tokenData(balance);
+        Buffer.from(mint.toBytes()).copy(data, 0);
+        Buffer.from(owner.toBytes()).copy(data, 32);
+        return { data, owner: tokenProgram, executable: false, lamports: 1 };
+      }
+      return null;
+    },
+  };
+  const funds = await readRuleFunds(client(connection, mint), row);
+  assert.equal(funds.decimals, 9);
+  assert.equal(funds.balance, balance);
+  assert.equal(formatBaseUnits(funds.balance ?? 0n, funds.decimals ?? 6), '1');
+  const src = read('app/rule/[address].tsx');
+  assert.match(src, /formatBaseUnits\(funds\.balance, funds\.decimals\)/);
+});
+
+test('before revoke or close, a legacy rule names the other rule whose delegate the signature clears', async () => {
+  const { readRuleFunds } = await chainModule;
+  const { otherDelegateWarning, revokeNote } = await import('./ruleAccount');
+  const tokenProgram = Keypair.generate().publicKey;
+  const owner = Keypair.generate().publicKey;
+  const mint = Keypair.generate().publicKey;
+  const ata = getAssociatedTokenAddressSync(mint, owner, false, tokenProgram);
+  const other = mandate({
+    owner: owner.toBase58(),
+    mint: mint.toBase58(),
+    purpose: 'groceries',
+    status: STATUS_ACTIVE,
+  });
+  const row = mandate({
+    owner: owner.toBase58(),
+    mint: mint.toBase58(),
+    source: ata.toBase58(),
+    mandateId: 91n,
+    status: STATUS_ACTIVE,
+  });
+  const connection = {
+    getAccountInfo: async (address: PublicKey) => {
+      if (address.equals(mint)) {
+        return { data: mintData(6), owner: tokenProgram, executable: false, lamports: 1 };
+      }
+      if (address.equals(ata)) {
+        return {
+          data: tokenAccountWithDelegate(500n, new PublicKey(other.address)),
+          owner: tokenProgram,
+          executable: false,
+          lamports: 1,
+        };
+      }
+      if (address.equals(new PublicKey(other.address))) {
+        return { data: encodeMandate(other), owner: PROGRAM_ID, executable: false, lamports: 1 };
+      }
+      return null;
+    },
+  };
+  const funds = await readRuleFunds(client(connection, mint), row);
+  assert.equal(funds.kind, 'associated');
+  assert.ok(funds.otherRule);
+  assert.match(funds.otherRule, /groceries/);
+  assert.match(funds.otherRule, new RegExp(other.address));
+  const sentence = otherDelegateWarning(funds.otherRule);
+  assert.match(sentence, /This signature also clears the delegate another rule depends on/);
+  assert.match(sentence, /groceries/);
+  assert.match(revokeNote(), /This signature clears that account's single delegate/);
+  const src = read('app/rule/[address].tsx');
+  const warnAt = src.indexOf('otherDelegateWarning(funds.otherRule)');
+  const revokeAt = src.indexOf('Revoke this rule');
+  const closeAt = src.indexOf('Close this rule');
+  assert.ok(warnAt !== -1 && revokeAt !== -1 && closeAt !== -1);
+  assert.ok(warnAt < revokeAt && warnAt < closeAt);
+  assert.match(src, /revokeNote\(\)/);
+});
+
+test('a legacy rule whose delegate is itself does not name another rule', async () => {
+  const { readRuleFunds } = await chainModule;
+  const tokenProgram = Keypair.generate().publicKey;
+  const owner = Keypair.generate().publicKey;
+  const mint = Keypair.generate().publicKey;
+  const ata = getAssociatedTokenAddressSync(mint, owner, false, tokenProgram);
+  const row = mandate({
+    owner: owner.toBase58(),
+    mint: mint.toBase58(),
+    source: ata.toBase58(),
+    mandateId: 92n,
+    status: STATUS_ACTIVE,
+  });
+  const connection = {
+    getAccountInfo: async (address: PublicKey) => {
+      if (address.equals(mint)) {
+        return { data: mintData(6), owner: tokenProgram, executable: false, lamports: 1 };
+      }
+      if (address.equals(ata)) {
+        return {
+          data: tokenAccountWithDelegate(500n, new PublicKey(row.address)),
+          owner: tokenProgram,
+          executable: false,
+          lamports: 1,
+        };
+      }
+      return null;
+    },
+  };
+  const funds = await readRuleFunds(client(connection, mint), row);
+  assert.equal(funds.otherRule, null);
 });

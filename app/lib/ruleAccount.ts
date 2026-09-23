@@ -1,4 +1,5 @@
-import { getAssociatedTokenAddressSync } from '@solana/spl-token';
+import { Buffer } from 'buffer';
+import { ACCOUNT_SIZE, AccountLayout, getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { PublicKey } from '@solana/web3.js';
 
 import { readU64Le } from './constants';
@@ -66,6 +67,21 @@ export function readTokenAmount(data: Uint8Array): bigint | null {
   return readU64Le(data, 64);
 }
 
+export function readTokenDelegate(data: Uint8Array): PublicKey | null {
+  if (data.length < ACCOUNT_SIZE) {
+    return null;
+  }
+  const raw = AccountLayout.decode(Buffer.from(data.subarray(0, ACCOUNT_SIZE)));
+  if (raw.delegateOption !== 1) {
+    return null;
+  }
+  const delegate = new PublicKey(raw.delegate);
+  if (delegate.equals(PublicKey.default)) {
+    return null;
+  }
+  return delegate;
+}
+
 export function readConfirmedTokenAmount(args: {
   data: Uint8Array;
   accountProgram: PublicKey;
@@ -106,6 +122,14 @@ export function closedLine(kind: RuleAccountKind): string {
     return 'Closed on chain. The remaining budget and the rent are back with the owner.';
   }
   return 'Closed on chain. The rent is back with the owner.';
+}
+
+export function revokeNote(): string {
+  return "Revoking ends authority for the agent now and is recorded on chain. This signature clears that account's single delegate. Nothing already paid changes. The decisions stay readable.";
+}
+
+export function otherDelegateWarning(ruleName: string): string {
+  return `This signature also clears the delegate another rule depends on: ${ruleName}.`;
 }
 
 export function closeNote(kind: RuleAccountKind, revokesFirst: boolean): string {

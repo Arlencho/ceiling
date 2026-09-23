@@ -17,7 +17,14 @@ import { formatBaseUnits, formatTimeLeft } from '../../lib/format';
 import { isActive } from '../../lib/mandate';
 import { mayClaimAbsence } from '../../lib/mandateRead';
 import { notActiveHint } from '../../lib/reasons';
-import { budgetLine, closedLine, closeNote } from '../../lib/ruleAccount';
+import {
+  budgetLine,
+  closedLine,
+  closeNote,
+  otherDelegateWarning,
+  revokeNote,
+  type RuleAccountKind,
+} from '../../lib/ruleAccount';
 import { displayPurpose, formatExpiryDate, ruleSentence, stampedRulesetLine } from '../../lib/ruleView';
 import { PAYEE_NOT_IN_RULESET, stampAlignment, stampAlignmentLine } from '../../lib/ruleset';
 import { useChain } from '../../lib/useChain';
@@ -42,13 +49,16 @@ export default function RuleDetailScreen() {
   const mandate = chain.mandates.find((row) => row.address === address) ?? null;
   const index = mandate ? chain.mandates.findIndex((row) => row.address === mandate.address) : -1;
   const stamp = mandate ? stampedRulesetLine(mandate.purpose) : null;
+  const funds = mandate && loadedFor === mandate.address ? loadedFunds : null;
+  const fundsError = mandate && errorFor === mandate.address ? loadedError : null;
+  const amountDecimals = funds?.decimals ?? chain.decimals;
   const alignment =
     mandate && stored.ready
       ? stampAlignment({
           purpose: mandate.purpose,
           cap: mandate.cap,
           perTxMax: mandate.perTxMax,
-          decimals: chain.decimals,
+          decimals: amountDecimals,
           rulesets: stored.rulesets,
         })
       : null;
@@ -95,8 +105,21 @@ export default function RuleDetailScreen() {
     };
   }, [mandate, chain.config]);
 
-  const funds = mandate && loadedFor === mandate.address ? loadedFunds : null;
-  const fundsError = mandate && errorFor === mandate.address ? loadedError : null;
+  const gateSignature = async (): Promise<{ sign: false } | { sign: true; kind: RuleAccountKind }> => {
+    if (!mandate || !chain.config) {
+      return { sign: true, kind: funds?.kind ?? 'other' };
+    }
+    const latest = await readRuleFunds(createClient(chain.config), mandate);
+    setLoadedFunds(latest);
+    setLoadedFor(mandate.address);
+    setLoadedError(null);
+    setErrorFor(null);
+    if (latest.otherRule && funds?.otherRule !== latest.otherRule) {
+      setMessage(otherDelegateWarning(latest.otherRule));
+      return { sign: false };
+    }
+    return { sign: true, kind: latest.kind };
+  };
 
   const onCopyAgent = async () => {
     if (!mandate) {
@@ -118,10 +141,13 @@ export default function RuleDetailScreen() {
     setFormError(null);
     setMessage(null);
     setClosing(true);
-    const kind = funds?.kind ?? 'other';
     try {
+      const gate = await gateSignature();
+      if (!gate.sign) {
+        return;
+      }
       await chain.close(address);
-      setClosedNote(closedLine(kind));
+      setClosedNote(closedLine(gate.kind));
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Close failed');
     } finally {
@@ -133,6 +159,10 @@ export default function RuleDetailScreen() {
     setFormError(null);
     setMessage(null);
     try {
+      const gate = await gateSignature();
+      if (!gate.sign) {
+        return;
+      }
       const result = await chain.revoke(address);
       setMessage(
         `Status on chain is now ${result.mandate.status === STATUS_REVOKED ? 'revoked' : String(result.mandate.status)}. The SPL delegation is dropped. Nothing already paid changes. The decisions stay readable.`,
@@ -175,18 +205,18 @@ export default function RuleDetailScreen() {
               <Text style={styles.explainCopy}>{notify.statusLine}</Text>
             ) : null}
             <Text style={styles.h2}>The rule</Text>
-            <Text style={styles.sentence}>{ruleSentence(mandate, chain.decimals)}</Text>
+            <Text style={styles.sentence}>{ruleSentence(mandate, amountDecimals)}</Text>
 
             <View style={styles.defs}>
               <Def label="Purpose" value={displayPurpose(mandate.purpose)} />
               {stamp ? <Def label="Stamped in purpose" value={stamp} /> : null}
-              <Def label="Total cap" value={formatBaseUnits(mandate.cap, chain.decimals)} />
-              <Def label="Per payment, max" value={formatBaseUnits(mandate.perTxMax, chain.decimals)} />
+              <Def label="Total cap" value={formatBaseUnits(mandate.cap, amountDecimals)} />
+              <Def label="Per payment, max" value={formatBaseUnits(mandate.perTxMax, amountDecimals)} />
               <Def label="Expires" value={formatExpiryDate(mandate.expiresAt)} />
               <Def label="Payee" value={truncateAddress(mandate.merchant)} />
               <Def
                 label="Spent so far"
-                value={`${formatBaseUnits(mandate.spent, chain.decimals)} of ${formatBaseUnits(mandate.cap, chain.decimals)}`}
+                value={`${formatBaseUnits(mandate.spent, amountDecimals)} of ${formatBaseUnits(mandate.cap, amountDecimals)}`}
               />
               <Def label="Time left" value={formatTimeLeft(mandate.expiresAt, nowSec)} />
               <Def
@@ -198,7 +228,9 @@ export default function RuleDetailScreen() {
                       : 'Reading the account'
                     : funds.balance === null
                       ? 'not on chain'
-                      : formatBaseUnits(funds.balance, chain.decimals)
+                      : funds.decimals == null
+                        ? 'unavailable'
+                        : formatBaseUnits(funds.balance, funds.decimals)
                 }
               />
               <Def label="Account" value={mandate.source} stacked />
@@ -243,6 +275,9 @@ export default function RuleDetailScreen() {
               </EmptyState>
             )}
 
+            {funds?.otherRule ? (
+              <Text style={styles.note}>{otherDelegateWarning(funds.otherRule)}</Text>
+            ) : null}
             <View style={styles.actions}>
               <Button
                 label="Edit the rule"
@@ -270,10 +305,10 @@ export default function RuleDetailScreen() {
                 />
               )}
             </View>
-            {isActive(mandate, nowSec) ? (
+            {mandate.status !== STATUS_REVOKED ? (
               <Text style={styles.note}>
-                Revoking ends authority for the agent now and is recorded on chain. Nothing already paid
-                changes. The decisions stay readable. {notActiveHint()}
+                {revokeNote()}
+                {isActive(mandate, nowSec) ? ` ${notActiveHint()}` : ''}
               </Text>
             ) : null}
             {!isActive(mandate, nowSec) ? (
