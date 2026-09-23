@@ -15,6 +15,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PublicKey, type Connection } from "@solana/web3.js";
+import { encodePaidLog, encodeRefusedLog } from "../indexer/src/events.js";
 import { makeBundle, type DecisionBundle } from "./bulk.js";
 import {
   CHARGE_DISCRIMINATOR,
@@ -118,13 +119,28 @@ function encodeLedger(mandate: PublicKey, rows: Row[]): Buffer {
   return data;
 }
 
+// Round 5: the log carries what the program writes on chain, the text line
+// (lib.rs:207, :239) and then the event (lib.rs:214, :248) inside Veto's own
+// frame. A text line without its event is a truncated log and binds nothing.
 function chargeTx(mandate: PublicKey, ledger: PublicKey, row: Row): unknown {
-  const logs =
+  const veto = REAL_PROGRAM.toBase58();
+  const own =
     row.kind === "paid"
-      ? [`Program log: VETO PAID amount=${row.amount}`]
+      ? [
+          `Program log: VETO PAID amount=${row.amount}`,
+          encodePaidLog({ mandate, amount: BigInt(row.amount), nonce: BigInt(row.nonce), spent: BigInt(row.amount) }),
+        ]
       : [
           `Program log: VETO REFUSED reason=5 (${reasonText(5)}) amount=${row.amount} per_tx_max=${LIMITS.per_tx_max} remaining=1 override_to_clear=${row.amount}`,
+          encodeRefusedLog({
+            mandate,
+            amount: BigInt(row.amount),
+            nonce: BigInt(row.nonce),
+            reason: 5,
+            suggestedOverride: BigInt(row.amount),
+          }),
         ];
+  const logs = [`Program ${veto} invoke [1]`, "Program log: Instruction: Charge", ...own, `Program ${veto} success`];
   return {
     slot: 1,
     blockTime: row.timestamp,
