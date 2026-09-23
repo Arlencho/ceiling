@@ -518,10 +518,19 @@ export async function fetchLedger(conn: Connection, address: PublicKey): Promise
 
 type AccountKeyLike = string | { pubkey: string } | { toBase58: () => string };
 
+type RpcInnerIx = {
+  programIdIndex: number;
+  accounts?: number[];
+  accountKeyIndexes?: number[];
+  data?: string | Uint8Array | number[];
+};
+
 type RpcTx = {
   meta: {
     err: unknown;
     logMessages?: string[] | null;
+    loadedAddresses?: { writable: AccountKeyLike[]; readonly: AccountKeyLike[] };
+    innerInstructions?: Array<{ instructions?: RpcInnerIx[] }> | null;
   } | null;
   transaction: {
     message: {
@@ -540,6 +549,12 @@ type RpcTx = {
     };
   };
 };
+
+function ixData(data: string | Uint8Array | number[] | undefined): Buffer {
+  if (typeof data === "string") return decodeBase58(data);
+  if (data === undefined) return Buffer.alloc(0);
+  return Buffer.from(data);
+}
 
 function toPublicKey(k: unknown): PublicKey {
   if (k instanceof PublicKey) return k;
@@ -646,28 +661,35 @@ function decodeOpenMandateArgs(data: Buffer): Omit<OpenedMandate, "owner"> {
   return { mandateId, merchant, cap, perTxMax, expiresAt, purpose };
 }
 
-function resolvedProgramIxs(
-  tx: RpcTx & { meta?: { loadedAddresses?: { writable: AccountKeyLike[]; readonly: AccountKeyLike[] } } | null },
-  programId: PublicKey,
-): { data: Buffer; accounts: PublicKey[] }[] {
+function resolvedProgramIxs(tx: RpcTx, programId: PublicKey): { data: Buffer; accounts: PublicKey[]; inner: boolean }[] {
   const keys = flattenAccountKeys(tx, tx.meta?.loadedAddresses ?? undefined);
   const msg = tx.transaction.message;
   const compiled = msg.compiledInstructions;
   const legacy = msg.instructions;
-  const ixs =
+  const top =
     compiled?.map((ix) => ({
       programIdIndex: ix.programIdIndex,
       accounts: ix.accountKeyIndexes,
       data: Buffer.from(ix.data),
+      inner: false,
     })) ??
     legacy?.map((ix) => ({
       programIdIndex: ix.programIdIndex,
       accounts: ix.accounts,
       data: decodeBase58(ix.data),
+      inner: false,
     })) ??
     [];
-  const out: { data: Buffer; accounts: PublicKey[] }[] = [];
-  for (const ix of ixs) {
+  const inner = (tx.meta?.innerInstructions ?? []).flatMap((group) =>
+    (group.instructions ?? []).map((ix) => ({
+      programIdIndex: ix.programIdIndex,
+      accounts: ix.accounts ?? ix.accountKeyIndexes ?? [],
+      data: ixData(ix.data),
+      inner: true,
+    })),
+  );
+  const out: { data: Buffer; accounts: PublicKey[]; inner: boolean }[] = [];
+  for (const ix of [...top, ...inner]) {
     const pid = keys[ix.programIdIndex];
     if (!pid || !pid.equals(programId)) continue;
     const accounts: PublicKey[] = [];
@@ -676,9 +698,15 @@ function resolvedProgramIxs(
       if (!key) throw new Error(`instruction account index ${idx} missing`);
       accounts.push(key);
     }
-    out.push({ data: ix.data, accounts });
+    out.push({ data: ix.data, accounts, inner: ix.inner });
   }
   return out;
+}
+
+function knownProgramInstruction(data: Buffer, discriminators: Buffer[]): boolean {
+  if (data.length < 8) return false;
+  const head = data.subarray(0, 8);
+  return discriminators.some((disc) => head.equals(disc));
 }
 
 function accountNamed(accounts: PublicKey[], names: string[], name: string): PublicKey | null {
@@ -692,19 +720,22 @@ export type MandateLifecycle = {
   closes: number;
 };
 
-// Top-level open_mandate and close_mandate instructions that name this mandate.
-// Anything else in the transaction is ignored. A second open or a close in the
-// same transaction is left for the caller to reject.
-export function mandateLifecycle(
-  tx: RpcTx & { meta?: { loadedAddresses?: { writable: AccountKeyLike[]; readonly: AccountKeyLike[] } } | null },
-  programId: PublicKey,
-  mandate: PublicKey,
-): MandateLifecycle {
+// open_mandate and close_mandate instructions that name this mandate, including
+// ones reached by CPI. Inner instruction data is base58 over the same flattened
+// account keys. An inner instruction whose data is not a known program
+// instruction can hide an open or a close, so the caller fails closed. Anything
+// else in the transaction is ignored. A second open or a close in the same
+// transaction is left for the caller to reject.
+export function mandateLifecycle(tx: RpcTx, programId: PublicKey, mandate: PublicKey): MandateLifecycle {
   const opens: OpenedMandate[] = [];
   let closes = 0;
   const openLayout = idlInstruction("open_mandate");
   const closeLayout = idlInstruction("close_mandate");
+  const discriminators = bundledIdl().instructions.map((item) => Buffer.from(item.discriminator));
   for (const ix of resolvedProgramIxs(tx, programId)) {
+    if (ix.inner && !knownProgramInstruction(ix.data, discriminators)) {
+      throw new Error("an inner instruction to the program could not be read");
+    }
     if (ix.data.length >= openLayout.disc.length && ix.data.subarray(0, openLayout.disc.length).equals(openLayout.disc)) {
       const named = accountNamed(ix.accounts, openLayout.accounts, "mandate");
       if (!named || !named.equals(mandate)) continue;

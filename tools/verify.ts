@@ -110,7 +110,13 @@ function eq(a: bigint | string | number, b: bigint | string | number, field: str
 }
 
 type ClosedHistory =
-  | { ok: true; covered: Map<string, OpenedMandate> }
+  | {
+      ok: true;
+      covered: Map<string, OpenedMandate>;
+      openCount: number;
+      latestOpenSlot: number | null;
+      current: OpenedMandate | null;
+    }
   | { ok: false; failure: string };
 
 type LimitView = {
@@ -122,7 +128,12 @@ type LimitView = {
   expiresAt: bigint;
   purpose: string;
   fromOpening: boolean;
+  // The account is open again under a later tenure. The ledger that exists
+  // now is that tenure's ring, not this signature's.
+  ringSuperseded: boolean;
 };
+
+type MandateSignature = { signature: string; err: unknown; slot: number | null };
 
 type CheckCache = {
   conn: Connection;
@@ -135,6 +146,7 @@ type CheckCache = {
   mandates: Map<string, MandateAccount>;
   ledgers: Map<string, Awaited<ReturnType<typeof fetchLedger>>>;
   closedHistory: Map<string, ClosedHistory>;
+  mandateSignatures: Map<string, MandateSignature[]>;
   destOwners: Map<string, PublicKey>;
   txs: Map<string, Awaited<ReturnType<Connection["getTransaction"]>>>;
 };
@@ -142,6 +154,10 @@ type CheckCache = {
 function txBlockTime(tx: { blockTime?: number | null }): number | null {
   return typeof tx.blockTime === "number" ? tx.blockTime : null;
 }
+
+// Clock unix time and the transaction's block time can differ by a couple of
+// seconds for one charge. A ring row further away was written by another transaction.
+const SAME_CHARGE_CLOCK_SKEW_S = 2n;
 
 function recordKey(record: DecisionRecord): string {
   return [
@@ -194,35 +210,61 @@ function programChoice(opts?: AssessOpts): { programId: PublicKey; source: strin
 
 const CLOSED_NOTE = "mandate account is closed and the limits came from the opening transaction";
 
-async function listMandateSignatures(
-  conn: Connection,
-  mandate: PublicKey,
-): Promise<{ signature: string; err: unknown }[]> {
-  const out: { signature: string; err: unknown }[] = [];
+async function listMandateSignatures(cache: CheckCache, mandate: PublicKey): Promise<MandateSignature[]> {
+  const key = mandate.toBase58();
+  const cached = cache.mandateSignatures.get(key);
+  if (cached) return cached;
+  const out: MandateSignature[] = [];
   const seen = new Set<string>();
   let before: string | undefined;
   const limit = 1000;
   for (;;) {
     let batch: Awaited<ReturnType<Connection["getSignaturesForAddress"]>>;
     try {
-      batch = await conn.getSignaturesForAddress(mandate, { limit, before });
+      batch = await cache.conn.getSignaturesForAddress(mandate, { limit, before });
     } catch (err) {
       throw asTransportError(err);
     }
     if (batch.length === 0) break;
+    let added = 0;
     for (const item of batch) {
-      if (seen.has(item.signature)) {
-        throw new Error("mandate history cannot be read completely: a signature repeated");
-      }
+      if (seen.has(item.signature)) continue;
       seen.add(item.signature);
-      out.push({ signature: item.signature, err: item.err });
+      added += 1;
+      out.push({
+        signature: item.signature,
+        err: item.err,
+        slot: typeof item.slot === "number" ? item.slot : null,
+      });
     }
     if (batch.length < limit) break;
     const last = batch[batch.length - 1];
-    if (!last) break;
+    // A full page that adds nothing, or that ends where this page started,
+    // would repeat forever. One signature listed twice in a short page is one transaction.
+    if (!last || added === 0 || last.signature === before) {
+      throw new Error("mandate history cannot be read completely: a signature repeated");
+    }
     before = last.signature;
   }
+  cache.mandateSignatures.set(key, out);
   return out;
+}
+
+function txSlot(tx: { slot?: unknown } | null): number | null {
+  if (!tx || typeof tx.slot !== "number") return null;
+  return tx.slot;
+}
+
+// The live account's limits belong to the tenure that is open now. A later
+// signature may be the open that started that tenure, so a record in an
+// earlier slot has to be read from history. No later slot means this
+// signature is not below the latest open.
+async function mustReadMandateTenure(cache: CheckCache, mandatePk: PublicKey, signature: string): Promise<boolean> {
+  if (typeof cache.conn.getSignaturesForAddress !== "function") return false;
+  const pages = await listMandateSignatures(cache, mandatePk);
+  const recordSlot = txSlot(await cachedTransaction(cache, signature));
+  if (recordSlot === null) return true;
+  return pages.some((page) => !page.err && (page.slot === null || page.slot > recordSlot));
 }
 
 function remember(cache: CheckCache, mandate: string, history: ClosedHistory): ClosedHistory {
@@ -238,9 +280,11 @@ async function closedMandateHistory(cache: CheckCache, mandatePk: PublicKey): Pr
   const key = mandatePk.toBase58();
   const cached = cache.closedHistory.get(key);
   if (cached) return cached;
-  const pages = await listMandateSignatures(cache.conn, mandatePk);
+  const pages = await listMandateSignatures(cache, mandatePk);
   const covered = new Map<string, OpenedMandate>();
   let current: OpenedMandate | null = null;
+  let openCount = 0;
+  let latestOpenSlot: number | null = null;
   for (const page of [...pages].reverse()) {
     if (page.err) continue;
     const tx = await cachedTransaction(cache, page.signature);
@@ -281,6 +325,10 @@ async function closedMandateHistory(cache: CheckCache, mandatePk: PublicKey): Pr
           failure: "mandate history is ambiguous: a mandate was opened again before it was closed",
         });
       }
+      openCount += 1;
+      if (page.slot !== null && (latestOpenSlot === null || page.slot > latestOpenSlot)) {
+        latestOpenSlot = page.slot;
+      }
       current = mark.opens[0]!;
     } else if (mark.closes === 1) {
       if (!current) {
@@ -292,7 +340,7 @@ async function closedMandateHistory(cache: CheckCache, mandatePk: PublicKey): Pr
       current = null;
     }
   }
-  return remember(cache, key, { ok: true, covered });
+  return remember(cache, key, { ok: true, covered, openCount, latestOpenSlot, current });
 }
 
 function liveLimits(mandate: MandateAccount): LimitView {
@@ -305,6 +353,33 @@ function liveLimits(mandate: MandateAccount): LimitView {
     expiresAt: mandate.expiresAt,
     purpose: mandate.purpose,
     fromOpening: false,
+    ringSuperseded: false,
+  };
+}
+
+function sameOpen(a: OpenedMandate, b: OpenedMandate): boolean {
+  return (
+    a.owner.equals(b.owner) &&
+    a.mandateId === b.mandateId &&
+    a.merchant.equals(b.merchant) &&
+    a.cap === b.cap &&
+    a.perTxMax === b.perTxMax &&
+    a.expiresAt === b.expiresAt &&
+    a.purpose === b.purpose
+  );
+}
+
+function openingLimits(opened: OpenedMandate, ringSuperseded: boolean): LimitView {
+  return {
+    owner: opened.owner,
+    mandateId: opened.mandateId,
+    merchant: opened.merchant,
+    cap: opened.cap,
+    perTxMax: opened.perTxMax,
+    expiresAt: opened.expiresAt,
+    purpose: opened.purpose,
+    fromOpening: true,
+    ringSuperseded,
   };
 }
 
@@ -314,23 +389,28 @@ async function limitSource(
   failures: string[],
   notes: string[],
 ): Promise<LimitView | undefined> {
-  const cached = cache.mandates.get(record.mandate);
-  if (cached) return liveLimits(cached);
   const mandatePk = new PublicKey(record.mandate);
-  try {
-    const loaded = await fetchMandate(cache.conn, mandatePk);
-    cache.mandates.set(record.mandate, loaded);
-    return liveLimits(loaded);
-  } catch (err) {
-    if (isTransportError(err)) throw err;
-    const message = failureText(err);
-    if (!message.startsWith("mandate account not found")) {
-      failures.push(message);
-      return undefined;
+  let live = cache.mandates.get(record.mandate);
+  if (!live) {
+    try {
+      live = await fetchMandate(cache.conn, mandatePk);
+      cache.mandates.set(record.mandate, live);
+    } catch (err) {
+      if (isTransportError(err)) throw err;
+      const message = failureText(err);
+      if (!message.startsWith("mandate account not found")) {
+        failures.push(message);
+        return undefined;
+      }
     }
   }
+  // A live account is the tenure that is open now. An earlier signature takes
+  // its limits from the open that covered it, the same walk a closed account uses.
   let history: ClosedHistory;
   try {
+    if (live && !(await mustReadMandateTenure(cache, mandatePk, record.signature))) {
+      return liveLimits(live);
+    }
     history = await closedMandateHistory(cache, mandatePk);
   } catch (err) {
     if (isTransportError(err)) throw err;
@@ -341,22 +421,21 @@ async function limitSource(
     failures.push(history.failure);
     return undefined;
   }
+  const recordSlot = txSlot(await cachedTransaction(cache, record.signature));
+  const belowLatest =
+    history.latestOpenSlot !== null && (recordSlot === null || recordSlot < history.latestOpenSlot);
+  // One open, and this signature is not below it: the live account is that tenure.
+  if (live && history.openCount < 2 && !belowLatest) return liveLimits(live);
   const opened = history.covered.get(record.signature);
   if (!opened) {
     failures.push(`mandate history does not cover signature ${record.signature}`);
     return undefined;
   }
+  // The open that is still current is the live tenure, so its ring is evidence.
+  // An earlier open is not. A closed account has no current open.
+  if (live && history.current && sameOpen(opened, history.current)) return liveLimits(live);
   notes.push(CLOSED_NOTE);
-  return {
-    owner: opened.owner,
-    mandateId: opened.mandateId,
-    merchant: opened.merchant,
-    cap: opened.cap,
-    perTxMax: opened.perTxMax,
-    expiresAt: opened.expiresAt,
-    purpose: opened.purpose,
-    fromOpening: true,
-  };
+  return openingLimits(opened, Boolean(live));
 }
 
 async function checkRecord(
@@ -507,13 +586,16 @@ async function checkRecord(
   if (held && !held.mandate.equals(mandatePk)) {
     failures.push(`ledger.mandate is ${held.mandate.toBase58()}, expected ${record.mandate}`);
   }
-  const rows = held
-    ? bindByTriple(indexedEntries(held), want, (row) => ({
-        mandate: held.mandate.toBase58(),
-        nonce: row.entry.nonce,
-        amount: row.entry.amount,
-      }))
-    : [];
+  // A reopened account's ring belongs to the live tenure. Rows in it can repeat
+  // an earlier tenure's nonce and amount, so they do not confirm that tenure.
+  const rows =
+    held && !limits.ringSuperseded
+      ? bindByTriple(indexedEntries(held), want, (row) => ({
+          mandate: held.mandate.toBase58(),
+          nonce: row.entry.nonce,
+          amount: row.entry.amount,
+        }))
+      : [];
   const bound = boundVetoDecision(tx.meta?.logMessages ?? [], programId, want);
   const blockTime = txBlockTime(tx);
   if (rows.length === 0) {
@@ -551,6 +633,17 @@ async function checkRecord(
       eq(record.reason_code, entry.reason, "reason_code (ledger)", failures);
       const chainKind = entry.kind === 1 ? "paid" : entry.kind === 2 ? "refused" : String(entry.kind);
       eq(record.kind, chainKind, "kind (ledger)", failures);
+      // The bound row has to be this transaction's. A twin from another tenure
+      // can share the nonce and the amount and still land at a different time.
+      if (blockTime !== null) {
+        const landed = BigInt(blockTime);
+        const delta = entry.ts >= landed ? entry.ts - landed : landed - entry.ts;
+        if (delta > SAME_CHARGE_CLOCK_SKEW_S) {
+          failures.push(
+            `timestamp (transaction): ledger row is at ${entry.ts.toString()}, transaction landed at ${blockTime}`,
+          );
+        }
+      }
     }
   }
 
@@ -796,6 +889,55 @@ function undecodableChargeFailures(
   return { failures, unread };
 }
 
+function accountText(key: unknown): string | null {
+  if (typeof key === "string") return key;
+  if (key instanceof PublicKey) return key.toBase58();
+  if (key && typeof key === "object") {
+    const rec = key as { toBase58?: unknown; pubkey?: unknown };
+    if (typeof rec.toBase58 === "function") {
+      try {
+        return (rec.toBase58 as () => string)();
+      } catch {
+        return null;
+      }
+    }
+    if (rec.pubkey !== undefined) return accountText(rec.pubkey);
+  }
+  return null;
+}
+
+// Account keys survive a log flood. A truncated transaction rejects a
+// mandate-scoped date_range only when this mandate is one of those keys.
+// With no mandate in scope, every truncated signature still rejects.
+function transactionNamesAccount(tx: unknown, account: string): boolean {
+  if (!tx || typeof tx !== "object") return true;
+  const body = tx as {
+    transaction?: { message?: { accountKeys?: unknown[]; staticAccountKeys?: unknown[] } };
+    meta?: { loadedAddresses?: { writable?: unknown[]; readonly?: unknown[] } } | null;
+  };
+  const message = body.transaction?.message;
+  const keys: unknown[] = [];
+  if (message && Array.isArray(message.accountKeys) && message.accountKeys.length > 0) {
+    keys.push(...message.accountKeys);
+  } else if (message && Array.isArray(message.staticAccountKeys)) {
+    keys.push(...message.staticAccountKeys);
+  }
+  const loaded = body.meta?.loadedAddresses;
+  if (loaded?.writable) keys.push(...loaded.writable);
+  if (loaded?.readonly) keys.push(...loaded.readonly);
+  if (keys.length === 0) return true;
+  return keys.some((key) => accountText(key) === account);
+}
+
+function truncatedForScope(
+  bundle: DecisionBundle,
+  history: { truncated: readonly string[]; transactions: { get(signature: string): unknown } },
+): string[] {
+  if (!bundle.scope.mandate) return [...history.truncated];
+  const mandate = bundle.scope.mandate;
+  return history.truncated.filter((signature) => transactionNamesAccount(history.transactions.get(signature), mandate));
+}
+
 async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckCache): Promise<FailureSplit> {
   const failures: string[] = [];
   const unread: string[] = [];
@@ -875,7 +1017,7 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
   // A top-level charge with no attributable Veto decision is missing from the
   // indexed set. Fail closed. A scope that names no mandate has no single ring
   // to catch the same hole. A runtime "Log truncated" line is that hole named.
-  for (const signature of history.truncated) {
+  for (const signature of truncatedForScope(bundle, history)) {
     failures.push(
       `signature ${signature} log ends with "Log truncated" and is not a complete decision list`,
     );
@@ -1019,6 +1161,7 @@ function makeCache(conn: Connection, rpc: string, opts?: AssessOpts): CheckCache
     mandates: new Map(),
     ledgers: new Map(),
     closedHistory: new Map(),
+    mandateSignatures: new Map(),
     destOwners: new Map(),
     txs: new Map(),
   };

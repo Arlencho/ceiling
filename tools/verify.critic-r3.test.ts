@@ -389,7 +389,8 @@ test("critic r3 N2: a date_range verify over the newest 3 of 40 fetches 3 transa
   );
   assert.equal(verdict.ok, true, verdict.text);
   assert.equal(counts.getTransaction, 3, `getTransaction called ${counts.getTransaction} times for a 3-row range`);
-  assert.equal(counts.getSignaturesForAddress, 1, `paged ${counts.getSignaturesForAddress} times past the from bound`);
+  // The range is one signature page. The live tenure check lists the mandate once and does not fetch again.
+  assert.equal(counts.getSignaturesForAddress, 2, `paged ${counts.getSignaturesForAddress} times past the from bound`);
 });
 
 test("critic r3 N2: a date_range in the middle skips signatures newer than `to` and stops at `from`", async () => {
@@ -411,8 +412,9 @@ test("critic r3 N2: a date_range in the middle skips signatures newer than `to` 
   assert.equal(verdict.ok, true, verdict.text);
   assert.equal(counts.getTransaction, 3, `getTransaction called ${counts.getTransaction} times for a 3-row range`);
   // Page 1 (rows 39..30) ends exactly on `from`; the walk needs page 2 to
-  // see a signature older than `from` before it can stop. Two pages, not four.
-  assert.equal(counts.getSignaturesForAddress, 2, `paged ${counts.getSignaturesForAddress} times`);
+  // see a signature older than `from` before it can stop. Two population pages,
+  // plus one mandate listing for the live tenure check.
+  assert.equal(counts.getSignaturesForAddress, 3, `paged ${counts.getSignaturesForAddress} times`);
 });
 
 test("critic r3 N2 control: the population check still sees a row missing from the file", async () => {
@@ -596,7 +598,8 @@ test("critic r3 N3: the genuine record of the first of two same-nonce charges in
   } as unknown as Connection;
   const genuine = await assessRecord(record(mandate, first), RPC, conn, OPTS);
   assert.equal(genuine.ok, true, `genuine record of the first charge is rejected:\n${genuine.text}`);
-  // Control: the second (paid) charge claimed under the first's record still rejects.
-  const claimPaid = await assessRecord(record(mandate, { ...second, amount: 100_000 }), RPC, conn, OPTS);
-  assert.equal(claimPaid.ok, false, claimPaid.text);
+  // The paid second charge is genuine. Claiming that same charge was refused binds the paid row and fails on kind.
+  const claimRefused = await assessRecord(record(mandate, { ...second, kind: "refused" }), RPC, conn, OPTS);
+  assert.equal(claimRefused.ok, false, claimRefused.text);
+  assert.match(claimRefused.text, /kind \(ledger\)/);
 });
