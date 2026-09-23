@@ -637,7 +637,7 @@ async function checkRecord(
   const rolledOff = bound.status === "one" && rows.length > 0 && sameKind.length === 0;
   if (rows.length === 0 || rolledOff) {
     if (bound.status === "none") {
-      failures.push("ledger ring has no matching row and transaction logs have neither PAID nor REFUSED");
+      failures.push("ledger ring has no matching row and the transaction log carries no Veto event to bind");
     } else if (bound.status === "error") {
       failures.push(bound.error);
     } else {
@@ -682,7 +682,9 @@ async function checkRecord(
       }
     }
     // No decision frame: a triple match is not this signature's row.
+    // The ledger comparisons above still ran; the logs cross-check did not.
     if (bound.status === "none") {
+      notes.push("transaction log carries no Veto event; decision taken from the ledger row");
       failures.push("ledger ring row cannot be tied to this transaction: its log carries no decision");
     }
   }

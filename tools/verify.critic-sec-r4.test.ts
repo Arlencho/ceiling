@@ -353,7 +353,7 @@ test("critic sec r4 C1: no Veto event, two text lines (paid then refused, same a
   const forged = await assessRecord(record(mandate, TOP_REFUSED_6, { kind: "paid" }), RPC, conn, OPTS);
   assert.equal(forged.ok, false, forged.text);
   // Round 5: the text branch is gone (7cfed05), so two text lines and no event bind nothing.
-  assert.match(forged.text, /ledger ring has no matching row and transaction logs have neither PAID nor REFUSED/);
+  assert.match(forged.text, /ledger ring has no matching row and the transaction log carries no Veto event to bind/);
   const refused = await assessRecord(record(mandate, TOP_REFUSED_6), RPC, conn, OPTS);
   assert.equal(refused.ok, false, "two unbound text lines must not confirm any record");
 });
@@ -363,6 +363,7 @@ test("critic sec r4 C2: no Veto event, two text lines, ring holds the refused ro
   const forged = await assessRecord(record(mandate, TOP_REFUSED_6, { kind: "paid" }), RPC, conn, OPTS);
   assert.equal(forged.ok, false, forged.text);
   assert.match(forged.text, /kind \(ledger\): record has paid, chain has refused/);
+  assert.match(forged.text, /transaction log carries no Veto event; decision taken from the ledger row/);
   // Round 5: no event means no logs cross-check; the ring row alone rejects.
   assert.doesNotMatch(forged.text, /VERDICT: CONFIRMED/);
 });
