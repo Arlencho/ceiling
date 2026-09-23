@@ -537,3 +537,66 @@ test("critic r3 132 control: Veto's own nested token CPI does not lose the VETO 
   assert.equal(parsed?.amount, 100_000n);
   assert.equal(decodeEventsFromLogs(logs, REAL_PROGRAM.toBase58())[0]?.kind, "paid");
 });
+
+// N3 (new in the fix diff). One transaction carrying two charge instructions
+// on the same mandate with the same nonce: the first refused (over
+// per_tx_max), the second paid. The program writes two ring rows for nonce 7
+// at one timestamp. export.ts --signature writes the first charge (refused,
+// 600000). checkRecord now filters ring rows by nonce only (verify.ts:275),
+// so both rows tie on distance, differ on kind and amount, and the tie rule
+// refuses to bind. On main and on the round 2 head the record's kind narrowed
+// it to one row and the record CONFIRMED (localnet redteam case D, HOLDS in
+// rounds 1 and 2, FAIL on this head). The instruction's amount is chain data
+// and would pick the row without trusting the record's kind.
+function twoChargeTx(mandate: PublicKey, ledger: PublicKey, first: Row, second: Row): unknown {
+  const keys = [AGENT, DEST, ledger, mandate, SOURCE, MINT, REAL_PROGRAM, TOKEN_PROGRAM_ID];
+  const ix = (row: Row) => ({
+    programIdIndex: 6,
+    accountKeyIndexes: [0, 3, 2, 4, 1, 5, 7],
+    data: Buffer.concat([CHARGE_DISCRIMINATOR, u64Le(BigInt(row.amount)), u64Le(BigInt(row.nonce))]),
+  });
+  const frame = (row: Row) => [
+    `Program ${REAL_PROGRAM.toBase58()} invoke [1]`,
+    "Program log: Instruction: Charge",
+    ...ownLines(mandate, row),
+    `Program ${REAL_PROGRAM.toBase58()} success`,
+  ];
+  return {
+    slot: 1,
+    blockTime: first.timestamp,
+    transaction: { message: { staticAccountKeys: keys, compiledInstructions: [ix(first), ix(second)] } },
+    meta: { err: null, logMessages: [...frame(first), ...frame(second)] },
+  };
+}
+
+test("critic r3 N3: the genuine record of the first of two same-nonce charges in one transaction CONFIRMS", async () => {
+  const first: Row = { kind: "refused", amount: 600_000, nonce: 7, timestamp: T0, signature: "r3-two-charges" };
+  const second: Row = { kind: "paid", amount: 100_000, nonce: 7, timestamp: T0, signature: "r3-two-charges" };
+  const mandateId = 53n;
+  const mandate = mandatePda(REAL_PROGRAM, OWNER, mandateId);
+  const ledger = ledgerPda(REAL_PROGRAM, mandate);
+  const accounts = new Map<string, { data: Buffer; owner: PublicKey }>([
+    [DEST.toBase58(), { data: tokenAccount(), owner: TOKEN_PROGRAM_ID }],
+    [mandate.toBase58(), { data: encodeMandate(mandateId, 1, 1, 100_000n), owner: REAL_PROGRAM }],
+    [ledger.toBase58(), { data: encodeLedger(mandate, [first, second]), owner: REAL_PROGRAM }],
+  ]);
+  const tx = twoChargeTx(mandate, ledger, first, second);
+  const conn = {
+    async getGenesisHash() {
+      return DEVNET_GENESIS;
+    },
+    async getTransaction(signature: string) {
+      return signature === first.signature ? tx : null;
+    },
+    async getAccountInfo(address: PublicKey) {
+      const hit = accounts.get(address.toBase58());
+      if (!hit) return null;
+      return { data: hit.data, owner: hit.owner, executable: false, lamports: 1 };
+    },
+  } as unknown as Connection;
+  const genuine = await assessRecord(record(mandate, first), RPC, conn, OPTS);
+  assert.equal(genuine.ok, true, `genuine record of the first charge is rejected:\n${genuine.text}`);
+  // Control: the second (paid) charge claimed under the first's record still rejects.
+  const claimPaid = await assessRecord(record(mandate, { ...second, amount: 100_000 }), RPC, conn, OPTS);
+  assert.equal(claimPaid.ok, false, claimPaid.text);
+});
