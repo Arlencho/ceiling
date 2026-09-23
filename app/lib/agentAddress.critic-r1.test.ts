@@ -75,6 +75,7 @@ test('a supplied agent address reaches the open_mandate instruction unchanged, a
 
   const source = getAssociatedTokenAddressSync(MINT, owner, false, TOKEN_PROGRAM);
   const connection = {
+    getBalance: async () => 50_000_000,
     getAccountInfo: async (address: PublicKey) => {
       if (address.equals(MINT)) {
         return { data: Buffer.alloc(0), owner: TOKEN_PROGRAM, executable: false, lamports: 1 };

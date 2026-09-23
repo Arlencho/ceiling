@@ -5,6 +5,10 @@ export const LEDGER_CAPACITY = 32;
 export const ENTRY_SIZE = 72;
 export const LEDGER_HEADER_SIZE = 40;
 export const LEDGER_ACCOUNT_SIZE = 8 + LEDGER_HEADER_SIZE + LEDGER_CAPACITY * ENTRY_SIZE;
+// Discriminator plus Mandate::INIT_SPACE. Live mandates are this size.
+export const MANDATE_ACCOUNT_SIZE = 310;
+// One signature's base fee. Rent for the two new accounts does not pay it.
+export const OPEN_FEE_MARGIN_LAMPORTS = 5_000;
 
 export const LEDGER_DISCRIMINATOR = Buffer.from([43, 41, 21, 213, 180, 176, 95, 32]);
 export const MANDATE_DISCRIMINATOR = Buffer.from([113, 216, 98, 159, 185, 63, 55, 18]);

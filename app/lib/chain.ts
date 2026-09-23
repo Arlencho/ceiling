@@ -10,7 +10,15 @@ import {
 
 import type { AppConfig } from './appConfig';
 import { loadConfig } from './config';
-import { KIND_OPENED, KIND_OVERRIDE, KIND_REVOKED, PURPOSE_MAX_LEN } from './constants';
+import {
+  KIND_OPENED,
+  KIND_OVERRIDE,
+  KIND_REVOKED,
+  LEDGER_ACCOUNT_SIZE,
+  MANDATE_ACCOUNT_SIZE,
+  OPEN_FEE_MARGIN_LAMPORTS,
+  PURPOSE_MAX_LEN,
+} from './constants';
 import { decodeEventsFromLogs, decodeInstructionKind } from './events';
 import { grantOverrideInstruction, openMandateInstruction, revokeMandateInstruction } from './instructions';
 import { assessOverride, type OverrideAssessment } from './override';
@@ -26,6 +34,32 @@ import {
 } from './ring';
 
 export type SignAndSend = (transactions: Transaction[]) => Promise<string[]>;
+
+// (account bytes + 128) * lamports per byte. This is devnet rent on 2026-09-23
+// when the connection does not expose getMinimumBalanceForRentExemption.
+const RENT_ACCOUNT_OVERHEAD = 128;
+const RENT_LAMPORTS_PER_EXEMPT_BYTE = 5080;
+
+export function rentExemptLamports(space: number): number {
+  return (space + RENT_ACCOUNT_OVERHEAD) * RENT_LAMPORTS_PER_EXEMPT_BYTE;
+}
+
+async function rentForOpen(connection: Connection): Promise<number> {
+  if (typeof connection.getMinimumBalanceForRentExemption === 'function') {
+    const mandate = await connection.getMinimumBalanceForRentExemption(MANDATE_ACCOUNT_SIZE);
+    const ledger = await connection.getMinimumBalanceForRentExemption(LEDGER_ACCOUNT_SIZE);
+    return mandate + ledger;
+  }
+  return rentExemptLamports(MANDATE_ACCOUNT_SIZE) + rentExemptLamports(LEDGER_ACCOUNT_SIZE);
+}
+
+async function ownerLamports(connection: Connection, owner: PublicKey): Promise<number> {
+  if (typeof connection.getBalance === 'function') {
+    return connection.getBalance(owner, 'confirmed');
+  }
+  const info = await connection.getAccountInfo(owner, 'confirmed');
+  return info?.lamports ?? 0;
+}
 
 export type OpenMandateInput = {
   owner: PublicKey;
@@ -197,6 +231,15 @@ export async function openMandate(
   if (!sourceInfo) {
     throw new Error(
       `The owner holds none of mint ${mint.toBase58()}. This app will not create a token account for it. The rule spends tokens the owner already holds.`,
+    );
+  }
+
+  const rent = await rentForOpen(client.connection);
+  const needed = rent + OPEN_FEE_MARGIN_LAMPORTS;
+  const balance = await ownerLamports(client.connection, input.owner);
+  if (balance < needed) {
+    throw new Error(
+      `Opening a rule creates two accounts, the mandate and the ledger. Rent is ${rent} lamports plus a ${OPEN_FEE_MARGIN_LAMPORTS} lamport fee margin, so this wallet needs ${needed} lamports. It has ${balance} lamports.`,
     );
   }
 
