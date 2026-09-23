@@ -310,17 +310,15 @@ test("R3-3 F4: JSON-RPC -32005 on getGenesisHash for a single record rejects typ
   await assert.rejects(() => assessRecord(record, RPC, conn, OPTS), (err: unknown) => isTransportError(err));
 });
 
-// Pre-existing, outside the fix diff (verify.ts:413 dates from 389fb94 on main):
-// bundleFailures reads the genesis hash with no wrapper before checkRecord does,
-// so a JSON-RPC error object there is a plain rejection, exit 1 instead of 3.
-// Fail-closed: no verdict is printed. Pinned as it behaves today; issue filed.
-test("R3-3 OUT-OF-SCOPE: JSON-RPC -32005 on getGenesisHash for a bundle rejects untyped (verify.ts:413), never CONFIRMED", async () => {
+// Bundle genesis reads use the same wrapper as a single record. A node failure
+// is transport (exit 3). No verdict is printed.
+test("R3-3: JSON-RPC -32005 on getGenesisHash for a bundle is transport, never CONFIRMED", async () => {
   const conn = rpcConnection(nodeAnswers(rpcError(-32602, "unreached"), rpcError(-32005, "Node is unhealthy")));
   const mandate = mandatePda(REAL_PROGRAM, OWNER, 3459n);
   const record = recordOf(mandate.toBase58(), { amount: 10, nonce: 1, timestamp: 1_790_117_945, signature: "5".repeat(87) });
   await assert.rejects(
     () => assessBundle(ruleBundle(mandate, [record]), RPC, conn, OPTS),
-    (err: unknown) => !isTransportError(err) && /Node is unhealthy/.test(err instanceof Error ? err.message : ""),
+    (err: unknown) => isTransportError(err) && /Node is unhealthy/.test(err instanceof Error ? err.message : ""),
   );
 });
 

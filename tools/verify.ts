@@ -487,15 +487,7 @@ async function checkRecord(
   }
   const mandatePk = new PublicKey(record.mandate);
 
-  let genesis = cache.genesis;
-  if (!genesis) {
-    try {
-      genesis = await conn.getGenesisHash();
-    } catch (err) {
-      rethrowUnlessInvalidParam(err);
-    }
-    cache.genesis = genesis;
-  }
+  const genesis = await cachedGenesis(cache);
   eq(record.genesis_hash, genesis, "genesis_hash", failures);
   const derivedCluster = clusterForGenesis(genesis);
   if (record.cluster !== derivedCluster) {
@@ -753,7 +745,7 @@ async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promis
   if (bundle.program_id !== expected) {
     failures.push(`program_id: envelope has ${bundle.program_id}, this tool checks ${expected}`);
   }
-  const genesis = cache.genesis ?? (cache.genesis = await cache.conn.getGenesisHash());
+  const genesis = await cachedGenesis(cache);
   if (bundle.genesis_hash !== genesis) {
     failures.push(`genesis_hash: envelope has ${bundle.genesis_hash}, chain has ${genesis}`);
   }
@@ -1214,9 +1206,23 @@ function failureText(err: unknown): string {
 }
 
 function jsonRpcErrorCode(err: unknown): number | null {
-  if (typeof err !== "object" || err === null || !("code" in err)) return null;
-  const code = (err as { code: unknown }).code;
-  return typeof code === "number" ? code : null;
+  if (typeof err !== "object" || err === null) return null;
+  const rec = err as { rpcCode?: unknown; code?: unknown };
+  if (typeof rec.rpcCode === "number") return rec.rpcCode;
+  if (typeof rec.code === "number") return rec.code;
+  return null;
+}
+
+async function cachedGenesis(cache: CheckCache): Promise<string> {
+  if (cache.genesis) return cache.genesis;
+  let genesis: string;
+  try {
+    genesis = await cache.conn.getGenesisHash();
+  } catch (err) {
+    rethrowUnlessInvalidParam(err);
+  }
+  cache.genesis = genesis;
+  return genesis;
 }
 
 // JSON-RPC -32602 is the node refusing a parameter from the file. A signature

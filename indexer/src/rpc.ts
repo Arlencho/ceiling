@@ -39,11 +39,13 @@ export class RateLimitedError extends Error {
 // pubkey or a destination the signer chose.
 export class TransportError extends Error {
   readonly status: number | null;
+  readonly rpcCode: number | null;
 
-  constructor(message: string, status: number | null = null) {
+  constructor(message: string, status: number | null = null, rpcCode: number | null = null) {
     super(message);
     this.name = "TransportError";
     this.status = status;
+    this.rpcCode = rpcCode;
   }
 }
 
@@ -129,6 +131,16 @@ export function isRateLimitError(err: unknown): boolean {
   return RATE_LIMIT_RE.test(msg);
 }
 
+export function jsonRpcCode(err: unknown): number | null {
+  if (typeof err !== "object" || err === null) return null;
+  const rec = err as { rpcCode?: unknown; code?: unknown; name?: unknown };
+  if (typeof rec.rpcCode === "number") return rec.rpcCode;
+  if (typeof rec.code !== "number") return null;
+  if (rec.name === "SolanaJSONRPCError") return rec.code;
+  if (err instanceof Error && rec.code <= -32000) return rec.code;
+  return null;
+}
+
 export function isTransportError(err: unknown): boolean {
   if (err instanceof TransportError || err instanceof RateLimitedError) return true;
   const name = errorName(err);
@@ -140,7 +152,7 @@ export function asTransportError(err: unknown): Error {
   const name = errorName(err);
   if ((name === "TransportError" || name === "RateLimitedError") && err instanceof Error) return err;
   const message = err instanceof Error ? err.message : String(err);
-  return new TransportError(message);
+  return new TransportError(message, null, jsonRpcCode(err));
 }
 
 export function isRetryable(err: unknown): boolean {
@@ -174,6 +186,11 @@ export async function withRetry<T>(
       last = err;
       if (!isRetryable(err) || i === attempts - 1) {
         if (err instanceof TransportError || err instanceof RateLimitedError) throw err;
+        const code = jsonRpcCode(err);
+        // -32602 is the node refusing a parameter. Every other JSON-RPC code
+        // is the transport, including a node that reports itself unhealthy.
+        if (code === -32602) throw err;
+        if (code !== null) throw asTransportError(err);
         const msg = err instanceof Error ? err.message : String(err);
         throw new Error(`${label}: ${msg}`);
       }
