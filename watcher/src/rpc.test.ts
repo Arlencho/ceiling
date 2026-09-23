@@ -141,15 +141,39 @@ test("critic: one configured endpoint still backs off on a transient 429 instead
 });
 
 test("critic: a malformed entry in VETO_RPC is refused at load, not discovered at the first 429", () => {
-  // parseRpcList validates nothing. The primary works, so a typo in the
-  // fallback is a silent single-endpoint configuration until the first 429,
-  // at which point fetch("gargabe") throws a TypeError that withRpcBackoff
-  // treats as an rpc failure and retries every 60 s.
   assert.throws(() =>
     loadConfig({
       VETO_RPC: "http://a.invalid, gargabe",
       VETO_KEYS_DIR: "/tmp/veto-rpc-test-keys-missing",
     }),
+  );
+});
+
+test("a malformed VETO_RPC entry names its position and does not echo the value", () => {
+  const secret = "rpc.example.test/?api-key=SECRET123";
+  assert.throws(
+    () =>
+      loadConfig({
+        ...IDENTITIES,
+        VETO_RPC: secret,
+        VETO_KEYS_DIR: "/tmp/veto-rpc-test-keys-missing",
+      }),
+    (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      assert.equal(message.includes("SECRET123"), false, message);
+      assert.equal(message.includes("rpc.example.test"), false, message);
+      assert.match(message, /position 1/);
+      return true;
+    },
+  );
+  assert.throws(
+    () => parseRpcList(`http://ok.example, ws://rpc.example.test/?api-key=SECRET123`),
+    (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      assert.equal(message.includes("SECRET123"), false, message);
+      assert.match(message, /position 2/);
+      return true;
+    },
   );
 });
 

@@ -119,6 +119,58 @@ test("filters by mandate and leaves other events out", () => {
   assert.equal(rows[0]?.kind, "paid");
 });
 
+test("a charge with only a text log is still one decision", () => {
+  const data = Buffer.concat([
+    CHARGE_IX_DISC,
+    Buffer.from(new Uint8Array(16)),
+  ]);
+  data.writeBigUInt64LE(446000n, 8);
+  data.writeBigUInt64LE(7n, 16);
+  const tx: TxView = {
+    signature: "text-only",
+    slot: 3,
+    blockTime: 50,
+    err: null,
+    logs: ["Program log: VETO PAID amount=446000"],
+    accountKeys: [],
+    instructions: [
+      {
+        programId: PROGRAM,
+        accounts: ["agent", MANDATE.toBase58(), "ledger", "source", DEST, "mint", "token"],
+        data,
+      },
+    ],
+  };
+  const rows = decisionsFromTx(tx, PROGRAM);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.signature, "text-only");
+  assert.equal(rows[0]?.mandate, MANDATE.toBase58());
+  assert.equal(rows[0]?.amount, 446000n);
+  assert.equal(rows[0]?.nonce, 7n);
+  assert.equal(rows[0]?.counterparty, DEST);
+});
+
+test("program data and a text log for the same charge count once", () => {
+  const log = encodePaidLog({ mandate: MANDATE, amount: 500n, nonce: 1n, spent: 500n });
+  const data = Buffer.concat([CHARGE_IX_DISC, Buffer.alloc(16)]);
+  const tx: TxView = {
+    signature: "both",
+    slot: 4,
+    blockTime: 60,
+    err: null,
+    logs: [log, "Program log: VETO PAID amount=500"],
+    accountKeys: [],
+    instructions: [
+      {
+        programId: PROGRAM,
+        accounts: ["agent", MANDATE.toBase58(), "ledger", "source", DEST, "mint", "token"],
+        data,
+      },
+    ],
+  };
+  assert.equal(decisionsFromTx(tx, PROGRAM).length, 1);
+});
+
 test("idl event discriminators stay in lockstep with the encoder", () => {
   const idl = JSON.parse(readFileSync(new URL("../idl/veto.json", import.meta.url), "utf8")) as {
     events: { name: string; discriminator: number[] }[];

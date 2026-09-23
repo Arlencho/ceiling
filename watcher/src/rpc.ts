@@ -1,5 +1,29 @@
 import { Connection } from "@solana/web3.js";
 
+export function redactRpcUrl(raw: string): string {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return "invalid-rpc-url";
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return "invalid-rpc-url";
+  // Scheme and host only. Alchemy, QuickNode, and Ankr put the key in the path.
+  // url.host is hostname plus port, and it already brackets IPv6.
+  return `${url.protocol}//${url.host}`;
+}
+
+export function redactRpcUrls(urls: readonly string[]): string {
+  return urls.map((url) => redactRpcUrl(url)).join(",");
+}
+
+export function redactRpcUrlsInText(message: string): string {
+  return message.replace(/https?:\/\/[^\s]+/g, (match) => {
+    const trimmed = match.replace(/[),.;]+$/g, "");
+    return redactRpcUrl(trimmed) + match.slice(trimmed.length);
+  });
+}
+
 export class RateLimitedError extends Error {
   readonly endpoints: readonly string[];
 
@@ -30,9 +54,17 @@ export function parseRpcList(raw: string | undefined | null): string[] {
     .filter((s) => s.length > 0);
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const part of parts) {
+  for (let i = 0; i < parts.length; i += 1) {
+    const part = parts[i]!;
     if (seen.has(part)) continue;
-    assertHttpUrl(part);
+    try {
+      assertHttpUrl(part);
+    } catch (err) {
+      if (err instanceof Error && err.message === "invalid rpc endpoint") {
+        throw new Error(`invalid rpc endpoint at position ${i + 1}`);
+      }
+      throw err;
+    }
     seen.add(part);
     out.push(part);
   }
@@ -44,13 +76,13 @@ function assertHttpUrl(part: string): void {
   try {
     url = new URL(part);
   } catch {
-    throw new Error(`invalid rpc endpoint: ${part}`);
+    throw new Error("invalid rpc endpoint");
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error(`invalid rpc endpoint: ${part}`);
+    throw new Error("invalid rpc endpoint");
   }
   if (url.hostname.length === 0) {
-    throw new Error(`invalid rpc endpoint: ${part}`);
+    throw new Error("invalid rpc endpoint");
   }
 }
 
@@ -105,8 +137,9 @@ export function makeFailoverFetch(
         try {
           const res = await doFetch(url, init);
           if (res.status === 429) {
-            log(`rpc rate limited on ${endpoint}`);
-            lastErr = new RateLimitedError(`rpc rate limited on ${endpoint}`, list);
+            const shown = redactRpcUrl(endpoint);
+            log(`rpc rate limited on ${shown}`);
+            lastErr = new RateLimitedError(`rpc rate limited on ${shown}`, list);
             if (!hasMore) throw lastErr;
             if (delay > 0) await sleepFn(delay);
             delay = nextDelay(delay, maxDelayMs);
@@ -118,7 +151,7 @@ export function makeFailoverFetch(
           lastErr = err;
           if (isRateLimitError(err)) {
             if (!(err instanceof RateLimitedError)) {
-              log(`rpc rate limited on ${endpoint}`);
+              log(`rpc rate limited on ${redactRpcUrl(endpoint)}`);
             }
             if (!hasMore) {
               throw err instanceof RateLimitedError

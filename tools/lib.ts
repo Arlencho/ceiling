@@ -3,7 +3,10 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PublicKey } from "@solana/web3.js";
 import type { Connection } from "@solana/web3.js";
-import { createFailoverConnection, parseRpcList } from "../indexer/src/rpc.js";
+import { decodeEventsFromLogs, linesForProgram } from "../indexer/src/events.js";
+import { createFailoverConnection, parseRpcList, redactRpcUrl, redactRpcUrls } from "../indexer/src/rpc.js";
+
+export { redactRpcUrl, redactRpcUrls };
 
 export const TOOLS_DIR = dirname(fileURLToPath(import.meta.url));
 export const REPO_DIR = join(TOOLS_DIR, "..");
@@ -260,6 +263,24 @@ function programIdFromIdl(repoRoot: string): string | undefined {
   return undefined;
 }
 
+export type VerifyProgramSource = "VETO_PROGRAM_ID" | "idl";
+
+// Verify does not read keys/devnet-addresses.env. A local devnet setup must
+// not silently change the program a record is checked against.
+export function resolveVerifyProgramId(
+  repoRoot = REPO_DIR,
+  env: NodeJS.ProcessEnv = process.env,
+): { programId: PublicKey; source: VerifyProgramSource } {
+  if (env.VETO_PROGRAM_ID && env.VETO_PROGRAM_ID.length > 0) {
+    return { programId: new PublicKey(env.VETO_PROGRAM_ID), source: "VETO_PROGRAM_ID" };
+  }
+  const fromIdl = programIdFromIdl(repoRoot);
+  if (fromIdl) return { programId: new PublicKey(fromIdl), source: "idl" };
+  throw new Error(
+    "lib.resolveVerifyProgramId: missing program id; pass --program-id or set VETO_PROGRAM_ID",
+  );
+}
+
 export function resolveProgramId(
   repoRoot = REPO_DIR,
   env: NodeJS.ProcessEnv = process.env,
@@ -283,6 +304,16 @@ export function resolveClusterName(repoRoot = REPO_DIR): string {
   if (fromFile && fromFile.length > 0) return fromFile;
   // A cluster label, not an endpoint, program, mint, or account.
   return "devnet";
+}
+
+const CLUSTER_BY_GENESIS: Readonly<Record<string, string>> = {
+  "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d": "mainnet-beta",
+  EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG: "devnet",
+  "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY": "testnet",
+};
+
+export function clusterForGenesis(genesis: string): string {
+  return CLUSTER_BY_GENESIS[genesis] ?? "localnet";
 }
 
 export function keysDir(repoRoot = REPO_DIR): string {
@@ -579,39 +610,110 @@ export function parseChargeFromTx(
   return null;
 }
 
-export function parseChargeLogs(logs: readonly string[]): {
+export type ChargeLogDecision = {
   kind: "paid" | "refused";
   reasonCode: number;
   reasonText: string;
   amount: bigint;
   suggestedOverride: bigint;
-} | null {
-  for (const line of logs) {
+};
+
+// Every attributed VETO PAID / VETO REFUSED line, in log order. parseChargeLogs
+// keeps the first, which is what a single-charge export reads.
+export function chargeLogDecisions(logs: readonly string[], programId: PublicKey | string): ChargeLogDecision[] {
+  const id = typeof programId === "string" ? programId : programId.toBase58();
+  const out: ChargeLogDecision[] = [];
+  for (const line of linesForProgram(logs, id)) {
     const paid = /VETO PAID amount=(\d+)/.exec(line);
     if (paid) {
-      return {
+      out.push({
         kind: "paid",
         reasonCode: 0,
         reasonText: "ok",
         amount: BigInt(paid[1]!),
         suggestedOverride: 0n,
-      };
+      });
+      continue;
     }
-    const refused = /VETO REFUSED reason=(\d+) \(([^)]*)\) amount=(\d+).*override_to_clear=(\d+)/.exec(
-      line,
-    );
+    const refused = /VETO REFUSED reason=(\d+) \(([^)]*)\) amount=(\d+).*override_to_clear=(\d+)/.exec(line);
     if (refused) {
       const reasonCode = Number.parseInt(refused[1]!, 10);
-      return {
+      out.push({
         kind: "refused",
         reasonCode,
         reasonText: refused[2] && refused[2].length > 0 ? refused[2] : reasonText(reasonCode),
         amount: BigInt(refused[3]!),
         suggestedOverride: BigInt(refused[4]!),
-      };
+      });
     }
   }
-  return null;
+  return out;
+}
+
+export function parseChargeLogs(logs: readonly string[], programId: PublicKey | string): ChargeLogDecision | null {
+  return chargeLogDecisions(logs, programId)[0] ?? null;
+}
+
+export type DecisionTriple = {
+  mandate: string;
+  nonce: bigint;
+  amount: bigint;
+};
+
+// Shared binder for a ring row and for a Veto event. Nonce alone is not a
+// decision: one transaction can refuse and then pay the same nonce at two
+// amounts, or pay one nonce and refuse another. Position is not a decision
+// either. Callers that still have more than one hit (two refusals of one
+// nonce at different times) disambiguate themselves. Callers that cannot
+// (events in one transaction) require exactly one hit.
+export function bindByTriple<T>(items: readonly T[], want: DecisionTriple, keyOf: (item: T) => DecisionTriple): T[] {
+  return items.filter((item) => {
+    const key = keyOf(item);
+    return key.mandate === want.mandate && key.nonce === want.nonce && key.amount === want.amount;
+  });
+}
+
+export function vetoDecisionCountError(count: number, nonce: bigint): string {
+  return `transaction carries ${count} Veto decisions for nonce ${nonce.toString()}`;
+}
+
+export type BoundVetoDecision =
+  | { status: "one"; decision: ChargeLogDecision }
+  | { status: "error"; error: string }
+  | { status: "none" };
+
+// Kind, reason, and override come from the one Veto event that matches the
+// charge triple. Zero matching events, or several, fail closed. A text line
+// is not a decision: it carries no mandate and no nonce. Events have been
+// part of the program since its first commit, so a text line with no event
+// is a truncated log and binds nothing.
+export function boundVetoDecision(
+  logs: readonly string[],
+  programId: PublicKey | string,
+  want: DecisionTriple,
+): BoundVetoDecision {
+  const id = typeof programId === "string" ? programId : programId.toBase58();
+  const events = decodeEventsFromLogs(logs, id);
+  if (events.length === 0) return { status: "none" };
+  const matches = bindByTriple(events, want, (event) => ({
+    mandate: event.mandate,
+    nonce: event.nonce,
+    amount: event.amount,
+  }));
+  if (matches.length !== 1) {
+    return { status: "error", error: vetoDecisionCountError(matches.length, want.nonce) };
+  }
+  const event = matches[0]!;
+  return {
+    status: "one",
+    decision: {
+      kind: event.kind,
+      reasonCode: event.reason,
+      reasonText: reasonText(event.reason),
+      amount: event.amount,
+      suggestedOverride: event.suggestedOverride,
+    },
+  };
 }
 
 function requireSafeInt(value: unknown, field: string): bigint {
@@ -766,16 +868,74 @@ export function entryMatches(
   return true;
 }
 
+function sameComparedFields(a: LedgerEntry, b: LedgerEntry): boolean {
+  return (
+    a.kind === b.kind &&
+    a.nonce === b.nonce &&
+    a.ts === b.ts &&
+    a.amount === b.amount &&
+    a.counterparty.equals(b.counterparty) &&
+    a.reason === b.reason &&
+    a.suggestedOverride === b.suggestedOverride
+  );
+}
+
+// The ring row for this signature. Distance is absolute time from blockTime.
+// A tie binds only when the tied rows agree on every field a record compares.
+// A null block time with more than one row refuses to bind to the newest.
+export function ringEntryForSignature(
+  rows: IndexedEntry[],
+  blockTime: number | null,
+  signature: string,
+): { entry: LedgerEntry } | { error: string } {
+  const nonce = rows[0]!.entry.nonce.toString();
+  if (blockTime === null) {
+    if (rows.length > 1) {
+      return {
+        error: `signature ${signature} matches ${rows.length} ledger rows for nonce ${nonce} equally; refusing to bind to the newest`,
+      };
+    }
+    return { entry: rows[0]!.entry };
+  }
+  const target = BigInt(blockTime);
+  const distance = (row: IndexedEntry): bigint => {
+    const ts = row.entry.ts;
+    return ts >= target ? ts - target : target - ts;
+  };
+  const ranked = [...rows].sort((a, b) => {
+    const delta = distance(a) - distance(b);
+    if (delta !== 0n) return delta < 0n ? -1 : 1;
+    return b.sequence - a.sequence;
+  });
+  const best = ranked[0]!;
+  const bestDistance = distance(best);
+  const tied = ranked.filter((row) => distance(row) === bestDistance);
+  if (tied.length > 1 && tied.some((row) => !sameComparedFields(row.entry, best.entry))) {
+    return {
+      error: `signature ${signature} matches ${tied.length} ledger rows for nonce ${best.entry.nonce.toString()} equally; refusing to bind to the newest`,
+    };
+  }
+  return { entry: best.entry };
+}
+
 export function matchingRingEntry(
   ledger: LedgerAccount,
-  want: { amount: bigint; nonce: bigint; kind: "paid" | "refused" },
+  want: {
+    amount: bigint;
+    nonce: bigint;
+    kind: "paid" | "refused";
+    timestamp?: number | null;
+    signature?: string;
+  },
 ): LedgerEntry | null {
   const kind = kindByte(want.kind);
   const hits = indexedEntries(ledger).filter((row) =>
     entryMatches(row.entry, { amount: want.amount, nonce: want.nonce, kind }),
   );
   if (hits.length === 0) return null;
-  return hits[hits.length - 1]!.entry;
+  const picked = ringEntryForSignature(hits, want.timestamp ?? null, want.signature ?? "");
+  if ("error" in picked) return null;
+  return picked.entry;
 }
 
 export async function tokenAccountOwner(conn: Connection, address: PublicKey): Promise<PublicKey> {

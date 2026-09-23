@@ -12,6 +12,42 @@ import {
 import type { CompiledIx, Decision, DecisionKind, TxView } from "./types.js";
 
 const PROGRAM_DATA = /^Program data: ([A-Za-z0-9+/=]+)$/;
+const PROGRAM_INVOKE = /^Program ([1-9A-HJ-NP-Za-km-z]+) invoke \[(\d+)\]$/;
+const PROGRAM_END = /^Program ([1-9A-HJ-NP-Za-km-z]+) (?:success|failed\b.*)$/;
+
+// Solana writes one frame per program: "Program <id> invoke [n]" ... "Program <id> success"
+// or "Program <id> failed". Program log and Program data lines belong to whichever
+// program is on top of that stack. A sibling instruction (an SPL Memo before charge,
+// a CPI into another program) cannot supply a VETO line or a Paid event.
+// A trace with no invoke line has no other program to separate, so those lines stay:
+// fixtures and older exports keep a bare "Program log:" / "Program data:" line.
+export function linesForProgram(logs: readonly string[], programId: string): readonly string[] {
+  let framed = false;
+  for (const line of logs) {
+    if (PROGRAM_INVOKE.test(line)) {
+      framed = true;
+      break;
+    }
+  }
+  if (!framed) return logs;
+  const stack: string[] = [];
+  const out: string[] = [];
+  for (const line of logs) {
+    const invoke = PROGRAM_INVOKE.exec(line);
+    if (invoke?.[1]) {
+      stack.push(invoke[1]);
+      continue;
+    }
+    const ended = PROGRAM_END.exec(line);
+    if (ended?.[1] && stack.length > 0 && stack[stack.length - 1] === ended[1]) {
+      stack.pop();
+      continue;
+    }
+    if (!line.startsWith("Program log:") && !line.startsWith("Program data:")) continue;
+    if (stack.length > 0 && stack[stack.length - 1] === programId) out.push(line);
+  }
+  return out;
+}
 
 export type DecodedEvent = {
   kind: DecisionKind;
@@ -23,9 +59,10 @@ export type DecodedEvent = {
   suggestedOverride: bigint;
 };
 
-export function decodeEventsFromLogs(logs: readonly string[]): DecodedEvent[] {
+export function decodeEventsFromLogs(logs: readonly string[], programId?: string): DecodedEvent[] {
+  const source = programId === undefined ? logs : linesForProgram(logs, programId);
   const out: DecodedEvent[] = [];
-  for (const line of logs) {
+  for (const line of source) {
     const match = PROGRAM_DATA.exec(line);
     if (!match?.[1]) continue;
     const raw = Buffer.from(match[1], "base64");
@@ -91,27 +128,90 @@ export function counterpartyFromCharge(tx: TxView, mandate: string): string {
   return charge?.accounts[4] ?? "";
 }
 
-export function decisionsFromTx(tx: TxView, _programId: string, mandateFilter?: string): Decision[] {
+export function decisionsFromTx(tx: TxView, programId: string, mandateFilter?: string): Decision[] {
   if (tx.err) return [];
-  const events = decodeEventsFromLogs(tx.logs);
-  const out: Decision[] = [];
-  for (const event of events) {
-    if (mandateFilter && event.mandate !== mandateFilter) continue;
-    out.push({
-      signature: tx.signature,
-      slot: tx.slot,
-      timestamp: tx.blockTime,
-      mandate: event.mandate,
-      amount: event.amount,
-      nonce: event.nonce,
-      counterparty: counterpartyFromCharge(tx, event.mandate),
-      kind: event.kind,
-      reason: event.reason,
-      reasonText: reasonText(event.reason),
-      suggestedOverride: event.suggestedOverride,
-    });
+  const events = decodeEventsFromLogs(tx.logs, programId);
+  if (events.length > 0) {
+    const out: Decision[] = [];
+    for (const event of events) {
+      if (mandateFilter && event.mandate !== mandateFilter) continue;
+      out.push({
+        signature: tx.signature,
+        slot: tx.slot,
+        timestamp: tx.blockTime,
+        mandate: event.mandate,
+        amount: event.amount,
+        nonce: event.nonce,
+        counterparty: counterpartyFromCharge(tx, event.mandate),
+        kind: event.kind,
+        reason: event.reason,
+        reasonText: reasonText(event.reason),
+        suggestedOverride: event.suggestedOverride,
+      });
+    }
+    return out;
   }
-  return out;
+  const fromLog = decisionFromChargeLog(tx, programId);
+  if (!fromLog) return [];
+  if (mandateFilter && fromLog.mandate !== mandateFilter) return [];
+  return [fromLog];
+}
+
+// A charge that landed before event logs were available, or a fixture that
+// only kept the text line, still names one decision. Program data wins when
+// both are present, so a normal charge is not counted twice.
+function decisionFromChargeLog(tx: TxView, programId: string): Decision | null {
+  const parsed = parseVetoTextLog(tx.logs, programId);
+  if (!parsed) return null;
+  const charge = tx.instructions.find(
+    (ix) => ix.programId === programId && isChargeIx(ix) && ix.accounts.length >= 5 && ix.data.length >= 24,
+  );
+  if (!charge) return null;
+  const amount = readU64Le(charge.data, 8);
+  const nonce = readU64Le(charge.data, 16);
+  if (amount !== parsed.amount) return null;
+  const mandate = charge.accounts[1] ?? "";
+  if (mandate.length === 0) return null;
+  return {
+    signature: tx.signature,
+    slot: tx.slot,
+    timestamp: tx.blockTime,
+    mandate,
+    amount,
+    nonce,
+    counterparty: charge.accounts[4] ?? "",
+    kind: parsed.kind,
+    reason: parsed.reason,
+    reasonText: reasonText(parsed.reason),
+    suggestedOverride: parsed.suggestedOverride,
+  };
+}
+
+function parseVetoTextLog(
+  logs: readonly string[],
+  programId: string,
+): {
+  kind: DecisionKind;
+  reason: number;
+  amount: bigint;
+  suggestedOverride: bigint;
+} | null {
+  for (const line of linesForProgram(logs, programId)) {
+    const paid = /VETO PAID amount=(\d+)/.exec(line);
+    if (paid?.[1]) {
+      return { kind: "paid", reason: 0, amount: BigInt(paid[1]), suggestedOverride: 0n };
+    }
+    const refused = /VETO REFUSED reason=(\d+) \([^)]*\) amount=(\d+).*override_to_clear=(\d+)/.exec(line);
+    if (refused?.[1] && refused[2] && refused[3]) {
+      return {
+        kind: "refused",
+        reason: Number.parseInt(refused[1], 10),
+        amount: BigInt(refused[2]),
+        suggestedOverride: BigInt(refused[3]),
+      };
+    }
+  }
+  return null;
 }
 
 export function encodePaidLog(args: {

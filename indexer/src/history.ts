@@ -5,7 +5,6 @@ import {
   clampPageSize,
   createFailoverConnection,
   isSkippableSlot,
-  paginateNewestFirst,
   parseRpcList,
   withRetry,
 } from "./rpc.js";
@@ -17,6 +16,14 @@ export type HistoryResult = {
   signatureCount: number;
   usedBlockScan: boolean;
   slotsScanned: number;
+  // getTransaction results for the signatures this walk actually fetched.
+  // A date_range verify hands them to the row checks instead of fetching again.
+  transactions: Map<string, VersionedTransactionResponse | null>;
+};
+
+type TimeWindow = {
+  from: number | null;
+  to: number | null;
 };
 
 type MessageLike = {
@@ -37,9 +44,7 @@ type MetaLike = {
 } | null;
 
 export async function fetchDecisionHistory(opts: FetchHistoryOptions): Promise<HistoryResult> {
-  const endpoints = parseRpcList(opts.rpcUrl);
-  if (endpoints.length === 0) throw new Error("no rpc endpoints configured");
-  const connection = createFailoverConnection(endpoints);
+  const connection = opts.connection ?? connectionFromRpc(opts.rpcUrl);
   if (!opts.programId || opts.programId.length === 0) {
     throw new Error(
       "history.fetchDecisionHistory: missing programId; set VETO_PROGRAM_ID in the environment, keys/devnet-addresses.env, or indexer/.env",
@@ -48,15 +53,17 @@ export async function fetchDecisionHistory(opts: FetchHistoryOptions): Promise<H
   const programId = new PublicKey(opts.programId);
   const pageSize = clampPageSize(opts.pageSize);
   const allowBlockScan = opts.allowBlockScan !== false;
+  const window: TimeWindow = { from: opts.from ?? null, to: opts.to ?? null };
 
-  const listed = await listProgramSignatures(connection, programId, pageSize);
+  const listed = await listProgramSignatures(connection, programId, pageSize, window);
   let usedBlockScan = false;
   let slotsScanned = 0;
   let txViews: TxView[] = [];
+  const transactions = new Map<string, VersionedTransactionResponse | null>();
 
   if (listed.items.length > 0) {
-    txViews = await fetchTransactions(connection, listed.items);
-  } else if (allowBlockScan) {
+    txViews = await fetchTransactions(connection, listed.items, window, transactions);
+  } else if (allowBlockScan && listed.pageCount === 0) {
     usedBlockScan = true;
     const scanned = await scanBlocksForProgram(connection, programId, {
       pageSize,
@@ -77,40 +84,81 @@ export async function fetchDecisionHistory(opts: FetchHistoryOptions): Promise<H
     signatureCount: listed.items.length,
     usedBlockScan,
     slotsScanned,
+    transactions,
   };
+}
+
+function connectionFromRpc(rpcUrl: string): Connection {
+  const endpoints = parseRpcList(rpcUrl);
+  if (endpoints.length === 0) throw new Error("no rpc endpoints configured");
+  return createFailoverConnection(endpoints);
 }
 
 export async function listProgramSignatures(
   connection: Connection,
   programId: PublicKey,
   pageSize: number,
+  window?: TimeWindow,
 ): Promise<{ items: SignaturePage[]; pageCount: number }> {
-  const listed = await paginateNewestFirst(
-    (before) =>
-      withRetry("getSignaturesForAddress", () =>
-        connection.getSignaturesForAddress(programId, {
-          limit: pageSize,
-          before,
-        }),
-      ),
-    pageSize,
-  );
-  return {
-    items: listed.items.map(toPage),
-    pageCount: listed.pageCount,
-  };
+  const from = window?.from ?? null;
+  const to = window?.to ?? null;
+  const items: SignaturePage[] = [];
+  let pageCount = 0;
+  let before: string | undefined;
+  for (;;) {
+    const batch = await withRetry("getSignaturesForAddress", () =>
+      connection.getSignaturesForAddress(programId, {
+        limit: pageSize,
+        before,
+      }),
+    );
+    if (batch.length === 0) break;
+    pageCount += 1;
+    let crossedFrom = false;
+    for (const item of batch) {
+      const page = toPage(item);
+      // Newest-first. Once a signature is older than `from`, the rest of this
+      // page and every later page are older too.
+      if (from !== null && page.blockTime !== null && page.blockTime < from) {
+        crossedFrom = true;
+        break;
+      }
+      if (to !== null && page.blockTime !== null && page.blockTime > to) continue;
+      items.push(page);
+    }
+    if (crossedFrom) break;
+    if (batch.length < pageSize) break;
+    const last = batch[batch.length - 1];
+    if (!last) break;
+    before = last.signature;
+  }
+  return { items, pageCount };
 }
 
-async function fetchTransactions(connection: Connection, pages: SignaturePage[]): Promise<TxView[]> {
+function outsideWindow(blockTime: number | null, window: TimeWindow): boolean {
+  if (blockTime === null) return false;
+  if (window.from !== null && blockTime < window.from) return true;
+  if (window.to !== null && blockTime > window.to) return true;
+  return false;
+}
+
+async function fetchTransactions(
+  connection: Connection,
+  pages: SignaturePage[],
+  window: TimeWindow,
+  fetched: Map<string, VersionedTransactionResponse | null>,
+): Promise<TxView[]> {
   const views: TxView[] = [];
   for (const page of pages) {
     if (page.err) continue;
+    if (outsideWindow(page.blockTime, window)) continue;
     const tx = await withRetry(`getTransaction ${page.signature.slice(0, 8)}`, () =>
       connection.getTransaction(page.signature, {
         commitment: "confirmed",
         maxSupportedTransactionVersion: 0,
       }),
     );
+    fetched.set(page.signature, tx);
     if (!tx) continue;
     const view = txToView(tx, page.signature, page.slot);
     if (view) views.push(view);
@@ -168,7 +216,7 @@ async function scanBlocksForProgram(
         });
         if (!view) continue;
         if (!view.accountKeys.includes(program)) continue;
-        if (decodeEventsFromLogs(view.logs).length > 0) txs.push(view);
+        if (decodeEventsFromLogs(view.logs, program).length > 0) txs.push(view);
       }
     }
   }
