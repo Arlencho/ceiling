@@ -34,8 +34,8 @@ Explorer:
 ## Fixtures
 
 - Test SPL mint at 6 decimals on the classic Token program (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`).
-- Owner token account funded with 1000000 tokens (a round number, not a dust amount).
-- Merchant token account created and holding zero tokens.
+- Owner token account was funded with 1000000 tokens at setup on 2026-09-20T20:57:14Z (a round number, not a dust amount). Paid charges since then moved 0.666 tokens to the merchant. `spl-token balance` on the owner token account prints `999999.334` (checked 2026-09-23).
+- Merchant token account was created empty at setup. Those same charges left it at `0.666`. `spl-token balance` on the merchant token account prints `0.666` (checked 2026-09-23), not zero.
 - Agent funded with 0.5 SOL for fees and holding **zero tokens**. The setup does not create an agent token account.
 
 ## Keypairs (secrets, not in git)
@@ -61,6 +61,10 @@ git status --ignored -- keys
 
 ## Recreate from nothing
 
+Reading the program on devnet does not use this section. The verify commands below, and export / verify in the README, call `https://api.devnet.solana.com` and do not need a keypair.
+
+`make setup` and `make localnet` deploy. Both run this script. They need the maintainer backup of `keys/program.json`, the keypair for `declare_id` `3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV`. That file is not in git (`keys/` is gitignored). If it is missing, the script stops with `keys/program.json is missing; the program keypair must be restored from backup` and does not mint a replacement. A fresh clone cannot run either target until that backup is restored. `npx tsx produce.ts` is also not a read: it needs `keys/owner.json` from the same backup.
+
 Toolchain used when this file was written: anchor-cli 1.2.0, solana-cli 4.1.2.
 
 ```bash
@@ -72,7 +76,7 @@ The script does not choose an RPC. It refuses and names `VETO_RPC` if that varia
 The script:
 
 1. Points the Solana CLI at `https://api.devnet.solana.com` and refuses to continue if the URL looks like mainnet.
-2. Creates `keys/` and the keypairs above when they are missing.
+2. Requires `keys/program.json` from the maintainer backup. A missing file is an error. It creates `keys/` and the other keypairs in the table when they are missing.
 3. Airdrops SOL to the deployer, retrying on rate limits.
 4. Builds the program. It copies `keys/program.json` to `target/deploy/veto-keypair.json`, runs `anchor keys sync` so the bytecode ID check matches the deploy address, then restores `programs/veto/src` so program source is not left dirty and is not committed.
 5. Runs `anchor deploy --provider.cluster devnet`.
@@ -115,12 +119,14 @@ Verify:
 
 ```bash
 solana account 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV -u https://api.devnet.solana.com
-solana program show 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV -u https://api.devnet.solana.com -k keys/deployer.json
+solana program show 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV -u https://api.devnet.solana.com
 spl-token balance --address FbhygYPyFk5PeiFppCezmMkqPqywTdAZxhkqxw79FBBE -u https://api.devnet.solana.com
 spl-token balance --address 2bt9HMQbNy6t2J4hnw15QF8iUesPrgJoNDvf99HNay7F -u https://api.devnet.solana.com
 spl-token accounts --owner 6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w -u https://api.devnet.solana.com
 solana balance 6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w -u https://api.devnet.solana.com
 ```
+
+`solana program show` answers this read without a signer. Passing `-k keys/deployer.json` fails on a fresh clone, because that file is gitignored, and the CLI then tells you to generate a new key. The upgrade authority it prints is the Deployer row above.
 
 ## Program account (verification)
 

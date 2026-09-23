@@ -72,25 +72,26 @@ test-scripts: ## Run deploy-script checks that do not need a cluster
 	./scripts/deploy-watcher-cloud.critic.round3.test.sh
 	./scripts/watcher-silent-alert.test.sh
 	./scripts/watcher-alert-round3.test.sh
+	./scripts/journey158-path3.critic-r1-pr184.test.sh
 
 # Provision a chain plus the demo fixtures. `make setup` names public devnet
 # (the recorded cluster). `make localnet` names a local validator. The script
 # still refuses if VETO_RPC is unset, so a direct invocation must name it.
 VETO_RPC ?= https://api.devnet.solana.com
-setup: ## Provision the demo cluster and token fixtures
+setup: ## Deploy devnet fixtures; needs the maintainer backup of keys/program.json
 	VETO_RPC=$(VETO_RPC) ./scripts/devnet-setup.sh
 
 LOCALNET_RPC ?= http://127.0.0.1:8899
 
-localnet: ## Provision fixtures against a local validator
+localnet: ## Deploy localnet fixtures; needs the maintainer backup of keys/program.json
 	VETO_RPC=$(LOCALNET_RPC) VETO_CLUSTER=localnet ./scripts/devnet-setup.sh
 
 # Off-phone decision record (schema in docs/DECISION_RECORD.md).
 # Bulk export reads the indexer library, so tools-test installs both packages.
 #   make tools-test
-#   cd tools && npx tsx produce.ts
-#   cd tools && npx tsx export.ts --signature <tx> | npx tsx verify.ts
-#   cd tools && npx tsx export.ts --mandate <addr> --format csv --out decisions.csv
+#   cd tools && VETO_RPC=https://api.devnet.solana.com npx tsx produce.ts
+#   cd tools && VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --signature <tx> | VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts
+#   cd tools && VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --mandate <addr> --format csv --out decisions.csv
 
 tools-test: ## Typecheck and test the decision-record tools
 	cd indexer && npm ci
@@ -107,9 +108,11 @@ indexer-test: ## Typecheck and test the history indexer
 	cd indexer && npm ci && npm run typecheck && npm test
 
 terminal-test: ## Typecheck and test the merchant terminal
-	cd terminal && npm ci && npm run typecheck && npm test
+	cd terminal && npm ci && cd ../watcher && npm ci && cd ../terminal && npm run typecheck && npm test
 
+# declare_id in programs/veto/src/lib.rs, the Program row in docs/DEVNET.md.
+VETO_PROGRAM_ID ?= 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV
 indexer-seed: ## Open a mandate and submit paid plus refused charges
-	cd indexer && npm run seed
+	cd indexer && VETO_RPC=$(VETO_RPC) VETO_PROGRAM_ID=$(VETO_PROGRAM_ID) npm run seed
 
 indexer: indexer-test ## Alias for indexer-test

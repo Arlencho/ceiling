@@ -91,9 +91,10 @@ materials.
 
 ### The watcher
 
-The cloud project for that job is [GCP_SETUP.md](GCP_SETUP.md). The deploy script has not been
-run, so the job is not in the project yet. `scripts/gcp-verify.sh` checks that document against
-the live project.
+The cloud project for that job is [GCP_SETUP.md](GCP_SETUP.md). The deploy script has been run.
+The Cloud Run jobs, scheduler, bucket, secret, and registry are listed there.
+`scripts/gcp-verify.sh` checks that document against the live project. Its absence checks fail
+because those resources exist.
 
 ### History
 
