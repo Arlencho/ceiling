@@ -683,9 +683,10 @@ export type BoundVetoDecision =
   | { status: "none" };
 
 // Kind, reason, and override come from the one Veto event that matches the
-// charge triple. Zero events or several events fail closed. A text line is
-// used only when the transaction carries no Veto event at all, and then only
-// when exactly one Veto decision line is present.
+// charge triple. Zero matching events, or several, fail closed. A text line
+// is not a decision: it carries no mandate and no nonce. Events have been
+// part of the program since its first commit, so a text line with no event
+// is a truncated log and binds nothing.
 export function boundVetoDecision(
   logs: readonly string[],
   programId: PublicKey | string,
@@ -693,33 +694,26 @@ export function boundVetoDecision(
 ): BoundVetoDecision {
   const id = typeof programId === "string" ? programId : programId.toBase58();
   const events = decodeEventsFromLogs(logs, id);
-  if (events.length > 0) {
-    const matches = bindByTriple(events, want, (event) => ({
-      mandate: event.mandate,
-      nonce: event.nonce,
+  if (events.length === 0) return { status: "none" };
+  const matches = bindByTriple(events, want, (event) => ({
+    mandate: event.mandate,
+    nonce: event.nonce,
+    amount: event.amount,
+  }));
+  if (matches.length !== 1) {
+    return { status: "error", error: vetoDecisionCountError(matches.length, want.nonce) };
+  }
+  const event = matches[0]!;
+  return {
+    status: "one",
+    decision: {
+      kind: event.kind,
+      reasonCode: event.reason,
+      reasonText: reasonText(event.reason),
       amount: event.amount,
-    }));
-    if (matches.length !== 1) {
-      return { status: "error", error: vetoDecisionCountError(matches.length, want.nonce) };
-    }
-    const event = matches[0]!;
-    return {
-      status: "one",
-      decision: {
-        kind: event.kind,
-        reasonCode: event.reason,
-        reasonText: reasonText(event.reason),
-        amount: event.amount,
-        suggestedOverride: event.suggestedOverride,
-      },
-    };
-  }
-  const lines = chargeLogDecisions(logs, id);
-  if (lines.length === 0) return { status: "none" };
-  if (lines.length !== 1) {
-    return { status: "error", error: vetoDecisionCountError(lines.length, want.nonce) };
-  }
-  return { status: "one", decision: lines[0]! };
+      suggestedOverride: event.suggestedOverride,
+    },
+  };
 }
 
 function requireSafeInt(value: unknown, field: string): bigint {
