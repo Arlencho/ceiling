@@ -196,7 +196,7 @@ export async function openMandate(
   const sourceInfo = await client.connection.getAccountInfo(source, 'confirmed');
   if (!sourceInfo) {
     throw new Error(
-      `Owner token account ${source.toBase58()} was not found. The mandate keeps funds in that account.`,
+      `The owner holds none of mint ${mint.toBase58()}. This app will not create a token account for it. The rule spends tokens the owner already holds.`,
     );
   }
 
