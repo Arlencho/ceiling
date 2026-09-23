@@ -10,6 +10,7 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 
+import { agentKeyForOpen } from './agentAddress';
 import { tryLoadConfig, type AppConfig } from './config';
 import {
   createClient,
@@ -234,7 +235,7 @@ function useChainState(): ChainState {
       if (!wallet.ownerPublicKey) {
         throw new Error('Connect with Seed Vault first');
       }
-      const agentKey = input.agent ?? (await wallet.createAgentKeypair()).publicKey;
+      const agentKey = await agentKeyForOpen(input.agent, () => wallet.createAgentKeypair());
       const client: ChainClient = createClient(loaded.config);
       const result = await openMandate(client, wallet.signAndSend, {
         owner: new PublicKey(wallet.ownerPublicKey),

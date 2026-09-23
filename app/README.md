@@ -29,9 +29,12 @@ Mobile Wallet Adapter. The owner public key is shown truncated. The
 authorization token is stored in `expo-secure-store` so a returning user is not
 prompted again. Disconnect deauthorizes that token and clears it.
 
-The agent keypair is generated on the phone with `@solana/web3.js` and stored in
-`expo-secure-store`. It is a different key from the owner. It holds authority
-and no funds. The owner private key is never written to storage.
+When the new rule screen leaves the agent address empty, the phone generates
+an agent keypair with `@solana/web3.js` and stores it in `expo-secure-store`.
+A filled address is the public key of an agent that runs elsewhere, and this
+phone does not store a secret for it. The agent is a different key from the
+owner. It holds authority and no funds. The owner private key is never written
+to storage.
 
 ## Owner screens
 

@@ -10,6 +10,7 @@ import { Field } from '../../components/Field';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
+import { AGENT_ADDRESS_HINT, parseOptionalAgentAddress } from '../../lib/agentAddress';
 import { PURPOSE_MAX_LEN } from '../../lib/constants';
 import { formatBaseUnits, parseBaseUnits } from '../../lib/format';
 import type { MandateAccount } from '../../lib/mandate';
@@ -125,6 +126,7 @@ function RuleCompose({
   const stored = useRulesets();
   const router = useRouter();
   const [fields, setFields] = useState<MandateFields>(initial);
+  const [agentAddress, setAgentAddress] = useState('');
   const [rulesetName, setRulesetName] = useState(selectedRuleset?.name ?? '');
   const [formError, setFormError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -151,6 +153,11 @@ function RuleCompose({
     }
     assertPurposeMayOpen(purpose, applying);
     const merchant = new PublicKey(fields.merchant.trim());
+    const agent = parseOptionalAgentAddress({
+      text: agentAddress,
+      owner: wallet.ownerPublicKey,
+      payee: merchant,
+    });
     const expiresAt = BigInt(Math.floor(Date.now() / 1000) + days * 86400);
     return chain.open({
       merchant,
@@ -158,6 +165,7 @@ function RuleCompose({
       perTxMax,
       expiresAt,
       purpose: purpose.trim(),
+      ...(agent ? { agent } : {}),
     });
   };
 
@@ -271,6 +279,13 @@ function RuleCompose({
               : 'the only wallet that may be paid'
           }
           hint={applying || authoring ? PAYEE_NOT_IN_RULESET : undefined}
+        />
+        <Field
+          label="Agent address"
+          value={agentAddress}
+          onChangeText={setAgentAddress}
+          placeholder="optional"
+          hint={AGENT_ADDRESS_HINT}
         />
         <Field
           label="Purpose"

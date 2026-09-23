@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Clipboard, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../../components/Button';
 import { ConnectGate } from '../../components/ConnectGate';
@@ -9,6 +9,7 @@ import { ReadState } from '../../components/ReadState';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
+import { copyAgentAddress } from '../../lib/agentAddress';
 import { STATUS_REVOKED } from '../../lib/constants';
 import { askAfterFirstRuleOpened } from '../../lib/decisionNotifyTask';
 import { formatBaseUnits, formatTimeLeft } from '../../lib/format';
@@ -60,6 +61,22 @@ export default function RuleDetailScreen() {
     void askAfterFirstRuleOpened().catch(() => undefined);
   }, [openedAddress]);
 
+  const onCopyAgent = async () => {
+    if (!mandate) {
+      return;
+    }
+    setFormError(null);
+    setMessage(null);
+    try {
+      await copyAgentAddress(mandate.agent, async (value) => {
+        Clipboard.setString(value);
+      });
+      setMessage('Agent address copied.');
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Copy failed');
+    }
+  };
+
   const onRevoke = async () => {
     setFormError(null);
     setMessage(null);
@@ -106,7 +123,24 @@ export default function RuleDetailScreen() {
                 value={`${formatBaseUnits(mandate.spent, chain.decimals)} of ${formatBaseUnits(mandate.cap, chain.decimals)}`}
               />
               <Def label="Time left" value={formatTimeLeft(mandate.expiresAt, nowSec)} />
-              <Def label="Agent" value={truncateAddress(mandate.agent)} />
+              <View style={styles.agentRow}>
+                <View style={styles.agentHead}>
+                  <Text style={styles.defK}>Agent</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Copy agent address"
+                    hitSlop={8}
+                    onPress={() => {
+                      void onCopyAgent();
+                    }}
+                  >
+                    <Text style={styles.copy}>Copy</Text>
+                  </Pressable>
+                </View>
+                <Text selectable style={styles.agentAddress}>
+                  {mandate.agent}
+                </Text>
+              </View>
             </View>
 
             <Text style={styles.keys}>
@@ -215,6 +249,28 @@ const styles = StyleSheet.create({
     fontFamily: fonts.mono,
     flexShrink: 1,
     textAlign: 'right',
+  },
+  agentRow: {
+    gap: 6,
+    paddingVertical: 9,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+  },
+  agentHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  agentAddress: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: fonts.mono,
+  },
+  copy: {
+    color: colors.body,
+    fontSize: 15,
+    fontWeight: '500',
   },
   keys: {
     color: colors.body,
