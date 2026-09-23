@@ -37,6 +37,7 @@ type MandateStub = { address: string; mint: string; merchant: string; perTxMax: 
 let ownerMandates: MandateStub[] = [
   { address: MANDATE, mint: MINT, merchant: MERCHANT, perTxMax: 500_000n },
 ];
+let ownerReadError: Error | null = null;
 let ledgerRows: (address: string) => readonly (typeof refusedRow)[] = () => [refusedRow];
 
 mock.module('expo-notifications', {
@@ -98,7 +99,12 @@ mock.module('./config', {
 mock.module('./chain', {
   namedExports: {
     createClient: () => ({}),
-    fetchOwnerMandates: async () => ownerMandates,
+    fetchOwnerMandates: async () => {
+      if (ownerReadError) {
+        throw ownerReadError;
+      }
+      return ownerMandates;
+    },
     fetchMintDecimals: async () => 6,
     fetchLedger: async (_client: unknown, mandate: PublicKey) => {
       ledgerReads += 1;
@@ -176,6 +182,7 @@ function resetNotifyHarness(): void {
   permissionGranted = true;
   registerCalls = 0;
   ownerMandates = [{ address: MANDATE, mint: MINT, merchant: MERCHANT, perTxMax: 500_000n }];
+  ownerReadError = null;
   ledgerRows = () => [refusedRow];
 }
 
@@ -250,6 +257,16 @@ test('opening another rule after permission was granted does not read the chain 
   await askAfterFirstRuleOpened();
   assert.equal(ledgerReads, reads);
   assert.equal(registerCalls, registers + 1);
+});
+
+test('a rate-limited background scan names the rate limit and does not announce a decision', async () => {
+  const { runDecisionNotifyScan } = await taskModule;
+  resetNotifyHarness();
+  ownerReadError = new Error('429 Too Many Requests');
+  scheduled.length = 0;
+
+  await assert.rejects(runDecisionNotifyScan(), /429|rate limit/i);
+  assert.equal(scheduled.length, 0);
 });
 
 test('a corrupted seen key announces nothing and is rewritten to the decisions already on the ring', async () => {
