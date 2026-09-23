@@ -195,11 +195,37 @@ async function readBody(res: Response): Promise<string> {
   }
 }
 
+const TRANSPORT_BODY_CAP_BYTES = 300;
+
+// A gateway page can echo the request path. Keyed providers put the key there,
+// so the body copied into a transport message stops at 300 bytes.
+function cappedTransportBody(body: string): string {
+  const bytes = new TextEncoder().encode(body);
+  if (bytes.length <= TRANSPORT_BODY_CAP_BYTES) return body;
+  let end = TRANSPORT_BODY_CAP_BYTES;
+  // A cut in the middle of a multibyte character walks back to its lead and drops it.
+  while (end > 0 && (bytes[end]! & 0xc0) === 0x80) end -= 1;
+  const cut = end < TRANSPORT_BODY_CAP_BYTES ? end : TRANSPORT_BODY_CAP_BYTES;
+  return new TextDecoder().decode(bytes.subarray(0, cut));
+}
+
+function isJsonRpcEnvelope(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const record = value as { jsonrpc?: unknown };
+  return typeof record.jsonrpc === "string" && record.jsonrpc.length > 0 && "id" in record;
+}
+
 function assertJsonBody(text: string): void {
+  let parsed: unknown;
   try {
-    JSON.parse(text);
+    parsed = JSON.parse(text);
   } catch (err) {
     throw asTransportError(err);
+  }
+  // A 200 with "{}" is valid JSON and not an envelope. web3 then throws a
+  // struct error. That is the node's answer failing to parse, so it is transport.
+  if (!isJsonRpcEnvelope(parsed)) {
+    throw new TransportError("response is not a JSON-RPC envelope");
   }
 }
 
@@ -250,7 +276,10 @@ export function makeFailoverFetch(
           }
           if (!res.ok) {
             const body = await readBody(res);
-            throw new TransportError(`${res.status} ${res.statusText}: ${body}`.trim(), res.status);
+            throw new TransportError(
+              `${res.status} ${res.statusText}: ${cappedTransportBody(body)}`.trim(),
+              res.status,
+            );
           }
           const text = await readBody(res);
           assertJsonBody(text);

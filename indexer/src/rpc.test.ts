@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   RateLimitedError,
+  TransportError,
   isRateLimitError,
   isRetryable,
   isSkippableSlot,
@@ -127,6 +128,37 @@ test("withRetry logs a 429 as a rate limit, not a failure", async () => {
   assert.match(lines.join("\n"), /rate limited/);
   assert.doesNotMatch(lines.join("\n"), /failure/);
   assert.equal(isRateLimitError(new RateLimitedError("rpc rate limited on http://a")), true);
+});
+
+test("a non-2xx transport error keeps at most 300 bytes of the response body", async () => {
+  const body = "x".repeat(500);
+  const failover = makeFailoverFetch(["http://primary.invalid"], () => {}, {
+    fetch: async () => new Response(body, { status: 502, statusText: "Bad Gateway" }),
+    sleep: async () => {},
+    initialDelayMs: 0,
+  });
+  await assert.rejects(
+    () => failover("http://primary.invalid", { method: "POST" }),
+    (err: unknown) => {
+      assert.ok(err instanceof TransportError);
+      const carried = err.message.slice("502 Bad Gateway: ".length);
+      assert.equal(Buffer.byteLength(carried), 300);
+      assert.equal(carried, "x".repeat(300));
+      return true;
+    },
+  );
+});
+
+test("a 200 body that is not a JSON-RPC envelope is a transport error", async () => {
+  const failover = makeFailoverFetch(["http://primary.invalid"], () => {}, {
+    fetch: async () => new Response("{}", { status: 200, statusText: "OK" }),
+    sleep: async () => {},
+    initialDelayMs: 0,
+  });
+  await assert.rejects(
+    () => failover("http://primary.invalid", { method: "POST" }),
+    (err: unknown) => err instanceof TransportError,
+  );
 });
 
 test("does not retry a cleaned-up slot", async () => {

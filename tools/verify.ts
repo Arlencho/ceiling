@@ -195,7 +195,7 @@ async function checkRecord(
     try {
       genesis = await conn.getGenesisHash();
     } catch (err) {
-      throw asTransportError(err);
+      rethrowUnlessInvalidParam(err);
     }
     cache.genesis = genesis;
   }
@@ -389,6 +389,14 @@ function rejectedText(failures: string[], notes: string[] = []): string {
   return `${lines.join("\n")}\n`;
 }
 
+type FailureSplit = {
+  failures: string[];
+  // Signatures the node listed and then did not return a transaction for.
+  // assessBundle branches on this list. Envelope lines also embed free-text
+  // fields from the file, so a scan of those lines is not a transport signal.
+  unread: string[];
+};
+
 function inScope(ts: bigint, bundle: DecisionBundle): boolean {
   if (bundle.scope.type !== "date_range") return true;
   if (bundle.scope.from !== null && ts < BigInt(bundle.scope.from)) return false;
@@ -396,7 +404,7 @@ function inScope(ts: bigint, bundle: DecisionBundle): boolean {
   return true;
 }
 
-async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promise<string[]> {
+async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promise<FailureSplit> {
   const failures: string[] = [];
   const expected = cache.expectedProgramId.toBase58();
   if (bundle.program_id !== expected) {
@@ -435,10 +443,11 @@ async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promis
   }
   if (bundle.scope.type === "rule") {
     failures.push(...(await rulePopulationFailures(bundle, cache)));
-  } else {
-    failures.push(...(await dateRangePopulationFailures(bundle, cache)));
+    return { failures, unread: [] };
   }
-  return failures;
+  const population = await dateRangePopulationFailures(bundle, cache);
+  failures.push(...population.failures);
+  return { failures, unread: population.unread };
 }
 
 function mandatePubkey(mandate: string, failures: string[]): PublicKey | null {
@@ -546,8 +555,9 @@ function undecodableChargeFailures(
   cache: CheckCache,
   transactions: Map<string, Awaited<ReturnType<Connection["getTransaction"]>>>,
   population: Set<string>,
-): string[] {
+): FailureSplit {
   const failures: string[] = [];
+  const unread: string[] = [];
   const program = cache.expectedProgramId;
   for (const signature of [...transactions.keys()].sort()) {
     if (population.has(signature)) continue;
@@ -555,9 +565,7 @@ function undecodableChargeFailures(
     // A listed signature with no transaction was not read. Skipping it lets a
     // file that omits the payment confirm. That is not a verdict.
     if (!tx) {
-      failures.push(
-        `signature ${signature} was not checked: the RPC returned no transaction for a listed signature`,
-      );
+      unread.push(signature);
       continue;
     }
     let charge: ChargeIx | null = null;
@@ -577,22 +585,23 @@ function undecodableChargeFailures(
       `signature ${signature} invokes charge on ${program.toBase58()} but carries no attributable Veto decision`,
     );
   }
-  return failures;
+  return { failures, unread };
 }
 
-async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckCache): Promise<string[]> {
+async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckCache): Promise<FailureSplit> {
   const failures: string[] = [];
+  const unread: string[] = [];
   let mandatePk: PublicKey | null = null;
   if (bundle.scope.mandate) {
     mandatePk = mandatePubkey(bundle.scope.mandate, failures);
-    if (!mandatePk) return failures;
+    if (!mandatePk) return { failures, unread };
     try {
       await cachedMandate(cache, bundle.scope.mandate, mandatePk);
     } catch (err) {
       const missing = missingAccountMessage(err);
       if (!missing) throw err;
       failures.push(missing);
-      return failures;
+      return { failures, unread };
     }
   }
   const history = await fetchDecisionHistory({
@@ -650,8 +659,10 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
   // A top-level charge with no attributable Veto decision is missing from the
   // indexed set. Fail closed. A scope that names no mandate has no single ring
   // to catch the same hole.
-  failures.push(...undecodableChargeFailures(bundle, cache, history.transactions, population));
-  return failures;
+  const charges = undecodableChargeFailures(bundle, cache, history.transactions, population);
+  failures.push(...charges.failures);
+  unread.push(...charges.unread);
+  return { failures, unread };
 }
 
 export async function assessRecord(
@@ -683,12 +694,16 @@ export async function assessBundle(
     return { ok: false, failures, text: rejectedText(failures), code: 1 };
   }
   const cache = makeCache(conn, rpc, opts);
-  const envelope = await bundleFailures(bundle, cache);
-  const unread = envelope.filter((line) => line.includes("was not checked: the RPC returned no transaction"));
-  if (unread.length > 0) {
+  const envelopeReport = await bundleFailures(bundle, cache);
+  if (envelopeReport.unread.length > 0) {
+    const unread = envelopeReport.unread.map(
+      (signature) =>
+        `signature ${signature} was not checked: the RPC returned no transaction for a listed signature`,
+    );
     const line = `verify failed: ${unread.join("; ")}`;
     return { ok: false, failures: unread, text: `${line}\n`, code: 3 };
   }
+  const envelope = envelopeReport.failures;
   const rows: RowVerdict[] = [];
   for (const [i, record] of bundle.decisions.entries()) {
     let failures: string[];
@@ -791,6 +806,21 @@ function failureText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+function jsonRpcErrorCode(err: unknown): number | null {
+  if (typeof err !== "object" || err === null || !("code" in err)) return null;
+  const code = (err as { code: unknown }).code;
+  return typeof code === "number" ? code : null;
+}
+
+// JSON-RPC -32602 is the node refusing a parameter from the file. A signature
+// of the wrong size is a rejection of that file. Every other rejection of
+// getTransaction and getGenesisHash is the transport, including a 200 that is
+// not an envelope and a node that reports itself unhealthy (-32005).
+function rethrowUnlessInvalidParam(err: unknown): never {
+  if (jsonRpcErrorCode(err) === -32602) throw err;
+  throw asTransportError(err);
+}
+
 // Account-load failures stay on the report. A transport failure still aborts
 // the row: it is not a verdict, and it must not be rewritten as one.
 async function accountOrFailure<T>(failures: string[], load: () => Promise<T>): Promise<T | undefined> {
@@ -815,7 +845,7 @@ async function cachedTransaction(
       maxSupportedTransactionVersion: 0,
     });
   } catch (err) {
-    throw asTransportError(err);
+    rethrowUnlessInvalidParam(err);
   }
   cache.txs.set(signature, tx);
   return tx;
