@@ -403,7 +403,7 @@ test("T3 RED-ON-HEAD: the envelope program_id carrying the phrase turns a REJECT
   const bundle = ruleBundle(mandate.toBase58(), [recordOf(mandate.toBase58(), row)], { program_id: `${REAL_PROGRAM.toBase58()} ${PHRASE}` });
   // The CLI accepts this envelope: program_id is a non-empty string (bulk.ts:258).
   const parsed = parseExportText(bundleToJson(bundle));
-  assert.equal(parsed.kind, "bundle");
+  assert.equal(parsed.kind, "bulk");
   const result = await assessBundle(bundle, RPC, conn, OPTS);
   neverConfirmed(result);
   rejectedVerdict(result);
@@ -415,7 +415,7 @@ test("T3 RED-ON-HEAD: scope.mandate carrying the phrase needs nothing on chain a
   const { conn, mandate } = chain({ mandateId: 2466n, rows: [] });
   const bundle = ruleBundle(`${mandate.toBase58()} ${PHRASE}`, [recordOf(mandate.toBase58(), row)]);
   const parsed = parseExportText(bundleToJson(bundle));
-  assert.equal(parsed.kind, "bundle");
+  assert.equal(parsed.kind, "bulk");
   const result = await assessBundle(bundle, RPC, conn, OPTS);
   neverConfirmed(result);
   rejectedVerdict(result);
