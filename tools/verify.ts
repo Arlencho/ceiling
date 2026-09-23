@@ -20,7 +20,6 @@ import {
   fetchMandate,
   flagString,
   indexedEntries,
-  kindByte,
   ledgerPda,
   parseArgs,
   parseChargeFromTx,
@@ -29,9 +28,9 @@ import {
   redactRpcUrls,
   resolveRpcList,
   resolveVerifyProgramId,
+  ringEntryForSignature,
   tokenAccountOwner,
   type DecisionRecord,
-  type IndexedEntry,
   type LedgerEntry,
   type MandateAccount,
 } from "./lib.js";
@@ -110,57 +109,11 @@ type CheckCache = {
   mandates: Map<string, MandateAccount>;
   ledgers: Map<string, Awaited<ReturnType<typeof fetchLedger>>>;
   destOwners: Map<string, PublicKey>;
+  txs: Map<string, Awaited<ReturnType<Connection["getTransaction"]>>>;
 };
 
 function txBlockTime(tx: { blockTime?: number | null }): number | null {
   return typeof tx.blockTime === "number" ? tx.blockTime : null;
-}
-
-function sameComparedFields(a: LedgerEntry, b: LedgerEntry): boolean {
-  return (
-    a.kind === b.kind &&
-    a.nonce === b.nonce &&
-    a.ts === b.ts &&
-    a.amount === b.amount &&
-    a.counterparty.equals(b.counterparty) &&
-    a.reason === b.reason &&
-    a.suggestedOverride === b.suggestedOverride
-  );
-}
-
-function ringEntryForSignature(
-  rows: IndexedEntry[],
-  blockTime: number | null,
-  signature: string,
-): { entry: LedgerEntry } | { error: string } {
-  const nonce = rows[0]!.entry.nonce.toString();
-  if (blockTime === null) {
-    if (rows.length > 1) {
-      return {
-        error: `signature ${signature} matches ${rows.length} ledger rows for nonce ${nonce} equally; refusing to bind to the newest`,
-      };
-    }
-    return { entry: rows[0]!.entry };
-  }
-  const target = BigInt(blockTime);
-  const distance = (row: IndexedEntry): bigint => {
-    const ts = row.entry.ts;
-    return ts >= target ? ts - target : target - ts;
-  };
-  const ranked = [...rows].sort((a, b) => {
-    const delta = distance(a) - distance(b);
-    if (delta !== 0n) return delta < 0n ? -1 : 1;
-    return b.sequence - a.sequence;
-  });
-  const best = ranked[0]!;
-  const bestDistance = distance(best);
-  const tied = ranked.filter((row) => distance(row) === bestDistance);
-  if (tied.length > 1 && tied.some((row) => !sameComparedFields(row.entry, best.entry))) {
-    return {
-      error: `signature ${signature} matches ${tied.length} ledger rows for nonce ${best.entry.nonce.toString()} equally; refusing to bind to the newest`,
-    };
-  }
-  return { entry: best.entry };
 }
 
 function recordKey(record: DecisionRecord): string {
@@ -251,10 +204,7 @@ async function checkRecord(
     failures.push(`reason_code ${record.reason_code} is not a code the program emits`);
   }
 
-  const tx = await conn.getTransaction(record.signature, {
-    commitment: "confirmed",
-    maxSupportedTransactionVersion: 0,
-  });
+  const tx = await cachedTransaction(cache, record.signature);
   if (!tx) {
     failures.push(
       `signature ${record.signature} not found on ${shownRpc(rpc)} (wrong cluster, tampered signature, or history pruned)`,
@@ -322,11 +272,8 @@ async function checkRecord(
   if (!ledger.mandate.equals(mandatePk)) {
     failures.push(`ledger.mandate is ${ledger.mandate.toBase58()}, expected ${record.mandate}`);
   }
-  const wantKind = kindByte(record.kind);
-  const rows = indexedEntries(ledger).filter(
-    (row) => row.entry.nonce === record.nonce && row.entry.kind === wantKind,
-  );
-  const logs = parseChargeLogs(tx.meta?.logMessages ?? []);
+  const rows = indexedEntries(ledger).filter((row) => row.entry.nonce === record.nonce);
+  const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
   const blockTime = txBlockTime(tx);
   if (rows.length === 0) {
     if (!logs) {
@@ -568,7 +515,12 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
     connection: cache.conn,
     allowBlockScan: cache.allowBlockScan,
     pageSize: cache.pageSize,
+    from: bundle.scope.from,
+    to: bundle.scope.to,
   });
+  for (const [signature, fetched] of history.transactions) {
+    cache.txs.set(signature, fetched);
+  }
   const indexed = filterIndexed(history.decisions, {
     mandate: bundle.scope.mandate ?? undefined,
     from: bundle.scope.from,
@@ -708,7 +660,21 @@ function makeCache(conn: Connection, rpc: string, opts?: AssessOpts): CheckCache
     mandates: new Map(),
     ledgers: new Map(),
     destOwners: new Map(),
+    txs: new Map(),
   };
+}
+
+async function cachedTransaction(
+  cache: CheckCache,
+  signature: string,
+): Promise<Awaited<ReturnType<Connection["getTransaction"]>>> {
+  if (cache.txs.has(signature)) return cache.txs.get(signature) ?? null;
+  const tx = await cache.conn.getTransaction(signature, {
+    commitment: "confirmed",
+    maxSupportedTransactionVersion: 0,
+  });
+  cache.txs.set(signature, tx);
+  return tx;
 }
 
 async function main(): Promise<void> {

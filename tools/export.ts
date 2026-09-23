@@ -99,7 +99,7 @@ async function recordFromSignature(
   }
   const ledger = await fetchLedger(conn, ledgerAddress);
   const wantKind = (() => {
-    const logs = parseChargeLogs(tx.meta?.logMessages ?? []);
+    const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
     if (logs) return kindByte(logs.kind);
     return null;
   })();
@@ -114,7 +114,7 @@ async function recordFromSignature(
   if (matches.length === 1) {
     entry = matches[0]!.entry;
   } else if (matches.length > 1) {
-    const logs = parseChargeLogs(tx.meta?.logMessages ?? []);
+    const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
     const blockTime = tx.blockTime !== null && tx.blockTime !== undefined ? BigInt(tx.blockTime) : null;
     const scored = matches
       .map((row) => {
@@ -127,7 +127,7 @@ async function recordFromSignature(
       .sort((a, b) => b.score - a.score);
     entry = scored[0]!.row.entry;
   } else {
-    const logs = parseChargeLogs(tx.meta?.logMessages ?? []);
+    const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
     if (!logs) {
       throw new Error(
         "no matching ledger row and the transaction logs have neither PAID nor REFUSED",

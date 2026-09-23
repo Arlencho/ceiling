@@ -3,6 +3,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PublicKey } from "@solana/web3.js";
 import type { Connection } from "@solana/web3.js";
+import { linesForProgram } from "../indexer/src/events.js";
 import { createFailoverConnection, parseRpcList, redactRpcUrl, redactRpcUrls } from "../indexer/src/rpc.js";
 
 export { redactRpcUrl, redactRpcUrls };
@@ -609,14 +610,18 @@ export function parseChargeFromTx(
   return null;
 }
 
-export function parseChargeLogs(logs: readonly string[]): {
+export function parseChargeLogs(
+  logs: readonly string[],
+  programId: PublicKey | string,
+): {
   kind: "paid" | "refused";
   reasonCode: number;
   reasonText: string;
   amount: bigint;
   suggestedOverride: bigint;
 } | null {
-  for (const line of logs) {
+  const id = typeof programId === "string" ? programId : programId.toBase58();
+  for (const line of linesForProgram(logs, id)) {
     const paid = /VETO PAID amount=(\d+)/.exec(line);
     if (paid) {
       return {
@@ -796,16 +801,74 @@ export function entryMatches(
   return true;
 }
 
+function sameComparedFields(a: LedgerEntry, b: LedgerEntry): boolean {
+  return (
+    a.kind === b.kind &&
+    a.nonce === b.nonce &&
+    a.ts === b.ts &&
+    a.amount === b.amount &&
+    a.counterparty.equals(b.counterparty) &&
+    a.reason === b.reason &&
+    a.suggestedOverride === b.suggestedOverride
+  );
+}
+
+// The ring row for this signature. Distance is absolute time from blockTime.
+// A tie binds only when the tied rows agree on every field a record compares.
+// A null block time with more than one row refuses to bind to the newest.
+export function ringEntryForSignature(
+  rows: IndexedEntry[],
+  blockTime: number | null,
+  signature: string,
+): { entry: LedgerEntry } | { error: string } {
+  const nonce = rows[0]!.entry.nonce.toString();
+  if (blockTime === null) {
+    if (rows.length > 1) {
+      return {
+        error: `signature ${signature} matches ${rows.length} ledger rows for nonce ${nonce} equally; refusing to bind to the newest`,
+      };
+    }
+    return { entry: rows[0]!.entry };
+  }
+  const target = BigInt(blockTime);
+  const distance = (row: IndexedEntry): bigint => {
+    const ts = row.entry.ts;
+    return ts >= target ? ts - target : target - ts;
+  };
+  const ranked = [...rows].sort((a, b) => {
+    const delta = distance(a) - distance(b);
+    if (delta !== 0n) return delta < 0n ? -1 : 1;
+    return b.sequence - a.sequence;
+  });
+  const best = ranked[0]!;
+  const bestDistance = distance(best);
+  const tied = ranked.filter((row) => distance(row) === bestDistance);
+  if (tied.length > 1 && tied.some((row) => !sameComparedFields(row.entry, best.entry))) {
+    return {
+      error: `signature ${signature} matches ${tied.length} ledger rows for nonce ${best.entry.nonce.toString()} equally; refusing to bind to the newest`,
+    };
+  }
+  return { entry: best.entry };
+}
+
 export function matchingRingEntry(
   ledger: LedgerAccount,
-  want: { amount: bigint; nonce: bigint; kind: "paid" | "refused" },
+  want: {
+    amount: bigint;
+    nonce: bigint;
+    kind: "paid" | "refused";
+    timestamp?: number | null;
+    signature?: string;
+  },
 ): LedgerEntry | null {
   const kind = kindByte(want.kind);
   const hits = indexedEntries(ledger).filter((row) =>
     entryMatches(row.entry, { amount: want.amount, nonce: want.nonce, kind }),
   );
   if (hits.length === 0) return null;
-  return hits[hits.length - 1]!.entry;
+  const picked = ringEntryForSignature(hits, want.timestamp ?? null, want.signature ?? "");
+  if ("error" in picked) return null;
+  return picked.entry;
 }
 
 export async function tokenAccountOwner(conn: Connection, address: PublicKey): Promise<PublicKey> {

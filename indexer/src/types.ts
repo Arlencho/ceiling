@@ -70,6 +70,11 @@ export type FetchHistoryOptions = {
   // Reader's connection. Verify passes the connection it already opened so a
   // date_range check hits the same RPC the rest of the verdict used.
   connection?: Connection;
+  // Inclusive unix seconds. Signature pages are newest-first, so paging stops
+  // once a signature is older than `from`. getTransaction is skipped for
+  // signatures outside [from, to].
+  from?: number | null;
+  to?: number | null;
 };
 
 export type OverlapRow = {
