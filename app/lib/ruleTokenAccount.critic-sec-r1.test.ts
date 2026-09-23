@@ -5,7 +5,7 @@
 // owner stops before the wallet prompt. A legacy rule already revoked on chain
 // is closed without a second revoke, which the program would refuse.
 //
-// Red on the PR head: closing a legacy rule whose on-chain status is EXPIRED
+// Red on the PR head 931d96e, green from 63d9bca: closing a legacy rule whose on-chain status is EXPIRED
 // (set by a refused charge, never revoked) sends no revoke, so the associated
 // token account keeps its delegation to the mandate PDA after the mandate is
 // gone, and the app has no later path to drop it.
@@ -198,7 +198,7 @@ function legacyRule(status: number) {
   return { owner, mint, tokenProgram, ata, m, ledger };
 }
 
-test('critic sec r1: RED closing a legacy rule the chain marked expired drops its delegation before the mandate is gone', async () => {
+test('critic sec r1: closing a legacy rule the chain marked expired drops its delegation before the mandate is gone (closed at 63d9bca)', async () => {
   // A refused charge past expiry sets status EXPIRED on chain. Nothing has
   // called revoke, so the associated token account still names the mandate
   // PDA as delegate for cap minus spent. close_mandate does not touch the

@@ -358,7 +358,7 @@ live('sec r1: close_mandate on an active rule is refused for a stranger and for 
   assert.equal((await getAccount(connection, ownerAta)).amount, before + unspent, 'the unspent budget is back');
 });
 
-live('sec r1: RED closing a legacy rule the chain marked expired leaves the associated token account delegated to a mandate that no longer exists', async () => {
+live('sec r1: closing a legacy rule the chain marked expired revokes first, so the associated token account keeps no delegation to a mandate that no longer exists (closed at 63d9bca)', async () => {
   const { fetchMandate, closeMandate } = await chainModule;
   const { openMandateInstruction, revokeMandateInstruction } = await instructionsModule;
   const expiresAt = BigInt((await chainNow()) + 4);
