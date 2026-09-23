@@ -386,7 +386,7 @@ function oneTenure(mandateId: bigint, fillers: number, twinAt: number, refusedFl
   return chain(mandateId, steps, { limits: FIRST, rows });
 }
 
-test("critic sec r3 R8: a refused charge claimed paid does not CONFIRM once the ring has rolled past its row and holds the paid retry within the skew window", { todo: "issue 181: pre-existing on main, ring row is evidence only with the transaction decision frame" }, async () => {
+test("critic sec r3 R8: a refused charge claimed paid does not CONFIRM once the ring has rolled past its row and holds the paid retry within the skew window", async () => {
   const { conn, mandate } = oneTenure(1720n, 31, 2);
   const forged = await assessRecord(record(mandate, { ...REFUSED, timestamp: T1 + 2 }, FIRST, "paid"), RPC, conn, OPTS);
   assert.equal(forged.ok, false, forged.text);
@@ -404,7 +404,7 @@ test("critic sec r3 R8 control: the retry one second outside the skew window, or
   assert.match(still.text, /kind \(ledger\)/);
 });
 
-test("critic sec r3 R8-G: the genuine refused record with its log intact is not REJECTED because the ring now holds only the paid retry", { todo: "issue 181: pre-existing on main, ring row is evidence only with the transaction decision frame" }, async () => {
+test("critic sec r3 R8-G: the genuine refused record with its log intact is not REJECTED because the ring now holds only the paid retry", async () => {
   const { conn, mandate } = oneTenure(1723n, 31, 2, false);
   const genuine = await assessRecord(record(mandate, REFUSED, FIRST, "refused"), RPC, conn, OPTS);
   assert.equal(genuine.ok, true, genuine.text);

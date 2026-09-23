@@ -630,7 +630,12 @@ async function checkRecord(
       : [];
   const bound = boundVetoDecision(tx.meta?.logMessages ?? [], programId, want);
   const blockTime = txBlockTime(tx);
-  if (rows.length === 0) {
+  const logKind = bound.status === "one" ? kindByte(bound.decision.kind) : null;
+  const sameKind = logKind === null ? rows : rows.filter((row) => row.entry.kind === logKind);
+  // The log names a kind and the ring has no row of that kind. This decision
+  // has rolled off. Binding the other kind's row would describe a different charge.
+  const rolledOff = bound.status === "one" && rows.length > 0 && sameKind.length === 0;
+  if (rows.length === 0 || rolledOff) {
     if (bound.status === "none") {
       failures.push("ledger ring has no matching row and transaction logs have neither PAID nor REFUSED");
     } else if (bound.status === "error") {
@@ -651,7 +656,6 @@ async function checkRecord(
     }
   } else {
     const timePick = ringEntryForSignature(rows, blockTime, record.signature);
-    const logKind = bound.status === "one" ? kindByte(bound.decision.kind) : null;
     const picked = ringRowForLogKind(timePick, rows, blockTime, record.signature, logKind);
     if ("error" in picked) {
       failures.push(picked.error);
@@ -677,12 +681,16 @@ async function checkRecord(
         }
       }
     }
+    // No decision frame: a triple match is not this signature's row.
+    if (bound.status === "none") {
+      failures.push("ledger ring row cannot be tied to this transaction: its log carries no decision");
+    }
   }
 
   // Same triple as the ring. The first Veto line in the transaction is not the decision.
-  if (rows.length > 0 && bound.status === "error") {
+  if (rows.length > 0 && !rolledOff && bound.status === "error") {
     failures.push(bound.error);
-  } else if (rows.length > 0 && bound.status === "one") {
+  } else if (rows.length > 0 && !rolledOff && bound.status === "one") {
     eq(record.kind, bound.decision.kind, "kind (logs)", failures);
     eq(record.reason_code, bound.decision.reasonCode, "reason_code (logs)", failures);
   }
