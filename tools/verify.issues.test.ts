@@ -9,6 +9,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Keypair, PublicKey, type Connection } from "@solana/web3.js";
+import { encodePaidLog, encodeRefusedLog } from "../indexer/src/events.js";
 import { buildScope, makeBundle, type DecisionBundle } from "./bulk.js";
 import {
   CHARGE_DISCRIMINATOR,
@@ -204,11 +205,23 @@ function chargeTx(args: {
   };
 }
 
-function logsFor(row: ChargeRow): string[] {
-  if (row.kind === "paid") return [`Program log: VETO PAID amount=${row.amount}`];
-  return [
-    `Program log: VETO REFUSED reason=${row.reason} (${reasonText(row.reason)}) amount=${row.amount} per_tx_max=${LIMITS.per_tx_max} remaining=1 override_to_clear=${row.override}`,
-  ];
+function logsFor(programId: PublicKey, mandate: PublicKey, row: ChargeRow): string[] {
+  const program = programId.toBase58();
+  const text =
+    row.kind === "paid"
+      ? `Program log: VETO PAID amount=${row.amount}`
+      : `Program log: VETO REFUSED reason=${row.reason} (${reasonText(row.reason)}) amount=${row.amount} per_tx_max=${LIMITS.per_tx_max} remaining=1 override_to_clear=${row.override}`;
+  const event =
+    row.kind === "paid"
+      ? encodePaidLog({ mandate, amount: BigInt(row.amount), nonce: BigInt(row.nonce), spent: BigInt(row.amount) })
+      : encodeRefusedLog({
+          mandate,
+          amount: BigInt(row.amount),
+          nonce: BigInt(row.nonce),
+          reason: row.reason,
+          suggestedOverride: BigInt(row.override),
+        });
+  return [`Program ${program} invoke [1]`, text, event, `Program ${program} success`];
 }
 
 function decisionFor(row: ChargeRow, programId: string, mandate: string): DecisionRecord {
@@ -312,7 +325,7 @@ function world(args: {
         amount: BigInt(row.amount),
         nonce: BigInt(row.nonce),
         blockTime: row.timestamp,
-        logs: logsFor(row),
+        logs: logsFor(args.programId, mandate, row),
       }),
     );
   }

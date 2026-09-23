@@ -107,7 +107,7 @@ function encodeLedger(mandate: PublicKey, rows: Row[]): Buffer {
 function recordOf(mandate: string, row: Row): DecisionRecord {
   const refused = row.kind === "refused";
   const reason = reasonOf(row);
-  return parseRecord({
+  const record = parseRecord({
     schema_version: 1,
     cluster: "devnet",
     genesis_hash: DEVNET_GENESIS,
@@ -128,8 +128,12 @@ function recordOf(mandate: string, row: Row): DecisionRecord {
     reason_code: reason,
     reason_text: reasonText(reason),
     suggested_override: refused ? row.amount : 0,
-    signature: row.signature,
+    signature: "5".repeat(87),
   });
+  // CRAFTED_SIG is not a chain signature, and a pubkey-sized label is rejected
+  // by the file parser. The assertion is about the report, so the signature is
+  // filled in on the DecisionRecord after parsing.
+  return { ...record, signature: row.signature };
 }
 
 function chargeTx(mandate: PublicKey, ledger: PublicKey, row: Row, blockTime: number | null = row.timestamp): unknown {
