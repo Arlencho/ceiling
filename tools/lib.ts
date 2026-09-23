@@ -726,7 +726,7 @@ export function mandateLifecycle(
 export function parseChargeFromTx(
   tx: RpcTx & { meta?: { loadedAddresses?: { writable: AccountKeyLike[]; readonly: AccountKeyLike[] } } | null },
   programId: PublicKey,
-): ChargeIx | null {
+): ChargeIx[] {
   const keys = flattenAccountKeys(tx, tx.meta?.loadedAddresses ?? undefined);
   const msg = tx.transaction.message;
   const compiled = msg.compiledInstructions;
@@ -744,6 +744,7 @@ export function parseChargeFromTx(
     })) ??
     [];
 
+  const charges: ChargeIx[] = [];
   for (const ix of ixs) {
     const pid = keys[ix.programIdIndex];
     if (!pid || !pid.equals(programId)) continue;
@@ -760,7 +761,7 @@ export function parseChargeFromTx(
       if (!key) throw new Error(`charge account index ${idx} missing`);
       return key;
     };
-    return {
+    charges.push({
       amount,
       nonce,
       agent: pick(0),
@@ -769,9 +770,9 @@ export function parseChargeFromTx(
       source: pick(3),
       destination: pick(4),
       mint: pick(5),
-    };
+    });
   }
-  return null;
+  return charges;
 }
 
 export type ChargeLogDecision = {

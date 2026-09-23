@@ -417,11 +417,30 @@ async function checkRecord(
     failures.push(`transaction failed on chain: ${JSON.stringify(tx.meta.err)}`);
   }
 
-  const charge = parseChargeFromTx(tx, programId);
-  if (!charge) {
+  const charges = parseChargeFromTx(tx, programId);
+  if (charges.length === 0) {
     failures.push(`transaction does not invoke charge on ${programId.toBase58()}`);
     return { failures, notes };
   }
+  const chargeWant = {
+    mandate: record.mandate,
+    nonce: record.nonce,
+    amount: record.amount,
+  };
+  const matchedCharges = bindByTriple(charges, chargeWant, (item) => ({
+    mandate: item.mandate.toBase58(),
+    nonce: item.nonce,
+    amount: item.amount,
+  }));
+  // One charge that does not match still reports the field difference.
+  // Several charges and zero or several hits do not pick a side.
+  if (matchedCharges.length !== 1 && charges.length !== 1) {
+    failures.push(
+      `transaction carries ${matchedCharges.length} charges matching mandate, nonce, and amount`,
+    );
+    return { failures, notes };
+  }
+  const charge = matchedCharges[0] ?? charges[0]!;
   eq(record.amount, charge.amount, "amount (instruction)", failures);
   eq(record.nonce, charge.nonce, "nonce (instruction)", failures);
   eq(record.mandate, charge.mandate.toBase58(), "mandate (instruction)", failures);
@@ -757,9 +776,9 @@ function undecodableChargeFailures(
       unread.push(signature);
       continue;
     }
-    let charge: ChargeIx | null = null;
+    let charges: ChargeIx[] = [];
     try {
-      charge = parseChargeFromTx(tx, program);
+      charges = parseChargeFromTx(tx, program);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (!message.startsWith("charge instruction") && !message.startsWith("charge account index")) throw err;
@@ -768,8 +787,8 @@ function undecodableChargeFailures(
       );
       continue;
     }
-    if (!charge) continue;
-    if (bundle.scope.mandate && charge.mandate.toBase58() !== bundle.scope.mandate) continue;
+    if (charges.length === 0) continue;
+    if (bundle.scope.mandate && charges.every((charge) => charge.mandate.toBase58() !== bundle.scope.mandate)) continue;
     failures.push(
       `signature ${signature} invokes charge on ${program.toBase58()} but carries no attributable Veto decision`,
     );
