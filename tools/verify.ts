@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { fetchDecisionHistory } from "../indexer/src/index.js";
+import { isRateLimitError, isRetryable } from "../indexer/src/rpc.js";
 import {
   COMPLETENESS,
   filterIndexed,
@@ -41,7 +42,12 @@ export type Verdict = {
   ok: boolean;
   failures: string[];
   text: string;
+  code: 0 | 1 | 3;
 };
+
+function isTransportError(err: unknown): boolean {
+  return isRateLimitError(err) || isRetryable(err);
+}
 
 export type AssessOpts = {
   env?: NodeJS.ProcessEnv;
@@ -68,7 +74,9 @@ A date_range export must match the indexer's signature set for that range
 --block-scan are passed through to the indexer. Block scan is off unless
 --block-scan is set.
 
-Exit 0 on CONFIRMED, 1 on REJECTED, 2 on usage error.
+Exit 0 on CONFIRMED, 1 on REJECTED, 2 on usage error, 3 when a row was not checked.
+A rate limit, timeout, or network error while checking a row is not a verdict.
+The run names that row as not checked and exits 3.
 Does not need a keypair. Re-reads the cluster independently of the phone.
 The program id is the address in tools/idl/veto.json
 (3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV) unless --program-id or
@@ -625,11 +633,11 @@ export async function assessRecord(
   const cache = makeCache(conn, rpc, opts);
   const { failures, notes } = await checkRecord(record, rpc, cache);
   if (failures.length > 0) {
-    return { ok: false, failures, text: rejectedText(failures, notes) };
+    return { ok: false, failures, text: rejectedText(failures, notes), code: 1 };
   }
   const genesis = cache.genesis ?? record.genesis_hash;
   const lines = [...notes.map((note) => `note: ${note}`), ...confirmedLines(record, rpc, genesis, cache.programSource)];
-  return { ok: true, failures: [], text: `${lines.join("\n")}\n` };
+  return { ok: true, failures: [], text: `${lines.join("\n")}\n`, code: 0 };
 }
 
 export async function assessBundle(
@@ -642,7 +650,7 @@ export async function assessBundle(
     const failures = [
       `completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${JSON.stringify(bundle.completeness)}`,
     ];
-    return { ok: false, failures, text: rejectedText(failures) };
+    return { ok: false, failures, text: rejectedText(failures), code: 1 };
   }
   const cache = makeCache(conn, rpc, opts);
   const envelope = await bundleFailures(bundle, cache);
@@ -652,6 +660,11 @@ export async function assessBundle(
     try {
       failures = (await checkRecord(record, rpc, cache)).failures;
     } catch (err) {
+      if (isTransportError(err)) {
+        const detail = err instanceof Error ? err.message : String(err);
+        const line = `verify failed: row ${i + 1} signature=${record.signature} was not checked: ${detail}`;
+        return { ok: false, failures: [line], text: `${line}\n`, code: 3 };
+      }
       const message = err instanceof Error ? err.message : String(err);
       failures = [message];
     }
@@ -671,6 +684,7 @@ export async function assessBundle(
       ok: report.ok,
       failures: rows.flatMap((row) => row.failures),
       text: insertContext(report.text, context),
+      code: report.ok ? 0 : 1,
     };
   }
   const lines = ["VERDICT: REJECTED", "", ...context, ""];
@@ -688,6 +702,7 @@ export async function assessBundle(
     ok: false,
     failures: [...envelope, ...rows.flatMap((row) => row.failures)],
     text: `${lines.join("\n")}\n`,
+    code: 1,
   };
 }
 
@@ -774,14 +789,19 @@ async function main(): Promise<void> {
     ...(pageSize !== undefined ? { pageSize } : {}),
   };
   if (parsed.kind === "single") {
-    const result = await assessRecord(parsed.record, rpc, conn, opts);
-    process.stdout.write(result.text);
-    if (!result.ok) process.exit(1);
+    writeResult(await assessRecord(parsed.record, rpc, conn, opts));
     return;
   }
-  const result = await assessBundle(parsed.bundle, rpc, conn, opts);
+  writeResult(await assessBundle(parsed.bundle, rpc, conn, opts));
+}
+
+function writeResult(result: Verdict): void {
+  if (result.code === 3) {
+    process.stderr.write(result.text);
+    process.exit(3);
+  }
   process.stdout.write(result.text);
-  if (!result.ok) process.exit(1);
+  if (result.code !== 0) process.exit(result.code);
 }
 
 function invokedAsCli(): boolean {
@@ -798,6 +818,6 @@ if (invokedAsCli()) {
   main().catch((err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`verify failed: ${message}`);
-    process.exit(1);
+    process.exit(isTransportError(err) ? 3 : 1);
   });
 }

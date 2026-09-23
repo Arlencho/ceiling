@@ -211,7 +211,7 @@ that same range (and that mandate, when one is named) and rejects the file
 unless the signature set matches. A date_range with no mandate is every
 charge on the program in that range. The bulk verdict prints the scope,
 program, cluster, mandate, and range it checked. A missing row is a reject.
-An RPC transport error prints `verify failed` and no verdict.
+An RPC transport error prints `verify failed` and no verdict, and exits 3. On a bulk file the line names the row that was not checked.
 
 RPC, in order: `--rpc`, then `VETO_RPC`, then `keys/devnet-addresses.env`
 `RPC=`. If none of those is set, the tool exits and names `VETO_RPC`. There
