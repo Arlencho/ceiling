@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { fetchDecisionHistory } from "../indexer/src/index.js";
-import { asTransportError, isTransportError } from "../indexer/src/rpc.js";
+import { TransportError, asTransportError, isTransportError } from "../indexer/src/rpc.js";
 import {
   COMPLETENESS,
   filterIndexed,
@@ -25,6 +25,8 @@ import {
   indexedEntries,
   kindByte,
   ledgerPda,
+  mandateLifecycle,
+  mandatePda,
   parseArgs,
   parseChargeFromTx,
   reasonText,
@@ -38,6 +40,7 @@ import {
   type DecisionRecord,
   type LedgerEntry,
   type MandateAccount,
+  type OpenedMandate,
 } from "./lib.js";
 
 export type Verdict = {
@@ -106,6 +109,21 @@ function eq(a: bigint | string | number, b: bigint | string | number, field: str
   }
 }
 
+type ClosedHistory =
+  | { ok: true; covered: Map<string, OpenedMandate> }
+  | { ok: false; failure: string };
+
+type LimitView = {
+  owner: PublicKey;
+  mandateId: bigint;
+  merchant: PublicKey;
+  cap: bigint;
+  perTxMax: bigint;
+  expiresAt: bigint;
+  purpose: string;
+  fromOpening: boolean;
+};
+
 type CheckCache = {
   conn: Connection;
   expectedProgramId: PublicKey;
@@ -116,6 +134,7 @@ type CheckCache = {
   genesis?: string;
   mandates: Map<string, MandateAccount>;
   ledgers: Map<string, Awaited<ReturnType<typeof fetchLedger>>>;
+  closedHistory: Map<string, ClosedHistory>;
   destOwners: Map<string, PublicKey>;
   txs: Map<string, Awaited<ReturnType<Connection["getTransaction"]>>>;
 };
@@ -171,6 +190,173 @@ function programChoice(opts?: AssessOpts): { programId: PublicKey; source: strin
   if (opts?.programId) return { programId: opts.programId, source: "flag" };
   const resolved = resolveVerifyProgramId(REPO_DIR, opts?.env ?? process.env);
   return { programId: resolved.programId, source: resolved.source };
+}
+
+const CLOSED_NOTE = "mandate account is closed and the limits came from the opening transaction";
+
+async function listMandateSignatures(
+  conn: Connection,
+  mandate: PublicKey,
+): Promise<{ signature: string; err: unknown }[]> {
+  const out: { signature: string; err: unknown }[] = [];
+  const seen = new Set<string>();
+  let before: string | undefined;
+  const limit = 1000;
+  for (;;) {
+    let batch: Awaited<ReturnType<Connection["getSignaturesForAddress"]>>;
+    try {
+      batch = await conn.getSignaturesForAddress(mandate, { limit, before });
+    } catch (err) {
+      throw asTransportError(err);
+    }
+    if (batch.length === 0) break;
+    for (const item of batch) {
+      if (seen.has(item.signature)) {
+        throw new Error("mandate history cannot be read completely: a signature repeated");
+      }
+      seen.add(item.signature);
+      out.push({ signature: item.signature, err: item.err });
+    }
+    if (batch.length < limit) break;
+    const last = batch[batch.length - 1];
+    if (!last) break;
+    before = last.signature;
+  }
+  return out;
+}
+
+function remember(cache: CheckCache, mandate: string, history: ClosedHistory): ClosedHistory {
+  cache.closedHistory.set(mandate, history);
+  return history;
+}
+
+// The same PDA can be closed and opened again. A signature is covered by the
+// open_mandate that is still open when that signature is reached, and by no
+// later one. A second open before a close, or a close before an open, is
+// ambiguous. A null body is not a missing tenure.
+async function closedMandateHistory(cache: CheckCache, mandatePk: PublicKey): Promise<ClosedHistory> {
+  const key = mandatePk.toBase58();
+  const cached = cache.closedHistory.get(key);
+  if (cached) return cached;
+  const pages = await listMandateSignatures(cache.conn, mandatePk);
+  const covered = new Map<string, OpenedMandate>();
+  let current: OpenedMandate | null = null;
+  for (const page of [...pages].reverse()) {
+    if (page.err) continue;
+    const tx = await cachedTransaction(cache, page.signature);
+    if (!tx) {
+      throw new TransportError(`the RPC returned no transaction for a listed signature ${page.signature}`);
+    }
+    let mark: ReturnType<typeof mandateLifecycle>;
+    try {
+      mark = mandateLifecycle(tx, cache.expectedProgramId, mandatePk);
+    } catch (err) {
+      if (isTransportError(err)) throw err;
+      const message = failureText(err);
+      return remember(cache, key, { ok: false, failure: `mandate history cannot be read completely: ${message}` });
+    }
+    if (mark.opens.length > 0 && mark.closes > 0) {
+      return remember(cache, key, {
+        ok: false,
+        failure: "mandate history is ambiguous: one transaction both opens and closes the mandate",
+      });
+    }
+    if (mark.opens.length > 1) {
+      return remember(cache, key, {
+        ok: false,
+        failure: "mandate history is ambiguous: one transaction opens the mandate more than once",
+      });
+    }
+    if (mark.closes > 1) {
+      return remember(cache, key, {
+        ok: false,
+        failure: "mandate history is ambiguous: one transaction closes the mandate more than once",
+      });
+    }
+    if (current) covered.set(page.signature, current);
+    if (mark.opens.length === 1) {
+      if (current) {
+        return remember(cache, key, {
+          ok: false,
+          failure: "mandate history is ambiguous: a mandate was opened again before it was closed",
+        });
+      }
+      current = mark.opens[0]!;
+    } else if (mark.closes === 1) {
+      if (!current) {
+        return remember(cache, key, {
+          ok: false,
+          failure: "mandate history is ambiguous: a mandate was closed before it was opened",
+        });
+      }
+      current = null;
+    }
+  }
+  return remember(cache, key, { ok: true, covered });
+}
+
+function liveLimits(mandate: MandateAccount): LimitView {
+  return {
+    owner: mandate.owner,
+    mandateId: mandate.mandateId,
+    merchant: mandate.merchant,
+    cap: mandate.cap,
+    perTxMax: mandate.perTxMax,
+    expiresAt: mandate.expiresAt,
+    purpose: mandate.purpose,
+    fromOpening: false,
+  };
+}
+
+async function limitSource(
+  record: DecisionRecord,
+  cache: CheckCache,
+  failures: string[],
+  notes: string[],
+): Promise<LimitView | undefined> {
+  const cached = cache.mandates.get(record.mandate);
+  if (cached) return liveLimits(cached);
+  const mandatePk = new PublicKey(record.mandate);
+  try {
+    const loaded = await fetchMandate(cache.conn, mandatePk);
+    cache.mandates.set(record.mandate, loaded);
+    return liveLimits(loaded);
+  } catch (err) {
+    if (isTransportError(err)) throw err;
+    const message = failureText(err);
+    if (!message.startsWith("mandate account not found")) {
+      failures.push(message);
+      return undefined;
+    }
+  }
+  let history: ClosedHistory;
+  try {
+    history = await closedMandateHistory(cache, mandatePk);
+  } catch (err) {
+    if (isTransportError(err)) throw err;
+    failures.push(failureText(err));
+    return undefined;
+  }
+  if (!history.ok) {
+    failures.push(history.failure);
+    return undefined;
+  }
+  const opened = history.covered.get(record.signature);
+  if (!opened) {
+    failures.push(`mandate history does not cover signature ${record.signature}`);
+    return undefined;
+  }
+  notes.push(CLOSED_NOTE);
+  return {
+    owner: opened.owner,
+    mandateId: opened.mandateId,
+    merchant: opened.merchant,
+    cap: opened.cap,
+    perTxMax: opened.perTxMax,
+    expiresAt: opened.expiresAt,
+    purpose: opened.purpose,
+    fromOpening: true,
+  };
 }
 
 async function checkRecord(
@@ -244,26 +430,16 @@ async function checkRecord(
   const expectedLedger = ledgerPda(programId, mandatePk);
   eq(charge.ledger.toBase58(), expectedLedger.toBase58(), "ledger PDA", failures);
 
-  let mandate = cache.mandates.get(record.mandate);
-  if (!mandate) {
-    const loaded = await accountOrFailure(failures, () => fetchMandate(conn, mandatePk));
-    if (!loaded) return { failures, notes };
-    mandate = loaded;
-    cache.mandates.set(record.mandate, mandate);
+  const limits = await limitSource(record, cache, failures, notes);
+  if (!limits) return { failures, notes };
+  eq(record.limits.cap, limits.cap, "limits.cap", failures);
+  eq(record.limits.per_tx_max, limits.perTxMax, "limits.per_tx_max", failures);
+  eq(record.limits.expires_at, limits.expiresAt, "limits.expires_at", failures);
+  eq(record.limits.merchant, limits.merchant.toBase58(), "limits.merchant", failures);
+  if (record.limits.purpose !== limits.purpose) {
+    failures.push(`limits.purpose: record has "${record.limits.purpose}", chain has "${limits.purpose}"`);
   }
-  eq(record.limits.cap, mandate.cap, "limits.cap", failures);
-  eq(record.limits.per_tx_max, mandate.perTxMax, "limits.per_tx_max", failures);
-  eq(record.limits.expires_at, mandate.expiresAt, "limits.expires_at", failures);
-  eq(record.limits.merchant, mandate.merchant.toBase58(), "limits.merchant", failures);
-  if (record.limits.purpose !== mandate.purpose) {
-    failures.push(`limits.purpose: record has "${record.limits.purpose}", chain has "${mandate.purpose}"`);
-  }
-  const idLe = Buffer.alloc(8);
-  idLe.writeBigUInt64LE(mandate.mandateId);
-  const derived = PublicKey.findProgramAddressSync(
-    [Buffer.from("mandate"), mandate.owner.toBuffer(), idLe],
-    programId,
-  )[0];
+  const derived = mandatePda(programId, limits.owner, limits.mandateId);
   if (!derived.equals(mandatePk)) {
     failures.push(
       `mandate PDA re-derived from on-chain owner+mandate_id is ${derived.toBase58()}, record has ${record.mandate}`,
@@ -278,22 +454,29 @@ async function checkRecord(
       cache.destOwners.set(charge.destination.toBase58(), destOwner);
     }
   }
-  if (destOwner && !destOwner.equals(mandate.merchant)) {
+  if (destOwner && !destOwner.equals(limits.merchant)) {
     failures.push(
-      `destination token account owner is ${destOwner.toBase58()}, mandate merchant is ${mandate.merchant.toBase58()}`,
+      `destination token account owner is ${destOwner.toBase58()}, mandate merchant is ${limits.merchant.toBase58()}`,
     );
   }
 
   const ledgerKey = expectedLedger.toBase58();
   let ledger = cache.ledgers.get(ledgerKey);
   if (!ledger) {
-    const loaded = await accountOrFailure(failures, () => fetchLedger(conn, expectedLedger));
-    if (!loaded) return { failures, notes };
-    ledger = loaded;
-    cache.ledgers.set(ledgerKey, ledger);
-  }
-  if (!ledger.mandate.equals(mandatePk)) {
-    failures.push(`ledger.mandate is ${ledger.mandate.toBase58()}, expected ${record.mandate}`);
+    try {
+      const loaded = await fetchLedger(conn, expectedLedger);
+      ledger = loaded;
+      cache.ledgers.set(ledgerKey, ledger);
+    } catch (err) {
+      if (isTransportError(err)) throw err;
+      const message = failureText(err);
+      // close_mandate reclaims the ledger with the mandate. The ring is gone;
+      // the charge transaction is the evidence.
+      if (!(limits.fromOpening && message.startsWith("ledger account not found"))) {
+        failures.push(message);
+        return { failures, notes };
+      }
+    }
   }
   // Chain data, not the file. Two charges can share a nonce and differ by amount.
   const want = {
@@ -301,11 +484,17 @@ async function checkRecord(
     nonce: charge.nonce,
     amount: charge.amount,
   };
-  const rows = bindByTriple(indexedEntries(ledger), want, (row) => ({
-    mandate: ledger.mandate.toBase58(),
-    nonce: row.entry.nonce,
-    amount: row.entry.amount,
-  }));
+  const held = ledger;
+  if (held && !held.mandate.equals(mandatePk)) {
+    failures.push(`ledger.mandate is ${held.mandate.toBase58()}, expected ${record.mandate}`);
+  }
+  const rows = held
+    ? bindByTriple(indexedEntries(held), want, (row) => ({
+        mandate: held.mandate.toBase58(),
+        nonce: row.entry.nonce,
+        amount: row.entry.amount,
+      }))
+    : [];
   const bound = boundVetoDecision(tx.meta?.logMessages ?? [], programId, want);
   const blockTime = txBlockTime(tx);
   if (rows.length === 0) {
@@ -797,6 +986,7 @@ function makeCache(conn: Connection, rpc: string, opts?: AssessOpts): CheckCache
     pageSize: opts?.pageSize,
     mandates: new Map(),
     ledgers: new Map(),
+    closedHistory: new Map(),
     destOwners: new Map(),
     txs: new Map(),
   };
