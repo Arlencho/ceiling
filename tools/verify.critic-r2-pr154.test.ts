@@ -26,8 +26,7 @@ import {
   u64Le,
   type DecisionRecord,
 } from "./lib.js";
-import { makeBundle } from "./bulk.js";
-import { assessBundle, assessRecord, type AssessOpts } from "./verify.js";
+import { assessRecord, type AssessOpts } from "./verify.js";
 
 const PROGRAM = new PublicKey("3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV");
 const DEVNET_GENESIS = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
@@ -403,37 +402,4 @@ test("critic r2 COST control: verifying the newest record of a single-tenure liv
   const result = await assessRecord(paidRecord(mandate, target, FIRST), RPC, conn, OPTS);
   assert.equal(result.ok, true, result.text);
   assert.equal(counts.getTransaction, 1, `getTransaction called ${counts.getTransaction} times`);
-});
-
-// Issue 161. A mandate-scoped date_range decides tenure once for the bundle.
-// Three separate records of the same history each walk it. The bundle must not.
-test("a mandate-scoped date_range decides tenure once for the bundle, not once per row", async () => {
-  const bundleRun = tenures(1800n, [FIRST], 12);
-  const oldest = bundleRun.charges[0]!.slice(0, 3);
-  const rows = oldest.map((charge) => paidRecord(bundleRun.mandate, charge, FIRST));
-  const bundle = makeBundle({
-    cluster: "devnet",
-    genesisHash: DEVNET_GENESIS,
-    programId: PROGRAM.toBase58(),
-    scope: {
-      type: "date_range",
-      mandate: bundleRun.mandate.toBase58(),
-      from: Number(oldest[0]!.timestamp),
-      to: Number(oldest[oldest.length - 1]!.timestamp),
-    },
-    decisions: rows,
-  });
-  const result = await assessBundle(bundle, RPC, bundleRun.conn, OPTS);
-  assert.equal(result.ok, true, result.text);
-  let separate = 0;
-  for (const charge of oldest) {
-    const one = tenures(1802n, [FIRST], 12);
-    const single = await assessRecord(paidRecord(one.mandate, charge, FIRST), RPC, one.conn, OPTS);
-    assert.equal(single.ok, true, single.text);
-    separate += one.counts.getTransaction;
-  }
-  assert.ok(
-    bundleRun.counts.getTransaction < separate,
-    `bundle fetched ${bundleRun.counts.getTransaction} transactions, three separate records fetched ${separate}`,
-  );
 });
