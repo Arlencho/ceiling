@@ -313,6 +313,7 @@ YAML
 
     pkg=$(tiny_package)
     npm_log=$(mktemp)
+    log_dir=""
     case "$mode" in
         step-writes-env)
             (
@@ -360,11 +361,23 @@ DOCKER
             fi
             rm -f "$build_log"
             rm -rf "$image_dir"
+            # The runner's temp file is mode 600. A container user cannot tee
+            # onto that mount. A directory it can create in is enough.
+            log_dir=$(mktemp -d)
+            chmod 777 "$log_dir"
+            rm -f "$npm_log"
+            npm_log="$log_dir/out.txt"
+            docker_err=$(mktemp)
             npm_status=0
-            docker run --rm -v "$pkg:/work" -w /work -v "$(dirname "$npm_log"):/logs" \
+            docker run --rm -v "$pkg:/work" -w /work -v "$log_dir:/logs" \
                 veto-ci-count-proof:npm-true \
-                sh -c 'set -o pipefail; npm test 2>&1 | tee /logs/'"$(basename "$npm_log")" \
-                || npm_status=$?
+                sh -c 'npm test > /logs/out.txt 2>&1' \
+                >"$docker_err" 2>&1 || npm_status=$?
+            if [ "$npm_status" -ne 0 ]; then
+                echo "docker run failed:"
+                sed -n '1,40p' "$docker_err"
+            fi
+            rm -f "$docker_err"
             ;;
     esac
     printf 'npm_exit: %s\n' "$npm_status"
@@ -389,6 +402,9 @@ DOCKER
     fi
     rm -rf "$pkg"
     rm -f "$npm_log"
+    if [ -n "$log_dir" ]; then
+        rm -rf "$log_dir"
+    fi
     unset npm_status
 done
 
