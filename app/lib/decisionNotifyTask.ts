@@ -223,6 +223,11 @@ async function registerQuietly(): Promise<void> {
 
 let asking: Promise<void> | null = null;
 
+export async function hasAskedForDecisionNotifications(): Promise<boolean> {
+  const asked = await secureStore.getItem(ASKED_KEY);
+  return asked === '1';
+}
+
 export function askAfterFirstRuleOpened(): Promise<void> {
   if (asking) {
     return asking;

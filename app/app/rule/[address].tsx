@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../../components/Button';
@@ -12,7 +12,8 @@ import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
 import { copyAgentAddress } from '../../lib/agentAddress';
 import { STATUS_REVOKED } from '../../lib/constants';
-import { askAfterFirstRuleOpened } from '../../lib/decisionNotifyTask';
+import { askAfterFirstRuleOpened, hasAskedForDecisionNotifications } from '../../lib/decisionNotifyTask';
+import { DECISION_NOTIFICATION_EXPLANATION, explainOnceThenAsk } from '../../lib/notificationAsk';
 import { formatBaseUnits, formatTimeLeft } from '../../lib/format';
 import { mayClaimAbsence } from '../../lib/mandateRead';
 import { notActiveHint } from '../../lib/reasons';
@@ -29,6 +30,8 @@ export default function RuleDetailScreen() {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [notifyCopy, setNotifyCopy] = useState<string | null>(null);
+  const notifyContinue = useRef<(() => void) | null>(null);
   const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
   const mandate = chain.mandates.find((row) => row.address === address) ?? null;
   const index = mandate ? chain.mandates.findIndex((row) => row.address === mandate.address) : -1;
@@ -59,7 +62,37 @@ export default function RuleDetailScreen() {
     if (!openedAddress) {
       return;
     }
-    void askAfterFirstRuleOpened().catch(() => undefined);
+    let cancelled = false;
+    void (async () => {
+      const asked = await hasAskedForDecisionNotifications();
+      if (cancelled) {
+        return;
+      }
+      await explainOnceThenAsk({
+        alreadyAsked: asked,
+        showExplanation: (copy) =>
+          new Promise<void>((resolve) => {
+            if (cancelled) {
+              resolve();
+              return;
+            }
+            notifyContinue.current = resolve;
+            setNotifyCopy(copy);
+          }),
+        ask: async () => {
+          if (cancelled) {
+            return;
+          }
+          await askAfterFirstRuleOpened();
+        },
+      });
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+      const pending = notifyContinue.current;
+      notifyContinue.current = null;
+      pending?.();
+    };
   }, [openedAddress]);
 
   const onCopyAgent = async () => {
@@ -109,6 +142,22 @@ export default function RuleDetailScreen() {
           </EmptyState>
         ) : (
           <View style={styles.block}>
+            {notifyCopy ? (
+              <View style={styles.explain}>
+                <Text style={styles.explainCopy}>{DECISION_NOTIFICATION_EXPLANATION}</Text>
+                <Button
+                  label="Continue"
+                  accessibilityLabel="Continue to notification permission"
+                  invert={false}
+                  onPress={() => {
+                    const done = notifyContinue.current;
+                    notifyContinue.current = null;
+                    setNotifyCopy(null);
+                    done?.();
+                  }}
+                />
+              </View>
+            ) : null}
             <Text style={styles.h2}>The rule</Text>
             <Text style={styles.sentence}>{ruleSentence(mandate, chain.decimals)}</Text>
 
@@ -233,6 +282,14 @@ const styles = StyleSheet.create({
   block: {
     gap: 12,
     alignSelf: 'stretch',
+  },
+  explain: {
+    gap: 10,
+  },
+  explainCopy: {
+    color: colors.body,
+    fontSize: 15,
+    lineHeight: 22,
   },
   h2: {
     color: colors.text,
