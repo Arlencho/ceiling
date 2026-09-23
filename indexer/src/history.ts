@@ -8,6 +8,7 @@ import {
   isSkippableSlot,
   isTransportError,
   isUnavailableBlock,
+  ListedBlockMissingError,
   ListedTransactionMissingError,
   parseRpcList,
   withRetry,
@@ -227,7 +228,10 @@ async function scanBlocksForProgram(
         if (isUnavailableBlock(err) || isTransportError(err)) throw asTransportError(err);
         throw err;
       }
-      if (!block) continue;
+      // getBlocks listed this slot. A null getBlock is not a skipped slot and
+      // not an empty block. Same class as a listed signature whose
+      // getTransaction answers null.
+      if (!block) throw new ListedBlockMissingError([slot]);
       for (const item of block.transactions) {
         const view = txPartsToView({
           signature: item.transaction.signatures[0] ?? "",

@@ -27,11 +27,11 @@ import {
   kindByte,
   ledgerPda,
   mandateLifecycle,
+  loadedSignature,
   mandatePda,
   parseArgs,
   parseChargeFromTx,
   reasonText,
-  requireSignature,
   redactRpcUrls,
   resolveRpcList,
   resolveVerifyProgramId,
@@ -107,7 +107,7 @@ function fail(failures: string[]): never {
 
 function eq(a: bigint | string | number, b: bigint | string | number, field: string, failures: string[]): void {
   if (a.toString() !== b.toString()) {
-    failures.push(`${field}: record has ${a}, chain has ${b}`);
+    failures.push(`${field}: record has ${echoFile(a.toString())}, chain has ${echoFile(b.toString())}`);
   }
 }
 
@@ -481,17 +481,15 @@ async function checkRecord(
   const notes: string[] = [];
   const conn = cache.conn;
   const programId = cache.expectedProgramId;
-  if (record.signature.length >= 64) {
-    try {
-      requireSignature(record.signature, "signature");
-    } catch (err) {
-      failures.push(failureText(err));
-      return { failures, notes };
-    }
+  try {
+    loadedSignature(record.signature, "signature");
+  } catch (err) {
+    failures.push(failureText(err));
+    return { failures, notes };
   }
   if (record.program_id !== programId.toBase58()) {
     failures.push(
-      `program_id: record has ${record.program_id}, this tool checks ${programId.toBase58()}`,
+      `program_id: record has ${echoFile(record.program_id)}, this tool checks ${programId.toBase58()}`,
     );
     return { failures, notes };
   }
@@ -506,7 +504,7 @@ async function checkRecord(
 
   if (record.reason_text !== reasonText(record.reason_code)) {
     failures.push(
-      `reason_text: record has ${JSON.stringify(record.reason_text)}, canonical text for code ${record.reason_code} is ${JSON.stringify(reasonText(record.reason_code))}`,
+      `reason_text: record has ${echoFile(JSON.stringify(record.reason_text))}, canonical text for code ${record.reason_code} is ${echoFile(JSON.stringify(reasonText(record.reason_code)))}`,
     );
   }
   if (record.kind === "paid" && record.reason_code !== 0) {
@@ -527,7 +525,7 @@ async function checkRecord(
     return { failures, notes };
   }
   if (tx.meta?.err) {
-    failures.push(`transaction failed on chain: ${JSON.stringify(tx.meta.err)}`);
+    failures.push(`transaction failed on chain: ${echoFile(JSON.stringify(tx.meta.err))}`);
   }
 
   const charges = parseChargeFromTx(tx, programId);
@@ -570,13 +568,13 @@ async function checkRecord(
   eq(record.limits.merchant, limits.merchant.toBase58(), "limits.merchant", failures);
   if (record.limits.purpose !== limits.purpose) {
     failures.push(
-      `limits.purpose: record has ${JSON.stringify(record.limits.purpose)}, chain has ${JSON.stringify(limits.purpose)}`,
+      `limits.purpose: record has ${echoFile(JSON.stringify(record.limits.purpose))}, chain has ${echoFile(JSON.stringify(limits.purpose))}`,
     );
   }
   const derived = mandatePda(programId, limits.owner, limits.mandateId);
   if (!derived.equals(mandatePk)) {
     failures.push(
-      `mandate PDA re-derived from on-chain owner+mandate_id is ${derived.toBase58()}, record has ${record.mandate}`,
+      `mandate PDA re-derived from on-chain owner+mandate_id is ${derived.toBase58()}, record has ${echoFile(record.mandate)}`,
     );
   }
 
@@ -620,7 +618,7 @@ async function checkRecord(
   };
   const held = ledger;
   if (held && !held.mandate.equals(mandatePk)) {
-    failures.push(`ledger.mandate is ${held.mandate.toBase58()}, expected ${record.mandate}`);
+    failures.push(`ledger.mandate is ${held.mandate.toBase58()}, expected ${echoFile(record.mandate)}`);
   }
   // A reopened account's ring belongs to the live tenure. Rows in it can repeat
   // an earlier tenure's nonce and amount, so they do not confirm that tenure.
@@ -653,7 +651,7 @@ async function checkRecord(
       eq(record.suggested_override, logs.suggestedOverride, "suggested_override (logs)", failures);
       if (record.reason_text !== logs.reasonText) {
         failures.push(
-          `reason_text: record has ${JSON.stringify(record.reason_text)}, logs have ${JSON.stringify(logs.reasonText)}`,
+          `reason_text: record has ${echoFile(JSON.stringify(record.reason_text))}, logs have ${echoFile(JSON.stringify(logs.reasonText))}`,
         );
       }
       if (blockTime !== null) {
@@ -713,19 +711,19 @@ function confirmedLines(record: DecisionRecord, rpc: string, genesis: string, pr
     `rpc                 ${shownRpc(rpc)}`,
     `cluster             ${clusterForGenesis(genesis)}`,
     `genesis_hash        ${genesis}`,
-    `program_id          ${record.program_id}`,
-    `checked against program ${record.program_id} (${programSource})`,
-    `mandate             ${record.mandate}`,
+    `program_id          ${echoFile(record.program_id)}`,
+    `checked against program ${echoFile(record.program_id)} (${programSource})`,
+    `mandate             ${echoFile(record.mandate)}`,
     `signature           ${echoFile(record.signature)}`,
-    `kind                ${record.kind}`,
+    `kind                ${echoFile(record.kind)}`,
     `amount              ${record.amount.toString()}`,
-    `counterparty        ${record.counterparty}`,
+    `counterparty        ${echoFile(record.counterparty)}`,
     `timestamp           ${record.timestamp.toString()}`,
     `nonce               ${record.nonce.toString()}`,
     `reason              ${record.reason_code} (${echoFile(record.reason_text)})`,
     `suggested_override  ${record.suggested_override.toString()}`,
     `limits              cap=${record.limits.cap.toString()} per_tx_max=${record.limits.per_tx_max.toString()} expires_at=${record.limits.expires_at.toString()}`,
-    `merchant            ${record.limits.merchant}`,
+    `merchant            ${echoFile(record.limits.merchant)}`,
     `purpose             ${echoFile(record.limits.purpose)}`,
     "",
     "Mandate limits, ledger entry, and charge transaction agree.",
@@ -757,11 +755,11 @@ async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promis
   const failures: string[] = [];
   const expected = cache.expectedProgramId.toBase58();
   if (bundle.program_id !== expected) {
-    failures.push(`program_id: envelope has ${bundle.program_id}, this tool checks ${expected}`);
+    failures.push(`program_id: envelope has ${echoFile(bundle.program_id)}, this tool checks ${expected}`);
   }
   const genesis = await cachedGenesis(cache);
   if (bundle.genesis_hash !== genesis) {
-    failures.push(`genesis_hash: envelope has ${bundle.genesis_hash}, chain has ${genesis}`);
+    failures.push(`genesis_hash: envelope has ${echoFile(bundle.genesis_hash)}, chain has ${echoFile(genesis)}`);
   }
   const cluster = clusterForGenesis(genesis);
   if (bundle.cluster !== cluster) {
@@ -775,7 +773,7 @@ async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promis
     seen.add(record.signature);
     if (record.program_id !== bundle.program_id) {
       failures.push(
-        `program_id: row ${echoFile(record.signature)} has ${record.program_id}, envelope has ${bundle.program_id}`,
+        `program_id: row ${echoFile(record.signature)} has ${echoFile(record.program_id)}, envelope has ${echoFile(bundle.program_id)}`,
       );
     }
     if (record.genesis_hash !== bundle.genesis_hash) {
@@ -788,7 +786,7 @@ async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promis
     }
     if (bundle.scope.mandate && record.mandate !== bundle.scope.mandate) {
       failures.push(
-        `mandate: row ${echoFile(record.signature)} has ${record.mandate}, scope has ${echoFile(bundle.scope.mandate)}`,
+        `mandate: row ${echoFile(record.signature)} has ${echoFile(record.mandate)}, scope has ${echoFile(bundle.scope.mandate)}`,
       );
     }
   }
@@ -1102,7 +1100,7 @@ export async function assessBundle(
 ): Promise<Verdict> {
   if (bundle.completeness !== COMPLETENESS) {
     const failures = [
-      `completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${JSON.stringify(bundle.completeness)}`,
+      `completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${echoFile(JSON.stringify(bundle.completeness))}`,
     ];
     return { ok: false, failures, text: rejectedText(failures), code: 1 };
   }
@@ -1156,7 +1154,7 @@ export async function assessBundle(
     for (const row of rows) {
       if (row.ok) continue;
       lines.push("");
-      lines.push(`REJECTED row ${row.index} signature=${echoFile(row.signature)} kind=${row.kind} nonce=${row.nonce}`);
+      lines.push(`REJECTED row ${row.index} signature=${echoFile(row.signature)} kind=${echoFile(row.kind)} nonce=${echoFile(row.nonce)}`);
       for (const failure of row.failures) lines.push(`- ${failure}`);
     }
   }
@@ -1177,7 +1175,7 @@ function populationLines(bundle: DecisionBundle, cache: CheckCache): string[] {
     `from                ${scope.from === null ? "none" : String(scope.from)}`,
     `to                  ${scope.to === null ? "none" : String(scope.to)}`,
     `program_id          ${cache.expectedProgramId.toBase58()}`,
-    `cluster             ${cache.genesis ? clusterForGenesis(cache.genesis) : bundle.cluster}`,
+    `cluster             ${cache.genesis ? clusterForGenesis(cache.genesis) : echoFile(bundle.cluster)}`,
     `checked against program ${cache.expectedProgramId.toBase58()} (${cache.programSource})`,
   ];
   if (scope.mandate) {

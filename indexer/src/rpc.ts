@@ -64,6 +64,17 @@ export class ListedTransactionMissingError extends TransportError {
   }
 }
 
+// getBlocks listed the slot and getBlock then answered null. That is not
+// proof the slot was skipped or empty.
+export class ListedBlockMissingError extends TransportError {
+  readonly slots: readonly number[];
+
+  constructor(slots: readonly number[]) {
+    super(slots.map((slot) => `the RPC returned no block for a listed slot ${slot}`).join("; "));
+    this.slots = slots;
+  }
+}
+
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 export type FailoverFetchOpts = {
