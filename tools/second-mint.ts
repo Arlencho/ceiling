@@ -31,6 +31,7 @@ import {
   mandatePda,
   parseArgs,
   reasonText,
+  redactRpcUrl,
   resolveProgramId,
   resolveRpcList,
   type Cli,
@@ -69,7 +70,7 @@ export type SecondMintGuardInput = {
 export function assertSecondMintAllowed(input: SecondMintGuardInput): void {
   for (const rpc of input.rpcUrls) {
     if (rpc.toLowerCase().includes("mainnet")) {
-      throw new Error(`second-mint: refusing mainnet rpc ${rpc}`);
+      throw new Error(`second-mint: refusing mainnet rpc ${redactRpcUrl(rpc)}`);
     }
   }
   if (input.genesis !== DEVNET_GENESIS) {

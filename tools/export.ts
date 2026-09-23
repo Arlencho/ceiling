@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { fetchDecisionHistory } from "../indexer/src/index.js";
 import {
@@ -15,9 +16,10 @@ import {
   type IndexedDecision,
 } from "./bulk.js";
 import {
+  bindByTriple,
+  boundVetoDecision,
   buildRecord,
   connection,
-  entryMatches,
   fetchLedger,
   fetchMandate,
   flagString,
@@ -31,6 +33,8 @@ import {
   resolveClusterName,
   resolveProgramId,
   resolveRpcList,
+  ringEntryForSignature,
+  ringRowForLogKind,
   type DecisionRecord,
   type LedgerAccount,
   type LedgerEntry,
@@ -77,7 +81,7 @@ async function getTx(conn: Connection, signature: string) {
   return tx;
 }
 
-async function recordFromSignature(
+export async function recordFromSignature(
   conn: Connection,
   signature: string,
   programId: PublicKey,
@@ -98,36 +102,22 @@ async function recordFromSignature(
     throw new Error("charge ledger account does not match the PDA derived from the mandate");
   }
   const ledger = await fetchLedger(conn, ledgerAddress);
-  const wantKind = (() => {
-    const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
-    if (logs) return kindByte(logs.kind);
-    return null;
-  })();
-  const matches = indexedEntries(ledger).filter((row) =>
-    entryMatches(row.entry, {
-      amount: charge.amount,
-      nonce: charge.nonce,
-      kind: wantKind ?? row.entry.kind,
-    }),
-  );
+  // Same candidate set verify uses: mandate, nonce, and amount. Log kind is not
+  // a filter. Two rows can share a nonce when a refusal does not advance it.
+  const want = {
+    mandate: charge.mandate.toBase58(),
+    nonce: charge.nonce,
+    amount: charge.amount,
+  };
+  const matches = bindByTriple(indexedEntries(ledger), want, (row) => ({
+    mandate: ledger.mandate.toBase58(),
+    nonce: row.entry.nonce,
+    amount: row.entry.amount,
+  }));
+  const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
+  const bound = boundVetoDecision(tx.meta?.logMessages ?? [], programId, want);
   let entry: LedgerEntry;
-  if (matches.length === 1) {
-    entry = matches[0]!.entry;
-  } else if (matches.length > 1) {
-    const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
-    const blockTime = tx.blockTime !== null && tx.blockTime !== undefined ? BigInt(tx.blockTime) : null;
-    const scored = matches
-      .map((row) => {
-        let score = 0;
-        if (blockTime !== null && row.entry.ts === blockTime) score += 2;
-        if (logs && row.entry.reason === logs.reasonCode) score += 2;
-        if (logs && row.entry.suggestedOverride === logs.suggestedOverride) score += 1;
-        return { row, score };
-      })
-      .sort((a, b) => b.score - a.score);
-    entry = scored[0]!.row.entry;
-  } else {
-    const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
+  if (matches.length === 0) {
     if (!logs) {
       throw new Error(
         "no matching ledger row and the transaction logs have neither PAID nor REFUSED",
@@ -143,6 +133,17 @@ async function recordFromSignature(
       reason: logs.reasonCode,
     };
     console.error("warning: ledger ring no longer holds this decision; reconstructed from the transaction");
+  } else if (bound.status === "error") {
+    throw new Error(bound.error);
+  } else {
+    const blockTime = typeof tx.blockTime === "number" ? tx.blockTime : null;
+    const timePick = ringEntryForSignature(matches, blockTime, signature);
+    const logKind = bound.status === "one" ? kindByte(bound.decision.kind) : null;
+    const picked = ringRowForLogKind(timePick, matches, blockTime, signature, logKind);
+    if ("error" in picked) {
+      throw new Error(picked.error);
+    }
+    entry = picked.entry;
   }
   return buildRecord({
     cluster,
@@ -302,8 +303,20 @@ async function main(): Promise<void> {
   writeOutput(format === "csv" ? bundleToCsv(bundle) : bundleToJson(bundle), out);
 }
 
-main().catch((err: unknown) => {
-  const message = err instanceof Error ? err.message : String(err);
-  console.error(`export failed: ${message}`);
-  process.exit(1);
-});
+function invokedAsCli(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return pathToFileURL(entry).href === import.meta.url;
+  } catch {
+    return false;
+  }
+}
+
+if (invokedAsCli()) {
+  main().catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`export failed: ${message}`);
+    process.exit(1);
+  });
+}

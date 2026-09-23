@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { fetchDecisionHistory } from "../indexer/src/index.js";
+import { asTransportError, isTransportError } from "../indexer/src/rpc.js";
 import {
   COMPLETENESS,
   filterIndexed,
@@ -22,6 +23,7 @@ import {
   bindByTriple,
   boundVetoDecision,
   indexedEntries,
+  kindByte,
   ledgerPda,
   parseArgs,
   parseChargeFromTx,
@@ -30,6 +32,7 @@ import {
   resolveRpcList,
   resolveVerifyProgramId,
   ringEntryForSignature,
+  ringRowForLogKind,
   tokenAccountOwner,
   type ChargeIx,
   type DecisionRecord,
@@ -41,6 +44,7 @@ export type Verdict = {
   ok: boolean;
   failures: string[];
   text: string;
+  code: 0 | 1 | 3;
 };
 
 export type AssessOpts = {
@@ -68,7 +72,9 @@ A date_range export must match the indexer's signature set for that range
 --block-scan are passed through to the indexer. Block scan is off unless
 --block-scan is set.
 
-Exit 0 on CONFIRMED, 1 on REJECTED, 2 on usage error.
+Exit 0 on CONFIRMED, 1 on REJECTED, 2 on usage error, 3 when a row was not checked.
+A rate limit, timeout, or network error while checking a row is not a verdict.
+The run names that row as not checked and exits 3.
 Does not need a keypair. Re-reads the cluster independently of the phone.
 The program id is the address in tools/idl/veto.json
 (3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV) unless --program-id or
@@ -184,7 +190,15 @@ async function checkRecord(
   }
   const mandatePk = new PublicKey(record.mandate);
 
-  const genesis = cache.genesis ?? (cache.genesis = await conn.getGenesisHash());
+  let genesis = cache.genesis;
+  if (!genesis) {
+    try {
+      genesis = await conn.getGenesisHash();
+    } catch (err) {
+      rethrowUnlessInvalidParam(err);
+    }
+    cache.genesis = genesis;
+  }
   eq(record.genesis_hash, genesis, "genesis_hash", failures);
   const derivedCluster = clusterForGenesis(genesis);
   if (record.cluster !== derivedCluster) {
@@ -232,7 +246,9 @@ async function checkRecord(
 
   let mandate = cache.mandates.get(record.mandate);
   if (!mandate) {
-    mandate = await fetchMandate(conn, mandatePk);
+    const loaded = await accountOrFailure(failures, () => fetchMandate(conn, mandatePk));
+    if (!loaded) return { failures, notes };
+    mandate = loaded;
     cache.mandates.set(record.mandate, mandate);
   }
   eq(record.limits.cap, mandate.cap, "limits.cap", failures);
@@ -256,10 +272,13 @@ async function checkRecord(
 
   let destOwner = cache.destOwners.get(charge.destination.toBase58());
   if (!destOwner) {
-    destOwner = await tokenAccountOwner(conn, charge.destination);
-    cache.destOwners.set(charge.destination.toBase58(), destOwner);
+    const loaded = await accountOrFailure(failures, () => tokenAccountOwner(conn, charge.destination));
+    if (loaded) {
+      destOwner = loaded;
+      cache.destOwners.set(charge.destination.toBase58(), destOwner);
+    }
   }
-  if (!destOwner.equals(mandate.merchant)) {
+  if (destOwner && !destOwner.equals(mandate.merchant)) {
     failures.push(
       `destination token account owner is ${destOwner.toBase58()}, mandate merchant is ${mandate.merchant.toBase58()}`,
     );
@@ -268,7 +287,9 @@ async function checkRecord(
   const ledgerKey = expectedLedger.toBase58();
   let ledger = cache.ledgers.get(ledgerKey);
   if (!ledger) {
-    ledger = await fetchLedger(conn, expectedLedger);
+    const loaded = await accountOrFailure(failures, () => fetchLedger(conn, expectedLedger));
+    if (!loaded) return { failures, notes };
+    ledger = loaded;
     cache.ledgers.set(ledgerKey, ledger);
   }
   if (!ledger.mandate.equals(mandatePk)) {
@@ -307,7 +328,9 @@ async function checkRecord(
       }
     }
   } else {
-    const picked = ringEntryForSignature(rows, blockTime, record.signature);
+    const timePick = ringEntryForSignature(rows, blockTime, record.signature);
+    const logKind = bound.status === "one" ? kindByte(bound.decision.kind) : null;
+    const picked = ringRowForLogKind(timePick, rows, blockTime, record.signature, logKind);
     if ("error" in picked) {
       failures.push(picked.error);
     } else {
@@ -366,6 +389,14 @@ function rejectedText(failures: string[], notes: string[] = []): string {
   return `${lines.join("\n")}\n`;
 }
 
+type FailureSplit = {
+  failures: string[];
+  // Signatures the node listed and then did not return a transaction for.
+  // assessBundle branches on this list. Envelope lines also embed free-text
+  // fields from the file, so a scan of those lines is not a transport signal.
+  unread: string[];
+};
+
 function inScope(ts: bigint, bundle: DecisionBundle): boolean {
   if (bundle.scope.type !== "date_range") return true;
   if (bundle.scope.from !== null && ts < BigInt(bundle.scope.from)) return false;
@@ -373,7 +404,7 @@ function inScope(ts: bigint, bundle: DecisionBundle): boolean {
   return true;
 }
 
-async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promise<string[]> {
+async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promise<FailureSplit> {
   const failures: string[] = [];
   const expected = cache.expectedProgramId.toBase58();
   if (bundle.program_id !== expected) {
@@ -412,10 +443,11 @@ async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promis
   }
   if (bundle.scope.type === "rule") {
     failures.push(...(await rulePopulationFailures(bundle, cache)));
-  } else {
-    failures.push(...(await dateRangePopulationFailures(bundle, cache)));
+    return { failures, unread: [] };
   }
-  return failures;
+  const population = await dateRangePopulationFailures(bundle, cache);
+  failures.push(...population.failures);
+  return { failures, unread: population.unread };
 }
 
 function mandatePubkey(mandate: string, failures: string[]): PublicKey | null {
@@ -523,13 +555,19 @@ function undecodableChargeFailures(
   cache: CheckCache,
   transactions: Map<string, Awaited<ReturnType<Connection["getTransaction"]>>>,
   population: Set<string>,
-): string[] {
+): FailureSplit {
   const failures: string[] = [];
+  const unread: string[] = [];
   const program = cache.expectedProgramId;
   for (const signature of [...transactions.keys()].sort()) {
     if (population.has(signature)) continue;
     const tx = transactions.get(signature);
-    if (!tx) continue;
+    // A listed signature with no transaction was not read. Skipping it lets a
+    // file that omits the payment confirm. That is not a verdict.
+    if (!tx) {
+      unread.push(signature);
+      continue;
+    }
     let charge: ChargeIx | null = null;
     try {
       charge = parseChargeFromTx(tx, program);
@@ -547,22 +585,23 @@ function undecodableChargeFailures(
       `signature ${signature} invokes charge on ${program.toBase58()} but carries no attributable Veto decision`,
     );
   }
-  return failures;
+  return { failures, unread };
 }
 
-async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckCache): Promise<string[]> {
+async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckCache): Promise<FailureSplit> {
   const failures: string[] = [];
+  const unread: string[] = [];
   let mandatePk: PublicKey | null = null;
   if (bundle.scope.mandate) {
     mandatePk = mandatePubkey(bundle.scope.mandate, failures);
-    if (!mandatePk) return failures;
+    if (!mandatePk) return { failures, unread };
     try {
       await cachedMandate(cache, bundle.scope.mandate, mandatePk);
     } catch (err) {
       const missing = missingAccountMessage(err);
       if (!missing) throw err;
       failures.push(missing);
-      return failures;
+      return { failures, unread };
     }
   }
   const history = await fetchDecisionHistory({
@@ -584,6 +623,14 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
     to: bundle.scope.to,
   });
   const population = new Set(indexed.map((row) => row.signature));
+  const fromLabel = bundle.scope.from === null ? "none" : String(bundle.scope.from);
+  const toLabel = bundle.scope.to === null ? "none" : String(bundle.scope.to);
+  for (const row of bundle.decisions) {
+    if (inScope(row.timestamp, bundle)) continue;
+    failures.push(
+      `signature ${row.signature} has timestamp ${row.timestamp.toString()} outside scope ${fromLabel}..${toLabel}`,
+    );
+  }
   const fileSigs = new Set(
     bundle.decisions.filter((row) => inScope(row.timestamp, bundle)).map((row) => row.signature),
   );
@@ -612,8 +659,10 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
   // A top-level charge with no attributable Veto decision is missing from the
   // indexed set. Fail closed. A scope that names no mandate has no single ring
   // to catch the same hole.
-  failures.push(...undecodableChargeFailures(bundle, cache, history.transactions, population));
-  return failures;
+  const charges = undecodableChargeFailures(bundle, cache, history.transactions, population);
+  failures.push(...charges.failures);
+  unread.push(...charges.unread);
+  return { failures, unread };
 }
 
 export async function assessRecord(
@@ -625,11 +674,11 @@ export async function assessRecord(
   const cache = makeCache(conn, rpc, opts);
   const { failures, notes } = await checkRecord(record, rpc, cache);
   if (failures.length > 0) {
-    return { ok: false, failures, text: rejectedText(failures, notes) };
+    return { ok: false, failures, text: rejectedText(failures, notes), code: 1 };
   }
   const genesis = cache.genesis ?? record.genesis_hash;
   const lines = [...notes.map((note) => `note: ${note}`), ...confirmedLines(record, rpc, genesis, cache.programSource)];
-  return { ok: true, failures: [], text: `${lines.join("\n")}\n` };
+  return { ok: true, failures: [], text: `${lines.join("\n")}\n`, code: 0 };
 }
 
 export async function assessBundle(
@@ -642,16 +691,30 @@ export async function assessBundle(
     const failures = [
       `completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${JSON.stringify(bundle.completeness)}`,
     ];
-    return { ok: false, failures, text: rejectedText(failures) };
+    return { ok: false, failures, text: rejectedText(failures), code: 1 };
   }
   const cache = makeCache(conn, rpc, opts);
-  const envelope = await bundleFailures(bundle, cache);
+  const envelopeReport = await bundleFailures(bundle, cache);
+  if (envelopeReport.unread.length > 0) {
+    const unread = envelopeReport.unread.map(
+      (signature) =>
+        `signature ${signature} was not checked: the RPC returned no transaction for a listed signature`,
+    );
+    const line = `verify failed: ${unread.join("; ")}`;
+    return { ok: false, failures: unread, text: `${line}\n`, code: 3 };
+  }
+  const envelope = envelopeReport.failures;
   const rows: RowVerdict[] = [];
   for (const [i, record] of bundle.decisions.entries()) {
     let failures: string[];
     try {
       failures = (await checkRecord(record, rpc, cache)).failures;
     } catch (err) {
+      if (isTransportError(err)) {
+        const detail = err instanceof Error ? err.message : String(err);
+        const line = `verify failed: row ${i + 1} signature=${record.signature} was not checked: ${detail}`;
+        return { ok: false, failures: [line], text: `${line}\n`, code: 3 };
+      }
       const message = err instanceof Error ? err.message : String(err);
       failures = [message];
     }
@@ -671,6 +734,7 @@ export async function assessBundle(
       ok: report.ok,
       failures: rows.flatMap((row) => row.failures),
       text: insertContext(report.text, context),
+      code: report.ok ? 0 : 1,
     };
   }
   const lines = ["VERDICT: REJECTED", "", ...context, ""];
@@ -688,6 +752,7 @@ export async function assessBundle(
     ok: false,
     failures: [...envelope, ...rows.flatMap((row) => row.failures)],
     text: `${lines.join("\n")}\n`,
+    code: 1,
   };
 }
 
@@ -737,15 +802,51 @@ function makeCache(conn: Connection, rpc: string, opts?: AssessOpts): CheckCache
   };
 }
 
+function failureText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function jsonRpcErrorCode(err: unknown): number | null {
+  if (typeof err !== "object" || err === null || !("code" in err)) return null;
+  const code = (err as { code: unknown }).code;
+  return typeof code === "number" ? code : null;
+}
+
+// JSON-RPC -32602 is the node refusing a parameter from the file. A signature
+// of the wrong size is a rejection of that file. Every other rejection of
+// getTransaction and getGenesisHash is the transport, including a 200 that is
+// not an envelope and a node that reports itself unhealthy (-32005).
+function rethrowUnlessInvalidParam(err: unknown): never {
+  if (jsonRpcErrorCode(err) === -32602) throw err;
+  throw asTransportError(err);
+}
+
+// Account-load failures stay on the report. A transport failure still aborts
+// the row: it is not a verdict, and it must not be rewritten as one.
+async function accountOrFailure<T>(failures: string[], load: () => Promise<T>): Promise<T | undefined> {
+  try {
+    return await load();
+  } catch (err) {
+    if (isTransportError(err)) throw err;
+    failures.push(failureText(err));
+    return undefined;
+  }
+}
+
 async function cachedTransaction(
   cache: CheckCache,
   signature: string,
 ): Promise<Awaited<ReturnType<Connection["getTransaction"]>>> {
   if (cache.txs.has(signature)) return cache.txs.get(signature) ?? null;
-  const tx = await cache.conn.getTransaction(signature, {
-    commitment: "confirmed",
-    maxSupportedTransactionVersion: 0,
-  });
+  let tx: Awaited<ReturnType<Connection["getTransaction"]>>;
+  try {
+    tx = await cache.conn.getTransaction(signature, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 0,
+    });
+  } catch (err) {
+    rethrowUnlessInvalidParam(err);
+  }
   cache.txs.set(signature, tx);
   return tx;
 }
@@ -774,14 +875,19 @@ async function main(): Promise<void> {
     ...(pageSize !== undefined ? { pageSize } : {}),
   };
   if (parsed.kind === "single") {
-    const result = await assessRecord(parsed.record, rpc, conn, opts);
-    process.stdout.write(result.text);
-    if (!result.ok) process.exit(1);
+    writeResult(await assessRecord(parsed.record, rpc, conn, opts));
     return;
   }
-  const result = await assessBundle(parsed.bundle, rpc, conn, opts);
+  writeResult(await assessBundle(parsed.bundle, rpc, conn, opts));
+}
+
+function writeResult(result: Verdict): void {
+  if (result.code === 3) {
+    process.stderr.write(result.text);
+    process.exit(3);
+  }
   process.stdout.write(result.text);
-  if (!result.ok) process.exit(1);
+  if (result.code !== 0) process.exit(result.code);
 }
 
 function invokedAsCli(): boolean {
@@ -798,6 +904,6 @@ if (invokedAsCli()) {
   main().catch((err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`verify failed: ${message}`);
-    process.exit(1);
+    process.exit(isTransportError(err) ? 3 : 1);
   });
 }

@@ -1,7 +1,7 @@
 import { Connection } from "@solana/web3.js";
 
 const RETRY_RE =
-  /\b429\b|503|504|timeout|timed out|ECONNRESET|ECONNREFUSED|fetch failed|rate limit|Too many requests|socket hang up|Connect Timeout|503 Service/i;
+  /\b429\b|\b503\b|\b504\b|\btimeout\b|\btimed out\b|ECONNRESET|ECONNREFUSED|fetch failed|rate limit|Too many requests|socket hang up|Connect Timeout/i;
 
 const SKIP_RE =
   /cleaned up|does not exist on node|Block not available|Slot \d+ was skipped|was skipped, or missing/i;
@@ -30,6 +30,20 @@ export class RateLimitedError extends Error {
     super(message);
     this.name = "RateLimitedError";
     this.endpoints = endpoints;
+  }
+}
+
+// A failure from the RPC transport itself: a non-2xx answer other than 429,
+// a body that is not JSON, or the fetch rejecting. Callers classify by this
+// type. Message text is not a transport signal, because it can carry a
+// pubkey or a destination the signer chose.
+export class TransportError extends Error {
+  readonly status: number | null;
+
+  constructor(message: string, status: number | null = null) {
+    super(message);
+    this.name = "TransportError";
+    this.status = status;
   }
 }
 
@@ -85,13 +99,33 @@ function assertHttpUrl(part: string): void {
   }
 }
 
+function errorName(err: unknown): string | null {
+  if (typeof err === "object" && err !== null && "name" in err) {
+    const name = (err as { name: unknown }).name;
+    return typeof name === "string" ? name : null;
+  }
+  return null;
+}
+
 export function isRateLimitError(err: unknown): boolean {
   if (err instanceof RateLimitedError) return true;
-  if (typeof err === "object" && err !== null && "name" in err && (err as { name: string }).name === "RateLimitedError") {
-    return true;
-  }
+  if (errorName(err) === "RateLimitedError") return true;
   const msg = err instanceof Error ? err.message : String(err);
   return RATE_LIMIT_RE.test(msg);
+}
+
+export function isTransportError(err: unknown): boolean {
+  if (err instanceof TransportError || err instanceof RateLimitedError) return true;
+  const name = errorName(err);
+  return name === "TransportError" || name === "RateLimitedError";
+}
+
+export function asTransportError(err: unknown): Error {
+  if (err instanceof TransportError || err instanceof RateLimitedError) return err;
+  const name = errorName(err);
+  if ((name === "TransportError" || name === "RateLimitedError") && err instanceof Error) return err;
+  const message = err instanceof Error ? err.message : String(err);
+  return new TransportError(message);
 }
 
 export function isRetryable(err: unknown): boolean {
@@ -124,6 +158,7 @@ export async function withRetry<T>(
     } catch (err) {
       last = err;
       if (!isRetryable(err) || i === attempts - 1) {
+        if (err instanceof TransportError || err instanceof RateLimitedError) throw err;
         const msg = err instanceof Error ? err.message : String(err);
         throw new Error(`${label}: ${msg}`);
       }
@@ -150,6 +185,59 @@ function nextDelay(delay: number, cap: number): number {
   if (delay <= 0) return delay;
   const doubled = delay * 2;
   return doubled > cap ? cap : doubled;
+}
+
+async function readBody(res: Response): Promise<string> {
+  try {
+    return await res.text();
+  } catch (err) {
+    throw asTransportError(err);
+  }
+}
+
+const TRANSPORT_BODY_CAP_BYTES = 300;
+
+// A gateway page can echo the request path. Keyed providers put the key there,
+// so the body copied into a transport message stops at 300 bytes.
+function cappedTransportBody(body: string): string {
+  const bytes = new TextEncoder().encode(body);
+  if (bytes.length <= TRANSPORT_BODY_CAP_BYTES) return body;
+  let end = TRANSPORT_BODY_CAP_BYTES;
+  // A cut in the middle of a multibyte character walks back to its lead and drops it.
+  while (end > 0 && (bytes[end]! & 0xc0) === 0x80) end -= 1;
+  const cut = end < TRANSPORT_BODY_CAP_BYTES ? end : TRANSPORT_BODY_CAP_BYTES;
+  return new TextDecoder().decode(bytes.subarray(0, cut));
+}
+
+function isJsonRpcEnvelope(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const record = value as { jsonrpc?: unknown };
+  return typeof record.jsonrpc === "string" && record.jsonrpc.length > 0 && "id" in record;
+}
+
+function assertJsonBody(text: string): void {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    throw asTransportError(err);
+  }
+  // A 200 with "{}" is valid JSON and not an envelope. web3 then throws a
+  // struct error. That is the node's answer failing to parse, so it is transport.
+  if (!isJsonRpcEnvelope(parsed)) {
+    throw new TransportError("response is not a JSON-RPC envelope");
+  }
+}
+
+function responseWithBody(res: Response, text: string): Response {
+  const headers = new Headers(res.headers);
+  headers.delete("content-encoding");
+  headers.delete("content-length");
+  return new Response(text, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+  });
 }
 
 export function makeFailoverFetch(
@@ -186,8 +274,18 @@ export function makeFailoverFetch(
             delay = nextDelay(delay, maxDelayMs);
             continue;
           }
-          return res;
+          if (!res.ok) {
+            const body = await readBody(res);
+            throw new TransportError(
+              `${res.status} ${res.statusText}: ${cappedTransportBody(body)}`.trim(),
+              res.status,
+            );
+          }
+          const text = await readBody(res);
+          assertJsonBody(text);
+          return responseWithBody(res, text);
         } catch (err) {
+          if (err instanceof TransportError) throw err;
           if (err instanceof RateLimitedError && !hasMore) throw err;
           lastErr = err;
           if (isRateLimitError(err)) {
@@ -203,7 +301,7 @@ export function makeFailoverFetch(
             delay = nextDelay(delay, maxDelayMs);
             continue;
           }
-          throw err;
+          throw asTransportError(err);
         }
       }
     }

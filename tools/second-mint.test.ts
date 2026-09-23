@@ -32,6 +32,18 @@ test("a mainnet rpc is refused before any mint is created", () => {
   );
 });
 
+test("a mainnet refusal prints the host and leaves the key out of the message", () => {
+  const raw = "https://mainnet.example.test/SECRETPATH?api-key=SECRET123";
+  assert.throws(
+    () => assertSecondMintAllowed({ ...ok, rpcUrls: [raw] }),
+    (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      assert.equal(message, "second-mint: refusing mainnet rpc https://mainnet.example.test");
+      return true;
+    },
+  );
+});
+
 test("a cluster whose genesis is not devnet is refused", () => {
   assert.throws(
     () =>
