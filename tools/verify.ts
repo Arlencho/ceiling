@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { fetchDecisionHistory } from "../indexer/src/index.js";
-import { TransportError, asTransportError, isTransportError } from "../indexer/src/rpc.js";
+import { ListedTransactionMissingError, TransportError, asTransportError, isTransportError } from "../indexer/src/rpc.js";
 import {
   COMPLETENESS,
   filterIndexed,
@@ -812,16 +812,24 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
       return { failures, unread };
     }
   }
-  const history = await fetchDecisionHistory({
-    rpcUrl: cache.rpc,
-    programId: cache.expectedProgramId.toBase58(),
-    mandate: bundle.scope.mandate ?? undefined,
-    connection: cache.conn,
-    allowBlockScan: cache.allowBlockScan,
-    pageSize: cache.pageSize,
-    from: bundle.scope.from,
-    to: bundle.scope.to,
-  });
+  let history: Awaited<ReturnType<typeof fetchDecisionHistory>>;
+  try {
+    history = await fetchDecisionHistory({
+      rpcUrl: cache.rpc,
+      programId: cache.expectedProgramId.toBase58(),
+      mandate: bundle.scope.mandate ?? undefined,
+      connection: cache.conn,
+      allowBlockScan: cache.allowBlockScan,
+      pageSize: cache.pageSize,
+      from: bundle.scope.from,
+      to: bundle.scope.to,
+    });
+  } catch (err) {
+    if (err instanceof ListedTransactionMissingError) {
+      return { failures, unread: [...err.signatures] };
+    }
+    throw err;
+  }
   for (const [signature, fetched] of history.transactions) {
     cache.txs.set(signature, fetched);
   }

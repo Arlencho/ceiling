@@ -5,6 +5,7 @@ import {
   clampPageSize,
   createFailoverConnection,
   isSkippableSlot,
+  ListedTransactionMissingError,
   parseRpcList,
   withRetry,
 } from "./rpc.js";
@@ -157,6 +158,7 @@ async function fetchTransactions(
   fetched: Map<string, VersionedTransactionResponse | null>,
 ): Promise<TxView[]> {
   const views: TxView[] = [];
+  const missing: string[] = [];
   for (const page of pages) {
     if (page.err) continue;
     if (outsideWindow(page.blockTime, window)) continue;
@@ -167,9 +169,16 @@ async function fetchTransactions(
       }),
     );
     fetched.set(page.signature, tx);
-    if (!tx) continue;
+    if (!tx) {
+      missing.push(page.signature);
+      continue;
+    }
     const view = txToView(tx, page.signature, page.slot);
     if (view) views.push(view);
+  }
+  if (missing.length > 0) {
+    missing.sort();
+    throw new ListedTransactionMissingError(missing);
   }
   return views;
 }
