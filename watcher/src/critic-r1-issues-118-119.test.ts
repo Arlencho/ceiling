@@ -421,8 +421,8 @@ test("critic r1: a clock that moves backwards across a slot boundary pays that s
 // ---------------------------------------------------------------------------
 // Overlapping windows from the feed, through the real windowContaining. Two
 // windows that both start on the slot with different prices: one send, the
-// slot nonce. A wider window that starts before the slot and is listed first:
-// no send at all (a gap), never a second nonce.
+// slot nonce. A wider window listed first, with the slot window after it:
+// the slot is paid once, under the slot nonce, at the slot window's price.
 // ---------------------------------------------------------------------------
 test("critic r1: overlapping feed windows cannot pay a slot twice or under a second nonce", async () => {
   const at = new Date("2026-09-22T16:00:00Z");
@@ -465,7 +465,11 @@ test("critic r1: overlapping feed windows cannot pay a slot twice or under a sec
     { timeStart: "2026-09-22T15:45:00Z", timeEnd: "2026-09-22T16:15:00Z", sekPerKwh: "0.5" },
     { timeStart: "2026-09-22T16:00:00Z", timeEnd: "2026-09-22T16:15:00Z", sekPerKwh: "0.00892" },
   ]);
-  assert.deepEqual(widerFirst.submitted, []);
-  assert.deepEqual(widerFirst.results, ["gap", "gap", "gap"]);
-  assert.equal(widerFirst.journal.load().filter((r) => r.decision === "gap").length, 1, "one gap row, not one per cycle");
+  assert.deepEqual(widerFirst.submitted, [1790092800n]);
+  assert.deepEqual(widerFirst.results, ["submitted", "skipped", "skipped"]);
+  const paidRows = widerFirst.journal.load().filter((r) => r.decision === "paid");
+  assert.equal(paidRows.length, 1);
+  assert.equal(paidRows[0]?.nonce, "1790092800");
+  assert.equal(paidRows[0]?.sek_per_kwh, "0.00892");
+  assert.equal(widerFirst.journal.load().filter((r) => r.decision === "gap").length, 0);
 });

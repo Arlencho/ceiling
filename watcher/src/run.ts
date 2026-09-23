@@ -72,9 +72,10 @@ const SLOT_MISMATCH_REASON = "window start does not match slot";
 const PAID_UNRECOVERED_REASON = "chain shows this window paid; signature could not be recovered";
 const STALE_UNCONFIRMED_REASON = "stale nonce; chain did not confirm this window paid";
 
-// A refusal does not move last_nonce. Once this process has watched the chain
-// return one, a later chain-backed call with a fresh journal still reads it.
-// Passing chainLastNonce without a ledger reader does not skip that read.
+// A refusal does not move last_nonce. The typed call passes `reader`, and
+// recordedCharge on that reader is required, so production cannot fall through
+// to this map. A fixture that still passes only chainLastNonce keeps the
+// refusal here, keyed by its own nonce, until this process exits.
 const refusalsThisProcess = new Map<bigint, RecoveredCharge>();
 
 function rememberRefusal(nonce: bigint, row: RecoveredCharge): void {
@@ -105,7 +106,7 @@ function windowStartsAtSlot(window: PriceWindow, at: Date): boolean {
   }
 }
 
-export async function processWindow(args: {
+type ProcessWindowFields = {
   at: Date;
   feed: PriceFeed;
   journal: JsonlJournal;
@@ -115,14 +116,34 @@ export async function processWindow(args: {
   log?: (line: string) => void;
   feedAttempts?: number;
   feedRetryMs?: number;
+};
+
+/** Chain reads for one charge. recordedCharge travels with the nonce reader so
+ * a typed caller cannot omit it and resubmit a refusal from process memory. */
+export type ChainReader = {
+  chainLastNonce: () => Promise<bigint>;
+  recoverSettled: (nonce: bigint) => Promise<RecoveredCharge | null>;
+  recordedCharge: (nonce: bigint) => Promise<RecoveredCharge | null>;
+};
+
+type ProcessWindowArgs = ProcessWindowFields & {
+  reader?: ChainReader;
+};
+
+type ProcessWindowRuntime = ProcessWindowArgs & {
   chainLastNonce?: () => Promise<bigint>;
   recoverSettled?: (nonce: bigint) => Promise<RecoveredCharge | null>;
-  /** Ledger row for this nonce. A chain-backed call always reads before it sends. */
   recordedCharge?: (nonce: bigint) => Promise<RecoveredCharge | null>;
-}): Promise<ProcessResult> {
+};
+
+export async function processWindow(args: ProcessWindowArgs): Promise<ProcessResult>;
+export async function processWindow(args: ProcessWindowRuntime): Promise<ProcessResult> {
   const log = args.log ?? logLine;
   const feedAttempts = args.feedAttempts ?? FEED_ATTEMPTS;
   const feedRetryMs = args.feedRetryMs ?? FEED_RETRY_MS;
+  const chainLastNonce = args.reader?.chainLastNonce ?? args.chainLastNonce;
+  const recoverSettled = args.reader?.recoverSettled ?? args.recoverSettled;
+  const recordedCharge = args.reader?.recordedCharge ?? args.recordedCharge;
 
   let window: PriceWindow | null = null;
   for (let attempt = 1; attempt <= feedAttempts; attempt += 1) {
@@ -206,13 +227,13 @@ export async function processWindow(args: {
   };
 
   const readSettled = async (): Promise<bigint> => {
-    if (!args.chainLastNonce) return args.journal.maxSettledNonce();
-    return withRpcBackoff("chain last_nonce", () => args.chainLastNonce!(), log);
+    if (!chainLastNonce) return args.journal.maxSettledNonce();
+    return withRpcBackoff("chain last_nonce", () => chainLastNonce(), log);
   };
 
   const recoverPaid = async (): Promise<RecoveredCharge | null> => {
-    if (!args.recoverSettled) return null;
-    return withRpcBackoff("recover settled", () => args.recoverSettled!(nonce), log);
+    if (!recoverSettled) return null;
+    return withRpcBackoff("recover settled", () => recoverSettled(nonce), log);
   };
 
   const closeAlreadySettled = async (
@@ -279,14 +300,14 @@ export async function processWindow(args: {
   }
 
   // Settlement above catches a paid nonce. A refusal does not move
-  // last_nonce, so the ledger row is a separate read and it is not optional:
-  // a passed reader is the chain account, and a chain-backed call that did
-  // not pass one still resolves a refusal this process has already seen.
-  if (args.chainLastNonce || args.recordedCharge) {
+  // last_nonce, so the ledger row is a separate read. `reader.recordedCharge`
+  // is that row. A fixture that passed only chainLastNonce still resolves a
+  // refusal this process has already seen.
+  if (chainLastNonce || recordedCharge) {
     let recorded: RecoveredCharge | null;
     try {
-      recorded = args.recordedCharge
-        ? await withRpcBackoff("recorded charge", () => args.recordedCharge!(nonce), log)
+      recorded = recordedCharge
+        ? await withRpcBackoff("recorded charge", () => recordedCharge(nonce), log)
         : refusalAlreadySeen(nonce);
     } catch (err) {
       if (isRateLimitError(err)) return deferRateLimit();

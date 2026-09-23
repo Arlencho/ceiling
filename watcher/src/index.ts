@@ -54,7 +54,7 @@ async function persistJournal(
   await persistRecordedDecision(path, store, row);
 }
 
-async function withJournalAndFeed() {
+async function withJournalAndFeed(now: Date) {
   const cfg = loadConfig();
   const store = storeFromGsUri(cfg.journalGcsUri);
   if (store !== null) {
@@ -63,29 +63,32 @@ async function withJournalAndFeed() {
   const journal = new JsonlJournal(cfg.journalPath);
   const feed = new EnergySpotFeed();
   const agent = loadKeypair(keyPath(cfg, "agent"));
-  // The chain ledger is the record of paid and refused windows. A refusal does
-  // not move last_nonce, so this runs whether or not a remote journal exists.
-  const { connection, programId } = connect(cfg, agent);
-  let entries: ChainDecision[] = [];
-  try {
-    entries = await withRpcBackoff("journal repair", () =>
-      fetchChainDecisions({
-        connection,
-        programId,
-        owner: new PublicKey(cfg.owner),
-        mandateId: cfg.mandateId,
-        hasNonce: (nonce) => journal.hasNonce(nonce),
-      }),
-    );
-  } catch (err) {
-    if (!isRateLimitError(err)) throw err;
-  }
-  const repaired = repairJournalFromChain(journal, entries);
-  if (repaired > 0) {
-    logLine(`journal repaired ${repaired} row(s) from chain history`);
-    if (store !== null) {
-      const rows = journal.load();
-      await persistJournal(cfg.journalPath, store, rows[rows.length - 1] ?? null);
+  // Repair is the ledger read. It runs for a local journal the same as a
+  // remote one, and only when a due slot is missing, so an idle pass does
+  // not spend the RPC budget a due slot needs.
+  if (dueSlots(now).some((slot) => !journal.hasNonce(nonceFromSlot(slot)))) {
+    const { connection, programId } = connect(cfg, agent);
+    let entries: ChainDecision[] = [];
+    try {
+      entries = await withRpcBackoff("journal repair", () =>
+        fetchChainDecisions({
+          connection,
+          programId,
+          owner: new PublicKey(cfg.owner),
+          mandateId: cfg.mandateId,
+          hasNonce: (nonce) => journal.hasNonce(nonce),
+        }),
+      );
+    } catch (err) {
+      if (!isRateLimitError(err)) throw err;
+    }
+    const repaired = repairJournalFromChain(journal, entries);
+    if (repaired > 0) {
+      logLine(`journal repaired ${repaired} row(s) from chain history`);
+      if (store !== null) {
+        const rows = journal.load();
+        await persistJournal(cfg.journalPath, store, rows[rows.length - 1] ?? null);
+      }
     }
   }
   const submit = (amount: bigint, nonce: bigint) => submitCharge({ cfg, agent, amount, nonce });
@@ -108,7 +111,7 @@ async function lastAppendedAfter<T>(
 
 async function processAt(at: Date): Promise<ProcessResult> {
   const { cfg, journal, feed, submit, store, chainLastNonce, recoverSettled, recordedCharge } =
-    await withJournalAndFeed();
+    await withJournalAndFeed(at);
   const { result, row } = await lastAppendedAfter(journal, () =>
     processWindow({
       at,
@@ -117,9 +120,11 @@ async function processAt(at: Date): Promise<ProcessResult> {
       submit,
       kwhMilli: cfg.kwhMilli,
       mintDecimals: cfg.mintDecimals,
-      chainLastNonce,
-      recoverSettled,
-      recordedCharge,
+      reader: {
+        chainLastNonce,
+        recoverSettled,
+        recordedCharge,
+      },
     }),
   );
   await persistJournal(cfg.journalPath, store, row);
@@ -128,7 +133,7 @@ async function processAt(at: Date): Promise<ProcessResult> {
 
 async function processDue(now: Date, announceIdle = false): Promise<boolean> {
   const { cfg, journal, feed, submit, store, chainLastNonce, recoverSettled, recordedCharge } =
-    await withJournalAndFeed();
+    await withJournalAndFeed(now);
   let acted = false;
   let deferred = false;
   for (const slot of dueSlots(now)) {
@@ -143,9 +148,11 @@ async function processDue(now: Date, announceIdle = false): Promise<boolean> {
         submit,
         kwhMilli: cfg.kwhMilli,
         mintDecimals: cfg.mintDecimals,
-        chainLastNonce,
-        recoverSettled,
-        recordedCharge,
+        reader: {
+          chainLastNonce,
+          recoverSettled,
+          recordedCharge,
+        },
       }),
     );
     await persistJournal(cfg.journalPath, store, row);
