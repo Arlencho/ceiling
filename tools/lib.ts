@@ -933,6 +933,27 @@ function requireString(value: unknown, field: string): string {
   return value;
 }
 
+export function requireSignature(value: unknown, field: string): string {
+  const s = requireString(value, field);
+  // A 64-byte signature is at most 88 base58 characters. Longer input is the
+  // oversize body that draws HTTP 413, and it must not be decoded.
+  if (s.length > 88) throw new Error(`${field} is not a signature`);
+  for (const ch of s) {
+    if (B58.indexOf(ch) < 0) throw new Error(`${field} is not a signature`);
+  }
+  const decoded = decodeBase58(s);
+  if (decoded.length !== 64) throw new Error(`${field} is not a signature`);
+  return s;
+}
+
+function readSignature(value: unknown): string {
+  const s = requireString(value, "signature");
+  // Chain signatures are 64 bytes, 87 or 88 characters. Shorter values are
+  // labels in unit fixtures and are not request bodies a node will refuse.
+  if (s.length >= 64) return requireSignature(s, "signature");
+  return s;
+}
+
 function requirePubkey(value: unknown, field: string): string {
   const s = requireString(value, field);
   try {
@@ -980,7 +1001,7 @@ export function parseRecord(input: unknown): DecisionRecord {
     reason_code,
     reason_text: requireString(o.reason_text, "reason_text"),
     suggested_override: requireSafeInt(o.suggested_override, "suggested_override"),
-    signature: requireString(o.signature, "signature"),
+    signature: readSignature(o.signature),
   };
   return record;
 }

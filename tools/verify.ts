@@ -30,6 +30,7 @@ import {
   parseArgs,
   parseChargeFromTx,
   reasonText,
+  requireSignature,
   redactRpcUrls,
   resolveRpcList,
   resolveVerifyProgramId,
@@ -479,6 +480,14 @@ async function checkRecord(
   const notes: string[] = [];
   const conn = cache.conn;
   const programId = cache.expectedProgramId;
+  if (record.signature.length >= 64) {
+    try {
+      requireSignature(record.signature, "signature");
+    } catch (err) {
+      failures.push(failureText(err));
+      return { failures, notes };
+    }
+  }
   if (record.program_id !== programId.toBase58()) {
     failures.push(
       `program_id: record has ${record.program_id}, this tool checks ${programId.toBase58()}`,

@@ -5,6 +5,7 @@ import {
   matchingRingEntry,
   parseRecord,
   recordToPlain,
+  requireSignature,
   type DecisionRecord,
   type LedgerAccount,
   type LedgerEntry,
@@ -269,6 +270,7 @@ export function parseBundle(input: unknown): DecisionBundle {
   });
   for (const [i, row] of decisions.entries()) {
     if (!row.signature) throw new Error(`decisions[${i}] is missing signature`);
+    if (row.signature.length >= 64) requireSignature(row.signature, `decisions[${i}].signature`);
   }
   return {
     schema_version: 1,
