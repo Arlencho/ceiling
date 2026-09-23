@@ -1,7 +1,3 @@
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
 import type { PriceFeed, PriceWindow } from "./feed.js";
 import type { JournalRow, JsonlJournal } from "./journal.js";
 import { logError, logLine } from "./log.js";
@@ -76,59 +72,6 @@ const SLOT_MISMATCH_REASON = "window start does not match slot";
 const PAID_UNRECOVERED_REASON = "chain shows this window paid; signature could not be recovered";
 const STALE_UNCONFIRMED_REASON = "stale nonce; chain did not confirm this window paid";
 
-type StoredRefusal = {
-  decision: "refused";
-  reason: string;
-  reasonCode: number;
-  suggestedOverride: string | null;
-  signature: string;
-  amount: string;
-};
-
-// A transpiled caller can still put chainLastNonce on the argument. The typed
-// parameter does not include it. The refusal is stored beside that process's
-// entry script so a second process running the same entry does not send it.
-function legacyRefusalPath(nonce: bigint): string {
-  const scope = createHash("sha256").update(process.argv.slice(1).join("\0")).digest("hex");
-  return join(tmpdir(), "veto-legacy-window-refusal", scope, `${nonce.toString()}.json`);
-}
-
-function isLegacyFlat(args: ProcessWindowArgs): boolean {
-  if (args.reader !== undefined) return false;
-  const raw = args as ProcessWindowArgs & Record<string, unknown>;
-  return typeof raw.chainLastNonce === "function" && typeof raw.recordedCharge !== "function";
-}
-
-function readLegacyRefusal(nonce: bigint): RecoveredCharge | null {
-  const path = legacyRefusalPath(nonce);
-  if (!existsSync(path)) return null;
-  const parsed = JSON.parse(readFileSync(path, "utf8")) as StoredRefusal;
-  if (parsed.decision !== "refused" || parsed.reasonCode === REASON_STALE_NONCE) return null;
-  return {
-    decision: "refused",
-    reason: parsed.reason,
-    reasonCode: parsed.reasonCode,
-    suggestedOverride: parsed.suggestedOverride === null ? null : BigInt(parsed.suggestedOverride),
-    signature: parsed.signature,
-    amount: BigInt(parsed.amount),
-  };
-}
-
-function writeLegacyRefusal(nonce: bigint, row: RecoveredCharge): void {
-  if (row.decision !== "refused" || row.reasonCode === REASON_STALE_NONCE) return;
-  const path = legacyRefusalPath(nonce);
-  mkdirSync(dirname(path), { recursive: true });
-  const stored: StoredRefusal = {
-    decision: "refused",
-    reason: row.reason,
-    reasonCode: row.reasonCode,
-    suggestedOverride: row.suggestedOverride === null ? null : row.suggestedOverride.toString(),
-    signature: row.signature,
-    amount: row.amount.toString(),
-  };
-  writeFileSync(path, `${JSON.stringify(stored)}\n`);
-}
-
 function journalSignature(signature: string | null | undefined): string | null {
   if (signature === null || signature === undefined || signature.length === 0) return null;
   return signature;
@@ -186,7 +129,6 @@ export async function processWindow<T extends ProcessWindowArgs>(
   const chainLastNonce = args.reader?.chainLastNonce;
   const recoverSettled = args.reader?.recoverSettled;
   const recordedCharge = args.reader?.recordedCharge;
-  const legacyFlat = isLegacyFlat(args);
 
   let window: PriceWindow | null = null;
   for (let attempt = 1; attempt <= feedAttempts; attempt += 1) {
@@ -357,9 +299,6 @@ export async function processWindow<T extends ProcessWindowArgs>(
     if (recorded !== null && recorded.decision === "refused") {
       return writeRecoveredRefusal(recorded);
     }
-  } else if (legacyFlat) {
-    const recorded = readLegacyRefusal(nonce);
-    if (recorded !== null) return writeRecoveredRefusal(recorded);
   }
 
   if (window === null) {
@@ -488,16 +427,6 @@ export async function processWindow<T extends ProcessWindowArgs>(
   });
 
   if (receipt.decision === "refused") {
-    if (legacyFlat) {
-      writeLegacyRefusal(nonce, {
-        decision: "refused",
-        reason: receipt.reason,
-        reasonCode: receipt.reasonCode,
-        suggestedOverride: receipt.suggestedOverride,
-        signature: receipt.signature,
-        amount,
-      });
-    }
     log(
       `refused reason=${receipt.reason} amount=${amount.toString()} nonce=${nonce.toString()} window=${window.timeStart} sig=${receipt.signature}`,
     );
