@@ -16,6 +16,18 @@ const LEDGER_HEADER_SIZE = 40;
 const KIND_PAID = 1;
 const KIND_REFUSED = 2;
 
+/** The account bytes are not a ledger. Retrying the read will not change that. */
+export class LedgerDecodeError extends Error {
+  readonly account: string;
+
+  constructor(account: string, reason?: string) {
+    const tail = reason === undefined || reason.length === 0 ? "" : `: ${reason}`;
+    super(`journal repair: account ${account} is not a Ledger${tail}`);
+    this.name = "LedgerDecodeError";
+    this.account = account;
+  }
+}
+
 export type ChainDecision = {
   nonce: bigint;
   decision: "paid" | "refused";
@@ -75,12 +87,12 @@ function buffersEqual(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
-export function decodeLedgerDecisions(data: Uint8Array): ChainDecision[] {
+export function decodeLedgerDecisions(data: Uint8Array, account = "ledger"): ChainDecision[] {
   if (data.length < 8 + LEDGER_HEADER_SIZE) {
-    throw new Error("journal repair: ledger account is too small");
+    throw new LedgerDecodeError(account, "ledger account is too small");
   }
   if (!buffersEqual(data.subarray(0, 8), LEDGER_DISCRIMINATOR)) {
-    throw new Error("journal repair: account is not a Ledger");
+    throw new LedgerDecodeError(account);
   }
   const body = data.subarray(8);
   const total = readU32Le(body, 32);
@@ -223,7 +235,7 @@ export async function fetchChainDecisions(args: {
   const mandate = mandatePda(args.programId, args.owner, args.mandateId);
   const ledger = ledgerPda(args.programId, mandate);
   const info = await args.connection.getAccountInfo(ledger, "confirmed");
-  const ring = info === null ? [] : decodeLedgerDecisions(info.data);
+  const ring = info === null ? [] : decodeLedgerDecisions(info.data, ledger.toBase58());
   if (!canWalk(args.connection)) return mergeChainDecisions(ring, []);
   const held = args.hasNonce;
   // Nothing on the ring is missing, so there is nothing to name.

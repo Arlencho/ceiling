@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../../components/Button';
@@ -14,6 +14,7 @@ import { KIND_OVERRIDE, KIND_REFUSED } from '../../lib/constants';
 import { findLedgerDecision, parseDecisionId } from '../../lib/exportRecord';
 import { explorerTxUrl, formatBaseUnits, formatClock, formatUnix, isListedDecision } from '../../lib/format';
 import { mayClaimAbsence } from '../../lib/mandateRead';
+import { paidDecisionBody } from '../../lib/notify';
 import { nonceSequence, overrideRowView, sequenceLine } from '../../lib/override';
 import { displayPurpose } from '../../lib/ruleView';
 import { useChain } from '../../lib/useChain';
@@ -47,6 +48,27 @@ export default function DecisionDetailScreen() {
     void chain.refresh();
   }, [chain]);
 
+  const wantedMandate = parsed?.mandate ?? null;
+  const loadedAddress = chain.mandate?.address ?? null;
+  const { loading, mandateStatus, mandates, selectMandate } = chain;
+  const wantedIsLoaded = wantedMandate
+    ? mandates.some((item) => item.address === wantedMandate)
+    : false;
+  const switching =
+    wantedMandate != null &&
+    loadedAddress !== wantedMandate &&
+    (loading || wantedIsLoaded || mandateStatus === 'not-read');
+
+  useEffect(() => {
+    if (!wantedMandate || !wantedIsLoaded) {
+      return;
+    }
+    if (loadedAddress === wantedMandate || loading) {
+      return;
+    }
+    void selectMandate(wantedMandate);
+  }, [wantedMandate, wantedIsLoaded, loadedAddress, loading, selectMandate]);
+
   const onShare = () => {
     if (!parsed) {
       return;
@@ -69,9 +91,9 @@ export default function DecisionDetailScreen() {
     <Screen refreshing={chain.loading} onRefresh={onRefresh}>
       <TopBar back="Decisions" meta={mandate ? displayPurpose(mandate.purpose) : undefined} />
       <ConnectGate>
-        {!mayClaimAbsence(chain.mandateStatus) ? (
+        {switching || !mayClaimAbsence(chain.mandateStatus) ? (
           <ReadState
-            status={chain.mandateStatus}
+            status={switching ? 'not-read' : chain.mandateStatus}
             empty="This decision is not on the ring for the selected rule. The app does not invent one."
           />
         ) : !row || !isListedDecision(row.kind) ? (
@@ -110,11 +132,14 @@ export default function DecisionDetailScreen() {
                   Paid <Text style={styles.italic}>within rule</Text>
                 </Text>
                 <Text style={styles.body}>
-                  {formatBaseUnits(row.amount, chain.decimals)}
                   {mandate
-                    ? `, under ${formatBaseUnits(mandate.perTxMax, chain.decimals)} per payment.`
-                    : '.'}{' '}
-                  The payee for this rule is {mandate ? truncateAddress(mandate.merchant) : 'the rule'}.
+                    ? paidDecisionBody({
+                        amount: row.amount,
+                        decimals: chain.decimals,
+                        perTxMax: mandate.perTxMax,
+                        merchant: mandate.merchant,
+                      })
+                    : `${formatBaseUnits(row.amount, chain.decimals)}. The payee for this rule is the rule.`}
                 </Text>
               </View>
             )}

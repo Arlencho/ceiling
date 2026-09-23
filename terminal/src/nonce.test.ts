@@ -7,10 +7,11 @@ const base = { kwhMilli: 50_000n, mintDecimals: 6 };
 function quoteAt(timeStart: string, timeEnd: string) {
   const quote = quoteForWindow({
     window: { timeStart, timeEnd, sekPerKwh: "0.01" },
+    at: timeStart,
     ...base,
   });
-  assert.ok(quote !== null);
-  return quote;
+  assert.ok(quote !== null && quote.nonce !== null);
+  return { ...quote, nonce: quote.nonce };
 }
 
 test("nonce advances strictly from one 15-minute window to the next", () => {
@@ -34,12 +35,15 @@ test("the same window always yields the same nonce, so a restart cannot double q
 test("a cheaper later window still carries a higher nonce", () => {
   const expensiveEarly = quoteForWindow({
     window: { timeStart: "2026-09-20T00:00:00+02:00", timeEnd: "2026-09-20T00:15:00+02:00", sekPerKwh: "5" },
+    at: "2026-09-20T00:00:00+02:00",
     ...base,
   });
   const cheapLate = quoteForWindow({
     window: { timeStart: "2026-09-20T00:15:00+02:00", timeEnd: "2026-09-20T00:30:00+02:00", sekPerKwh: "0.001" },
+    at: "2026-09-20T00:15:00+02:00",
     ...base,
   });
   assert.ok(expensiveEarly !== null && cheapLate !== null);
+  assert.ok(expensiveEarly.nonce !== null && cheapLate.nonce !== null);
   assert.ok(cheapLate.nonce > expensiveEarly.nonce);
 });

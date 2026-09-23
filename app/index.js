@@ -12,4 +12,8 @@
 // a module body run AFTER every import in that module has been evaluated, which
 // would silently put the router first.
 import './polyfills';
+// Defined after the polyfills, so a background launch can read a ledger.
+// Do not move this above ./polyfills, and do not drop it: the router import
+// below is what starts the UI, and the task has to exist before that.
+import './lib/decisionNotifyTask';
 import 'expo-router/entry';

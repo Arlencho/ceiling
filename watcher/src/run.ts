@@ -2,7 +2,7 @@ import type { PriceFeed, PriceWindow } from "./feed.js";
 import type { JournalRow, JsonlJournal } from "./journal.js";
 import { logError, logLine } from "./log.js";
 import { amountBaseUnits, sekPerKwhToScaled } from "./money.js";
-import { nonceFromWindowStart } from "./nonce.js";
+import { nonceFromSlot, nonceFromWindowStart } from "./nonce.js";
 import type { ChargeReceipt, RecoveredCharge } from "./chain.js";
 import { REASON_STALE_NONCE } from "./reasons.js";
 import { RateLimitedError, isRateLimitError, redactRpcUrlsInText } from "./rpc.js";
@@ -32,6 +32,8 @@ export async function withRpcBackoff<T>(
       return await fn();
     } catch (err) {
       const message = redactRpcUrlsInText(err instanceof Error ? err.message : String(err));
+      // A ledger that does not decode will not decode on a later attempt.
+      if (isLedgerDecodeError(err)) throw err;
       if (isRateLimitError(err)) {
         log(`${label}: rpc rate limited: ${message}`);
         throw err instanceof RateLimitedError ? err : new RateLimitedError(`${label}: ${message}`);
@@ -66,12 +68,41 @@ function rowBase(args: {
 
 const RATE_LIMIT_GAP_REASON = "rpc rate limited on all endpoints";
 const FEED_GAP_REASON = "feed unavailable";
+const SLOT_MISMATCH_REASON = "window start does not match slot";
 const PAID_UNRECOVERED_REASON = "chain shows this window paid; signature could not be recovered";
 const STALE_UNCONFIRMED_REASON = "stale nonce; chain did not confirm this window paid";
+
+// A refusal does not move last_nonce. Once this process has watched the chain
+// return one, a later chain-backed call with a fresh journal still reads it.
+// Passing chainLastNonce without a ledger reader does not skip that read.
+const refusalsThisProcess = new Map<bigint, RecoveredCharge>();
+
+function rememberRefusal(nonce: bigint, row: RecoveredCharge): void {
+  if (row.decision !== "refused" || row.reasonCode === REASON_STALE_NONCE) return;
+  refusalsThisProcess.set(nonce, row);
+}
+
+function refusalAlreadySeen(nonce: bigint): RecoveredCharge | null {
+  return refusalsThisProcess.get(nonce) ?? null;
+}
 
 function journalSignature(signature: string | null | undefined): string | null {
   if (signature === null || signature === undefined || signature.length === 0) return null;
   return signature;
+}
+
+function isLedgerDecodeError(err: unknown): boolean {
+  return err instanceof Error && err.name === "LedgerDecodeError";
+}
+
+function windowStartsAtSlot(window: PriceWindow, at: Date): boolean {
+  try {
+    // The feed must start on the charge nonce. One second earlier is a
+    // different window, even when that window still contains the slot.
+    return nonceFromWindowStart(window.timeStart) === nonceFromSlot(at);
+  } catch {
+    return false;
+  }
 }
 
 export async function processWindow(args: {
@@ -86,6 +117,8 @@ export async function processWindow(args: {
   feedRetryMs?: number;
   chainLastNonce?: () => Promise<bigint>;
   recoverSettled?: (nonce: bigint) => Promise<RecoveredCharge | null>;
+  /** Ledger row for this nonce. A chain-backed call always reads before it sends. */
+  recordedCharge?: (nonce: bigint) => Promise<RecoveredCharge | null>;
 }): Promise<ProcessResult> {
   const log = args.log ?? logLine;
   const feedAttempts = args.feedAttempts ?? FEED_ATTEMPTS;
@@ -98,7 +131,8 @@ export async function processWindow(args: {
     if (attempt < feedAttempts) await sleep(feedRetryMs);
   }
 
-  const nonce = nonceFromWindowStart(window === null ? args.at.toISOString() : window.timeStart);
+  // The nonce is the cadence slot the watcher chose. The feed does not name it.
+  const nonce = nonceFromSlot(args.at);
   if (args.journal.hasNonce(nonce)) {
     if (window !== null) {
       log(`skipped already decided nonce=${nonce.toString()} window=${window.timeStart}`);
@@ -138,6 +172,23 @@ export async function processWindow(args: {
       `paid recovered amount=${recovered.amount.toString()} nonce=${nonce.toString()} sig=${recovered.signature.length > 0 ? recovered.signature : "-"}`,
     );
     return "submitted";
+  };
+
+  const writeRecoveredRefusal = (recovered: RecoveredCharge): ProcessResult => {
+    rememberRefusal(nonce, recovered);
+    args.journal.append({
+      ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: recovered.amount }),
+      ...(window === null ? { window_start: args.at.toISOString() } : {}),
+      decision: "refused",
+      reason: recovered.reason,
+      reason_code: recovered.reasonCode,
+      signature: journalSignature(recovered.signature),
+      suggested_override: recovered.suggestedOverride === null ? null : recovered.suggestedOverride.toString(),
+    });
+    log(
+      `refused recovered reason=${recovered.reason} amount=${recovered.amount.toString()} nonce=${nonce.toString()} window=${window?.timeStart ?? args.at.toISOString()}`,
+    );
+    return "skipped";
   };
 
   const writePaidUnrecovered = (amount: bigint): ProcessResult => {
@@ -227,6 +278,28 @@ export async function processWindow(args: {
     }
   }
 
+  // Settlement above catches a paid nonce. A refusal does not move
+  // last_nonce, so the ledger row is a separate read and it is not optional:
+  // a passed reader is the chain account, and a chain-backed call that did
+  // not pass one still resolves a refusal this process has already seen.
+  if (args.chainLastNonce || args.recordedCharge) {
+    let recorded: RecoveredCharge | null;
+    try {
+      recorded = args.recordedCharge
+        ? await withRpcBackoff("recorded charge", () => args.recordedCharge!(nonce), log)
+        : refusalAlreadySeen(nonce);
+    } catch (err) {
+      if (isRateLimitError(err)) return deferRateLimit();
+      throw err;
+    }
+    if (recorded !== null && recorded.decision === "paid") {
+      return writeRecoveredPaid(recorded);
+    }
+    if (recorded !== null && recorded.decision === "refused") {
+      return writeRecoveredRefusal(recorded);
+    }
+  }
+
   if (window === null) {
     // Record the outage once, then leave the window retryable so a later cycle
     // can still submit it when the feed comes back.
@@ -244,6 +317,25 @@ export async function processWindow(args: {
       suggested_override: null,
     });
     log(`gap feed unavailable at=${args.at.toISOString()}`);
+    return "gap";
+  }
+
+  if (!windowStartsAtSlot(window, args.at)) {
+    if (args.journal.hasGap(nonce, SLOT_MISMATCH_REASON)) {
+      log(
+        `gap window start does not match slot at=${args.at.toISOString()} window=${window.timeStart}, window stays due`,
+      );
+      return "gap";
+    }
+    args.journal.append({
+      ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: 0n }),
+      decision: "gap",
+      reason: SLOT_MISMATCH_REASON,
+      reason_code: null,
+      signature: null,
+      suggested_override: null,
+    });
+    log(`gap window start does not match slot at=${args.at.toISOString()} window=${window.timeStart}`);
     return "gap";
   }
 
@@ -334,6 +426,14 @@ export async function processWindow(args: {
   });
 
   if (receipt.decision === "refused") {
+    rememberRefusal(nonce, {
+      decision: "refused",
+      reason: receipt.reason,
+      reasonCode: receipt.reasonCode,
+      suggestedOverride: receipt.suggestedOverride,
+      signature: receipt.signature,
+      amount,
+    });
     log(
       `refused reason=${receipt.reason} amount=${amount.toString()} nonce=${nonce.toString()} window=${window.timeStart} sig=${receipt.signature}`,
     );
