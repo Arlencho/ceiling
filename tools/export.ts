@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { fetchDecisionHistory } from "../indexer/src/index.js";
 import {
@@ -31,6 +32,7 @@ import {
   resolveClusterName,
   resolveProgramId,
   resolveRpcList,
+  ringEntryForSignature,
   type DecisionRecord,
   type LedgerAccount,
   type LedgerEntry,
@@ -77,7 +79,7 @@ async function getTx(conn: Connection, signature: string) {
   return tx;
 }
 
-async function recordFromSignature(
+export async function recordFromSignature(
   conn: Connection,
   signature: string,
   programId: PublicKey,
@@ -114,18 +116,12 @@ async function recordFromSignature(
   if (matches.length === 1) {
     entry = matches[0]!.entry;
   } else if (matches.length > 1) {
-    const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
-    const blockTime = tx.blockTime !== null && tx.blockTime !== undefined ? BigInt(tx.blockTime) : null;
-    const scored = matches
-      .map((row) => {
-        let score = 0;
-        if (blockTime !== null && row.entry.ts === blockTime) score += 2;
-        if (logs && row.entry.reason === logs.reasonCode) score += 2;
-        if (logs && row.entry.suggestedOverride === logs.suggestedOverride) score += 1;
-        return { row, score };
-      })
-      .sort((a, b) => b.score - a.score);
-    entry = scored[0]!.row.entry;
+    const blockTime = typeof tx.blockTime === "number" ? tx.blockTime : null;
+    const picked = ringEntryForSignature(matches, blockTime, signature);
+    if ("error" in picked) {
+      throw new Error(picked.error);
+    }
+    entry = picked.entry;
   } else {
     const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
     if (!logs) {
@@ -302,8 +298,20 @@ async function main(): Promise<void> {
   writeOutput(format === "csv" ? bundleToCsv(bundle) : bundleToJson(bundle), out);
 }
 
-main().catch((err: unknown) => {
-  const message = err instanceof Error ? err.message : String(err);
-  console.error(`export failed: ${message}`);
-  process.exit(1);
-});
+function invokedAsCli(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return pathToFileURL(entry).href === import.meta.url;
+  } catch {
+    return false;
+  }
+}
+
+if (invokedAsCli()) {
+  main().catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`export failed: ${message}`);
+    process.exit(1);
+  });
+}
