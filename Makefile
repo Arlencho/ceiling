@@ -107,7 +107,7 @@ indexer-test: ## Typecheck and test the history indexer
 	cd indexer && npm ci && npm run typecheck && npm test
 
 terminal-test: ## Typecheck and test the merchant terminal
-	cd terminal && npm ci && npm run typecheck && npm test
+	cd terminal && npm ci && cd ../watcher && npm ci && cd ../terminal && npm run typecheck && npm test
 
 # declare_id in programs/veto/src/lib.rs, the Program row in docs/DEVNET.md.
 VETO_PROGRAM_ID ?= 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV
