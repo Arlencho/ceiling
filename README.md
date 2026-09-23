@@ -250,11 +250,11 @@ To take a decision off the phone and check it from a laptop:
 ```bash
 cd indexer && npm ci
 cd ../tools && npm ci
-npx tsx produce.ts
-npx tsx export.ts --signature <tx> --out refused.json
-npx tsx verify.ts refused.json
-npx tsx export.ts --mandate <mandate> --format csv --out rule.csv
-npx tsx verify.ts rule.csv
+VETO_RPC=https://api.devnet.solana.com npx tsx produce.ts
+VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --signature <tx> --out refused.json
+VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts refused.json
+VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --mandate <mandate> --format csv --out rule.csv
+VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts rule.csv
 ```
 
 The JSON schema, the bulk envelope, and the CSV columns are in

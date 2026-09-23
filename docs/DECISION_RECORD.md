@@ -234,22 +234,22 @@ cd ../tools && npm ci
 
 # One paid charge and one refused charge against a fresh mandate.
 # Uses gitignored keys/ from scripts/devnet-setup.sh.
-npx tsx produce.ts
+VETO_RPC=https://api.devnet.solana.com npx tsx produce.ts
 
 # JSON for one decision, by signature.
-npx tsx export.ts --signature <tx>
-npx tsx export.ts --signature <tx> --out refused.json
+VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --signature <tx>
+VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --signature <tx> --out refused.json
 
 # Everything under one rule, or a UTC date range. JSON default, or CSV.
-npx tsx export.ts --mandate <mandate> --out rule.json
-npx tsx export.ts --mandate <mandate> --format csv --out rule.csv
-npx tsx export.ts --from 2026-09-20 --to 2026-09-21 --mandate <mandate> --out day.json
+VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --mandate <mandate> --out rule.json
+VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --mandate <mandate> --format csv --out rule.csv
+VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --from 2026-09-20 --to 2026-09-21 --mandate <mandate> --out day.json
 
 # Re-read the chain. Confirm a genuine file, reject a tampered one.
-npx tsx verify.ts refused.json
-npx tsx verify.ts rule.json
-npx tsx verify.ts rule.csv
-npx tsx export.ts --signature <tx> | npx tsx verify.ts
+VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts refused.json
+VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts rule.json
+VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts rule.csv
+VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --signature <tx> | VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts
 ```
 
 `produce.ts` opens its own source token account so it does not replace the SPL

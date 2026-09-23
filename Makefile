@@ -88,9 +88,9 @@ localnet: ## Deploy localnet fixtures; needs the maintainer backup of keys/progr
 # Off-phone decision record (schema in docs/DECISION_RECORD.md).
 # Bulk export reads the indexer library, so tools-test installs both packages.
 #   make tools-test
-#   cd tools && npx tsx produce.ts
-#   cd tools && npx tsx export.ts --signature <tx> | npx tsx verify.ts
-#   cd tools && npx tsx export.ts --mandate <addr> --format csv --out decisions.csv
+#   cd tools && VETO_RPC=https://api.devnet.solana.com npx tsx produce.ts
+#   cd tools && VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --signature <tx> | VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts
+#   cd tools && VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --mandate <addr> --format csv --out decisions.csv
 
 tools-test: ## Typecheck and test the decision-record tools
 	cd indexer && npm ci
