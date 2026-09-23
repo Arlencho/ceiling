@@ -369,12 +369,14 @@ Verify:
 
 ```bash
 solana account {program_id} -u {rpc}
-solana program show {program_id} -u {rpc} -k keys/deployer.json
+solana program show {program_id} -u {rpc}
 spl-token balance --address {owner_ata} -u {rpc}
 spl-token balance --address {merchant_ata} -u {rpc}
 spl-token accounts --owner {agent} -u {rpc}
 solana balance {agent} -u {rpc}
 ```
+
+`solana program show` answers this read without a signer. Passing `-k keys/deployer.json` fails on a fresh clone, because that file is gitignored, and the CLI then tells you to generate a new key. The upgrade authority it prints is the Deployer row above.
 
 ## Program account (verification)
 
