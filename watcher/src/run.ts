@@ -72,20 +72,6 @@ const SLOT_MISMATCH_REASON = "window start does not match slot";
 const PAID_UNRECOVERED_REASON = "chain shows this window paid; signature could not be recovered";
 const STALE_UNCONFIRMED_REASON = "stale nonce; chain did not confirm this window paid";
 
-// A refusal does not move last_nonce. Once this process has watched the chain
-// return one, a later chain-backed call with a fresh journal still reads it.
-// Passing chainLastNonce without a ledger reader does not skip that read.
-const refusalsThisProcess = new Map<bigint, RecoveredCharge>();
-
-function rememberRefusal(nonce: bigint, row: RecoveredCharge): void {
-  if (row.decision !== "refused" || row.reasonCode === REASON_STALE_NONCE) return;
-  refusalsThisProcess.set(nonce, row);
-}
-
-function refusalAlreadySeen(nonce: bigint): RecoveredCharge | null {
-  return refusalsThisProcess.get(nonce) ?? null;
-}
-
 function journalSignature(signature: string | null | undefined): string | null {
   if (signature === null || signature === undefined || signature.length === 0) return null;
   return signature;
@@ -105,7 +91,7 @@ function windowStartsAtSlot(window: PriceWindow, at: Date): boolean {
   }
 }
 
-export async function processWindow(args: {
+type ProcessWindowFields = {
   at: Date;
   feed: PriceFeed;
   journal: JsonlJournal;
@@ -115,14 +101,34 @@ export async function processWindow(args: {
   log?: (line: string) => void;
   feedAttempts?: number;
   feedRetryMs?: number;
-  chainLastNonce?: () => Promise<bigint>;
-  recoverSettled?: (nonce: bigint) => Promise<RecoveredCharge | null>;
-  /** Ledger row for this nonce. A chain-backed call always reads before it sends. */
-  recordedCharge?: (nonce: bigint) => Promise<RecoveredCharge | null>;
-}): Promise<ProcessResult> {
+};
+
+/** Chain reads for one charge. recordedCharge travels with the nonce reader so
+ * a typed caller cannot omit it and resubmit a refusal from process memory. */
+export type ChainReader = {
+  chainLastNonce: () => Promise<bigint>;
+  recoverSettled: (nonce: bigint) => Promise<RecoveredCharge | null>;
+  recordedCharge: (nonce: bigint) => Promise<RecoveredCharge | null>;
+};
+
+type ProcessWindowArgs = ProcessWindowFields & {
+  reader?: ChainReader;
+};
+
+// A non-literal argument can carry chainLastNonce and still match a plain
+// parameter. Keys outside ProcessWindowArgs are `never`, so that shape does
+// not type-check.
+type NoFlatChain<T> = Record<Exclude<keyof T, keyof ProcessWindowArgs>, never>;
+
+export async function processWindow<T extends ProcessWindowArgs>(
+  args: T & NoFlatChain<T>,
+): Promise<ProcessResult> {
   const log = args.log ?? logLine;
   const feedAttempts = args.feedAttempts ?? FEED_ATTEMPTS;
   const feedRetryMs = args.feedRetryMs ?? FEED_RETRY_MS;
+  const chainLastNonce = args.reader?.chainLastNonce;
+  const recoverSettled = args.reader?.recoverSettled;
+  const recordedCharge = args.reader?.recordedCharge;
 
   let window: PriceWindow | null = null;
   for (let attempt = 1; attempt <= feedAttempts; attempt += 1) {
@@ -175,7 +181,6 @@ export async function processWindow(args: {
   };
 
   const writeRecoveredRefusal = (recovered: RecoveredCharge): ProcessResult => {
-    rememberRefusal(nonce, recovered);
     args.journal.append({
       ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: recovered.amount }),
       ...(window === null ? { window_start: args.at.toISOString() } : {}),
@@ -206,13 +211,13 @@ export async function processWindow(args: {
   };
 
   const readSettled = async (): Promise<bigint> => {
-    if (!args.chainLastNonce) return args.journal.maxSettledNonce();
-    return withRpcBackoff("chain last_nonce", () => args.chainLastNonce!(), log);
+    if (!chainLastNonce) return args.journal.maxSettledNonce();
+    return withRpcBackoff("chain last_nonce", () => chainLastNonce(), log);
   };
 
   const recoverPaid = async (): Promise<RecoveredCharge | null> => {
-    if (!args.recoverSettled) return null;
-    return withRpcBackoff("recover settled", () => args.recoverSettled!(nonce), log);
+    if (!recoverSettled) return null;
+    return withRpcBackoff("recover settled", () => recoverSettled(nonce), log);
   };
 
   const closeAlreadySettled = async (
@@ -279,15 +284,11 @@ export async function processWindow(args: {
   }
 
   // Settlement above catches a paid nonce. A refusal does not move
-  // last_nonce, so the ledger row is a separate read and it is not optional:
-  // a passed reader is the chain account, and a chain-backed call that did
-  // not pass one still resolves a refusal this process has already seen.
-  if (args.chainLastNonce || args.recordedCharge) {
+  // last_nonce, so the ledger row is a separate read on the reader.
+  if (recordedCharge) {
     let recorded: RecoveredCharge | null;
     try {
-      recorded = args.recordedCharge
-        ? await withRpcBackoff("recorded charge", () => args.recordedCharge!(nonce), log)
-        : refusalAlreadySeen(nonce);
+      recorded = await withRpcBackoff("recorded charge", () => recordedCharge(nonce), log);
     } catch (err) {
       if (isRateLimitError(err)) return deferRateLimit();
       throw err;
@@ -426,14 +427,6 @@ export async function processWindow(args: {
   });
 
   if (receipt.decision === "refused") {
-    rememberRefusal(nonce, {
-      decision: "refused",
-      reason: receipt.reason,
-      reasonCode: receipt.reasonCode,
-      suggestedOverride: receipt.suggestedOverride,
-      signature: receipt.signature,
-      amount,
-    });
     log(
       `refused reason=${receipt.reason} amount=${amount.toString()} nonce=${nonce.toString()} window=${window.timeStart} sig=${receipt.signature}`,
     );

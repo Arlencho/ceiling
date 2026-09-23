@@ -387,8 +387,11 @@ test(
         log: (line) => logs.push(line),
         feedAttempts: 1,
         feedRetryMs: 0,
-        chainLastNonce: () => readLastNonce({ cfg, agent }),
-        recoverSettled: (nonce) => recoverSettledCharge({ cfg, agent, nonce }),
+        reader: {
+          chainLastNonce: () => readLastNonce({ cfg, agent }),
+          recoverSettled: (nonce) => recoverSettledCharge({ cfg, agent, nonce }),
+          recordedCharge: async () => null,
+        },
       });
       const rows = journal.load().filter((r) => r.nonce === WINDOW_NONCE.toString());
       assert.equal(rpc.sends, 1, "the charge must have been sent once");

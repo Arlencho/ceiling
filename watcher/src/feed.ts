@@ -313,15 +313,21 @@ export function parseFeedBody(text: string): PriceWindow[] {
   return windows;
 }
 
+/** Prefer the window that starts at `at`. A wider window listed first still
+ * contains the instant, and taking it first leaves the slot unpaid. Containment
+ * is only the fallback when no window starts on the instant. */
 export function windowContaining(windows: PriceWindow[], at: Date): PriceWindow | null {
   const t = at.getTime();
+  if (!Number.isFinite(t)) return null;
+  let contained: PriceWindow | null = null;
   for (const w of windows) {
     const start = Date.parse(w.timeStart);
     const end = Date.parse(w.timeEnd);
     if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
-    if (t >= start && t < end) return w;
+    if (start === t) return w;
+    if (contained === null && t >= start && t < end) contained = w;
   }
-  return null;
+  return contained;
 }
 
 /** True when the body is not a day file the parser can read.

@@ -86,11 +86,14 @@ test("a stale-nonce refusal carries its confirmed signature when a later payment
   let reads = 0;
   const result = await processWindow({
     ...r3Args(journal),
-    chainLastNonce: async () => {
-      reads += 1;
-      return reads === 1 ? 0n : LATER_NONCE;
+    reader: {
+      chainLastNonce: async () => {
+        reads += 1;
+        return reads === 1 ? 0n : LATER_NONCE;
+      },
+      recoverSettled: async () => null,
+      recordedCharge: async () => null,
     },
-    recoverSettled: async () => null,
     submit: async () => STALE,
   });
   const row = journal.load().find((r) => r.nonce === WINDOW_NONCE.toString());
@@ -105,8 +108,11 @@ test("a stale-nonce refusal carries its confirmed signature when the chain did n
   const journal = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-80-gap-")), "d.jsonl"));
   const result = await processWindow({
     ...r3Args(journal),
-    chainLastNonce: async () => 0n,
-    recoverSettled: async () => null,
+    reader: {
+      chainLastNonce: async () => 0n,
+      recoverSettled: async () => null,
+      recordedCharge: async () => null,
+    },
     submit: async () => STALE,
   });
   const row = journal.load().find((r) => r.nonce === WINDOW_NONCE.toString());
@@ -123,18 +129,21 @@ test("a recovered paid row keeps the paid signature when a stale-nonce refusal i
   let reads = 0;
   const result = await processWindow({
     ...r3Args(journal),
-    chainLastNonce: async () => {
-      reads += 1;
-      return reads === 1 ? 0n : WINDOW_NONCE;
+    reader: {
+      chainLastNonce: async () => {
+        reads += 1;
+        return reads === 1 ? 0n : WINDOW_NONCE;
+      },
+      recoverSettled: async () => ({
+        decision: "paid" as const,
+        reason: "ok",
+        reasonCode: 0,
+        suggestedOverride: null,
+        signature: RECOVERED_SIG,
+        amount: 446_000n,
+      }),
+      recordedCharge: async () => null,
     },
-    recoverSettled: async () => ({
-      decision: "paid" as const,
-      reason: "ok",
-      reasonCode: 0,
-      suggestedOverride: null,
-      signature: RECOVERED_SIG,
-      amount: 446_000n,
-    }),
     submit: async () => STALE,
   });
   const row = journal.load().find((r) => r.nonce === WINDOW_NONCE.toString());
@@ -442,8 +451,11 @@ test(
           log: () => {},
           feedAttempts: 1,
           feedRetryMs: 0,
-          chainLastNonce: () => readLastNonce({ cfg, agent }),
-          recoverSettled: (nonce) => recoverSettledCharge({ cfg, agent, nonce }),
+          reader: {
+            chainLastNonce: () => readLastNonce({ cfg, agent }),
+            recoverSettled: (nonce) => recoverSettledCharge({ cfg, agent, nonce }),
+            recordedCharge: async () => null,
+          },
         });
         await new Promise((resolve) => setTimeout(resolve, 5_000));
       } finally {

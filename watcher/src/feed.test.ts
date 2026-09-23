@@ -22,6 +22,15 @@ test("windowContaining matches the 15-minute slot that holds the instant", () =>
   assert.equal(miss, null);
 });
 
+test("windowContaining prefers the window that starts at the instant when a wider window is listed first", () => {
+  const at = new Date("2026-09-22T16:00:00Z");
+  const wider = { timeStart: "2026-09-22T15:45:00Z", timeEnd: "2026-09-22T16:15:00Z", sekPerKwh: "0.5" };
+  const slot = { timeStart: "2026-09-22T16:00:00Z", timeEnd: "2026-09-22T16:15:00Z", sekPerKwh: "0.00892" };
+  const hit = windowContaining([wider, slot], at);
+  assert.equal(hit?.timeStart, slot.timeStart);
+  assert.equal(hit?.sekPerKwh, "0.00892");
+});
+
 test("feedUrlFor uses the Stockholm calendar date", () => {
   assert.equal(
     feedUrlFor(new Date("2026-09-20T00:00:00+02:00")),

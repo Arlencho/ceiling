@@ -179,8 +179,11 @@ async function mergedOnce(args: {
       log: () => {},
       feedAttempts: 1,
       feedRetryMs: 0,
-      chainLastNonce: args.chainLastNonce,
-      recoverSettled: args.recoverSettled,
+      reader: {
+        chainLastNonce: args.chainLastNonce,
+        recoverSettled: args.recoverSettled ?? (async () => null),
+        recordedCharge: async () => null,
+      },
     });
     const rows = journal.load();
     const last = rows.length > prior ? rows[rows.length - 1] : null;

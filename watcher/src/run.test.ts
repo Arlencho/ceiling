@@ -509,15 +509,18 @@ test("a chain lastNonce at this window is recovered instead of submitted", async
     log: () => {},
     feedAttempts: 1,
     feedRetryMs: 0,
-    chainLastNonce: async () => 1789855200n,
-    recoverSettled: async () => ({
-      decision: "paid" as const,
-      reason: "ok",
-      reasonCode: 0,
-      suggestedOverride: null,
-      signature: "recovered-sig",
-      amount: 446_000n,
-    }),
+    reader: {
+      chainLastNonce: async () => 1789855200n,
+      recoverSettled: async () => ({
+        decision: "paid" as const,
+        reason: "ok",
+        reasonCode: 0,
+        suggestedOverride: null,
+        signature: "recovered-sig",
+        amount: 446_000n,
+      }),
+      recordedCharge: async () => null,
+    },
   });
   assert.equal(result, "submitted");
   assert.equal(submits, 0);
@@ -629,12 +632,15 @@ test("critic r2: a transient non-429 failure on the pre-submit last_nonce read i
     log: () => {},
     feedAttempts: 1,
     feedRetryMs: 0,
-    chainLastNonce: async () => {
-      reads += 1;
-      if (reads === 1) throw new Error("502 Bad Gateway: Bad Gateway");
-      return 0n;
+    reader: {
+      chainLastNonce: async () => {
+        reads += 1;
+        if (reads === 1) throw new Error("502 Bad Gateway: Bad Gateway");
+        return 0n;
+      },
+      recoverSettled: async () => null,
+      recordedCharge: async () => null,
     },
-    recoverSettled: async () => null,
     submit: async () => {
       submits += 1;
       return { decision: "paid" as const, reason: "ok", reasonCode: 0, suggestedOverride: null, signature: "sig-after-blip" };
@@ -664,11 +670,14 @@ test("critic r2: a stale-nonce refusal on a window a later payment overtook is n
     log: () => {},
     feedAttempts: 1,
     feedRetryMs: 0,
-    chainLastNonce: async () => {
-      reads += 1;
-      return reads === 1 ? 0n : later;
+    reader: {
+      chainLastNonce: async () => {
+        reads += 1;
+        return reads === 1 ? 0n : later;
+      },
+      recoverSettled: async () => null,
+      recordedCharge: async () => null,
     },
-    recoverSettled: async () => null,
     submit: async () => ({
       decision: "refused" as const,
       reason: "nonce already settled",
@@ -888,8 +897,11 @@ for (const c of r3TransientCases) {
     const { value: result, stderr } = await r3CaptureStderr(() =>
       processWindow({
         ...r3Args(journal),
-        chainLastNonce: async () => c.reads(),
-        recoverSettled: async () => c.recoveries(),
+        reader: {
+          chainLastNonce: async () => c.reads(),
+          recoverSettled: async () => c.recoveries(),
+          recordedCharge: async () => null,
+        },
         submit: async () => {
           submits += 1;
           return c.submit();
@@ -920,8 +932,11 @@ test("critic r3: stale refusal, recovery empty, re-read still below the window: 
     // The chain confirmed a stale refusal, so last_nonce >= nonce on the
     // leader. A read that still says 0 is a lagging node: nothing on the
     // chain we can see supports "paid".
-    chainLastNonce: async () => 0n,
-    recoverSettled: async () => null,
+    reader: {
+      chainLastNonce: async () => 0n,
+      recoverSettled: async () => null,
+      recordedCharge: async () => null,
+    },
     submit: async () => {
       submits += 1;
       return R3_STALE;
@@ -950,11 +965,14 @@ test("critic r3: stale refusal, recovery empty, re-read equals the window: journ
     // last_nonce is written only on the paid path (lib.rs:187), so a re-read
     // equal to this nonce is the chain's own statement that this window paid.
     // The ring and history give nothing, so amount and signature stay unknown.
-    chainLastNonce: async () => {
-      reads += 1;
-      return reads === 1 ? 0n : R3_NONCE;
+    reader: {
+      chainLastNonce: async () => {
+        reads += 1;
+        return reads === 1 ? 0n : R3_NONCE;
+      },
+      recoverSettled: async () => null,
+      recordedCharge: async () => null,
     },
-    recoverSettled: async () => null,
     submit: async () => R3_STALE,
   });
   assert.equal(result, "submitted");

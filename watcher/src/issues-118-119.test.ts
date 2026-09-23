@@ -70,7 +70,11 @@ test("a feed that shifts time_start is not charged once per answer", async () =>
         log: () => {},
         feedAttempts: 1,
         feedRetryMs: 0,
-        chainLastNonce: async () => 0n,
+        reader: {
+          chainLastNonce: async () => 0n,
+          recoverSettled: async () => null,
+          recordedCharge: async () => null,
+        },
       }),
     );
   }
@@ -103,7 +107,11 @@ test("a shifted window does not burn the slot: the matching window still pays", 
       log: () => {},
       feedAttempts: 1,
       feedRetryMs: 0,
-      chainLastNonce: async () => 0n,
+      reader: {
+        chainLastNonce: async () => 0n,
+        recoverSettled: async () => null,
+        recordedCharge: async () => null,
+      },
     }),
     "gap",
   );
@@ -122,7 +130,11 @@ test("a shifted window does not burn the slot: the matching window still pays", 
       log: () => {},
       feedAttempts: 1,
       feedRetryMs: 0,
-      chainLastNonce: async () => 0n,
+      reader: {
+        chainLastNonce: async () => 0n,
+        recoverSettled: async () => null,
+        recordedCharge: async () => null,
+      },
     }),
     "submitted",
   );
@@ -183,15 +195,18 @@ test("a refusal already on the chain ledger is not submitted again from an empty
     log: () => {},
     feedAttempts: 1,
     feedRetryMs: 0,
-    chainLastNonce: async () => 0n,
-    recordedCharge: async () => ({
-      decision: "refused",
-      reason: "over per-payment maximum",
-      reasonCode: 5,
-      suggestedOverride: 446_000n,
-      signature: "refuse-sig",
-      amount: 446_000n,
-    }),
+    reader: {
+      chainLastNonce: async () => 0n,
+      recoverSettled: async () => null,
+      recordedCharge: async () => ({
+        decision: "refused",
+        reason: "over per-payment maximum",
+        reasonCode: 5,
+        suggestedOverride: 446_000n,
+        signature: "refuse-sig",
+        amount: 446_000n,
+      }),
+    },
   });
   assert.equal(result, "skipped");
   assert.deepEqual(submitted, []);
