@@ -161,9 +161,19 @@ export function isRetryable(err: unknown): boolean {
   return RETRY_RE.test(msg);
 }
 
+// Slot was skipped, or skipped in long-term storage. A genuine gap in the ledger.
+const SKIPPED_SLOT_CODES = new Set([-32007, -32009]);
+// Pruned or not held by this node. The block existed; the walk has not checked it.
+const UNAVAILABLE_BLOCK_CODES = new Set([-32001, -32004, -32014]);
+
 export function isSkippableSlot(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return SKIP_RE.test(msg);
+  const code = jsonRpcCode(err);
+  return code !== null && SKIPPED_SLOT_CODES.has(code);
+}
+
+export function isUnavailableBlock(err: unknown): boolean {
+  const code = jsonRpcCode(err);
+  return code !== null && UNAVAILABLE_BLOCK_CODES.has(code);
 }
 
 export function sleep(ms: number): Promise<void> {
