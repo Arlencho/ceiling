@@ -106,7 +106,8 @@ as a diary.
 
 One APK, in `app/`. Connect through Mobile Wallet Adapter against Seed Vault. Write a mandate. A
 today view of what the agent did and declined. A ledger with explorer links. Revoke in one tap. A
-push on every decision, because the agent acts while the owner is not looking.
+local notification on every decision, raised by an on-device background read
+(`app/lib/decisionNotifyTask.ts`), because the agent acts while the owner is not looking.
 
 The agent key is generated in the app and held in `expo-secure-store`. It signs `charge` and
 nothing else. It owns no funds and cannot widen any limit.

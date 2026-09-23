@@ -16,7 +16,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import { dueSlots } from "./cadence.js";
+import { dueSlots, nextSlot } from "./cadence.js";
 import { ledgerPda, mandatePda } from "./chain.js";
 import type { PriceFeed } from "./feed.js";
 import { JsonlJournal } from "./journal.js";
@@ -295,7 +295,9 @@ test("an idle run cycle does not read the ledger when the journal already holds 
   writeFileSync(join(dir, "agent.json"), JSON.stringify(Array.from(agent.secretKey)));
   const journalPath = join(dir, "decisions.jsonl");
   const now = new Date();
-  const lines = dueSlots(now).map((slot) => paidRow(slot));
+  // Every due slot, plus the next one, so a cadence boundary crossed while the
+  // child starts cannot turn this idle fixture into a charge cycle.
+  const lines = [...dueSlots(now), nextSlot(now)].map((slot) => paidRow(slot));
   writeFileSync(journalPath, lines.length === 0 ? "" : `${lines.join("\n")}\n`);
   try {
     const run = await spawnWatcher({

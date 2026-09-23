@@ -86,6 +86,7 @@ curl http://127.0.0.1:8788/api/quote
   "sek_per_kwh": "0.00892",
   "kwh_milli": "50000",
   "mint": "...",
+  "mint_decimals": 6,
   "merchant_token_account": "...",
   "source": "https://www.elprisetjustnu.se/api/v1/prices/2026/09-20_SE3.json"
 }
