@@ -3,7 +3,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PublicKey } from "@solana/web3.js";
 import type { Connection } from "@solana/web3.js";
-import { linesForProgram } from "../indexer/src/events.js";
+import { decodeEventsFromLogs, linesForProgram } from "../indexer/src/events.js";
 import { createFailoverConnection, parseRpcList, redactRpcUrl, redactRpcUrls } from "../indexer/src/rpc.js";
 
 export { redactRpcUrl, redactRpcUrls };
@@ -610,43 +610,116 @@ export function parseChargeFromTx(
   return null;
 }
 
-export function parseChargeLogs(
-  logs: readonly string[],
-  programId: PublicKey | string,
-): {
+export type ChargeLogDecision = {
   kind: "paid" | "refused";
   reasonCode: number;
   reasonText: string;
   amount: bigint;
   suggestedOverride: bigint;
-} | null {
+};
+
+// Every attributed VETO PAID / VETO REFUSED line, in log order. parseChargeLogs
+// keeps the first, which is what a single-charge export reads.
+export function chargeLogDecisions(logs: readonly string[], programId: PublicKey | string): ChargeLogDecision[] {
   const id = typeof programId === "string" ? programId : programId.toBase58();
+  const out: ChargeLogDecision[] = [];
   for (const line of linesForProgram(logs, id)) {
     const paid = /VETO PAID amount=(\d+)/.exec(line);
     if (paid) {
-      return {
+      out.push({
         kind: "paid",
         reasonCode: 0,
         reasonText: "ok",
         amount: BigInt(paid[1]!),
         suggestedOverride: 0n,
-      };
+      });
+      continue;
     }
-    const refused = /VETO REFUSED reason=(\d+) \(([^)]*)\) amount=(\d+).*override_to_clear=(\d+)/.exec(
-      line,
-    );
+    const refused = /VETO REFUSED reason=(\d+) \(([^)]*)\) amount=(\d+).*override_to_clear=(\d+)/.exec(line);
     if (refused) {
       const reasonCode = Number.parseInt(refused[1]!, 10);
-      return {
+      out.push({
         kind: "refused",
         reasonCode,
         reasonText: refused[2] && refused[2].length > 0 ? refused[2] : reasonText(reasonCode),
         amount: BigInt(refused[3]!),
         suggestedOverride: BigInt(refused[4]!),
-      };
+      });
     }
   }
-  return null;
+  return out;
+}
+
+export function parseChargeLogs(logs: readonly string[], programId: PublicKey | string): ChargeLogDecision | null {
+  return chargeLogDecisions(logs, programId)[0] ?? null;
+}
+
+export type DecisionTriple = {
+  mandate: string;
+  nonce: bigint;
+  amount: bigint;
+};
+
+// Shared binder for a ring row and for a Veto event. Nonce alone is not a
+// decision: one transaction can refuse and then pay the same nonce at two
+// amounts, or pay one nonce and refuse another. Position is not a decision
+// either. Callers that still have more than one hit (two refusals of one
+// nonce at different times) disambiguate themselves. Callers that cannot
+// (events in one transaction) require exactly one hit.
+export function bindByTriple<T>(items: readonly T[], want: DecisionTriple, keyOf: (item: T) => DecisionTriple): T[] {
+  return items.filter((item) => {
+    const key = keyOf(item);
+    return key.mandate === want.mandate && key.nonce === want.nonce && key.amount === want.amount;
+  });
+}
+
+export function vetoDecisionCountError(count: number, nonce: bigint): string {
+  return `transaction carries ${count} Veto decisions for nonce ${nonce.toString()}`;
+}
+
+export type BoundVetoDecision =
+  | { status: "one"; decision: ChargeLogDecision }
+  | { status: "error"; error: string }
+  | { status: "none" };
+
+// Kind, reason, and override come from the one Veto event that matches the
+// charge triple. Zero events or several events fail closed. A text line is
+// used only when the transaction carries no Veto event at all, and then only
+// when exactly one Veto decision line is present.
+export function boundVetoDecision(
+  logs: readonly string[],
+  programId: PublicKey | string,
+  want: DecisionTriple,
+): BoundVetoDecision {
+  const id = typeof programId === "string" ? programId : programId.toBase58();
+  const events = decodeEventsFromLogs(logs, id);
+  if (events.length > 0) {
+    const matches = bindByTriple(events, want, (event) => ({
+      mandate: event.mandate,
+      nonce: event.nonce,
+      amount: event.amount,
+    }));
+    if (matches.length !== 1) {
+      return { status: "error", error: vetoDecisionCountError(matches.length, want.nonce) };
+    }
+    const event = matches[0]!;
+    return {
+      status: "one",
+      decision: {
+        kind: event.kind,
+        reasonCode: event.reason,
+        reasonText: reasonText(event.reason),
+        amount: event.amount,
+        suggestedOverride: event.suggestedOverride,
+      },
+    };
+  }
+  const lines = chargeLogDecisions(logs, id);
+  if (lines.length === 0) return { status: "none" };
+  if (lines.length !== 1) {
+    return { status: "error", error: vetoDecisionCountError(lines.length, want.nonce) };
+  }
+  return { status: "one", decision: lines[0]! };
 }
 
 function requireSafeInt(value: unknown, field: string): bigint {

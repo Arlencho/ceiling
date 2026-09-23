@@ -19,17 +19,19 @@ import {
   fetchLedger,
   fetchMandate,
   flagString,
+  bindByTriple,
+  boundVetoDecision,
   indexedEntries,
   ledgerPda,
   parseArgs,
   parseChargeFromTx,
-  parseChargeLogs,
   reasonText,
   redactRpcUrls,
   resolveRpcList,
   resolveVerifyProgramId,
   ringEntryForSignature,
   tokenAccountOwner,
+  type ChargeIx,
   type DecisionRecord,
   type LedgerEntry,
   type MandateAccount,
@@ -272,13 +274,26 @@ async function checkRecord(
   if (!ledger.mandate.equals(mandatePk)) {
     failures.push(`ledger.mandate is ${ledger.mandate.toBase58()}, expected ${record.mandate}`);
   }
-  const rows = indexedEntries(ledger).filter((row) => row.entry.nonce === record.nonce);
-  const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
+  // Chain data, not the file. Two charges can share a nonce and differ by amount.
+  const want = {
+    mandate: charge.mandate.toBase58(),
+    nonce: charge.nonce,
+    amount: charge.amount,
+  };
+  const rows = bindByTriple(indexedEntries(ledger), want, (row) => ({
+    mandate: ledger.mandate.toBase58(),
+    nonce: row.entry.nonce,
+    amount: row.entry.amount,
+  }));
+  const bound = boundVetoDecision(tx.meta?.logMessages ?? [], programId, want);
   const blockTime = txBlockTime(tx);
   if (rows.length === 0) {
-    if (!logs) {
+    if (bound.status === "none") {
       failures.push("ledger ring has no matching row and transaction logs have neither PAID nor REFUSED");
+    } else if (bound.status === "error") {
+      failures.push(bound.error);
     } else {
+      const logs = bound.decision;
       notes.push("ledger ring no longer holds this decision; checking transaction logs");
       eq(record.kind, logs.kind, "kind (logs)", failures);
       eq(record.reason_code, logs.reasonCode, "reason_code (logs)", failures);
@@ -308,9 +323,12 @@ async function checkRecord(
     }
   }
 
-  if (logs) {
-    eq(record.kind, logs.kind, "kind (logs)", failures);
-    eq(record.reason_code, logs.reasonCode, "reason_code (logs)", failures);
+  // Same triple as the ring. The first Veto line in the transaction is not the decision.
+  if (rows.length > 0 && bound.status === "error") {
+    failures.push(bound.error);
+  } else if (rows.length > 0 && bound.status === "one") {
+    eq(record.kind, bound.decision.kind, "kind (logs)", failures);
+    eq(record.reason_code, bound.decision.reasonCode, "reason_code (logs)", failures);
   }
 
   return { failures, notes };
@@ -461,6 +479,20 @@ async function rulePopulationFailures(bundle: DecisionBundle, cache: CheckCache)
     failures.push(missing);
     return failures;
   }
+  failures.push(...ledgerRowFailures(bundle, ledger));
+  const paid = bundle.decisions.filter((row) => row.kind === "paid").length;
+  const refused = bundle.decisions.filter((row) => row.kind === "refused").length;
+  if (paid !== mandate.spendCount) {
+    failures.push(`paid rows: file has ${paid}, mandate spend_count is ${mandate.spendCount}`);
+  }
+  if (refused !== mandate.refusalCount) {
+    failures.push(`refused rows: file has ${refused}, mandate refusal_count is ${mandate.refusalCount}`);
+  }
+  return failures;
+}
+
+function ledgerRowFailures(bundle: DecisionBundle, ledger: Awaited<ReturnType<typeof fetchLedger>>): string[] {
+  const failures: string[] = [];
   const chainRows = indexedEntries(ledger).filter(
     (row) =>
       (row.entry.kind === KIND_PAID || row.entry.kind === KIND_REFUSED) && inScope(row.entry.ts, bundle),
@@ -483,21 +515,46 @@ async function rulePopulationFailures(bundle: DecisionBundle, cache: CheckCache)
       );
     }
   }
-  const paid = bundle.decisions.filter((row) => row.kind === "paid").length;
-  const refused = bundle.decisions.filter((row) => row.kind === "refused").length;
-  if (paid !== mandate.spendCount) {
-    failures.push(`paid rows: file has ${paid}, mandate spend_count is ${mandate.spendCount}`);
-  }
-  if (refused !== mandate.refusalCount) {
-    failures.push(`refused rows: file has ${refused}, mandate refusal_count is ${mandate.refusalCount}`);
+  return failures;
+}
+
+function undecodableChargeFailures(
+  bundle: DecisionBundle,
+  cache: CheckCache,
+  transactions: Map<string, Awaited<ReturnType<Connection["getTransaction"]>>>,
+  population: Set<string>,
+): string[] {
+  const failures: string[] = [];
+  const program = cache.expectedProgramId;
+  for (const signature of [...transactions.keys()].sort()) {
+    if (population.has(signature)) continue;
+    const tx = transactions.get(signature);
+    if (!tx) continue;
+    let charge: ChargeIx | null = null;
+    try {
+      charge = parseChargeFromTx(tx, program);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!message.startsWith("charge instruction") && !message.startsWith("charge account index")) throw err;
+      failures.push(
+        `signature ${signature} invokes charge on ${program.toBase58()} but carries no attributable Veto decision`,
+      );
+      continue;
+    }
+    if (!charge) continue;
+    if (bundle.scope.mandate && charge.mandate.toBase58() !== bundle.scope.mandate) continue;
+    failures.push(
+      `signature ${signature} invokes charge on ${program.toBase58()} but carries no attributable Veto decision`,
+    );
   }
   return failures;
 }
 
 async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckCache): Promise<string[]> {
   const failures: string[] = [];
+  let mandatePk: PublicKey | null = null;
   if (bundle.scope.mandate) {
-    const mandatePk = mandatePubkey(bundle.scope.mandate, failures);
+    mandatePk = mandatePubkey(bundle.scope.mandate, failures);
     if (!mandatePk) return failures;
     try {
       await cachedMandate(cache, bundle.scope.mandate, mandatePk);
@@ -540,6 +597,22 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
       failures.push(`signature ${signature} is in the file and not in the indexed date_range`);
     }
   }
+  // The ring cannot be truncated by a log flood. A date_range that names a
+  // mandate still has to include every ring row whose timestamp is inside the window.
+  if (mandatePk) {
+    try {
+      const ledger = await cachedLedger(cache, mandatePk);
+      failures.push(...ledgerRowFailures(bundle, ledger));
+    } catch (err) {
+      const missing = missingAccountMessage(err);
+      if (!missing) throw err;
+      failures.push(missing);
+    }
+  }
+  // A top-level charge with no attributable Veto decision is missing from the
+  // indexed set. Fail closed. A scope that names no mandate has no single ring
+  // to catch the same hole.
+  failures.push(...undecodableChargeFailures(bundle, cache, history.transactions, population));
   return failures;
 }
 

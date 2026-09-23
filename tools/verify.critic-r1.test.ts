@@ -298,16 +298,20 @@ test("critic r1: two refusals of one nonce in the same second both verify", asyn
   assert.equal(two.ok, true, `genuine second refusal is rejected:\n${two.text}`);
 });
 
-test("critic r1: two same-second refusals that differ on amount are not bound", async () => {
+test("critic r1: two same-second refusals that differ on amount bind by the instruction amount", async () => {
   const rows: Row[] = [
     { kind: "refused", amount: 600_000, nonce: 5, timestamp: T0, signature: "tie-differ-1" },
     { kind: "refused", amount: 700_000, nonce: 5, timestamp: T0, signature: "tie-differ-2" },
   ];
   const { conn, records, mandates } = chain([{ mandateId: 6n, rows }]);
-  const first = records.get(mandates[0]!.toBase58())![0]!;
-  const result = await assessRecord(first, RPC, conn, OPTS);
-  assert.equal(result.ok, false, result.text);
-  assert.match(result.text, /equally/);
+  const [first, second] = records.get(mandates[0]!.toBase58())!;
+  const one = await assessRecord(first!, RPC, conn, OPTS);
+  const two = await assessRecord(second!, RPC, conn, OPTS);
+  assert.equal(one.ok, true, `genuine 600000 refusal is rejected:\n${one.text}`);
+  assert.equal(two.ok, true, `genuine 700000 refusal is rejected:\n${two.text}`);
+  const claimOther = await assessRecord({ ...first!, amount: 700_000n }, RPC, conn, OPTS);
+  assert.equal(claimOther.ok, false, claimOther.text);
+  assert.match(claimOther.text, /amount \(instruction\)/);
 });
 
 // Regression check named for this round: the attacks the fix does close, on
