@@ -63,6 +63,7 @@ test-scripts: ## Run deploy-script checks that do not need a cluster
 	./scripts/ci-covers-packages-critic-r6.test.sh
 	./scripts/ci-test-ran-proof.test.sh
 	./scripts/ci-test-ran-proof-critic-r1.test.sh
+	./scripts/ci-test-ran-proof-critic-r2.test.sh
 	./scripts/ci-runs-typecheck.test.sh
 	./scripts/docs-one-genesis.test.sh
 	./scripts/gcp-verify.test.sh
