@@ -1,6 +1,6 @@
 import type { Connection, ConfirmedSignatureInfo, VersionedTransactionResponse } from "@solana/web3.js";
 import { PublicKey } from "@solana/web3.js";
-import { decodeEventsFromLogs, decodeIxData, decisionsFromTx } from "./events.js";
+import { decisionLogTruncated, decodeEventsFromLogs, decodeIxData, decisionsFromTx } from "./events.js";
 import {
   clampPageSize,
   createFailoverConnection,
@@ -19,6 +19,9 @@ export type HistoryResult = {
   // getTransaction results for the signatures this walk actually fetched.
   // A date_range verify hands them to the row checks instead of fetching again.
   transactions: Map<string, VersionedTransactionResponse | null>;
+  // Signatures whose log ends in the runtime's "Log truncated" line.
+  // An empty decision list for one of these is not "no decision".
+  truncated: string[];
 };
 
 type TimeWindow = {
@@ -74,10 +77,14 @@ export async function fetchDecisionHistory(opts: FetchHistoryOptions): Promise<H
   }
 
   const decisions: Decision[] = [];
+  const truncated: string[] = [];
   for (const tx of txViews) {
-    decisions.push(...decisionsFromTx(tx, programId.toBase58(), opts.mandate));
+    const found = decisionsFromTx(tx, programId.toBase58(), opts.mandate);
+    if (decisionLogTruncated(found)) truncated.push(tx.signature);
+    decisions.push(...found);
   }
   decisions.sort(compareDecisions);
+  truncated.sort();
   return {
     decisions,
     signaturePages: listed.pageCount,
@@ -85,6 +92,7 @@ export async function fetchDecisionHistory(opts: FetchHistoryOptions): Promise<H
     usedBlockScan,
     slotsScanned,
     transactions,
+    truncated,
   };
 }
 

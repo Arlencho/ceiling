@@ -847,7 +847,12 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
   }
   // A top-level charge with no attributable Veto decision is missing from the
   // indexed set. Fail closed. A scope that names no mandate has no single ring
-  // to catch the same hole.
+  // to catch the same hole. A runtime "Log truncated" line is that hole named.
+  for (const signature of history.truncated) {
+    failures.push(
+      `signature ${signature} log ends with "Log truncated" and is not a complete decision list`,
+    );
+  }
   const charges = undecodableChargeFailures(bundle, cache, history.transactions, population);
   failures.push(...charges.failures);
   unread.push(...charges.unread);
