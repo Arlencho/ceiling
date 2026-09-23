@@ -1,3 +1,14 @@
+const KNOWN_CLUSTERS = ['devnet', 'testnet', 'mainnet-beta'] as const;
+
+export function walletChainForCluster(cluster: string): string {
+  if (!KNOWN_CLUSTERS.includes(cluster as (typeof KNOWN_CLUSTERS)[number])) {
+    throw new Error(
+      `Unknown cluster "${cluster}". The wallet chain is derived from the configured cluster and must be devnet, testnet, or mainnet-beta.`,
+    );
+  }
+  return `solana:${cluster}`;
+}
+
 export type AppConfig = {
   rpcUrl: string;
   programId: string;
@@ -54,6 +65,7 @@ export function configFromExtra(
   const decimalsRaw = pick(extra, 'vetoMintDecimals', env, 'EXPO_PUBLIC_VETO_MINT_DECIMALS');
   const explorerCluster =
     pick(extra, 'vetoExplorerCluster', env, 'EXPO_PUBLIC_VETO_EXPLORER_CLUSTER') || 'devnet';
+  walletChainForCluster(explorerCluster);
   return {
     rpcUrl,
     programId,
