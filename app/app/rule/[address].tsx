@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../../components/Button';
@@ -12,13 +12,13 @@ import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
 import { copyAgentAddress } from '../../lib/agentAddress';
 import { STATUS_REVOKED } from '../../lib/constants';
-import { askAfterFirstRuleOpened } from '../../lib/decisionNotifyTask';
 import { formatBaseUnits, formatTimeLeft } from '../../lib/format';
 import { mayClaimAbsence } from '../../lib/mandateRead';
 import { notActiveHint } from '../../lib/reasons';
 import { displayPurpose, formatExpiryDate, ruleSentence, stampedRulesetLine } from '../../lib/ruleView';
 import { PAYEE_NOT_IN_RULESET, stampAlignment, stampAlignmentLine } from '../../lib/ruleset';
 import { useChain } from '../../lib/useChain';
+import { useNotificationExplanation } from '../../lib/useNotificationExplanation';
 import { useRulesets } from '../../lib/useRulesets';
 import { truncateAddress } from '../../lib/wallet';
 
@@ -55,12 +55,7 @@ export default function RuleDetailScreen() {
   }, [chain]);
 
   const openedAddress = mandate?.address ?? null;
-  useEffect(() => {
-    if (!openedAddress) {
-      return;
-    }
-    void askAfterFirstRuleOpened().catch(() => undefined);
-  }, [openedAddress]);
+  const notify = useNotificationExplanation(openedAddress);
 
   const onCopyAgent = async () => {
     if (!mandate) {
@@ -109,6 +104,19 @@ export default function RuleDetailScreen() {
           </EmptyState>
         ) : (
           <View style={styles.block}>
+            {notify.explanation ? (
+              <View style={styles.explain}>
+                <Text style={styles.explainCopy}>{notify.explanation}</Text>
+                <Button
+                  label="Continue"
+                  accessibilityLabel="Continue to notification permission"
+                  invert={false}
+                  onPress={notify.onContinue}
+                />
+              </View>
+            ) : notify.statusLine ? (
+              <Text style={styles.explainCopy}>{notify.statusLine}</Text>
+            ) : null}
             <Text style={styles.h2}>The rule</Text>
             <Text style={styles.sentence}>{ruleSentence(mandate, chain.decimals)}</Text>
 
@@ -233,6 +241,14 @@ const styles = StyleSheet.create({
   block: {
     gap: 12,
     alignSelf: 'stretch',
+  },
+  explain: {
+    gap: 10,
+  },
+  explainCopy: {
+    color: colors.body,
+    fontSize: 15,
+    lineHeight: 22,
   },
   h2: {
     color: colors.text,

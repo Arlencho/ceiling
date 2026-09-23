@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { configFromExtra } from './appConfig';
+import { configFromExtra, walletChainForCluster } from './appConfig';
 
 test('configFromExtra requires RPC and program id from config', () => {
   assert.throws(
@@ -24,6 +24,24 @@ test('configFromExtra does not invent an RPC url', () => {
   );
   assert.equal(cfg.rpcUrl, 'http://example.invalid:8999');
   assert.equal(cfg.programId, 'Pid11111111111111111111111111111111111111111');
+});
+
+test('an unknown cluster is refused instead of a devnet wallet chain', () => {
+  assert.throws(
+    () =>
+      configFromExtra(
+        {
+          vetoRpc: 'http://127.0.0.1:8899',
+          vetoProgramId: 'Pid11111111111111111111111111111111111111111',
+          vetoExplorerCluster: 'localnet',
+        },
+        {},
+      ),
+    /Unknown cluster "localnet"/,
+  );
+  assert.equal(walletChainForCluster('mainnet-beta'), 'solana:mainnet-beta');
+  assert.equal(walletChainForCluster('testnet'), 'solana:testnet');
+  assert.throws(() => walletChainForCluster('mainnet'), /Unknown cluster "mainnet"/);
 });
 
 test('env fills extra when extra is empty', () => {

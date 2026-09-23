@@ -1,12 +1,12 @@
 import { Buffer } from 'buffer';
 import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
 
+import { walletChainForCluster } from './appConfig';
+
 export const APP_IDENTITY = {
   name: 'Veto',
   uri: 'https://github.com/Arlencho/veto',
 } as const;
-
-export const MWA_CHAIN = 'solana:devnet' as const;
 
 export const SESSION_STORE_KEY = 'veto.wallet.session';
 export const AGENT_SECRET_STORE_KEY = 'veto.wallet.agentSecret';
@@ -226,13 +226,27 @@ export async function createAgentKeypair(
   return created;
 }
 
+async function clusterForWallet(): Promise<string> {
+  try {
+    const { loadConfig } = await import('./config');
+    return loadConfig().explorerCluster;
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith('Unknown cluster')) {
+      throw err;
+    }
+    const raw = process.env.EXPO_PUBLIC_VETO_EXPLORER_CLUSTER?.trim() ?? '';
+    return raw.length > 0 ? raw : 'devnet';
+  }
+}
+
 export async function authorize(
   wallet: MwaWallet,
   storedAuthToken?: string,
 ): Promise<StoredSession> {
+  const chain = walletChainForCluster(await clusterForWallet());
   const result = await wallet.authorize({
     identity: APP_IDENTITY,
-    chain: MWA_CHAIN,
+    chain,
     ...(storedAuthToken ? { auth_token: storedAuthToken } : {}),
   });
   const account = result.accounts[0];
