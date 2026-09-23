@@ -1,0 +1,229 @@
+import { PublicKey } from "@solana/web3.js";
+import { LEDGER_DISCRIMINATOR, MANDATE_DISCRIMINATOR } from "./idl.js";
+
+export const LEDGER_CAPACITY = 32;
+export const ENTRY_SIZE = 72;
+/** Bytes of the ledger body before the first entry, after the 8-byte discriminator. */
+export const LEDGER_HEADER_SIZE = 40;
+
+export type MandateAccount = {
+  owner: PublicKey;
+  agent: PublicKey;
+  mint: PublicKey;
+  source: PublicKey;
+  merchant: PublicKey;
+  mandateId: bigint;
+  cap: bigint;
+  spent: bigint;
+  perTxMax: bigint;
+  expiresAt: bigint;
+  overrideAmount: bigint;
+  overrideNonce: bigint;
+  lastNonce: bigint;
+  purpose: string;
+  status: number;
+  spendCount: number;
+  refusalCount: number;
+  bump: number;
+};
+
+export type LedgerEntry = {
+  ts: bigint;
+  amount: bigint;
+  counterparty: PublicKey;
+  nonce: bigint;
+  suggestedOverride: bigint;
+  kind: number;
+  reason: number;
+};
+
+export type LedgerAccount = {
+  mandate: PublicKey;
+  total: number;
+  head: number;
+  bump: number;
+  entries: LedgerEntry[];
+};
+
+export function u64Le(value: bigint): Buffer {
+  const buf = Buffer.alloc(8);
+  buf.writeBigUInt64LE(value);
+  return buf;
+}
+
+export function asU64(value: bigint | number, field: string): bigint {
+  if (typeof value === "bigint") {
+    if (value < 0n || value > 0xffff_ffff_ffff_ffffn) {
+      throw new Error(`${field} is outside u64`);
+    }
+    return value;
+  }
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${field} must be a non-negative safe integer or a bigint`);
+  }
+  return BigInt(value);
+}
+
+export function toPublicKey(value: PublicKey | string, field: string): PublicKey {
+  if (value instanceof PublicKey) return value;
+  try {
+    return new PublicKey(value);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`${field} is not a public key: ${message}`);
+  }
+}
+
+/** PDA seeds: "mandate", owner, mandate id as a u64 little-endian. */
+export function mandatePda(programId: PublicKey, owner: PublicKey, mandateId: bigint): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("mandate"), owner.toBuffer(), u64Le(mandateId)],
+    programId,
+  );
+  return pda;
+}
+
+/** PDA seeds: "ledger", mandate address. */
+export function ledgerPda(programId: PublicKey, mandate: PublicKey): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("ledger"), mandate.toBuffer()],
+    programId,
+  );
+  return pda;
+}
+
+function requireDisc(data: Buffer, expected: Buffer, what: string): void {
+  if (data.length < expected.length || !data.subarray(0, expected.length).equals(expected)) {
+    throw new Error(`${what} account discriminator mismatch`);
+  }
+}
+
+function need(data: Buffer, offset: number, length: number, what: string): void {
+  if (offset < 0 || offset + length > data.length) {
+    throw new Error(`${what} overruns account data`);
+  }
+}
+
+function readPubkey(data: Buffer, offset: number, what: string): [PublicKey, number] {
+  need(data, offset, 32, what);
+  return [new PublicKey(data.subarray(offset, offset + 32)), offset + 32];
+}
+
+function readU64(data: Buffer, offset: number, what: string): [bigint, number] {
+  need(data, offset, 8, what);
+  return [data.readBigUInt64LE(offset), offset + 8];
+}
+
+function readI64(data: Buffer, offset: number, what: string): [bigint, number] {
+  need(data, offset, 8, what);
+  return [data.readBigInt64LE(offset), offset + 8];
+}
+
+function readU32(data: Buffer, offset: number, what: string): [number, number] {
+  need(data, offset, 4, what);
+  return [data.readUInt32LE(offset), offset + 4];
+}
+
+function readU8(data: Buffer, offset: number, what: string): [number, number] {
+  need(data, offset, 1, what);
+  return [data.readUInt8(offset), offset + 1];
+}
+
+function readString(data: Buffer, offset: number): [string, number] {
+  const [len, mid] = readU32(data, offset, "purpose length");
+  if (len > 64) throw new Error(`purpose longer than on-chain max (${len})`);
+  need(data, mid, len, "purpose");
+  return [data.subarray(mid, mid + len).toString("utf8"), mid + len];
+}
+
+export function decodeMandate(data: Buffer): MandateAccount {
+  requireDisc(data, MANDATE_DISCRIMINATOR, "Mandate");
+  let o = 8;
+  let owner: PublicKey;
+  let agent: PublicKey;
+  let mint: PublicKey;
+  let source: PublicKey;
+  let merchant: PublicKey;
+  [owner, o] = readPubkey(data, o, "owner");
+  [agent, o] = readPubkey(data, o, "agent");
+  [mint, o] = readPubkey(data, o, "mint");
+  [source, o] = readPubkey(data, o, "source");
+  [merchant, o] = readPubkey(data, o, "merchant");
+  let mandateId: bigint;
+  let cap: bigint;
+  let spent: bigint;
+  let perTxMax: bigint;
+  let expiresAt: bigint;
+  let overrideAmount: bigint;
+  let overrideNonce: bigint;
+  let lastNonce: bigint;
+  let purpose: string;
+  let status: number;
+  let spendCount: number;
+  let refusalCount: number;
+  let bump: number;
+  [mandateId, o] = readU64(data, o, "mandate_id");
+  [cap, o] = readU64(data, o, "cap");
+  [spent, o] = readU64(data, o, "spent");
+  [perTxMax, o] = readU64(data, o, "per_tx_max");
+  [expiresAt, o] = readI64(data, o, "expires_at");
+  [overrideAmount, o] = readU64(data, o, "override_amount");
+  [overrideNonce, o] = readU64(data, o, "override_nonce");
+  [lastNonce, o] = readU64(data, o, "last_nonce");
+  [purpose, o] = readString(data, o);
+  [status, o] = readU8(data, o, "status");
+  [spendCount, o] = readU32(data, o, "spend_count");
+  [refusalCount, o] = readU32(data, o, "refusal_count");
+  [bump] = readU8(data, o, "bump");
+  return {
+    owner,
+    agent,
+    mint,
+    source,
+    merchant,
+    mandateId,
+    cap,
+    spent,
+    perTxMax,
+    expiresAt,
+    overrideAmount,
+    overrideNonce,
+    lastNonce,
+    purpose,
+    status,
+    spendCount,
+    refusalCount,
+    bump,
+  };
+}
+
+function decodeEntry(data: Buffer, offset: number): LedgerEntry {
+  need(data, offset, ENTRY_SIZE, "ledger entry");
+  return {
+    ts: data.readBigInt64LE(offset),
+    amount: data.readBigUInt64LE(offset + 8),
+    counterparty: new PublicKey(data.subarray(offset + 16, offset + 48)),
+    nonce: data.readBigUInt64LE(offset + 48),
+    suggestedOverride: data.readBigUInt64LE(offset + 56),
+    kind: data.readUInt8(offset + 64),
+    reason: data.readUInt8(offset + 65),
+  };
+}
+
+export function decodeLedger(data: Buffer): LedgerAccount {
+  requireDisc(data, LEDGER_DISCRIMINATOR, "Ledger");
+  const min = 8 + LEDGER_HEADER_SIZE + LEDGER_CAPACITY * ENTRY_SIZE;
+  if (data.length < min) {
+    throw new Error(`Ledger account is ${data.length} bytes, need ${min}`);
+  }
+  const mandate = new PublicKey(data.subarray(8, 40));
+  const total = data.readUInt32LE(40);
+  const head = data.readUInt16LE(44);
+  const bump = data.readUInt8(46);
+  const entries: LedgerEntry[] = [];
+  const base = 8 + LEDGER_HEADER_SIZE;
+  for (let i = 0; i < LEDGER_CAPACITY; i += 1) {
+    entries.push(decodeEntry(data, base + i * ENTRY_SIZE));
+  }
+  return { mandate, total, head, bump, entries };
+}

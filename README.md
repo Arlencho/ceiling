@@ -137,6 +137,31 @@ account, not a vault holding the money. The owner can revoke in one signature, a
 the SPL delegation directly without this program, which the program notices and reports as a
 refusal reason rather than crashing on.
 
+## Put your agent under a rule
+
+The agent key signs `charge` and pays the transaction fee. It is not the owner key.
+
+Generate a keypair and print its public address:
+
+```bash
+solana-keygen new --no-bip39-passphrase --silent -o keys/agent.json
+solana-keygen pubkey keys/agent.json
+```
+
+Fund that address with a little SOL for fees. `status()` warns when the balance is under 100000 lamports, which is 20 charges at the 5000 lamport base fee.
+
+In the app, open a new rule and paste that public address into the field labeled "Agent address". The same screen takes Cap, Per-payment maximum, Expiry (days from now), Payee, and Purpose. The owner key signs the open.
+
+Until [issue 190](https://github.com/Arlencho/veto/issues/190) publishes `veto-agent-sdk`, install the package from this repo checkout and run the example from there. The example connects to `https://api.devnet.solana.com`, loads the agent key file, reads `last_nonce`, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
+
+```bash
+cd sdk
+npm ci
+npx tsx examples/pay-once.ts ../keys/agent.json <mandate-address> <amount-in-base-units>
+```
+
+`watcher/` is the full reference agent. It prices a public electricity spot and submits `charge` on a schedule. This package is the client for one charge and for reading the mandate, the ledger, and the decisions.
+
 ## What the chain enforces
 
 Four limits, all on chain, checked on every charge: **cap**, **per-payment maximum**, **expiry**,
@@ -201,6 +226,7 @@ not the demo mint `2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU`.
 ```
 programs/veto/            the Anchor program: state, policy, zero-copy ledger
 app/                      the Android app: Expo, custom dev client, Seed Vault via MWA
+sdk/                      TypeScript client: charge, mandate, ledger, decisions
 watcher/                  unattended agent: live SE3 feed, charge, JSONL diary
 indexer/                  rebuild Paid and Refused history from transaction logs
 tools/                    export one decision as JSON and verify it against the chain
