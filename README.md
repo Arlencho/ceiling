@@ -152,7 +152,7 @@ Fund that address with a little SOL for fees. `status()` warns when the balance 
 
 In the app, open a new rule and paste that public address into the field labeled "Agent address". The same screen takes Cap, Per-payment maximum, Expiry (days from now), Payee, and Purpose. The owner key signs the open.
 
-Install this repo's package `veto-agent-sdk` and run the example. The example connects to `https://api.devnet.solana.com`, loads the agent key file, reads `last_nonce`, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
+Until [issue 190](https://github.com/Arlencho/veto/issues/190) publishes `veto-agent-sdk`, install the package from this repo checkout and run the example from there. The example connects to `https://api.devnet.solana.com`, loads the agent key file, reads `last_nonce`, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
 
 ```bash
 cd sdk

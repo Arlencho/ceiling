@@ -1,4 +1,4 @@
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
   Keypair,
   PublicKey,
@@ -188,7 +188,7 @@ export class VetoAgent {
 
   private async loadMandate(): Promise<MandateAccount> {
     try {
-      return await fetchMandate(this.connection, this.mandate);
+      return await fetchMandate(this.connection, this.mandate, this.programId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`VetoAgent: ${message}`, { cause: err });
@@ -266,6 +266,13 @@ async function merchantTokenAccount(
   mint: PublicKey,
   tokenProgram: PublicKey,
 ): Promise<PublicKey> {
+  // The destination is the merchant associated token account for this mint and
+  // the source token program. Listing is only for a merchant with no such account,
+  // and more than one listed account is still an error.
+  const ata = getAssociatedTokenAddressSync(mint, merchant, true, tokenProgram);
+  const ataInfo = await connection.getAccountInfo(ata, "confirmed");
+  if (ataInfo) return ata;
+
   const filter = tokenProgram.equals(TOKEN_PROGRAM_ID) ? { mint } : { programId: tokenProgram };
   const listed = await connection.getTokenAccountsByOwner(merchant, filter, "confirmed");
   const matches: PublicKey[] = [];
@@ -278,6 +285,7 @@ async function merchantTokenAccount(
     if (!accountMint.equals(mint)) continue;
     matches.push(item.pubkey);
   }
+  if (matches.some((key) => key.equals(ata))) return ata;
   if (matches.length === 0) {
     throw new Error(
       `VetoAgent.charge: no token account for merchant ${merchant.toBase58()} and mint ${mint.toBase58()}`,

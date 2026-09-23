@@ -211,82 +211,29 @@ function counterpartyFromCharge(tx: TxView, mandate: string): string {
   return charge?.accounts[4] ?? "";
 }
 
-function parseVetoTextLog(
-  logs: readonly string[],
-  programId: string,
-): { kind: DecisionKind; reason: number; amount: bigint; suggestedOverride: bigint } | null {
-  for (const line of linesForProgram(logs, programId)) {
-    const paid = /VETO PAID amount=(\d+)/.exec(line);
-    if (paid?.[1]) {
-      return { kind: "paid", reason: 0, amount: BigInt(paid[1]), suggestedOverride: 0n };
-    }
-    const refused = /VETO REFUSED reason=(\d+) \([^)]*\) amount=(\d+).*override_to_clear=(\d+)/.exec(line);
-    if (refused?.[1] && refused[2] && refused[3]) {
-      return {
-        kind: "refused",
-        reason: Number.parseInt(refused[1], 10),
-        amount: BigInt(refused[2]),
-        suggestedOverride: BigInt(refused[3]),
-      };
-    }
-  }
-  return null;
-}
-
-function decisionFromChargeLog(tx: TxView, programId: string): Decision | null {
-  const parsed = parseVetoTextLog(tx.logs, programId);
-  if (!parsed) return null;
-  const charge = tx.instructions.find(
-    (ix) => ix.programId === programId && isChargeIx(ix) && ix.accounts.length >= 5 && ix.data.length >= 24,
-  );
-  if (!charge) return null;
-  const amount = readU64Le(charge.data, 8);
-  const nonce = readU64Le(charge.data, 16);
-  if (amount !== parsed.amount) return null;
-  const mandate = charge.accounts[1] ?? "";
-  if (mandate.length === 0) return null;
-  return {
-    signature: tx.signature,
-    slot: tx.slot,
-    timestamp: tx.blockTime,
-    mandate,
-    amount,
-    nonce,
-    counterparty: charge.accounts[4] ?? "",
-    kind: parsed.kind,
-    reason: parsed.reason,
-    reasonText: reasonText(parsed.reason),
-    suggestedOverride: parsed.suggestedOverride,
-  };
-}
-
+// A Veto frame without its Program data event is not a decision. The program
+// writes the text line before emit!, so a text line alone is a cut log.
 export function decisionsFromTx(tx: TxView, programId: string, mandateFilter?: string): Decision[] {
   if (tx.err) return [];
   const events = decodeEventsFromLogs(tx.logs, programId);
-  if (events.length > 0) {
-    const out: Decision[] = [];
-    for (const event of events) {
-      if (mandateFilter && event.mandate !== mandateFilter) continue;
-      out.push({
-        signature: tx.signature,
-        slot: tx.slot,
-        timestamp: tx.blockTime,
-        mandate: event.mandate,
-        amount: event.amount,
-        nonce: event.nonce,
-        counterparty: counterpartyFromCharge(tx, event.mandate),
-        kind: event.kind,
-        reason: event.reason,
-        reasonText: reasonText(event.reason),
-        suggestedOverride: event.suggestedOverride,
-      });
-    }
-    return out;
+  const out: Decision[] = [];
+  for (const event of events) {
+    if (mandateFilter && event.mandate !== mandateFilter) continue;
+    out.push({
+      signature: tx.signature,
+      slot: tx.slot,
+      timestamp: tx.blockTime,
+      mandate: event.mandate,
+      amount: event.amount,
+      nonce: event.nonce,
+      counterparty: counterpartyFromCharge(tx, event.mandate),
+      kind: event.kind,
+      reason: event.reason,
+      reasonText: reasonText(event.reason),
+      suggestedOverride: event.suggestedOverride,
+    });
   }
-  const fromLog = decisionFromChargeLog(tx, programId);
-  if (!fromLog) return [];
-  if (mandateFilter && fromLog.mandate !== mandateFilter) return [];
-  return [fromLog];
+  return out;
 }
 
 function keyToBase58(value: KeyLike): string {

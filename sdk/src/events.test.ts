@@ -82,7 +82,7 @@ test("program data inside a sibling invoke is not a Veto decision", () => {
   assert.deepEqual(rows, []);
 });
 
-test("a text line is a decision only when the transaction has no Veto event", () => {
+test("a text line without a Program data event is not a decision", () => {
   const mandate = Keypair.generate().publicKey;
   const logs = framed(PROGRAM, [
     "Program log: VETO REFUSED reason=5 (nope) amount=10 override_to_clear=10",
@@ -91,10 +91,7 @@ test("a text line is a decision only when the transaction has no Veto event", ()
     view({ logs, instructions: [chargeIx(mandate.toBase58(), "dest", 10n, 3n)] }),
     PROGRAM,
   );
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0]?.reasonText, "over per-payment maximum");
-  assert.equal(rows[0]?.nonce, 3n);
-  assert.equal(rows[0]?.suggestedOverride, 10n);
+  assert.deepEqual(rows, []);
 });
 
 test("a text line whose amount disagrees with the charge instruction is not a decision", () => {

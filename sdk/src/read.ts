@@ -14,19 +14,29 @@ export type { Decision, LedgerAccount, MandateAccount };
 
 const PAGE_MAX = 1000;
 
-async function accountData(connection: Connection, address: PublicKey, what: string): Promise<Buffer> {
+async function accountData(
+  connection: Connection,
+  address: PublicKey,
+  what: string,
+  programId: PublicKey,
+): Promise<Buffer> {
   const info = await connection.getAccountInfo(address, "confirmed");
   if (!info) throw new Error(`${what}: account not found: ${address.toBase58()}`);
+  if (!info.owner.equals(programId)) {
+    throw new Error(`${what}: ${address.toBase58()} is not owned by the Veto program`);
+  }
   return Buffer.from(info.data);
 }
 
 export async function fetchMandate(
   connection: Connection,
   address: PublicKey | string,
+  programId: PublicKey | string = PROGRAM_ID,
 ): Promise<MandateAccount> {
   const key = toPublicKey(address, "fetchMandate");
+  const owner = toPublicKey(programId, "fetchMandate programId");
   try {
-    return decodeMandate(await accountData(connection, key, "fetchMandate"));
+    return decodeMandate(await accountData(connection, key, "fetchMandate", owner));
   } catch (err) {
     if (err instanceof Error && err.message.startsWith("fetchMandate:")) throw err;
     const message = err instanceof Error ? err.message : String(err);
@@ -37,10 +47,12 @@ export async function fetchMandate(
 export async function fetchLedger(
   connection: Connection,
   address: PublicKey | string,
+  programId: PublicKey | string = PROGRAM_ID,
 ): Promise<LedgerAccount> {
   const key = toPublicKey(address, "fetchLedger");
+  const owner = toPublicKey(programId, "fetchLedger programId");
   try {
-    return decodeLedger(await accountData(connection, key, "fetchLedger"));
+    return decodeLedger(await accountData(connection, key, "fetchLedger", owner));
   } catch (err) {
     if (err instanceof Error && err.message.startsWith("fetchLedger:")) throw err;
     const message = err instanceof Error ? err.message : String(err);
@@ -57,8 +69,7 @@ export type DecisionPage = {
 
 /**
  * Decisions whose transaction touched this mandate.
- * Attribution matches indexer/src/events.ts: program-data events on the Veto
- * frame win, and a text line counts only when that transaction has no event.
+ * A Veto frame without its Program data event is not a decision.
  */
 export async function decisionsForMandate(
   connection: Connection,
