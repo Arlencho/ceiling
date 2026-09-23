@@ -127,7 +127,7 @@ hackathon calendar.
 | **Sep 23** | Program deployed to devnet. Watcher running against the live feed, paying and refusing unattended. First real ledger entries accumulating. | None. This is the gate that makes the demo possible at all |
 | **Sep 27** | Watcher stable and logging a clean daily rhythm. Indexer reading full history from tx logs. Dev client runs on both Seekers, MWA authorize works against Seed Vault. | If the watcher restarts, the seven-day window slips to five and the pitch says five |
 | **Oct 1** | Mandate opened from the phone with one signature. Today view and ledger reading real history. Revoke works. | Open the mandate from a desktop signer, keep MWA for sign-in only |
-| **Oct 4** | Override path with the actionable suggestion. Push notifications. Export and off-phone verify working. Polish. Release APK installs clean on a wiped device. Deck drafted. Security pass on the program. | Drop the model, ship the structured form |
+| **Oct 4** | Override path with the actionable suggestion. Local notifications from an on-device background read. Export and off-phone verify working. Polish. Release APK installs clean on a wiped device. Deck drafted. Security pass on the program. | Drop the model, ship the structured form |
 | **Oct 6** | Three-minute video shot on device. Deck done. | Re-shoot day is Oct 7 |
 | **Oct 8** | Submitted on Align. | True cutoff is 08:59 the next morning; the night is reserve |
 

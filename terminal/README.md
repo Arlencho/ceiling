@@ -91,11 +91,15 @@ curl http://127.0.0.1:8788/api/quote
 }
 ```
 
-`amount` and `nonce` are decimal strings of integers (mint base units and the
-unix seconds of the window start). When the feed is down the endpoint answers
-503 with an error and no amount, no nonce, no price. `npm run quote` prints
-the same JSON once and exits nonzero when there is no quote, which is handy
-for scripting the agent side.
+`amount` is a decimal string of an integer (mint base units). `nonce` is a
+decimal string or null. The decimal string is the unix seconds of the window
+start, and it is present only when that window starts on the cadence slot.
+When the window is chargeable but does not start on the slot, `GET /api/quote`
+answers 200 with `"nonce": null`. Null means the watcher will not pay that
+window, so there is nothing to pay under it. When the feed is down the
+endpoint answers 503 with an error and no amount, no nonce, no price.
+`npm run quote` prints the same JSON once and exits nonzero when there is no
+quote, which is handy for scripting the agent side.
 
 `GET /api/state` returns the exact view model the page renders, as JSON.
 
