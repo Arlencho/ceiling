@@ -1,6 +1,7 @@
+import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../../components/Button';
 import { ConnectGate } from '../../components/ConnectGate';
@@ -9,6 +10,7 @@ import { ReadState } from '../../components/ReadState';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
+import { copyAgentAddress } from '../../lib/agentAddress';
 import { STATUS_REVOKED } from '../../lib/constants';
 import { askAfterFirstRuleOpened } from '../../lib/decisionNotifyTask';
 import { formatBaseUnits, formatTimeLeft } from '../../lib/format';
@@ -60,6 +62,22 @@ export default function RuleDetailScreen() {
     void askAfterFirstRuleOpened().catch(() => undefined);
   }, [openedAddress]);
 
+  const onCopyAgent = async () => {
+    if (!mandate) {
+      return;
+    }
+    setFormError(null);
+    setMessage(null);
+    try {
+      await copyAgentAddress(mandate.agent, async (value) => {
+        await Clipboard.setStringAsync(value);
+      });
+      setMessage('Agent address copied.');
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Copy failed');
+    }
+  };
+
   const onRevoke = async () => {
     setFormError(null);
     setMessage(null);
@@ -106,7 +124,23 @@ export default function RuleDetailScreen() {
                 value={`${formatBaseUnits(mandate.spent, chain.decimals)} of ${formatBaseUnits(mandate.cap, chain.decimals)}`}
               />
               <Def label="Time left" value={formatTimeLeft(mandate.expiresAt, nowSec)} />
-              <Def label="Agent" value={truncateAddress(mandate.agent)} />
+              <Def
+                label="Agent"
+                value={mandate.agent}
+                stacked
+                action={
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Copy agent address"
+                    onPress={() => {
+                      void onCopyAgent();
+                    }}
+                    style={({ pressed }) => [styles.copyHit, pressed && styles.copyPressed]}
+                  >
+                    <Text style={styles.copy}>Copy</Text>
+                  </Pressable>
+                }
+              />
             </View>
 
             <Text style={styles.keys}>
@@ -164,11 +198,31 @@ export default function RuleDetailScreen() {
   );
 }
 
-function Def({ label, value }: { label: string; value: string }) {
+function Def({
+  label,
+  value,
+  action,
+  stacked = false,
+}: {
+  label: string;
+  value: string;
+  action?: ReactNode;
+  stacked?: boolean;
+}) {
   return (
-    <View style={styles.def}>
-      <Text style={styles.defK}>{label}</Text>
-      <Text selectable style={styles.defV}>
+    <View style={[styles.def, stacked && styles.defStacked]}>
+      {stacked ? (
+        <View style={styles.defHead}>
+          <Text style={styles.defK}>{label}</Text>
+          {action}
+        </View>
+      ) : (
+        <>
+          <Text style={styles.defK}>{label}</Text>
+          {action}
+        </>
+      )}
+      <Text selectable style={[styles.defV, stacked && styles.defVStacked]}>
         {value}
       </Text>
     </View>
@@ -215,6 +269,32 @@ const styles = StyleSheet.create({
     fontFamily: fonts.mono,
     flexShrink: 1,
     textAlign: 'right',
+  },
+  defStacked: {
+    flexDirection: 'column',
+    justifyContent: 'flex-start',
+    gap: 6,
+  },
+  defHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  defVStacked: {
+    textAlign: 'left',
+  },
+  copyHit: {
+    minHeight: 44,
+    paddingVertical: 10,
+    justifyContent: 'center',
+  },
+  copyPressed: {
+    opacity: 0.7,
+  },
+  copy: {
+    color: colors.body,
+    fontSize: 15,
+    fontWeight: '500',
   },
   keys: {
     color: colors.body,
