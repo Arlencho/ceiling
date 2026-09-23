@@ -45,17 +45,26 @@
 # says. So is any env key whose name starts with npm_config_, in any case, at
 # those same levels, and on the step that runs the check. A committed .npmrc
 # anywhere in the tree that sets script-shell is the same switch outside the
-# workflow file.
+# workflow file. A strategy key on a check job is refused too, because that
+# key can stop the job before a step runs.
 #
 # The program is not a package.json package. A job must run `make test` from
 # the repo root, not switched off, and not behind a paths filter. The job
 # that runs `make test-scripts` is held to that same rule: it must exist, it
-# must not be switched off, and a paths filter must not skip it.
+# must not be switched off, and a paths filter must not skip it. Both jobs
+# capture the runner output, and the next step asserts the count floor.
 #
-# The guard reads the workflow as written and the .npmrc files the tree
-# commits. What a step, a composite action, or a container image does at run
-# time is outside its reach. That needs a check proving a test ran. Issue
-# 108 tracks that class.
+# Reach of this guard ends at the workflow file as written and the .npmrc
+# files the tree commits. A step that writes npm_config_script_shell into
+# GITHUB_ENV, a step that writes .npmrc, a composite action, and a container
+# image all change the run after this file has been read. The guard does not
+# see them.
+#
+# The test-count floor covers that run-time class. Each check job's test step
+# is `set -o pipefail` and the test command piped to tee. The next step runs
+# scripts/ci-assert-test-count.sh on that log and fails if the parsed count
+# is zero or below the floor committed for that package in
+# scripts/ci-test-floors.txt. The program and scripts jobs use the same floor.
 #
 # A suite nobody runs is worse than no suite, because it is quoted as evidence.
 # No network, no cloud, no vendor CLIs. Python stdlib only.
@@ -797,11 +806,109 @@ def effective_workdir(doc, job, step) -> str:
     return wd
 
 
+# The test step that proves a count is two lines: pipefail, then the test
+# command piped to tee. The next step is the assert script, the check name,
+# and the same quoted log path. Exact `npm test` or `make test` with no tee
+# does not prove the runner produced a count.
+CAPTURED_RUN = re.compile(
+    r'^set -o pipefail\n([^\n]+) 2>&1 \| tee ("[^"\n]+")\s*$'
+)
+PROOF_RUN = re.compile(
+    r'^bash "\$GITHUB_WORKSPACE/scripts/ci-assert-test-count\.sh" '
+    r'([A-Za-z0-9_-]+) ("[^"\n]+")\s*$'
+)
+
+
+def captured_run(step):
+    if not isinstance(step, dict):
+        return None
+    run = step.get("run")
+    if not isinstance(run, str):
+        return None
+    match = CAPTURED_RUN.match(run.strip())
+    if match is None:
+        return None
+    return match.group(1), match.group(2)
+
+
+def bare_run(step, command: str) -> bool:
+    if not isinstance(step, dict):
+        return False
+    run = step.get("run")
+    return isinstance(run, str) and run.strip() == command
+
+
+def proof_after(steps, name: str, log_path: str, after: int) -> str:
+    switched = False
+    for index, step in enumerate(steps):
+        if index <= after:
+            continue
+        if not isinstance(step, dict):
+            continue
+        run = step.get("run")
+        if not isinstance(run, str):
+            continue
+        match = PROOF_RUN.match(run.strip())
+        if match is None or match.group(1) != name or match.group(2) != log_path:
+            continue
+        if "shell" in step or "if" in step or "continue-on-error" in step:
+            switched = True
+            continue
+        return ""
+    if switched:
+        return "the test-count step is switched off"
+    return "no step asserts the test count from the captured runner output"
+
+
+def test_step_problem(job, pkg: str, default_wd: str) -> str:
+    commands = ("npm test", "npm run test")
+    steps = job.get("steps")
+    if not isinstance(steps, list):
+        steps = []
+    disabled = []
+    bare_live = False
+    for index, step in enumerate(steps):
+        if not isinstance(step, dict):
+            continue
+        captured = captured_run(step)
+        bare = any(bare_run(step, command) for command in commands)
+        if captured is None and not bare:
+            continue
+        if captured is not None and captured[0] not in commands:
+            continue
+        if "shell" in step:
+            disabled.append("shell")
+            continue
+        step_env = npm_config_keys(step.get("env"))
+        if step_env:
+            disabled.append("env " + ", ".join(step_env))
+            continue
+        if "if" in step or "continue-on-error" in step:
+            disabled.append("step if or continue-on-error")
+            continue
+        wd = item_text(step.get("working-directory")) if "working-directory" in step else default_wd
+        if last_segment(wd) != pkg:
+            disabled.append("working-directory " + (wd or "repo root"))
+            continue
+        if captured is None:
+            bare_live = True
+            continue
+        proof = proof_after(steps, pkg, captured[1], index)
+        if proof:
+            return proof
+        return ""
+    if bare_live:
+        return "the test step does not capture runner output for the count floor"
+    if disabled:
+        return "the package script is present but not run (" + ", ".join(disabled) + ")"
+    return "a command CI happens to carry is not scripts.test"
+
+
 def job_problem(job, pkg: str, check: str, doc=None) -> str:
     commands = ["npm test", "npm run test"] if check == "test" else [f"npm run {check}"]
     if not isinstance(job, dict):
         return "job is not a mapping"
-    problems = [key for key in ("if", "continue-on-error", "needs") if key in job]
+    problems = [key for key in ("if", "continue-on-error", "needs", "strategy") if key in job]
     if problems:
         return "job " + ", ".join(problems) + " disables the check before the step runs"
     surface = blocking_surface(doc) or blocking_surface(job)
@@ -813,6 +920,8 @@ def job_problem(job, pkg: str, check: str, doc=None) -> str:
         run_defaults = defaults.get("run")
         if isinstance(run_defaults, dict) and run_defaults.get("working-directory"):
             default_wd = item_text(run_defaults.get("working-directory"))
+    if check == "test":
+        return test_step_problem(job, pkg, default_wd)
     disabled = []
     steps = job.get("steps")
     if not isinstance(steps, list):
@@ -845,18 +954,12 @@ def job_problem(job, pkg: str, check: str, doc=None) -> str:
     return "a command CI happens to carry is not scripts." + check
 
 
-def command_step(step, command: str) -> bool:
-    if not isinstance(step, dict):
-        return False
-    run = step.get("run")
-    return isinstance(run, str) and run.strip() == command
-
-
-def repo_root_command_problem(doc, command: str) -> str:
-    """A live repo-root step whose run text is exactly command.
+def repo_root_command_problem(doc, command: str, floor_name: str) -> str:
+    """A live repo-root step that runs command and then proves the count.
 
     The same rule covers `make test` and `make test-scripts`: the job must
-    exist, must not be switched off, and must not sit behind a paths filter.
+    exist, must not be switched off, must not sit behind a paths filter,
+    and must assert the committed floor from the captured runner output.
     """
     if not isinstance(doc, dict):
         return "workflow is not a mapping, so " + command + " never runs"
@@ -869,20 +972,25 @@ def repo_root_command_problem(doc, command: str) -> str:
         return "no job runs " + command + " from the repo root"
     wf = blocking_surface(doc)
     reasons = []
+    bare_live = False
     for name, job in jobs.items():
         if not isinstance(job, dict):
             continue
         steps = job.get("steps")
         if not isinstance(steps, list):
             continue
-        for step in steps:
-            if not command_step(step, command):
+        for index, step in enumerate(steps):
+            captured = captured_run(step)
+            is_bare = bare_run(step, command)
+            if captured is None and not is_bare:
+                continue
+            if captured is not None and captured[0] != command:
                 continue
             label = name if isinstance(name, str) else "job"
             if wf:
                 reasons.append(label + " " + wf)
                 continue
-            switched = [key for key in ("if", "continue-on-error", "needs") if key in job]
+            switched = [key for key in ("if", "continue-on-error", "needs", "strategy") if key in job]
             if switched:
                 reasons.append(
                     label + " job " + ", ".join(switched) + " disables the check before the step runs"
@@ -907,18 +1015,27 @@ def repo_root_command_problem(doc, command: str) -> str:
             if not is_repo_root(wd):
                 reasons.append(label + " working-directory " + (wd or "empty") + " is not the repo root")
                 continue
+            if captured is None:
+                bare_live = True
+                continue
+            proof = proof_after(steps, floor_name, captured[1], index)
+            if proof:
+                reasons.append(label + " " + proof)
+                continue
             return ""
     if reasons:
         return command + " is present but not a live repo-root check (" + "; ".join(reasons) + ")"
+    if bare_live:
+        return command + " does not capture runner output for the count floor"
     return "no job runs " + command + " from the repo root"
 
 
 def program_job_problem(doc) -> str:
-    return repo_root_command_problem(doc, "make test")
+    return repo_root_command_problem(doc, "make test", "program")
 
 
 def scripts_job_problem(doc) -> str:
-    return repo_root_command_problem(doc, "make test-scripts")
+    return repo_root_command_problem(doc, "make test-scripts", "scripts")
 
 
 _NPMRC_SKIP = {".git", "node_modules", "target", "dist", ".next", "coverage", ".anchor"}

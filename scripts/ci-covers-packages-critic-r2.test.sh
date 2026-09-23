@@ -59,7 +59,13 @@ path, mode = sys.argv[1], sys.argv[2]
 s = open(path).read()
 
 job_head = '  app:\n    runs-on: ubuntu-latest\n'
-job_tail = '      - run: npm test\n\n  terminal:\n'
+job_tail = (
+    '      - name: Prove the app tests ran\n'
+    '        run: |\n'
+    '          bash "$GITHUB_WORKSPACE/scripts/ci-assert-test-count.sh" app "$RUNNER_TEMP/ci-app-tests.txt"\n'
+    '\n'
+    '  terminal:\n'
+)
 defaults = '    defaults:\n      run:\n        working-directory: app\n    steps:\n'
 step = '      - run: npm run typecheck\n'
 trigger = 'on:\n  push:\n    branches: [main]\n  pull_request:\n'
@@ -83,7 +89,7 @@ def once(old, new):
 if mode == 'order-if-between-defaults-and-steps':
     in_app(defaults, defaults.replace('    steps:\n', '    if: false\n    steps:\n'))
 elif mode == 'order-if-after-blank-comment':
-    once(job_tail, '      - run: npm test\n\n    # gate\n    if: false\n\n  terminal:\n')
+    once(job_tail, job_tail.replace('\n\n  terminal:\n', '\n\n    # gate\n    if: false\n\n  terminal:\n'))
 elif mode == 'order-steps-first-if-last':
     a, b = app_job(s)
     body = s[a + len('  app:\n'):b]

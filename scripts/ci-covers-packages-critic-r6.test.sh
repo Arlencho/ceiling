@@ -49,17 +49,23 @@ import sys
 path, mode = sys.argv[1], sys.argv[2]
 s = open(path).read()
 job = "  scripts:\n    runs-on: ubuntu-latest\n"
-step = "        run: make test-scripts\n"
+step = '          make test-scripts 2>&1 | tee "$RUNNER_TEMP/ci-scripts-tests.txt"\n'
 whole = (
-    "  scripts:\n    runs-on: ubuntu-latest\n    steps:\n"
-    "      - uses: actions/checkout@v4\n      - name: Deploy-script checks\n"
-    "        run: make test-scripts\n\n"
+    '  scripts:\n    runs-on: ubuntu-latest\n    steps:\n'
+    '      - uses: actions/checkout@v4\n      - name: Deploy-script checks\n'
+    '        run: |\n'
+    '          set -o pipefail\n'
+    '          make test-scripts 2>&1 | tee "$RUNNER_TEMP/ci-scripts-tests.txt"\n'
+    '      - name: Prove the scripts tests ran\n'
+    '        run: |\n'
+    '          bash "$GITHUB_WORKSPACE/scripts/ci-assert-test-count.sh" scripts "$RUNNER_TEMP/ci-scripts-tests.txt"\n'
+    '\n'
 )
 edits = {
     "renamed-if":   (job, "  checks:\n    runs-on: ubuntu-latest\n    if: false\n"),
     "removed":      (whole, ""),
     "step-if":      (step, step + "        if: false\n"),
-    "or-true":      (step, "        run: make test-scripts || true\n"),
+    "or-true":      (step, '          make test-scripts || true 2>&1 | tee "$RUNNER_TEMP/ci-scripts-tests.txt"\n'),
     "workdir":      (step, step + "        working-directory: scripts\n"),
     "renamed-live": (job, "  checks:\n    runs-on: ubuntu-latest\n"),
     "timeout":      (job, job + "    timeout-minutes: 30\n"),

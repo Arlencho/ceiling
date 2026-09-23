@@ -51,25 +51,34 @@ path, mode = sys.argv[1], sys.argv[2]
 s = open(path).read()
 
 job_head = '  app:\n    runs-on: ubuntu-latest\n'
-job_tail = '      - run: npm test\n\n  terminal:\n'
+job_tail = (
+    '      - name: Prove the app tests ran\n'
+    '        run: |\n'
+    '          bash "$GITHUB_WORKSPACE/scripts/ci-assert-test-count.sh" app "$RUNNER_TEMP/ci-app-tests.txt"\n'
+    '\n'
+    '  terminal:\n'
+)
 step = '      - run: npm run typecheck\n'
 trigger = 'on:\n  push:\n    branches: [main]\n  pull_request:\n'
 
 def app_job(text):
     return text.index('  app:\n'), text.index('\n  terminal:')
 
+def after_steps(extra):
+    return job_tail.replace('\n\n  terminal:\n', '\n' + extra + '\n\n  terminal:\n')
+
 if mode == 'job-if-after-steps':
     assert s.count(job_tail) == 1
-    s = s.replace(job_tail, '      - run: npm test\n    if: false\n\n  terminal:\n')
+    s = s.replace(job_tail, after_steps('    if: false'))
 elif mode == 'job-continue-after-steps':
     assert s.count(job_tail) == 1
-    s = s.replace(job_tail, '      - run: npm test\n    continue-on-error: true\n\n  terminal:\n')
+    s = s.replace(job_tail, after_steps('    continue-on-error: true'))
 elif mode == 'job-needs-after-steps':
     assert s.count(job_head) == 1 and s.count(job_tail) == 1
     s = s.replace(job_head,
         '  never:\n    if: false\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n'
         '  app:\n    runs-on: ubuntu-latest\n')
-    s = s.replace(job_tail, '      - run: npm test\n    needs: never\n\n  terminal:\n')
+    s = s.replace(job_tail, after_steps('    needs: never'))
 elif mode == 'job-quoted-if':
     assert s.count(job_head) == 1
     s = s.replace(job_head, '  app:\n    "if": false\n    runs-on: ubuntu-latest\n')
