@@ -1,0 +1,19 @@
+# Minimum tests each check job must report.
+# scripts/ci-assert-test-count.sh reads this after the test step and fails
+# when the runner count is zero or below the floor.
+#
+# node: "# tests N" or the spec reporter's tests line. One run prints one
+# line. Several summaries in one log are added.
+# cargo: passed plus failed, summed across every "test result:" line.
+# shell: lines from make test-scripts that start with "ok - ".
+#
+# Node and cargo floors are the counts from main run 35882903662 at 389fb94.
+# The scripts floor is the ok-line count of make test-scripts on this branch.
+
+app node 139
+terminal node 66
+watcher node 207
+tools node 113
+indexer node 31
+program cargo 26
+scripts shell 288

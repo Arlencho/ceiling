@@ -35,7 +35,12 @@ jobs:
           avm use 1.2.0
 
       - name: Build and test
-        run: make test
+        run: |
+          set -o pipefail
+          make test 2>&1 | tee "$RUNNER_TEMP/ci-program-tests.txt"
+      - name: Prove the program tests ran
+        run: |
+          bash "$GITHUB_WORKSPACE/scripts/ci-assert-test-count.sh" program "$RUNNER_TEMP/ci-program-tests.txt"
 
   # The deploy-script checks read source and refuse a mismatched or missing
   # program keypair. They do not need a cluster or a funded key, so they run
@@ -45,7 +50,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Deploy-script checks
-        run: make test-scripts
+        run: |
+          set -o pipefail
+          make test-scripts 2>&1 | tee "$RUNNER_TEMP/ci-scripts-tests.txt"
+      - name: Prove the scripts tests ran
+        run: |
+          bash "$GITHUB_WORKSPACE/scripts/ci-assert-test-count.sh" scripts "$RUNNER_TEMP/ci-scripts-tests.txt"
 
   app:
     runs-on: ubuntu-latest
@@ -69,7 +79,13 @@ jobs:
       # the typecheck, so 100 tests across 17 files had never once been run by
       # CI. A typecheck does not execute anything, which is how a module that
       # could not even load on the Node version this job pins stayed green.
-      - run: npm test
+      - name: Test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/ci-app-tests.txt"
+      - name: Prove the app tests ran
+        run: |
+          bash "$GITHUB_WORKSPACE/scripts/ci-assert-test-count.sh" app "$RUNNER_TEMP/ci-app-tests.txt"
 
   terminal:
     runs-on: ubuntu-latest
@@ -92,7 +108,13 @@ jobs:
         run: npm ci
         working-directory: watcher
       - run: npm run typecheck
-      - run: npm test
+      - name: Test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/ci-terminal-tests.txt"
+      - name: Prove the terminal tests ran
+        run: |
+          bash "$GITHUB_WORKSPACE/scripts/ci-assert-test-count.sh" terminal "$RUNNER_TEMP/ci-terminal-tests.txt"
 
   watcher:
     runs-on: ubuntu-latest
@@ -108,7 +130,13 @@ jobs:
           cache-dependency-path: watcher/package-lock.json
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      - name: Test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/ci-watcher-tests.txt"
+      - name: Prove the watcher tests ran
+        run: |
+          bash "$GITHUB_WORKSPACE/scripts/ci-assert-test-count.sh" watcher "$RUNNER_TEMP/ci-watcher-tests.txt"
 
   watcher-image:
     runs-on: ubuntu-latest
@@ -138,7 +166,13 @@ jobs:
         run: npm ci
         working-directory: indexer
       - run: npm run typecheck
-      - run: npm test
+      - name: Test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/ci-tools-tests.txt"
+      - name: Prove the tools tests ran
+        run: |
+          bash "$GITHUB_WORKSPACE/scripts/ci-assert-test-count.sh" tools "$RUNNER_TEMP/ci-tools-tests.txt"
 
   indexer:
     runs-on: ubuntu-latest
@@ -154,4 +188,10 @@ jobs:
           cache-dependency-path: indexer/package-lock.json
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      - name: Test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/ci-indexer-tests.txt"
+      - name: Prove the indexer tests ran
+        run: |
+          bash "$GITHUB_WORKSPACE/scripts/ci-assert-test-count.sh" indexer "$RUNNER_TEMP/ci-indexer-tests.txt"
