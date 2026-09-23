@@ -306,11 +306,13 @@ states the honest limit on itself:
 }
 ```
 
-That envelope is a live export from public Solana devnet on 2026-09-21 (mandate
-`CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g`). The full file had five paid
-and refused charges. `tools/verify.ts` confirmed all five. Changing one refused
-amount to `1` rejected exactly that row (`confirmed: 4`, `rejected: 1`) and
-named the signature.
+That envelope is one row of a live export from public Solana devnet (mandate
+`CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g`). A fresh export of that mandate
+prints `export 9 decision(s)`: three paid and six refused. `tools/verify.ts`
+on that file prints `confirmed: 9`, `rejected: 0`, and
+`spend_count=3 refusal_count=6`. Changing one refused amount to `1` rejects
+that row. It does not print `confirmed: 4` or `rejected: 1`. The ledger line
+stays `spend_count=3 refusal_count=6`.
 
 `scope.type` is `rule` (everything under that mandate) or `date_range` (`from`
 and/or `to` as unix seconds, inclusive). A date range may also name a mandate.

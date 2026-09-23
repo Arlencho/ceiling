@@ -75,24 +75,27 @@ mandate allows 0.5 per payment. It did not pay, it said why, and it said what wo
 it. That transaction is the record. Solana devnet, our token, our counterparty: when a rule
 allows a bill, the program executes an SPL transfer of that token to a token account we created.
 
-Four later decisions on the same mandate confirmed on the six-hour cadence. Each was refused.
+Five later decisions on the same mandate confirmed on the six-hour cadence. Each was refused.
 The per-payment maximum is 0.5, and each charge was over it. Token balances are unchanged on
-all four.
+all five. A fresh export of the mandate prints nine decisions: three paid and six refused
+(this refusal, plus the five below).
 
-| Recorded (UTC) | Stockholm hour on 2026-09-21 | Spot price | Charge | Decision |
+| Recorded (UTC) | Stockholm window | Spot price | Charge | Decision |
 |---|---|---|---|---|
-| 2026-09-20 22:00:00 | 00:00 | 0.16326 SEK/kWh | 8.163 | [refused](https://explorer.solana.com/tx/5MJLtM92foysaWgfqs6x6oBYxyES2Ra2st8UK47dRX8h1F2wo43qQxJt4GFycEWiLSKJQjWbUBhotHMhkHymLoBU?cluster=devnet) |
-| 2026-09-21 04:00:08 | 06:00 | 0.43085 SEK/kWh | 21.5425 | [refused](https://explorer.solana.com/tx/47PZmcRp85U5s3S9GjKekJ7BYcfLeCvY3MKhcDyhyn8Rt5YRdLL5MviymKfFKBeiswn3owx8P6VianW4MRLfU97N?cluster=devnet) |
-| 2026-09-21 10:00:00 | 12:00 | 0.15807 SEK/kWh | 7.9035 | [refused](https://explorer.solana.com/tx/5HTd7nhtGvz2zpxxbszgVBhRAjcv52MTBRLvVoxRt98LXJvaVsEDRcLSbsAzx1SMdRoxekzhTBtmx6T6xTfDVMdr?cluster=devnet) |
-| 2026-09-21 16:00:09 | 18:00 | 1.27877 SEK/kWh | 63.9385 | [refused](https://explorer.solana.com/tx/59ePBRRBGdu51J7aURacABWNtzqhvpWLFzsSfEcFA5eJd4Zn2y2gtY9MtG6fF6dgG8CdFKbWDzvnKGJRSmZKngyq?cluster=devnet) |
+| 2026-09-20 22:00:00 | 2026-09-21 00:00 | 0.16326 SEK/kWh | 8.163 | [refused](https://explorer.solana.com/tx/5MJLtM92foysaWgfqs6x6oBYxyES2Ra2st8UK47dRX8h1F2wo43qQxJt4GFycEWiLSKJQjWbUBhotHMhkHymLoBU?cluster=devnet) |
+| 2026-09-21 04:00:08 | 2026-09-21 06:00 | 0.43085 SEK/kWh | 21.5425 | [refused](https://explorer.solana.com/tx/47PZmcRp85U5s3S9GjKekJ7BYcfLeCvY3MKhcDyhyn8Rt5YRdLL5MviymKfFKBeiswn3owx8P6VianW4MRLfU97N?cluster=devnet) |
+| 2026-09-21 10:00:00 | 2026-09-21 12:00 | 0.15807 SEK/kWh | 7.9035 | [refused](https://explorer.solana.com/tx/5HTd7nhtGvz2zpxxbszgVBhRAjcv52MTBRLvVoxRt98LXJvaVsEDRcLSbsAzx1SMdRoxekzhTBtmx6T6xTfDVMdr?cluster=devnet) |
+| 2026-09-21 16:00:09 | 2026-09-21 18:00 | 1.27877 SEK/kWh | 63.9385 | [refused](https://explorer.solana.com/tx/59ePBRRBGdu51J7aURacABWNtzqhvpWLFzsSfEcFA5eJd4Zn2y2gtY9MtG6fF6dgG8CdFKbWDzvnKGJRSmZKngyq?cluster=devnet) |
+| 2026-09-21 22:00:11 | 2026-09-22 00:00 | 1.29704 SEK/kWh | 64.852 | [refused](https://explorer.solana.com/tx/SNZdXV6H5JCuPKxDB5K7ykMbADByXew2nNRuPiue6ETmSRUP9NZgqMuh3XgoEFDZnv7Ltx15JdBAwV7rrf8Umy8?cluster=devnet) |
 
-The recorded time is the block time. The Stockholm hour is the SE3 window the price belongs to,
-the 15-minute window that starts at that hour. Those prices are the Nordic day-ahead spot for
-SE3 on 2026-09-21, on the [same public URL the agent reads](https://www.elprisetjustnu.se/).
+The recorded time is the block time. The Stockholm window is the SE3 hour the price belongs to,
+the 15-minute window that starts at that hour. The first four prices are the Nordic day-ahead
+spot for SE3 on 2026-09-21. The fifth is 2026-09-22 00:00. Both days are on the
+[same public URL the agent reads](https://www.elprisetjustnu.se/).
 Each charge is that price times 50 kWh, the kWh figure the bill is repriced against. The program
 log on each transaction is `reason=5 (over
 per-payment maximum)` with `per_tx_max=500000` and these base-unit amounts: 8163000, 21542500,
-7903500, 63938500.
+7903500, 63938500, 64852000.
 
 To take one off chain and check it independently:
 
