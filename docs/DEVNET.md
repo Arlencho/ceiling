@@ -34,8 +34,8 @@ Explorer:
 ## Fixtures
 
 - Test SPL mint at 6 decimals on the classic Token program (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`).
-- Owner token account funded with 1000000 tokens (a round number, not a dust amount).
-- Merchant token account created and holding zero tokens.
+- Owner token account was funded with 1000000 tokens at setup on 2026-09-20T20:57:14Z (a round number, not a dust amount). Paid charges since then moved 0.666 tokens to the merchant. `spl-token balance` on the owner token account prints `999999.334` (checked 2026-09-23).
+- Merchant token account was created empty at setup. Those same charges left it at `0.666`. `spl-token balance` on the merchant token account prints `0.666` (checked 2026-09-23), not zero.
 - Agent funded with 0.5 SOL for fees and holding **zero tokens**. The setup does not create an agent token account.
 
 ## Keypairs (secrets, not in git)

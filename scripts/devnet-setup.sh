@@ -284,8 +284,8 @@ Explorer:
 ## Fixtures
 
 - Test SPL mint at {decimals} decimals on the classic Token program (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`).
-- Owner token account funded with {fund} tokens (a round number, not a dust amount).
-- Merchant token account created and holding zero tokens.
+- Owner token account funded at setup with {fund} tokens (a round number, not a dust amount). Later paid charges reduce that balance. `spl-token balance` on the owner token account prints what the cluster holds now.
+- Merchant token account created empty at setup. Later paid charges increase that balance. `spl-token balance` on the merchant token account prints what the cluster holds now, which is not zero once a charge has been paid.
 - Agent funded with {agent_sol} SOL for fees and holding **zero tokens**. The setup does not create an agent token account.
 
 ## Keypairs (secrets, not in git)
