@@ -255,16 +255,44 @@ function txSlot(tx: { slot?: unknown } | null): number | null {
   return tx.slot;
 }
 
-// The live account's limits belong to the tenure that is open now. A later
-// signature may be the open that started that tenure, so a record in an
-// earlier slot has to be read from history. No later slot means this
-// signature is not below the latest open.
+// The live account belongs to the tenure that is open now. Decide that from
+// the listing at and above the record, newest first. A page in this slot or
+// a later one can be the reopen (page.slot >= recordSlot), including this
+// transaction. Pages the listing places below the record stay unread. If
+// none of the pages we fetch opens or closes the mandate, the live account
+// is this record's tenure. One that does sends the signature through the
+// full walk.
 async function mustReadMandateTenure(cache: CheckCache, mandatePk: PublicKey, signature: string): Promise<boolean> {
-  if (typeof cache.conn.getSignaturesForAddress !== "function") return false;
   const pages = await listMandateSignatures(cache, mandatePk);
+  const recordAt = pages.findIndex((page) => page.signature === signature);
   const recordSlot = txSlot(await cachedTransaction(cache, signature));
   if (recordSlot === null) return true;
-  return pages.some((page) => !page.err && (page.slot === null || page.slot > recordSlot));
+  for (let index = 0; index < pages.length; index += 1) {
+    const page = pages[index]!;
+    if (page.err) continue;
+    if (recordAt >= 0 && index > recordAt) continue;
+    const sameOrLaterSlot = page.slot === null || page.slot >= recordSlot;
+    if (!sameOrLaterSlot) continue;
+    if (await pageOpensOrCloses(cache, mandatePk, page.signature)) return true;
+  }
+  return false;
+}
+
+// True when this transaction opens or closes the mandate. A null body is the
+// same hole the full walk reports. An instruction that cannot be read can
+// hide an open or a close, so the full walk fails that history closed.
+async function pageOpensOrCloses(cache: CheckCache, mandatePk: PublicKey, signature: string): Promise<boolean> {
+  const tx = await cachedTransaction(cache, signature);
+  if (!tx) {
+    throw new TransportError(`the RPC returned no transaction for a listed signature ${signature}`);
+  }
+  try {
+    const mark = mandateLifecycle(tx, cache.expectedProgramId, mandatePk);
+    return mark.opens.length > 0 || mark.closes > 0;
+  } catch (err) {
+    if (isTransportError(err)) throw err;
+    return true;
+  }
 }
 
 function remember(cache: CheckCache, mandate: string, history: ClosedHistory): ClosedHistory {
@@ -357,18 +385,6 @@ function liveLimits(mandate: MandateAccount): LimitView {
   };
 }
 
-function sameOpen(a: OpenedMandate, b: OpenedMandate): boolean {
-  return (
-    a.owner.equals(b.owner) &&
-    a.mandateId === b.mandateId &&
-    a.merchant.equals(b.merchant) &&
-    a.cap === b.cap &&
-    a.perTxMax === b.perTxMax &&
-    a.expiresAt === b.expiresAt &&
-    a.purpose === b.purpose
-  );
-}
-
 function openingLimits(opened: OpenedMandate, ringSuperseded: boolean): LimitView {
   return {
     owner: opened.owner,
@@ -381,6 +397,32 @@ function openingLimits(opened: OpenedMandate, ringSuperseded: boolean): LimitVie
     fromOpening: true,
     ringSuperseded,
   };
+}
+
+// The live ring holding this charge's mandate, nonce, and amount is how a
+// single tenure proves the signature without a mandate signature index.
+// A reopened ring does not hold the earlier charge, so an empty index then
+// fails closed instead of inheriting the new limits.
+async function liveRingHoldsCharge(
+  record: DecisionRecord,
+  cache: CheckCache,
+  mandatePk: PublicKey,
+): Promise<boolean> {
+  let ledger: Awaited<ReturnType<typeof cachedLedger>>;
+  try {
+    ledger = await cachedLedger(cache, mandatePk);
+  } catch (err) {
+    if (isTransportError(err)) throw err;
+    return false;
+  }
+  if (!ledger.mandate.equals(mandatePk)) return false;
+  const want = { mandate: record.mandate, nonce: record.nonce, amount: record.amount };
+  const rows = bindByTriple(indexedEntries(ledger), want, (row) => ({
+    mandate: ledger.mandate.toBase58(),
+    nonce: row.entry.nonce,
+    amount: row.entry.amount,
+  }));
+  return rows.length > 0;
 }
 
 async function limitSource(
@@ -406,10 +448,36 @@ async function limitSource(
   }
   // A live account is the tenure that is open now. An earlier signature takes
   // its limits from the open that covered it, the same walk a closed account uses.
+  // Both shortcuts below require the mandate listing to contain this signature.
+  // A connection that cannot list, or a listing that stops before the charge,
+  // does not inherit the live account. An empty index whose live ring still
+  // holds this charge is the single-tenure case: the logs path is not what
+  // would be confirming it.
   let history: ClosedHistory;
   try {
-    if (live && !(await mustReadMandateTenure(cache, mandatePk, record.signature))) {
-      return liveLimits(live);
+    if (live) {
+      if (typeof cache.conn.getSignaturesForAddress !== "function") {
+        // No index at all. The logs path would trust this live account, so a
+        // ring that does not hold the charge fails closed. A ring that holds
+        // it is the single tenure the account is open under.
+        if (!(await liveRingHoldsCharge(record, cache, mandatePk))) {
+          failures.push(`mandate history does not list signature ${record.signature}`);
+          return undefined;
+        }
+        return liveLimits(live);
+      }
+      const pages = await listMandateSignatures(cache, mandatePk);
+      const listed = pages.some((page) => page.signature === record.signature);
+      if (!listed) {
+        const ringHolds = pages.length === 0 && (await liveRingHoldsCharge(record, cache, mandatePk));
+        if (!ringHolds) {
+          failures.push(`mandate history does not list signature ${record.signature}`);
+          return undefined;
+        }
+      }
+      if (!(await mustReadMandateTenure(cache, mandatePk, record.signature))) {
+        return liveLimits(live);
+      }
     }
     history = await closedMandateHistory(cache, mandatePk);
   } catch (err) {
@@ -431,9 +499,10 @@ async function limitSource(
     failures.push(`mandate history does not cover signature ${record.signature}`);
     return undefined;
   }
-  // The open that is still current is the live tenure, so its ring is evidence.
-  // An earlier open is not. A closed account has no current open.
-  if (live && history.current && sameOpen(opened, history.current)) return liveLimits(live);
+  // The open object still current is the live tenure, so its ring is evidence.
+  // An earlier open is not, even when the owner reopened the same rule.
+  // A closed account has no current open.
+  if (live && history.current && opened === history.current) return liveLimits(live);
   notes.push(CLOSED_NOTE);
   return openingLimits(opened, Boolean(live));
 }

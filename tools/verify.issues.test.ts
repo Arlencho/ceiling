@@ -328,6 +328,22 @@ function world(args: {
       if (!hit) return null;
       return { data: hit.data, owner: hit.owner, executable: false, lamports: 1 };
     },
+    async getSignaturesForAddress(_address: PublicKey, config?: { before?: string; limit?: number }) {
+      const listed = [...txs.keys()];
+      const start = config?.before ? listed.indexOf(config.before) + 1 : 0;
+      const limit = config?.limit ?? listed.length;
+      return listed.slice(start, start + limit).map((signature) => {
+        const body = txs.get(signature) as { slot?: number; blockTime?: number | null; meta?: { err?: unknown } };
+        return {
+          signature,
+          slot: typeof body?.slot === "number" ? body.slot : 1,
+          err: body?.meta?.err ?? null,
+          memo: null,
+          blockTime: body?.blockTime ?? null,
+          confirmationStatus: "confirmed" as const,
+        };
+      });
+    },
   } as unknown as Connection;
   const records = args.rows.map((row) => decisionFor(row, args.programId.toBase58(), mandate.toBase58()));
   const bundle = makeBundle({

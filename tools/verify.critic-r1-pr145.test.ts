@@ -280,7 +280,7 @@ function guardOk() {
 
 // ---------------------------------------------------------------- issue 130
 
-test("130: a throttle on row 2 of a bundle yields no CONFIRMED and no REJECTED row, code 3, and names row 2", async () => {
+test("130: a throttle reading a newer mandate signature is not a verdict and does not confirm the earlier row", async () => {
   const rows: Row[] = [
     { kind: "paid", amount: 10, nonce: 1, timestamp: 1_790_117_945, signature: "sig-1" },
     { kind: "paid", amount: 10, nonce: 2, timestamp: 1_790_117_946, signature: "sig-2" },
@@ -297,7 +297,9 @@ test("130: a throttle on row 2 of a bundle yields no CONFIRMED and no REJECTED r
   const result = await assessBundle(ruleBundle(mandate, rows.map((row) => recordOf(mandate.toBase58(), row))), RPC, conn, OPTS);
   assert.equal(result.code, 3, result.text);
   assert.equal(result.ok, false);
-  assert.match(result.text, /row 2 signature=sig-2 was not checked: rpc rate limited/);
+  // The earlier charge reads sig-2 to see whether that transaction opened or
+  // closed the mandate. The rate limit is not a verdict on either row.
+  assert.match(result.text, /signature=sig-1 was not checked: rpc rate limited/);
   assert.doesNotMatch(result.text, /VERDICT/);
   assert.doesNotMatch(result.text, /CONFIRMED/i);
   assert.doesNotMatch(result.text, /REJECTED/);

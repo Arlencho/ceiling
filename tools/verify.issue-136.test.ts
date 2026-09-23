@@ -185,6 +185,18 @@ function chain(mandateId: bigint, rows: Row[]): { conn: Connection; mandate: Pub
       if (!hit) return null;
       return { data: hit.data, owner: hit.owner, executable: false, lamports: 1 };
     },
+    async getSignaturesForAddress() {
+      return [
+        {
+          signature: SIG,
+          slot: 1,
+          err: null,
+          memo: null,
+          blockTime: rows[0]?.timestamp ?? null,
+          confirmationStatus: "confirmed" as const,
+        },
+      ];
+    },
   } as unknown as Connection;
   return { conn, mandate };
 }
