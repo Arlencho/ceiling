@@ -52,7 +52,8 @@
 # the repo root, not switched off, and not behind a paths filter. The job
 # that runs `make test-scripts` is held to that same rule: it must exist, it
 # must not be switched off, and a paths filter must not skip it. Both jobs
-# capture the runner output, and the next step asserts the count floor.
+# capture the runner output, and the immediately following step asserts the
+# count floor.
 #
 # Reach of this guard ends at the workflow file as written and the .npmrc
 # files the tree commits. A step that writes npm_config_script_shell into
@@ -60,11 +61,15 @@
 # image all change the run after this file has been read. The guard does not
 # see them.
 #
-# The test-count floor covers that run-time class. Each check job's test step
-# is `set -o pipefail` and the test command piped to tee. The next step runs
-# scripts/ci-assert-test-count.sh on that log and fails if the parsed count
-# is zero or below the floor committed for that package in
-# scripts/ci-test-floors.txt. The program and scripts jobs use the same floor.
+# The test-count floor proves the runner printed a summary at or above the
+# floor committed for that package in scripts/ci-test-floors.txt, not that
+# the summary is genuine. A controlled script-shell, a rewritten log, or a
+# container npm that prints a summary defeats it. That forged-summary case is
+# the accepted risk under issue 108. Each check job's test step is
+# `set -o pipefail` and the test command piped to tee. The step immediately
+# after it runs scripts/ci-assert-test-count.sh on that log and fails if the
+# parsed count is zero or below the floor. The program and scripts jobs use
+# the same floor.
 #
 # A suite nobody runs is worse than no suite, because it is quoted as evidence.
 # No network, no cloud, no vendor CLIs. Python stdlib only.
@@ -807,9 +812,11 @@ def effective_workdir(doc, job, step) -> str:
 
 
 # The test step that proves a count is two lines: pipefail, then the test
-# command piped to tee. The next step is the assert script, the check name,
-# and the same quoted log path. Exact `npm test` or `make test` with no tee
-# does not prove the runner produced a count.
+# command piped to tee. The immediately following step is the assert script,
+# the check name, and the same quoted log path. A step in that slot can
+# rewrite the captured log, so the guard refuses it and names the job.
+# Exact `npm test` or `make test` with no tee does not prove the runner
+# produced a count.
 CAPTURED_RUN = re.compile(
     r'^set -o pipefail\n([^\n]+) 2>&1 \| tee ("[^"\n]+")\s*$'
 )
@@ -838,26 +845,21 @@ def bare_run(step, command: str) -> bool:
     return isinstance(run, str) and run.strip() == command
 
 
-def proof_after(steps, name: str, log_path: str, after: int) -> str:
-    switched = False
-    for index, step in enumerate(steps):
-        if index <= after:
-            continue
-        if not isinstance(step, dict):
-            continue
-        run = step.get("run")
-        if not isinstance(run, str):
-            continue
-        match = PROOF_RUN.match(run.strip())
-        if match is None or match.group(1) != name or match.group(2) != log_path:
-            continue
-        if "shell" in step or "if" in step or "continue-on-error" in step:
-            switched = True
-            continue
-        return ""
-    if switched:
-        return "the test-count step is switched off"
-    return "no step asserts the test count from the captured runner output"
+def proof_after(steps, name: str, log_path: str, after: int, job: str) -> str:
+    """The count proof is steps[after + 1]. Anything else there can rewrite the log."""
+    nxt = after + 1
+    if nxt >= len(steps):
+        return job + ": no step asserts the test count from the captured runner output"
+    step = steps[nxt]
+    if not isinstance(step, dict):
+        return job + ": a step between the capture and the count proof can rewrite the log"
+    run = step.get("run")
+    match = PROOF_RUN.match(run.strip()) if isinstance(run, str) else None
+    if match is None or match.group(1) != name or match.group(2) != log_path:
+        return job + ": a step between the capture and the count proof can rewrite the log"
+    if "shell" in step or "if" in step or "continue-on-error" in step:
+        return job + ": the test-count step is switched off"
+    return ""
 
 
 def test_step_problem(job, pkg: str, default_wd: str) -> str:
@@ -893,7 +895,7 @@ def test_step_problem(job, pkg: str, default_wd: str) -> str:
         if captured is None:
             bare_live = True
             continue
-        proof = proof_after(steps, pkg, captured[1], index)
+        proof = proof_after(steps, pkg, captured[1], index, pkg)
         if proof:
             return proof
         return ""
@@ -959,7 +961,8 @@ def repo_root_command_problem(doc, command: str, floor_name: str) -> str:
 
     The same rule covers `make test` and `make test-scripts`: the job must
     exist, must not be switched off, must not sit behind a paths filter,
-    and must assert the committed floor from the captured runner output.
+    and the immediately following step must assert the committed floor from
+    the captured runner output.
     """
     if not isinstance(doc, dict):
         return "workflow is not a mapping, so " + command + " never runs"
@@ -1018,9 +1021,9 @@ def repo_root_command_problem(doc, command: str, floor_name: str) -> str:
             if captured is None:
                 bare_live = True
                 continue
-            proof = proof_after(steps, floor_name, captured[1], index)
+            proof = proof_after(steps, floor_name, captured[1], index, label)
             if proof:
-                reasons.append(label + " " + proof)
+                reasons.append(proof)
                 continue
             return ""
     if reasons:

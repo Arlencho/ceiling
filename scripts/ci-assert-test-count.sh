@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prove a check job's tests ran.
+# Compare a check job's printed runner summary with its floor.
 #
 # Usage: ci-assert-test-count.sh <name> <logfile> [floors-file]
 #
@@ -8,6 +8,11 @@
 # the log is missing, the runner summary is missing, the count is zero, or
 # the count is below that floor. A third argument selects another floors
 # file. The workflow step does not pass one: the committed file is the floor.
+#
+# The floor proves the runner printed a summary at or above the floor, not
+# that the summary is genuine. A controlled script-shell, a rewritten log, or
+# a container npm that prints a summary defeats it. That forged-summary case
+# is the accepted risk under issue 108.
 #
 # node:  "# tests N" (tap) or the spec reporter's tests line. Several
 #        summaries in one log are added.
