@@ -14,7 +14,8 @@
 //      confirm. B2 moves the CPI'd payment to another mandate.
 //   C. No Veto event, two attributed text lines (paid, then refused, same
 //      amount). Must fail closed with the ring wrapped and with the ring
-//      holding the refused row.
+//      holding the refused row. Round 5: messages follow 7cfed05, which
+//      removed the text branch; the fail-closed asserts are unchanged.
 //   D. The truncation boundary. D1: the flood cuts the log right after nonce
 //      5's event, so the transaction carries one event, for nonce 5, and no
 //      line for nonce 6: the events path fails closed. D2: the same flood one
@@ -335,7 +336,8 @@ test("critic sec r4 C1: no Veto event, two text lines (paid then refused, same a
   const { conn, mandate } = setup(55n, CPI_PAID_5, TOP_REFUSED_6, { wrapped: true, logs: (m) => relayThenTop(m, CPI_PAID_5, TOP_REFUSED_6, false) });
   const forged = await assessRecord(record(mandate, TOP_REFUSED_6, { kind: "paid" }), RPC, conn, OPTS);
   assert.equal(forged.ok, false, forged.text);
-  assert.match(forged.text, /transaction carries 2 Veto decisions for nonce 6/);
+  // Round 5: the text branch is gone (7cfed05), so two text lines and no event bind nothing.
+  assert.match(forged.text, /ledger ring has no matching row and transaction logs have neither PAID nor REFUSED/);
   const refused = await assessRecord(record(mandate, TOP_REFUSED_6), RPC, conn, OPTS);
   assert.equal(refused.ok, false, "two unbound text lines must not confirm any record");
 });
@@ -345,7 +347,8 @@ test("critic sec r4 C2: no Veto event, two text lines, ring holds the refused ro
   const forged = await assessRecord(record(mandate, TOP_REFUSED_6, { kind: "paid" }), RPC, conn, OPTS);
   assert.equal(forged.ok, false, forged.text);
   assert.match(forged.text, /kind \(ledger\): record has paid, chain has refused/);
-  assert.match(forged.text, /transaction carries 2 Veto decisions for nonce 6/);
+  // Round 5: no event means no logs cross-check; the ring row alone rejects.
+  assert.doesNotMatch(forged.text, /VERDICT: CONFIRMED/);
 });
 
 // D. The truncation boundary. The relay floods its own frame; the runtime
