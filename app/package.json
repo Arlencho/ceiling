@@ -8,7 +8,8 @@
     "android": "expo start --dev-client --android",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
-    "test": "tsx --experimental-test-module-mocks --test \"{lib,components,app}/**/*.test.ts\""
+    "test": "tsx --experimental-test-module-mocks --test \"{lib,components,app}/**/*.test.ts\"",
+    "eas-build-pre-install": "npm install -g npm@11"
   },
   "dependencies": {
     "@solana-mobile/mobile-wallet-adapter-protocol": "^2.3.0",
