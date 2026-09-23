@@ -173,18 +173,21 @@ export function serializeSeenIds(mandate: string, ids: readonly string[]): strin
   return JSON.stringify(compact);
 }
 
-export function parseSeenIds(mandate: string, raw: string | null): Set<string> {
-  if (!raw) {
+// A null raw value means nothing is stored and yields an empty set.
+// Text that is not a JSON array yields null, so a caller can tell corruption
+// apart from a real empty seen set.
+export function parseSeenIds(mandate: string, raw: string | null): Set<string> | null {
+  if (raw === null) {
     return new Set();
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return new Set();
+    return null;
   }
   if (!Array.isArray(parsed)) {
-    return new Set();
+    return null;
   }
   const out = new Set<string>();
   for (const item of parsed) {

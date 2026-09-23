@@ -125,11 +125,16 @@ async function scanOnce(): Promise<void> {
   for (const ledger of ledgers) {
     const raw = await secureStore.getItem(seenStorageKey(ledger.mandate));
     // A missing key is not an empty seen set. deliverDecisionNotices stores
-    // the rows already on that rule and does not announce them.
+    // the rows already on that rule and does not announce them. Text that is
+    // not a JSON array is the same case: seed quietly instead of announcing.
     if (raw === null) {
       continue;
     }
-    seenByMandate.set(ledger.mandate, parseSeenIds(ledger.mandate, raw));
+    const seen = parseSeenIds(ledger.mandate, raw);
+    if (seen === null) {
+      continue;
+    }
+    seenByMandate.set(ledger.mandate, seen);
   }
   await deliverDecisionNotices({
     ledgers,

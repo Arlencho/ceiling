@@ -195,16 +195,12 @@ test('the first scan after notification permission is granted stores every curre
   await askAfterFirstRuleOpened();
 
   assert.equal(scheduled.length, 0);
-  assert.equal(
-    parseSeenIds(MANDATE, store.get(seenStorageKey(MANDATE)) ?? null).has(encodeDecisionId(MANDATE, refusedRow)),
-    true,
-  );
-  assert.equal(
-    parseSeenIds(MANDATE_B, store.get(seenStorageKey(MANDATE_B)) ?? null).has(
-      encodeDecisionId(MANDATE_B, laterRow),
-    ),
-    true,
-  );
+  const seenMandate = parseSeenIds(MANDATE, store.get(seenStorageKey(MANDATE)) ?? null);
+  const seenMandateB = parseSeenIds(MANDATE_B, store.get(seenStorageKey(MANDATE_B)) ?? null);
+  assert.ok(seenMandate);
+  assert.ok(seenMandateB);
+  assert.equal(seenMandate.has(encodeDecisionId(MANDATE, refusedRow)), true);
+  assert.equal(seenMandateB.has(encodeDecisionId(MANDATE_B, laterRow)), true);
 });
 
 test('a rule added later stores the decisions already on it and announces none', async () => {
@@ -220,13 +216,12 @@ test('a rule added later stores the decisions already on it and announces none',
   await runDecisionNotifyScan();
 
   assert.equal(scheduled.length, 0);
-  assert.equal(
-    parseSeenIds(MANDATE_B, store.get(seenStorageKey(MANDATE_B)) ?? null).has(
-      encodeDecisionId(MANDATE_B, laterRow),
-    ),
-    true,
-  );
-  assert.equal(parseSeenIds(MANDATE, store.get(seenStorageKey(MANDATE)) ?? null).has(existingId), true);
+  const seenMandateB = parseSeenIds(MANDATE_B, store.get(seenStorageKey(MANDATE_B)) ?? null);
+  const seenMandate = parseSeenIds(MANDATE, store.get(seenStorageKey(MANDATE)) ?? null);
+  assert.ok(seenMandateB);
+  assert.ok(seenMandate);
+  assert.equal(seenMandateB.has(encodeDecisionId(MANDATE_B, laterRow)), true);
+  assert.equal(seenMandate.has(existingId), true);
 });
 
 test('a decision that appears after a rule was seeded is announced once', async () => {
@@ -255,4 +250,17 @@ test('opening another rule after permission was granted does not read the chain 
   await askAfterFirstRuleOpened();
   assert.equal(ledgerReads, reads);
   assert.equal(registerCalls, registers + 1);
+});
+
+test('a corrupted seen key announces nothing and is rewritten to the decisions already on the ring', async () => {
+  const { runDecisionNotifyScan } = await taskModule;
+  const { seenStorageKey, serializeSeenIds } = await import('./notify');
+  resetNotifyHarness();
+  const key = seenStorageKey(MANDATE);
+  store.set(key, 'not json');
+
+  await runDecisionNotifyScan();
+
+  assert.equal(scheduled.length, 0);
+  assert.equal(store.get(key), serializeSeenIds(MANDATE, [encodeDecisionId(MANDATE, refusedRow)]));
 });

@@ -151,8 +151,12 @@ test('F1 two-context path: two contexts that both read the seen set before eithe
     { mandate: MANDATE, merchant: MERCHANT, perTxMax: 500_000n, decimals: 6, rows: [oldRow, freshRow] },
   ];
   // Each JS context has its own scanTail, so nothing serialises these two reads.
-  const seenHeadless = new Map([[MANDATE, parseSeenIds(MANDATE, store.get(key) ?? null)]]);
-  const seenForeground = new Map([[MANDATE, parseSeenIds(MANDATE, store.get(key) ?? null)]]);
+  const headlessIds = parseSeenIds(MANDATE, store.get(key) ?? null);
+  const foregroundIds = parseSeenIds(MANDATE, store.get(key) ?? null);
+  assert.ok(headlessIds);
+  assert.ok(foregroundIds);
+  const seenHeadless = new Map([[MANDATE, headlessIds]]);
+  const seenForeground = new Map([[MANDATE, foregroundIds]]);
   const saveSeen = async (mandate: string, ids: readonly string[]) => {
     store.set(seenStorageKey(mandate), serializeSeenIds(mandate, ids));
   };
@@ -166,7 +170,9 @@ test('F1 two-context path: two contexts that both read the seen set before eithe
   assert.equal(presents.length, 2, 'both contexts present; the identifier is what collapses them');
   assert.equal(tray().size, 1);
   assert.equal(tray().get(freshId)?.content.title, 'Refused');
-  assert.equal(parseSeenIds(MANDATE, store.get(key) ?? null).has(freshId), true);
+  const remembered = parseSeenIds(MANDATE, store.get(key) ?? null);
+  assert.ok(remembered);
+  assert.equal(remembered.has(freshId), true);
 });
 
 test('regression: seed on first read, announce the next decision once, quiet after a restart', async () => {

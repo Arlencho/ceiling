@@ -188,6 +188,7 @@ test('a decision the phone already announced stays quiet, including on a second 
   assert.equal(shown[0]?.body, refusalWhyLine(refusalArgs));
 
   const remembered = parseSeenIds(MANDATE_A, stored.get(seenStorageKey(MANDATE_A)) ?? null);
+  assert.ok(remembered);
   assert.equal(remembered.size, 2);
 
   const again: DecisionNotice[] = [];
@@ -236,6 +237,7 @@ test('a failed announcement does not mark that decision as announced', async () 
     ['Paid within rule'],
   );
   const remembered = parseSeenIds(MANDATE_A, stored.get(MANDATE_A) ?? null);
+  assert.ok(remembered);
   assert.equal(remembered.has(encodeDecisionId(MANDATE_A, paid)), true);
   assert.equal(remembered.has(encodeDecisionId(MANDATE_A, refused)), false);
 
@@ -293,8 +295,11 @@ test('a full ring of remembered decisions fits in one secure-store value', () =>
   assert.equal(plan.notices.length, 32);
   const value = serializeSeenIds(mandate, plan.seenByMandate.get(mandate) ?? []);
   assert.equal(value.length <= 2048, true);
-  assert.equal(parseSeenIds(mandate, value).size, 32);
-  assert.equal(parseSeenIds(mandate, '{').size, 0);
+  const roundTrip = parseSeenIds(mandate, value);
+  assert.ok(roundTrip);
+  assert.equal(roundTrip.size, 32);
+  assert.equal(parseSeenIds(mandate, '{'), null);
+  assert.equal(parseSeenIds(mandate, '{}'), null);
   assert.match(seenStorageKey(mandate), /^[A-Za-z0-9._-]+$/);
 });
 
@@ -319,6 +324,7 @@ test('the first read of a rule stores every decision already on it and announces
   });
   assert.equal(shown.length, 0);
   const remembered = parseSeenIds(MANDATE_A, stored.get(MANDATE_A) ?? null);
+  assert.ok(remembered);
   assert.equal(remembered.has(encodeDecisionId(MANDATE_A, refused)), true);
   assert.equal(remembered.has(encodeDecisionId(MANDATE_A, paid)), true);
 });
@@ -346,6 +352,7 @@ test('a rule added later stores the decisions already on it and announces none',
   });
   assert.equal(shown.length, 0);
   const rememberedB = parseSeenIds(MANDATE_B, stored.get(MANDATE_B) ?? null);
+  assert.ok(rememberedB);
   assert.equal(rememberedB.has(encodeDecisionId(MANDATE_B, already)), true);
 });
 
@@ -365,10 +372,12 @@ test('a rule that was empty on its first read announces a decision that arrives 
   assert.equal(shown.length, 0);
   assert.equal(stored.has(MANDATE_A), true);
   const refused = refusalRow();
+  const seeded = parseSeenIds(MANDATE_A, stored.get(MANDATE_A) ?? null);
+  assert.ok(seeded);
   const later: DecisionNotice[] = [];
   await deliverDecisionNotices({
     ledgers: [ledger(MANDATE_A, [refused])],
-    seenByMandate: new Map([[MANDATE_A, parseSeenIds(MANDATE_A, stored.get(MANDATE_A) ?? null)]]),
+    seenByMandate: new Map([[MANDATE_A, seeded]]),
     present: async (notice) => {
       later.push(notice);
     },
