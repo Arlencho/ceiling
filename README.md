@@ -238,7 +238,12 @@ same backup. See [docs/DEVNET.md](docs/DEVNET.md).
 The history indexer lives in `indexer/`. It walks program logs rather than trusting the 32-entry
 ring, because a busy week wraps the ring and the full trail has to survive that. `make
 indexer-test` typechecks and tests it. `make indexer-seed` opens a mandate and submits one paid
-charge and several refused ones so the CLI can be compared against the ring.
+charge and several refused ones so the CLI can be compared against the ring. The target passes
+`VETO_RPC` (default `https://api.devnet.solana.com`) and `VETO_PROGRAM_ID` (default
+`3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV`). It still needs `keys/devnet-addresses.env`
+plus `keys/owner.json` and `keys/agent.json`. `make setup` writes those files, and setup refuses
+without the maintainer backup of `keys/program.json`. Without the address file the seed stops on
+`missing MINT`.
 
 To take a decision off the phone and check it from a laptop:
 

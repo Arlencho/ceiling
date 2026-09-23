@@ -109,7 +109,9 @@ indexer-test: ## Typecheck and test the history indexer
 terminal-test: ## Typecheck and test the merchant terminal
 	cd terminal && npm ci && npm run typecheck && npm test
 
+# declare_id in programs/veto/src/lib.rs, the Program row in docs/DEVNET.md.
+VETO_PROGRAM_ID ?= 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV
 indexer-seed: ## Open a mandate and submit paid plus refused charges
-	cd indexer && npm run seed
+	cd indexer && VETO_RPC=$(VETO_RPC) VETO_PROGRAM_ID=$(VETO_PROGRAM_ID) npm run seed
 
 indexer: indexer-test ## Alias for indexer-test
