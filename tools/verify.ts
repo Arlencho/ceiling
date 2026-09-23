@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { fetchDecisionHistory } from "../indexer/src/index.js";
-import { isRateLimitError, isRetryable } from "../indexer/src/rpc.js";
+import { asTransportError, isTransportError } from "../indexer/src/rpc.js";
 import {
   COMPLETENESS,
   filterIndexed,
@@ -23,6 +23,7 @@ import {
   bindByTriple,
   boundVetoDecision,
   indexedEntries,
+  kindByte,
   ledgerPda,
   parseArgs,
   parseChargeFromTx,
@@ -31,6 +32,7 @@ import {
   resolveRpcList,
   resolveVerifyProgramId,
   ringEntryForSignature,
+  ringRowForLogKind,
   tokenAccountOwner,
   type ChargeIx,
   type DecisionRecord,
@@ -44,10 +46,6 @@ export type Verdict = {
   text: string;
   code: 0 | 1 | 3;
 };
-
-function isTransportError(err: unknown): boolean {
-  return isRateLimitError(err) || isRetryable(err);
-}
 
 export type AssessOpts = {
   env?: NodeJS.ProcessEnv;
@@ -192,7 +190,15 @@ async function checkRecord(
   }
   const mandatePk = new PublicKey(record.mandate);
 
-  const genesis = cache.genesis ?? (cache.genesis = await conn.getGenesisHash());
+  let genesis = cache.genesis;
+  if (!genesis) {
+    try {
+      genesis = await conn.getGenesisHash();
+    } catch (err) {
+      throw asTransportError(err);
+    }
+    cache.genesis = genesis;
+  }
   eq(record.genesis_hash, genesis, "genesis_hash", failures);
   const derivedCluster = clusterForGenesis(genesis);
   if (record.cluster !== derivedCluster) {
@@ -240,7 +246,9 @@ async function checkRecord(
 
   let mandate = cache.mandates.get(record.mandate);
   if (!mandate) {
-    mandate = await fetchMandate(conn, mandatePk);
+    const loaded = await accountOrFailure(failures, () => fetchMandate(conn, mandatePk));
+    if (!loaded) return { failures, notes };
+    mandate = loaded;
     cache.mandates.set(record.mandate, mandate);
   }
   eq(record.limits.cap, mandate.cap, "limits.cap", failures);
@@ -264,10 +272,13 @@ async function checkRecord(
 
   let destOwner = cache.destOwners.get(charge.destination.toBase58());
   if (!destOwner) {
-    destOwner = await tokenAccountOwner(conn, charge.destination);
-    cache.destOwners.set(charge.destination.toBase58(), destOwner);
+    const loaded = await accountOrFailure(failures, () => tokenAccountOwner(conn, charge.destination));
+    if (loaded) {
+      destOwner = loaded;
+      cache.destOwners.set(charge.destination.toBase58(), destOwner);
+    }
   }
-  if (!destOwner.equals(mandate.merchant)) {
+  if (destOwner && !destOwner.equals(mandate.merchant)) {
     failures.push(
       `destination token account owner is ${destOwner.toBase58()}, mandate merchant is ${mandate.merchant.toBase58()}`,
     );
@@ -276,7 +287,9 @@ async function checkRecord(
   const ledgerKey = expectedLedger.toBase58();
   let ledger = cache.ledgers.get(ledgerKey);
   if (!ledger) {
-    ledger = await fetchLedger(conn, expectedLedger);
+    const loaded = await accountOrFailure(failures, () => fetchLedger(conn, expectedLedger));
+    if (!loaded) return { failures, notes };
+    ledger = loaded;
     cache.ledgers.set(ledgerKey, ledger);
   }
   if (!ledger.mandate.equals(mandatePk)) {
@@ -315,7 +328,9 @@ async function checkRecord(
       }
     }
   } else {
-    const picked = ringEntryForSignature(rows, blockTime, record.signature);
+    const timePick = ringEntryForSignature(rows, blockTime, record.signature);
+    const logKind = bound.status === "one" ? kindByte(bound.decision.kind) : null;
+    const picked = ringRowForLogKind(timePick, rows, blockTime, record.signature, logKind);
     if ("error" in picked) {
       failures.push(picked.error);
     } else {
@@ -537,7 +552,14 @@ function undecodableChargeFailures(
   for (const signature of [...transactions.keys()].sort()) {
     if (population.has(signature)) continue;
     const tx = transactions.get(signature);
-    if (!tx) continue;
+    // A listed signature with no transaction was not read. Skipping it lets a
+    // file that omits the payment confirm. That is not a verdict.
+    if (!tx) {
+      failures.push(
+        `signature ${signature} was not checked: the RPC returned no transaction for a listed signature`,
+      );
+      continue;
+    }
     let charge: ChargeIx | null = null;
     try {
       charge = parseChargeFromTx(tx, program);
@@ -662,6 +684,11 @@ export async function assessBundle(
   }
   const cache = makeCache(conn, rpc, opts);
   const envelope = await bundleFailures(bundle, cache);
+  const unread = envelope.filter((line) => line.includes("was not checked: the RPC returned no transaction"));
+  if (unread.length > 0) {
+    const line = `verify failed: ${unread.join("; ")}`;
+    return { ok: false, failures: unread, text: `${line}\n`, code: 3 };
+  }
   const rows: RowVerdict[] = [];
   for (const [i, record] of bundle.decisions.entries()) {
     let failures: string[];
@@ -760,15 +787,36 @@ function makeCache(conn: Connection, rpc: string, opts?: AssessOpts): CheckCache
   };
 }
 
+function failureText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+// Account-load failures stay on the report. A transport failure still aborts
+// the row: it is not a verdict, and it must not be rewritten as one.
+async function accountOrFailure<T>(failures: string[], load: () => Promise<T>): Promise<T | undefined> {
+  try {
+    return await load();
+  } catch (err) {
+    if (isTransportError(err)) throw err;
+    failures.push(failureText(err));
+    return undefined;
+  }
+}
+
 async function cachedTransaction(
   cache: CheckCache,
   signature: string,
 ): Promise<Awaited<ReturnType<Connection["getTransaction"]>>> {
   if (cache.txs.has(signature)) return cache.txs.get(signature) ?? null;
-  const tx = await cache.conn.getTransaction(signature, {
-    commitment: "confirmed",
-    maxSupportedTransactionVersion: 0,
-  });
+  let tx: Awaited<ReturnType<Connection["getTransaction"]>>;
+  try {
+    tx = await cache.conn.getTransaction(signature, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 0,
+    });
+  } catch (err) {
+    throw asTransportError(err);
+  }
   cache.txs.set(signature, tx);
   return tx;
 }

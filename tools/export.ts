@@ -16,9 +16,10 @@ import {
   type IndexedDecision,
 } from "./bulk.js";
 import {
+  bindByTriple,
+  boundVetoDecision,
   buildRecord,
   connection,
-  entryMatches,
   fetchLedger,
   fetchMandate,
   flagString,
@@ -33,6 +34,7 @@ import {
   resolveProgramId,
   resolveRpcList,
   ringEntryForSignature,
+  ringRowForLogKind,
   type DecisionRecord,
   type LedgerAccount,
   type LedgerEntry,
@@ -100,30 +102,22 @@ export async function recordFromSignature(
     throw new Error("charge ledger account does not match the PDA derived from the mandate");
   }
   const ledger = await fetchLedger(conn, ledgerAddress);
-  const wantKind = (() => {
-    const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
-    if (logs) return kindByte(logs.kind);
-    return null;
-  })();
-  const matches = indexedEntries(ledger).filter((row) =>
-    entryMatches(row.entry, {
-      amount: charge.amount,
-      nonce: charge.nonce,
-      kind: wantKind ?? row.entry.kind,
-    }),
-  );
+  // Same candidate set verify uses: mandate, nonce, and amount. Log kind is not
+  // a filter. Two rows can share a nonce when a refusal does not advance it.
+  const want = {
+    mandate: charge.mandate.toBase58(),
+    nonce: charge.nonce,
+    amount: charge.amount,
+  };
+  const matches = bindByTriple(indexedEntries(ledger), want, (row) => ({
+    mandate: ledger.mandate.toBase58(),
+    nonce: row.entry.nonce,
+    amount: row.entry.amount,
+  }));
+  const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
+  const bound = boundVetoDecision(tx.meta?.logMessages ?? [], programId, want);
   let entry: LedgerEntry;
-  if (matches.length === 1) {
-    entry = matches[0]!.entry;
-  } else if (matches.length > 1) {
-    const blockTime = typeof tx.blockTime === "number" ? tx.blockTime : null;
-    const picked = ringEntryForSignature(matches, blockTime, signature);
-    if ("error" in picked) {
-      throw new Error(picked.error);
-    }
-    entry = picked.entry;
-  } else {
-    const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
+  if (matches.length === 0) {
     if (!logs) {
       throw new Error(
         "no matching ledger row and the transaction logs have neither PAID nor REFUSED",
@@ -139,6 +133,17 @@ export async function recordFromSignature(
       reason: logs.reasonCode,
     };
     console.error("warning: ledger ring no longer holds this decision; reconstructed from the transaction");
+  } else if (bound.status === "error") {
+    throw new Error(bound.error);
+  } else {
+    const blockTime = typeof tx.blockTime === "number" ? tx.blockTime : null;
+    const timePick = ringEntryForSignature(matches, blockTime, signature);
+    const logKind = bound.status === "one" ? kindByte(bound.decision.kind) : null;
+    const picked = ringRowForLogKind(timePick, matches, blockTime, signature, logKind);
+    if ("error" in picked) {
+      throw new Error(picked.error);
+    }
+    entry = picked.entry;
   }
   return buildRecord({
     cluster,

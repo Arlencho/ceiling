@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { PublicKey } from "@solana/web3.js";
 import type { Connection } from "@solana/web3.js";
 import { decodeEventsFromLogs, linesForProgram } from "../indexer/src/events.js";
-import { createFailoverConnection, parseRpcList, redactRpcUrl, redactRpcUrls } from "../indexer/src/rpc.js";
+import { asTransportError, createFailoverConnection, parseRpcList, redactRpcUrl, redactRpcUrls } from "../indexer/src/rpc.js";
 
 export { redactRpcUrl, redactRpcUrls };
 
@@ -496,14 +496,22 @@ export function indexedEntries(ledger: LedgerAccount): IndexedEntry[] {
   return out;
 }
 
+async function readAccount(conn: Connection, address: PublicKey) {
+  try {
+    return await conn.getAccountInfo(address, "confirmed");
+  } catch (err) {
+    throw asTransportError(err);
+  }
+}
+
 export async function fetchMandate(conn: Connection, address: PublicKey): Promise<MandateAccount> {
-  const info = await conn.getAccountInfo(address, "confirmed");
+  const info = await readAccount(conn, address);
   if (!info) throw new Error(`mandate account not found: ${address.toBase58()}`);
   return decodeMandate(Buffer.from(info.data));
 }
 
 export async function fetchLedger(conn: Connection, address: PublicKey): Promise<LedgerAccount> {
-  const info = await conn.getAccountInfo(address, "confirmed");
+  const info = await readAccount(conn, address);
   if (!info) throw new Error(`ledger account not found: ${address.toBase58()}`);
   return decodeLedger(Buffer.from(info.data));
 }
@@ -918,6 +926,23 @@ export function ringEntryForSignature(
   return { entry: best.entry };
 }
 
+// A nearer row of the other kind is a different charge: a refusal does not
+// advance the nonce. When the transaction names a kind, bind among the rows
+// of that kind. Callers that have no log decision pass null and keep the
+// time pick.
+export function ringRowForLogKind(
+  picked: { entry: LedgerEntry } | { error: string },
+  rows: IndexedEntry[],
+  blockTime: number | null,
+  signature: string,
+  logKind: number | null,
+): { entry: LedgerEntry } | { error: string } {
+  if ("error" in picked || logKind === null || picked.entry.kind === logKind) return picked;
+  const sameKind = rows.filter((row) => row.entry.kind === logKind);
+  if (sameKind.length === 0) return picked;
+  return ringEntryForSignature(sameKind, blockTime, signature);
+}
+
 export function matchingRingEntry(
   ledger: LedgerAccount,
   want: {
@@ -939,7 +964,7 @@ export function matchingRingEntry(
 }
 
 export async function tokenAccountOwner(conn: Connection, address: PublicKey): Promise<PublicKey> {
-  const info = await conn.getAccountInfo(address, "confirmed");
+  const info = await readAccount(conn, address);
   if (!info) throw new Error(`token account not found: ${address.toBase58()}`);
   if (!info.owner.equals(TOKEN_PROGRAM_ID)) {
     throw new Error(`counterparty ${address.toBase58()} is not an SPL token account`);
