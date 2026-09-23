@@ -6,7 +6,9 @@ import * as TaskManager from 'expo-task-manager';
 import { createClient, fetchLedger, fetchMintDecimals, fetchOwnerMandates } from './chain';
 import { tryLoadConfig } from './config';
 import type { MandateAccount } from './mandate';
+import { RATE_LIMIT_RETRY_MS } from './mandateRead';
 import { secureStore } from './mwa';
+import { isRateLimitError } from './rpcError';
 import {
   DECISION_NOTIFY_INTERVAL_MINUTES,
   deliverDecisionNotices,
@@ -44,6 +46,39 @@ TaskManager.defineTask(DECISION_NOTIFY_TASK, async () => {
 });
 
 let scanTail: Promise<void> = Promise.resolve();
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function readOwnerMandates(
+  client: ReturnType<typeof createClient>,
+  owner: PublicKey,
+): Promise<MandateAccount[]> {
+  try {
+    return await fetchOwnerMandates(client, owner);
+  } catch (err) {
+    if (!isRateLimitError(err)) {
+      throw new Error('Could not read rules for this owner');
+    }
+    let last: unknown = err;
+    for (const delay of RATE_LIMIT_RETRY_MS) {
+      await wait(delay);
+      try {
+        return await fetchOwnerMandates(client, owner);
+      } catch (retryErr) {
+        last = retryErr;
+        if (!isRateLimitError(retryErr)) {
+          throw new Error('Could not read rules for this owner');
+        }
+      }
+    }
+    const detail = last instanceof Error ? last.message : '429';
+    throw new Error(`The RPC rate limited this read. ${detail}`);
+  }
+}
 
 export function runDecisionNotifyScan(): Promise<void> {
   const run = scanTail.then(scanOnce, scanOnce);
@@ -90,12 +125,7 @@ async function scanOnce(): Promise<void> {
   } catch {
     return;
   }
-  let mandates: MandateAccount[];
-  try {
-    mandates = await fetchOwnerMandates(client, owner);
-  } catch {
-    throw new Error('Could not read rules for this owner');
-  }
+  const mandates = await readOwnerMandates(client, owner);
 
   const decimalsCache = new Map<string, number>();
   const ledgers: NotifyMandateLedger[] = [];
