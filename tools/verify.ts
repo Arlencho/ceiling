@@ -151,6 +151,8 @@ type CheckCache = {
   mandateSignatures: Map<string, MandateSignature[]>;
   destOwners: Map<string, PublicKey>;
   txs: Map<string, Awaited<ReturnType<Connection["getTransaction"]>>>;
+  // Mandate ids whose in-file signatures were shown, in one walk, to sit in the live tenure.
+  liveTenure: Set<string>;
 };
 
 function txBlockTime(tx: { blockTime?: number | null }): number | null {
@@ -440,6 +442,9 @@ async function limitSource(
         failures.push(`mandate history does not list signature ${echoFile(record.signature)}`);
         return undefined;
       }
+      // A mandate-scoped date_range already walked the oldest in-file signature.
+      // Every newer signature in that file is the same tenure.
+      if (cache.liveTenure.has(record.mandate)) return liveLimits(live);
       if (!(await mustReadMandateTenure(cache, mandatePk, record.signature))) {
         return liveLimits(live);
       }
@@ -1075,7 +1080,33 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
   const charges = undecodableChargeFailures(bundle, cache, history.transactions, population);
   failures.push(...charges.failures);
   unread.push(...charges.unread);
+  if (mandatePk) await primeMandateTenure(cache, mandatePk, bundle.decisions.map((row) => row.signature));
   return { failures, unread };
+}
+
+// One tenure walk for every row of a mandate-scoped date_range. The oldest
+// signature in the file decides how far the listing has to be read. Later
+// rows reuse that answer instead of walking again.
+async function primeMandateTenure(cache: CheckCache, mandatePk: PublicKey, signatures: string[]): Promise<void> {
+  const key = mandatePk.toBase58();
+  if (cache.liveTenure.has(key) || cache.closedHistory.has(key)) return;
+  const pages = await listMandateSignatures(cache, mandatePk);
+  let oldest = "";
+  let oldestAt = -1;
+  for (const signature of signatures) {
+    const at = pages.findIndex((page) => page.signature === signature);
+    if (at > oldestAt) {
+      oldest = signature;
+      oldestAt = at;
+    }
+  }
+  if (oldest.length === 0) return;
+  const needsFull = await mustReadMandateTenure(cache, mandatePk, oldest);
+  if (!needsFull) {
+    cache.liveTenure.add(key);
+    return;
+  }
+  await closedMandateHistory(cache, mandatePk);
 }
 
 export async function assessRecord(
@@ -1214,6 +1245,7 @@ function makeCache(conn: Connection, rpc: string, opts?: AssessOpts): CheckCache
     mandateSignatures: new Map(),
     destOwners: new Map(),
     txs: new Map(),
+    liveTenure: new Set(),
   };
 }
 
