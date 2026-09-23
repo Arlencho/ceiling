@@ -27,7 +27,7 @@ export default function HelpRefusalScreen() {
         rule, grant an override, or revoke.
       </Text>
       <Text style={styles.body}>
-        The agent key holds authority and no funds. It can pay inside the rule, and nothing else.
+        The agent key holds authority and none of your money. It can pay inside the rule, and nothing else.
         It cannot widen any limit. Each rule has its own agent. An override the owner grants is a
         recorded decision for one nonce, not a settings change. The per-payment ceiling rises for
         that charge only. The total cap does not.

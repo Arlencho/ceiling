@@ -6,6 +6,7 @@ import { ConnectGate } from '../../components/ConnectGate';
 import { ContextBar } from '../../components/ContextBar';
 import { DecisionRow } from '../../components/DecisionRow';
 import { EmptyState } from '../../components/EmptyState';
+import { OpenFirstRule } from '../../components/OpenFirstRule';
 import { ReadState } from '../../components/ReadState';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
@@ -40,10 +41,14 @@ export default function OverviewScreen() {
         {chain.error && chain.mandateStatus !== 'rate-limited' ? (
           <EmptyState>{chain.error}</EmptyState>
         ) : null}
-        <ReadState
-          status={chain.mandateStatus}
-          empty="No rule on chain for this owner yet. Open one on the Rules tab. This screen reads real history only and never invents rows."
-        />
+        {chain.mandateStatus === 'empty' ? (
+          <OpenFirstRule onOpen={() => router.push('/rule/new')} />
+        ) : (
+          <ReadState
+            status={chain.mandateStatus}
+            empty="No rule on chain for this owner yet. This screen reads real history only and never invents rows."
+          />
+        )}
         {chain.mandateStatus === 'present' && mandate ? (
           <View style={styles.block}>
             <ContextBar

@@ -1,19 +1,41 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
+import { showsIntroduction } from '../lib/onboarding';
+import { useOnboarding } from '../lib/useOnboarding';
 import { useWallet } from '../lib/useWallet';
 import { Button } from './Button';
+import { OnboardingCards } from './OnboardingCards';
 import { colors, fonts } from './theme';
 
 const THESIS =
-  'The owner key lives in Seed Vault and never leaves it. The agent key holds authority and no funds.';
+  'The owner key lives in Seed Vault and never leaves it. The agent key holds authority and none of your money.';
 
 export function ConnectGate({ children }: { children: ReactNode }) {
   const wallet = useWallet();
+  const onboarding = useOnboarding();
   const connected = wallet.ownerPublicKey !== null;
 
-  if (!wallet.ready) {
-    return <ActivityIndicator color={colors.text} />;
+  if (!wallet.ready || !onboarding.ready) {
+    return <ActivityIndicator color={colors.text} accessibilityLabel="Loading" />;
+  }
+
+  if (showsIntroduction({ connected, seen: onboarding.seen })) {
+    return (
+      <OnboardingCards
+        showConnect
+        connectBusy={wallet.busy}
+        onSkip={() => onboarding.markSeen()}
+        onConnect={async () => {
+          await onboarding.markSeen();
+          try {
+            await wallet.connect();
+          } catch {
+            // The flag is already stored. The Connect screen below shows the wallet error.
+          }
+        }}
+      />
+    );
   }
 
   if (!connected || !wallet.ownerPublicKey) {
