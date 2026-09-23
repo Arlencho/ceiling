@@ -26,6 +26,7 @@ export function OnboardingCards({
   const [error, setError] = useState<string | null>(null);
   const card = ONBOARDING_CARDS[step];
   const last = step === ONBOARDING_CARDS.length - 1;
+  const showDone = last && !showConnect;
   if (!card) {
     return null;
   }
@@ -50,7 +51,13 @@ export function OnboardingCards({
 
   return (
     <View style={styles.block}>
-      <View accessible accessibilityRole="text" accessibilityLabel={label} style={styles.card}>
+      <View
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={label}
+        accessibilityLiveRegion="polite"
+        style={styles.card}
+      >
         <Text style={styles.step}>{`${step + 1} of ${ONBOARDING_CARDS.length}`}</Text>
         <Text style={styles.title}>{card.title}</Text>
         <Text style={styles.body}>{card.body}</Text>
@@ -67,7 +74,7 @@ export function OnboardingCards({
             }}
           />
         ) : null}
-        {last && !showConnect ? (
+        {showDone ? (
           <Button
             label="Done"
             accessibilityLabel="Done with the introduction"
@@ -86,16 +93,18 @@ export function OnboardingCards({
             }
           />
         ) : null}
-        <Button
-          label="Skip"
-          accessibilityLabel="Skip introduction"
-          invert={false}
-          quiet
-          busy={pending}
-          onPress={() => {
-            void run(onSkip);
-          }}
-        />
+        {showDone ? null : (
+          <Button
+            label="Skip"
+            accessibilityLabel="Skip introduction"
+            invert={false}
+            quiet
+            busy={pending}
+            onPress={() => {
+              void run(onSkip);
+            }}
+          />
+        )}
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>

@@ -9,7 +9,7 @@ import { OnboardingCards } from './OnboardingCards';
 import { colors, fonts } from './theme';
 
 const THESIS =
-  'The owner key lives in Seed Vault and never leaves it. The agent key holds authority and no funds.';
+  'The owner key lives in Seed Vault and never leaves it. The agent key holds authority and none of your money.';
 
 export function ConnectGate({ children }: { children: ReactNode }) {
   const wallet = useWallet();

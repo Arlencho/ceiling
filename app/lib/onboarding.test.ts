@@ -12,6 +12,7 @@ const owner = Keypair.generate();
 const memory = new Map<string, string>();
 const nav = { pushes: [] as string[], backs: 0 };
 let transactCalls = 0;
+let rejectSeenWrite = false;
 
 const chainStub = {
   loading: false,
@@ -86,6 +87,9 @@ mock.module('expo-router', {
 const secureStore = {
   getItem: async (key: string) => memory.get(key) ?? null,
   setItem: async (key: string, value: string) => {
+    if (rejectSeenWrite && key === 'veto.onboarding.seen') {
+      throw new Error('store rejected the write');
+    }
     memory.set(key, value);
   },
   deleteItem: async (key: string) => {
@@ -131,14 +135,14 @@ mock.module('./useChain', {
 });
 
 const CARD_BODIES = [
-  'Your agent holds no funds and cannot move your money on its own. It can only ask the program to pay inside the rule.',
+  'Your agent holds none of your money and cannot move your money on its own. It can only ask the program to pay inside the rule.',
   'You write one rule: who may be paid, the largest single payment, a total cap, and an expiry. The program enforces those limits.',
   'When it asks for more than the largest single payment, the program does not pay. The chain records why: a transaction that moved nothing, with the reason.',
   'Your phone can tell you, and you decide: allow that one payment above the per-payment ceiling when it stays inside the total cap, or revoke the rule. Anyone can check the record against the chain.',
 ] as const;
 
 const CONNECT_THESIS =
-  'The owner key lives in Seed Vault and never leaves it. The agent key holds authority and no funds.';
+  'The owner key lives in Seed Vault and never leaves it. The agent key holds authority and none of your money.';
 
 const SEED_VAULT_LINE = 'The owner key stays in Seed Vault. This app never sees it.';
 
@@ -259,6 +263,7 @@ test.beforeEach(() => {
   nav.pushes.length = 0;
   nav.backs = 0;
   transactCalls = 0;
+  rejectSeenWrite = false;
   chainStub.mandateStatus = 'empty';
   chainStub.error = null;
   chainStub.configError = null;
@@ -269,6 +274,7 @@ test('leaving the introduction before Skip or Connect shows it again', async () 
   const first = await mount(gate());
   const opening = await settle(first, (text) => text.includes(CARD_BODIES[0]));
   assert.equal(opening.includes(CARD_BODIES[0]), true);
+  assert.equal(opening.includes('no funds'), false);
   assert.equal(opening.includes(CONNECT_THESIS), false);
   assert.equal(memory.get(ui.seenKey), undefined);
   await unmount(first);
@@ -311,6 +317,7 @@ test('Skip on every card stores the flag and the next launch shows Connect', asy
   });
   const after = await settle(root, (text) => text.includes(CONNECT_THESIS));
   assert.equal(after.includes(CARD_BODIES[0]), false);
+  assert.equal(after.includes('no funds'), false);
   assert.equal(memory.get(ui.seenKey), '1');
   assert.equal(transactCalls, 0);
   await unmount(root);
@@ -319,6 +326,26 @@ test('Skip on every card stores the flag and the next launch shows Connect', asy
   const relaunch = await settle(next, (text) => text.includes(CONNECT_THESIS));
   assert.equal(relaunch.includes('It can only ask'), false);
   assert.ok(button(next, 'Connect'));
+});
+
+test('a failed seen-flag write still shows Connect and the next launch asks again', async () => {
+  rejectSeenWrite = true;
+  const root = await mount(gate());
+  await settle(root, (text) => text.includes(CARD_BODIES[0]));
+  assert.equal(memory.get(ui.seenKey), undefined);
+  await act(async () => {
+    button(root, 'Skip introduction').props.onPress();
+    await new Promise((resolve) => setImmediate(resolve));
+  });
+  const after = await settle(root, (text) => text.includes(CONNECT_THESIS));
+  assert.equal(after.includes(CARD_BODIES[0]), false);
+  assert.equal(memory.get(ui.seenKey), undefined);
+  assert.equal(transactCalls, 0);
+  await unmount(root);
+
+  const next = await mount(gate());
+  const again = await settle(next, (text) => text.includes(CARD_BODIES[0]));
+  assert.equal(again.includes(CONNECT_THESIS), false);
 });
 
 test('Connect on the last card finishes the introduction and connects', async () => {
@@ -373,7 +400,7 @@ test('an owner who already connected is not sent through the introduction', asyn
   const root = await mount(gate('home'));
   const text = await settle(root, (value) => value.includes('home'));
   assert.equal(text.includes(CARD_BODIES[0]), false);
-  assert.equal(memory.get(ui.seenKey), undefined);
+  assert.equal(memory.get(ui.seenKey), '1');
   assert.equal(transactCalls, 0);
 });
 
@@ -394,6 +421,7 @@ test('Help can open the introduction again after it was skipped', async () => {
   );
   const text = await settle(route, (value) => value.includes(CARD_BODIES[0]));
   assert.ok(text.includes(CARD_BODIES[0]));
+  assert.equal(labelsOf(route).includes('Help'), false);
   assert.equal(memory.get(ui.seenKey), '1');
 });
 
@@ -421,6 +449,8 @@ test('a connected owner can read the introduction again and leave on Done', asyn
   const last = visibleText(route);
   assert.ok(last.includes(SEED_VAULT_LINE));
   assert.ok(button(route, 'Done with the introduction'));
+  assert.equal(labelsOf(route).includes('Skip introduction'), false);
+  assert.equal(labelsOf(route).includes('Help'), false);
   assert.equal(labelsOf(route).includes('Connect'), false);
   const calls = transactCalls;
   await act(async () => {

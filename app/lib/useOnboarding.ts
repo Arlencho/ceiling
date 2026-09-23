@@ -10,7 +10,7 @@ import {
 import type { ReactNode } from 'react';
 
 import { secureStore } from './mwa';
-import { loadOnboardingSeen, markOnboardingSeen } from './onboarding';
+import { markOnboardingSeen, resolveOnboardingSeen } from './onboarding';
 
 export type OnboardingState = {
   ready: boolean;
@@ -26,7 +26,7 @@ function useOnboardingState(): OnboardingState {
     let cancelled = false;
     (async () => {
       try {
-        const value = await loadOnboardingSeen(secureStore);
+        const value = await resolveOnboardingSeen(secureStore);
         if (!cancelled) {
           setSeen(value);
         }
@@ -46,7 +46,11 @@ function useOnboardingState(): OnboardingState {
   }, []);
 
   const markSeen = useCallback(async () => {
-    await markOnboardingSeen(secureStore);
+    try {
+      await markOnboardingSeen(secureStore);
+    } catch {
+      // Still leave the cards. The flag stays unset until a later write succeeds.
+    }
     setSeen(true);
   }, []);
 

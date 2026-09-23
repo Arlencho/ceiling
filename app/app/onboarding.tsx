@@ -9,6 +9,7 @@ import { useOnboarding } from '../lib/useOnboarding';
 import { useWallet } from '../lib/useWallet';
 
 // Help opens this route again after the first-run flag is set. It does not clear that flag.
+// No Help control here, so Help and the introduction cannot stack on each other.
 export default function OnboardingScreen() {
   const router = useRouter();
   const wallet = useWallet();
@@ -17,7 +18,7 @@ export default function OnboardingScreen() {
 
   return (
     <Screen>
-      <TopBar back="Back" />
+      <TopBar back="Back" help={false} />
       {onboarding.ready ? (
         <OnboardingCards
           showConnect={!connected}

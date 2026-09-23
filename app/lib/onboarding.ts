@@ -1,4 +1,4 @@
-import type { WalletStore } from './wallet';
+import { loadSession, type WalletStore } from './wallet';
 
 /** Same shape as `veto.notify.asked`: a `'1'` flag in the secure store. */
 export const ONBOARDING_SEEN_KEY = 'veto.onboarding.seen';
@@ -11,7 +11,7 @@ export type OnboardingCard = {
 export const ONBOARDING_CARDS: readonly OnboardingCard[] = [
   {
     title: 'It can only ask',
-    body: 'Your agent holds no funds and cannot move your money on its own. It can only ask the program to pay inside the rule.',
+    body: 'Your agent holds none of your money and cannot move your money on its own. It can only ask the program to pay inside the rule.',
   },
   {
     title: 'One rule',
@@ -44,7 +44,27 @@ export async function markOnboardingSeen(store: WalletStore): Promise<void> {
   await store.setItem(ONBOARDING_SEEN_KEY, '1');
 }
 
-/** First run, before Connect. A connected owner is already past it. Help opens the cards on its own route. */
+/**
+ * The stored flag, or an owner restored from the session store.
+ * A fresh install has no session and is not marked seen.
+ */
+export async function resolveOnboardingSeen(store: WalletStore): Promise<boolean> {
+  if (await loadOnboardingSeen(store)) {
+    return true;
+  }
+  const session = await loadSession(store);
+  if (!session) {
+    return false;
+  }
+  try {
+    await markOnboardingSeen(store);
+  } catch {
+    // Count this session as seen even when the flag cannot be stored.
+  }
+  return true;
+}
+
+/** First run, before Connect. Seen covers the flag and a restored owner. Help opens the cards on its own route. */
 export function showsIntroduction(args: { connected: boolean; seen: boolean }): boolean {
   return !args.connected && !args.seen;
 }

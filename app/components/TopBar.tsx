@@ -7,10 +7,12 @@ export function TopBar({
   title,
   meta,
   back,
+  help = true,
 }: {
   title?: string;
   meta?: string;
   back?: string;
+  help?: boolean;
 }) {
   const router = useRouter();
   return (
@@ -31,14 +33,16 @@ export function TopBar({
       )}
       <View style={styles.right}>
         {meta ? <Text style={styles.meta}>{meta}</Text> : null}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Help"
-          onPress={() => router.push('/help')}
-          hitSlop={8}
-        >
-          <Text style={styles.help}>Help</Text>
-        </Pressable>
+        {help ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Help"
+            onPress={() => router.push('/help')}
+            hitSlop={8}
+          >
+            <Text style={styles.help}>Help</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );

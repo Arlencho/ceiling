@@ -105,10 +105,11 @@ mock.module('./mwa', {
   },
 });
 
-const CARD_ONE = 'Your agent holds no funds and cannot move your money on its own.';
+// The card and the Connect line say the agent holds none of the owner's money. It still holds SOL for fees.
+const CARD_ONE = 'Your agent holds none of your money and cannot move your money on its own.';
 const CARD_TWO_TITLE = 'One rule';
 const CONNECT_THESIS =
-  'The owner key lives in Seed Vault and never leaves it. The agent key holds authority and no funds.';
+  'The owner key lives in Seed Vault and never leaves it. The agent key holds authority and none of your money.';
 
 type Loaded = {
   ConnectGate: (props: { children: ReactNode }) => ReactNode;
