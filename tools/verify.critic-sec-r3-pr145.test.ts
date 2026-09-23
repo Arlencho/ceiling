@@ -188,6 +188,22 @@ function chain(mandateId: bigint, rows: Row[], raise: Map<string, unknown> = new
       if (!hit) return null;
       return { data: hit.data, owner: hit.owner, executable: false, lamports: 1 };
     },
+    // The charge transactions carry slot 1. A listing slot below that keeps the
+    // tenure read off a sibling whose getTransaction is the case under test.
+    // Each record's signature is still in the listing.
+    async getSignaturesForAddress(_address: PublicKey, config?: { before?: string; limit?: number }) {
+      const newestFirst = [...rows].reverse();
+      const start = config?.before ? newestFirst.findIndex((row) => row.signature === config.before) + 1 : 0;
+      const limit = config?.limit ?? newestFirst.length;
+      return newestFirst.slice(start, start + limit).map((row) => ({
+        signature: row.signature,
+        slot: 0,
+        err: null,
+        memo: null,
+        blockTime: row.timestamp,
+        confirmationStatus: "confirmed" as const,
+      }));
+    },
   } as unknown as Connection;
   return { conn, mandate };
 }

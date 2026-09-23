@@ -399,32 +399,6 @@ function openingLimits(opened: OpenedMandate, ringSuperseded: boolean): LimitVie
   };
 }
 
-// The live ring holding this charge's mandate, nonce, and amount is how a
-// single tenure proves the signature without a mandate signature index.
-// A reopened ring does not hold the earlier charge, so an empty index then
-// fails closed instead of inheriting the new limits.
-async function liveRingHoldsCharge(
-  record: DecisionRecord,
-  cache: CheckCache,
-  mandatePk: PublicKey,
-): Promise<boolean> {
-  let ledger: Awaited<ReturnType<typeof cachedLedger>>;
-  try {
-    ledger = await cachedLedger(cache, mandatePk);
-  } catch (err) {
-    if (isTransportError(err)) throw err;
-    return false;
-  }
-  if (!ledger.mandate.equals(mandatePk)) return false;
-  const want = { mandate: record.mandate, nonce: record.nonce, amount: record.amount };
-  const rows = bindByTriple(indexedEntries(ledger), want, (row) => ({
-    mandate: ledger.mandate.toBase58(),
-    nonce: row.entry.nonce,
-    amount: row.entry.amount,
-  }));
-  return rows.length > 0;
-}
-
 async function limitSource(
   record: DecisionRecord,
   cache: CheckCache,
@@ -448,32 +422,21 @@ async function limitSource(
   }
   // A live account is the tenure that is open now. An earlier signature takes
   // its limits from the open that covered it, the same walk a closed account uses.
-  // Both shortcuts below require the mandate listing to contain this signature.
-  // A connection that cannot list, or a listing that stops before the charge,
-  // does not inherit the live account. An empty index whose live ring still
-  // holds this charge is the single-tenure case: the logs path is not what
-  // would be confirming it.
+  // The listing has to contain this signature. An empty listing, a listing that
+  // stops before the charge, and a connection that cannot list signatures are
+  // the same incomplete index. The live ring does not stand in for the listing.
   let history: ClosedHistory;
   try {
     if (live) {
       if (typeof cache.conn.getSignaturesForAddress !== "function") {
-        // No index at all. The logs path would trust this live account, so a
-        // ring that does not hold the charge fails closed. A ring that holds
-        // it is the single tenure the account is open under.
-        if (!(await liveRingHoldsCharge(record, cache, mandatePk))) {
-          failures.push(`mandate history does not list signature ${record.signature}`);
-          return undefined;
-        }
-        return liveLimits(live);
+        failures.push(`mandate history does not list signature ${record.signature}`);
+        return undefined;
       }
       const pages = await listMandateSignatures(cache, mandatePk);
       const listed = pages.some((page) => page.signature === record.signature);
       if (!listed) {
-        const ringHolds = pages.length === 0 && (await liveRingHoldsCharge(record, cache, mandatePk));
-        if (!ringHolds) {
-          failures.push(`mandate history does not list signature ${record.signature}`);
-          return undefined;
-        }
+        failures.push(`mandate history does not list signature ${record.signature}`);
+        return undefined;
       }
       if (!(await mustReadMandateTenure(cache, mandatePk, record.signature))) {
         return liveLimits(live);

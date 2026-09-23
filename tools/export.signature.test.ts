@@ -148,6 +148,18 @@ function chain(blockTime: number | null): { conn: Connection; mandate: PublicKey
       if (!hit) return null;
       return { data: hit.data, owner: hit.owner, executable: false, lamports: 1 };
     },
+    async getSignaturesForAddress() {
+      return [
+        {
+          signature: "charge-at-t",
+          slot: 1,
+          err: null,
+          memo: null,
+          blockTime,
+          confirmationStatus: "confirmed" as const,
+        },
+      ];
+    },
   } as unknown as Connection;
   return { conn, mandate };
 }

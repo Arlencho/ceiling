@@ -468,7 +468,11 @@ function twoChargeChain(mandateId: bigint, flooded: boolean) {
     [mandate.toBase58(), { data: encodeMandate(mandateId, FIRST, 1), owner: PROGRAM }],
     [ledger.toBase58(), { data: encodeLedger(mandate, [refused, paid]), owner: PROGRAM }],
   ]);
-  const conn = node({ txs: new Map([[SIG, tx]]), listings: new Map(), accounts });
+  const conn = node({
+    txs: new Map([[SIG, tx]]),
+    listings: new Map([[mandate.toBase58(), [{ signature: SIG, slot: 1, err: null, blockTime: T1 }]]]),
+    accounts,
+  });
   return { conn, mandate, refused, paid };
 }
 
@@ -504,7 +508,19 @@ test("critic sec r1 S3-C: a stale refused charge with a same-second paid twin ro
     [mandate.toBase58(), { data: encodeMandate(mandateId, FIRST, 1), owner: PROGRAM }],
     [ledger.toBase58(), { data: encodeLedger(mandate, [paidRow, staleRow]), owner: PROGRAM }],
   ]);
-  const conn = node({ txs, listings: new Map(), accounts });
+  const conn = node({
+    txs,
+    listings: new Map([
+      [
+        mandate.toBase58(),
+        [
+          { signature: "stale-6", slot: 11, err: null, blockTime: T1 },
+          { signature: "paid-6", slot: 10, err: null, blockTime: T1 },
+        ],
+      ],
+    ]),
+    accounts,
+  });
   const forged = await assessRecord(record(mandate, staleRow, FIRST, "paid"), RPC, conn, OPTS);
   assert.equal(forged.ok, false, forged.text);
   assert.doesNotMatch(forged.text, /VERDICT: CONFIRMED/);
@@ -531,7 +547,7 @@ test("critic sec r1 S4: a top-level paid charge behind a relay flood cannot be l
     [mandate.toBase58(), { data: encodeMandate(mandateId, FIRST, 2), owner: PROGRAM }],
     [ledger.toBase58(), { data: encodeLedger(mandate, rows), owner: PROGRAM }],
   ]);
-  const conn = node({ txs, listings: new Map([[P, listed]]), accounts });
+  const conn = node({ txs, listings: new Map([[P, listed], [mandate.toBase58(), listed]]), accounts });
   const bundle = makeBundle({
     cluster: "devnet",
     genesisHash: DEVNET_GENESIS,

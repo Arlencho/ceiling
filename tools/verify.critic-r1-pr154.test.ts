@@ -399,7 +399,10 @@ function programWithNeighbour(
     [mandate.toBase58(), { data: encodeMandate(mandateId, FIRST, 1), owner: PROGRAM }],
     [ledger.toBase58(), { data: encodeLedger(mandate, rows), owner: PROGRAM }],
   ]);
-  const listings = new Map<string, Listed[]>([[PROGRAM.toBase58(), listed]]);
+  const listings = new Map<string, Listed[]>([
+    [PROGRAM.toBase58(), listed],
+    [mandate.toBase58(), listed],
+  ]);
   const conn = node({ txs, listings, accounts, nullSigs });
   const bundleFor = (scopeMandate: string | null) =>
     makeBundle({
@@ -477,7 +480,11 @@ test("critic r1 136: both records of a two-charge transaction export by triple a
     [mandate.toBase58(), { data: encodeMandate(mandateId, FIRST, 1), owner: PROGRAM }],
     [ledger.toBase58(), { data: encodeLedger(mandate, [refused, paid]), owner: PROGRAM }],
   ]);
-  const conn = node({ txs: new Map([[SIG, tx]]), listings: new Map(), accounts });
+  const conn = node({
+    txs: new Map([[SIG, tx]]),
+    listings: new Map([[mandate.toBase58(), [{ signature: SIG, slot: 1, err: null, blockTime: T1 }]]]),
+    accounts,
+  });
   for (const row of [refused, paid]) {
     const exported = await recordFromSignature(conn, SIG, PROGRAM, "devnet", DEVNET_GENESIS, {
       mandate: mandate.toBase58(),
