@@ -11,8 +11,10 @@
  *    object, which escapes the excess-property check.
  * 4. Two `once --window` runs with fresh journals against a ledger holding a
  *    refusal for that nonce send nothing.
- * 5. Two processes calling processWindow with the legacy shape (chainLastNonce
- *    only, no recordedCharge) must not both send the refused nonce.
+ *
+ * Round 2 removed the legacy two-process probe: it pinned the behaviour of a
+ * shape the parameter type forbids. critic-r2-pr144.test.ts holds the
+ * replacement.
  */
 import assert from "node:assert/strict";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
@@ -468,46 +470,4 @@ test("critic r1 PR 144: two once --window runs with fresh journals against a ref
   } finally {
     await rpc.close();
   }
-});
-
-// ---------------------------------------------------------------------------
-// 5. Restart with the legacy shape (still accepted by the runtime): two
-//    processes, fresh journal each, chainLastNonce only, refused submit.
-// ---------------------------------------------------------------------------
-const LEGACY_SCRIPT = `
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { JsonlJournal } from ${JSON.stringify(pathToFileURL(join(SRC_DIR, "journal.ts")).href)};
-import { processWindow } from ${JSON.stringify(pathToFileURL(join(SRC_DIR, "run.ts")).href)};
-const journal = new JsonlJournal(join(mkdtempSync(join(tmpdir(), "veto-r1-144-legacy-")), "decisions.jsonl"));
-const sent = [];
-const legacy = {
-  at: new Date(${JSON.stringify(SLOT_UTC)}),
-  feed: { async getWindow(at) { return { timeStart: at.toISOString(), timeEnd: new Date(at.getTime() + 900000).toISOString(), sekPerKwh: "1.00000" }; } },
-  journal,
-  submit: async (_amount, nonce) => {
-    sent.push(nonce.toString());
-    return { decision: "refused", reason: "over per-payment maximum", reasonCode: ${REASON_OVER_PER_TX_MAX}, suggestedOverride: null, signature: "sig-refused" };
-  },
-  kwhMilli: 50000n, mintDecimals: 6, log: () => {}, feedAttempts: 1, feedRetryMs: 0,
-  chainLastNonce: async () => 0n,
-};
-const result = await processWindow(legacy);
-process.stdout.write(JSON.stringify({ pid: process.pid, result, sent }) + "\\n");
-`;
-
-test("critic r1 PR 144: a restart with the legacy chainLastNonce-only shape does not resubmit a refused nonce", { timeout: 40_000 }, async () => {
-  const dir = mkdtempSync(join(tmpdir(), "veto-r1-144-legacy-script-"));
-  const script = join(dir, "legacy.mjs");
-  writeFileSync(script, LEGACY_SCRIPT);
-  const outputs: { pid: number; result: string; sent: string[] }[] = [];
-  for (let i = 0; i < 2; i += 1) {
-    const run = await spawnNode({ cwd: WATCHER_DIR, env: process.env, nodeArgs: ["--import", "tsx", script], timeoutMs: 15_000 });
-    assert.equal(run.code, 0, `stderr=${run.stderr}`);
-    outputs.push(JSON.parse(run.stdout.trim()) as { pid: number; result: string; sent: string[] });
-  }
-  assert.notEqual(outputs[0]?.pid, outputs[1]?.pid);
-  assert.deepEqual(outputs[0]?.sent, [SLOT_NONCE.toString()], "first process sends once and is refused");
-  assert.deepEqual(outputs[1]?.sent, [], `second process resubmitted the refused nonce: ${JSON.stringify(outputs)}`);
 });
