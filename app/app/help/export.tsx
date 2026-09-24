@@ -1,5 +1,4 @@
-import { useRouter } from 'expo-router';
-import * as ExpoRouter from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../../components/Button';
@@ -7,70 +6,6 @@ import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
 import { finishHelpExport } from '../../lib/helpNavigation';
-
-type RouteState = { routes?: readonly { name?: string; path?: string }[] } | undefined;
-
-type NavigationReader = () => { getState: () => RouteState };
-
-type RouterDouble = {
-  usePathname?: () => string;
-  useRouter?: () => {
-    canDismiss: () => boolean;
-    dismiss: (count?: number) => void;
-    push: (href: string) => void;
-  };
-};
-
-// Test doubles of expo-router export the router and the pathname, and omit
-// useNavigation. Those doubles still keep the route list. When the hook is
-// absent, Done reads that list through the router and puts it back, so the
-// counted dismiss sees the same stack the double is modeling.
-function routesFromRouterDouble(): RouteState {
-  const doubled = ExpoRouter as RouterDouble;
-  const readPath = doubled.usePathname;
-  const openRouter = doubled.useRouter;
-  if (typeof readPath !== 'function' || typeof openRouter !== 'function') return undefined;
-  const router = openRouter();
-  const topDown: string[] = [];
-  let path = readPath();
-  if (typeof path !== 'string') return undefined;
-  topDown.push(path);
-  let guard = 0;
-  while (router.canDismiss() && guard < 8) {
-    router.dismiss(1);
-    const next = readPath();
-    guard += 1;
-    if (typeof next !== 'string' || next === path) break;
-    topDown.push(next);
-    path = next;
-  }
-  const aboveRoot = topDown.slice(0, -1);
-  for (let index = aboveRoot.length - 1; index >= 0; index -= 1) {
-    const href = aboveRoot[index];
-    if (href) router.push(href);
-  }
-  return {
-    routes: [...topDown].reverse().map((href) => ({ name: href, path: href })),
-  };
-}
-
-function resolveNavigation(): NavigationReader {
-  const hooked = (ExpoRouter as { useNavigation?: unknown }).useNavigation;
-  if (typeof hooked === 'function') return hooked as NavigationReader;
-  return function useNavigation() {
-    return { getState: routesFromRouterDouble };
-  };
-}
-
-const useNavigation = resolveNavigation();
-
-function routesFrom(state: RouteState): readonly { name?: string; path?: string }[] | null {
-  if (!state?.routes || state.routes.length === 0) return null;
-  return state.routes.map((route) => ({
-    name: route.name,
-    path: route.path,
-  }));
-}
 
 export default function HelpExportScreen() {
   const navigation = useNavigation();
@@ -96,7 +31,7 @@ export default function HelpExportScreen() {
       <View style={styles.actions}>
         <Button
           label="Done"
-          onPress={() => finishHelpExport(router, routesFrom(navigation.getState()))}
+          onPress={() => finishHelpExport(router, navigation.getState()?.routes ?? null)}
         />
       </View>
     </Screen>
