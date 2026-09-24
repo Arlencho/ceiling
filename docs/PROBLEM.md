@@ -38,8 +38,8 @@ them. A burner wallet cannot show that.
 Veto is that mandate on Solana, and the record of the decisions under it.
 
 The owner sets the four limits and a purpose string. The purpose is stored on chain as written
-and is not evaluated. A rule opened in the app moves the cap into a token account derived from
-the owner. The mandate PDA is the SPL delegate on that account. The program does not escrow
+and the program does not evaluate it. A rule opened in the app moves the cap into a token
+account derived from the owner. The mandate PDA is the SPL delegate on that account. The program does not escrow
 into a vault. The owner key stays in Seed Vault and is reached through Mobile Wallet Adapter.
 A separate agent key can submit a charge. It cannot change a limit, change the merchant, extend
 the expiry, or move funds outside the mandate.
@@ -58,10 +58,12 @@ A decision can be exported and checked against the chain from another machine. T
 ## What this does not claim
 
 The record is every payment made under the mandate, and every refusal the agent submitted. A
-charge the agent never submitted leaves no entry, and nothing on chain can record one. A
-refusal is one declined attempt against the mandate. It does not show that the agent had no
-other funding path, or that the ceiling was tight: a one million ceiling on a five dollar
-charge is a record of a five dollar charge.
+charge the agent never submitted leaves no program ledger entry. When the operator supplies a
+purpose check and it declines, the agent records a memo shown as Agent declined (advisory). The
+program still enforces every number, whoever runs the agent can skip the check, and verify does
+not treat that memo as a program refusal. A refusal is one declined attempt against the mandate.
+It does not show that the agent had no other funding path, or that the ceiling was tight: a one
+million ceiling on a five dollar charge is a record of a five dollar charge.
 
 The export is the documented schema. Anyone can re-read it from the chain. It is not a W3C
 verifiable credential. There is no signing ceremony and no verifier service.

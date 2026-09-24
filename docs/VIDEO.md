@@ -115,6 +115,7 @@ Last frame: the refusal card. Same 6.2325-over-0.5 card the video opened on.
 ## Rules for the edit
 
 - **A refusal is never styled as an error.** Not in the app, not in the edit, no red flash, no error sound. It is the product working.
+- A row labeled Agent declined (advisory) is the agent's own purpose-check memo: the operator supplied the check, a decline submits no charge and the memo is signed by the agent's key and names the rule, whoever runs the agent can skip the check, the program still enforces every number, and verify does not treat it as a program refusal.
 - **No claim the repo does not make.** The words the entry does not use are in [internal/WORDS.md](internal/WORDS.md).
 - Real device, visible. No simulator frames.
 - Under three minutes, hard.

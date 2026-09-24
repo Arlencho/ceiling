@@ -162,8 +162,9 @@ Documented here so nobody adds them to the program.
 - A binding of the owner key to a legal person, a device, or Seed Vault.
 - Proof that the agent had no other spending path (a burner, a second mandate,
   a direct owner transfer).
-- A record of a charge the agent never submitted. Nothing on chain can provide
-  that.
+- A ledger entry for a charge the agent never submitted. The program does not
+  write one. An advisory memo is the agent's own record, and verify does not
+  treat it as a decision.
 - A human-readable merchant name. The chain has a pubkey.
 - Token decimals and a unit name. Decimals live on the mint account, not on the
   mandate. This record speaks base units only.
@@ -195,7 +196,9 @@ It confirms, independently:
    covers the signature. When the live account is a later opening, or the
    account is closed, limits come from the `open_mandate` whose tenure
    contains the signature. A closed account prints `mandate account is closed
-   and the limits came from the opening transaction`.
+   and the limits came from the opening transaction`. Deciding a record's
+   tenure reads the signatures listed above it, so older records on long-lived
+   rules take more reads. Verification stays correct.
 5. The ledger PDA derived from the mandate still holds a matching row (amount,
    nonce, kind, reason, suggested override, counterparty, timestamp), unless
    the ring has wrapped, in which case the transaction logs must match and the

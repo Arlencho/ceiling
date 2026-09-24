@@ -44,9 +44,9 @@ The SPL delegated amount is the ceiling underneath the rule. The rule narrows it
 
 On a rule opened in the app, that delegation sits on the rule's own token account. Revoking one rule does not clear another rule's account. On a shared source, SPL allows one delegate, and revoke clears that delegate.
 
-There is no record of a charge the agent never submits, and nothing on chain can provide one. The record is every decision the agent submits. No payment happens without a record, and no submitted attempt is judged by the agent instead of by the chain. The terminal shows payments that arrived. It has no view of a charge the agent never submitted.
+There is no program ledger entry for a charge the agent never submits. The record is every decision the agent submits. No payment happens without a record, and no submitted attempt is judged by the agent instead of by the chain. The terminal shows payments that arrived. It has no view of a charge the agent never submitted.
 
-No model is involved. The numbers are typed or taken from a template, and the why is a fixed sentence per reason code. The program stores the purpose string as written and does not evaluate it.
+No model is involved. The numbers are typed or taken from a template, and the why is a fixed sentence per reason code. The program stores the purpose string as written and does not evaluate it. The agent operator can supply a model-agnostic purpose check of a charge against that on-chain purpose: on a decline the agent submits no charge and records a memo the app and the SDK show as Agent declined (advisory), the program still enforces every number, whoever runs the agent can skip the check, and verify does not treat that memo as a program refusal.
 
 A complete record of every payment made under this authority, a worst case fixed in advance by the rule, and every refusal the agent surfaced. The rule is the prior claim. The decisions are the evidence. Neither is worth anything alone.
 
