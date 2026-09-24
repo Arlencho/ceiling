@@ -1072,7 +1072,13 @@ export function buildRecord(args: {
   genesisHash: string;
   programId: PublicKey;
   mandate: PublicKey;
-  mandateAccount: MandateAccount;
+  mandateAccount: {
+    cap: bigint;
+    perTxMax: bigint;
+    expiresAt: bigint;
+    merchant: PublicKey;
+    purpose: string;
+  };
   entry: LedgerEntry;
   signature: string;
 }): DecisionRecord {

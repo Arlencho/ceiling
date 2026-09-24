@@ -210,7 +210,8 @@ function programChoice(opts?: AssessOpts): { programId: PublicKey; source: strin
   return { programId: resolved.programId, source: resolved.source };
 }
 
-const CLOSED_NOTE = "mandate account is closed and the limits came from the opening transaction";
+export const CLOSED_MANDATE_LIMITS_NOTE =
+  "mandate account is closed and the limits came from the opening transaction";
 
 async function listMandateSignatures(cache: CheckCache, mandate: PublicKey): Promise<MandateSignature[]> {
   const key = mandate.toBase58();
@@ -373,6 +374,40 @@ async function closedMandateHistory(cache: CheckCache, mandatePk: PublicKey): Pr
   return remember(cache, key, { ok: true, covered, openCount, latestOpenSlot, current });
 }
 
+// The open that covered each signature, from the same walk verify uses.
+// One call reads the mandate history. Callers with many decisions look up
+// each signature in the map instead of walking again.
+export async function coveredOpeningTenures(
+  conn: Connection,
+  programId: PublicKey,
+  mandate: PublicKey,
+): Promise<Map<string, OpenedMandate>> {
+  const cache = makeCache(conn, "", { programId });
+  const history = await closedMandateHistory(cache, mandate);
+  if (!history.ok) throw new Error(history.failure);
+  return history.covered;
+}
+
+export function tenureCovering(covered: Map<string, OpenedMandate>, signature: string): OpenedMandate {
+  const opened = covered.get(signature);
+  if (!opened) {
+    throw new Error(`mandate history does not cover signature ${echoFile(signature)}`);
+  }
+  return opened;
+}
+
+// Limits of the open that still covered `signature`. Export calls this when
+// the mandate account is gone, so the record is bound to that tenure and not
+// to a later one at the same address.
+export async function openingTenureForSignature(
+  conn: Connection,
+  programId: PublicKey,
+  mandate: PublicKey,
+  signature: string,
+): Promise<OpenedMandate> {
+  return tenureCovering(await coveredOpeningTenures(conn, programId, mandate), signature);
+}
+
 function liveLimits(mandate: MandateAccount): LimitView {
   return {
     owner: mandate.owner,
@@ -401,24 +436,36 @@ function openingLimits(opened: OpenedMandate, ringSuperseded: boolean): LimitVie
   };
 }
 
-async function limitSource(
-  record: DecisionRecord,
+type TenureDecision = { ok: true; limits: LimitView } | { ok: false; failure: string };
+
+// Limits export and verify both bind a signature to. The listing above the
+// record decides, by object identity of the covered open. The listing must
+// contain the signature. Anything short of that fails closed.
+export type SignatureTenure = {
+  cap: bigint;
+  perTxMax: bigint;
+  expiresAt: bigint;
+  merchant: PublicKey;
+  purpose: string;
+  fromOpening: boolean;
+};
+
+async function decideRecordTenure(
   cache: CheckCache,
-  failures: string[],
-  notes: string[],
-): Promise<LimitView | undefined> {
-  const mandatePk = new PublicKey(record.mandate);
-  let live = cache.mandates.get(record.mandate);
+  mandatePk: PublicKey,
+  signature: string,
+): Promise<TenureDecision> {
+  const key = mandatePk.toBase58();
+  let live = cache.mandates.get(key);
   if (!live) {
     try {
       live = await fetchMandate(cache.conn, mandatePk);
-      cache.mandates.set(record.mandate, live);
+      cache.mandates.set(key, live);
     } catch (err) {
       if (isTransportError(err)) throw err;
       const message = failureText(err);
       if (!message.startsWith("mandate account not found")) {
-        failures.push(message);
-        return undefined;
+        return { ok: false, failure: message };
       }
     }
   }
@@ -431,45 +478,74 @@ async function limitSource(
   try {
     if (live) {
       if (typeof cache.conn.getSignaturesForAddress !== "function") {
-        failures.push(`mandate history does not list signature ${echoFile(record.signature)}`);
-        return undefined;
+        return { ok: false, failure: `mandate history does not list signature ${echoFile(signature)}` };
       }
       const pages = await listMandateSignatures(cache, mandatePk);
-      const listed = pages.some((page) => page.signature === record.signature);
+      const listed = pages.some((page) => page.signature === signature);
       if (!listed) {
-        failures.push(`mandate history does not list signature ${echoFile(record.signature)}`);
-        return undefined;
+        return { ok: false, failure: `mandate history does not list signature ${echoFile(signature)}` };
       }
-      if (!(await mustReadMandateTenure(cache, mandatePk, record.signature))) {
-        return liveLimits(live);
+      if (!(await mustReadMandateTenure(cache, mandatePk, signature))) {
+        return { ok: true, limits: liveLimits(live) };
       }
     }
     history = await closedMandateHistory(cache, mandatePk);
   } catch (err) {
     if (isTransportError(err)) throw err;
-    failures.push(failureText(err));
-    return undefined;
+    return { ok: false, failure: failureText(err) };
   }
-  if (!history.ok) {
-    failures.push(history.failure);
-    return undefined;
-  }
-  const recordSlot = txSlot(await cachedTransaction(cache, record.signature));
+  if (!history.ok) return { ok: false, failure: history.failure };
+  const recordSlot = txSlot(await cachedTransaction(cache, signature));
   const belowLatest =
     history.latestOpenSlot !== null && (recordSlot === null || recordSlot < history.latestOpenSlot);
   // One open, and this signature is not below it: the live account is that tenure.
-  if (live && history.openCount < 2 && !belowLatest) return liveLimits(live);
-  const opened = history.covered.get(record.signature);
+  if (live && history.openCount < 2 && !belowLatest) return { ok: true, limits: liveLimits(live) };
+  const opened = history.covered.get(signature);
   if (!opened) {
-    failures.push(`mandate history does not cover signature ${echoFile(record.signature)}`);
-    return undefined;
+    return { ok: false, failure: `mandate history does not cover signature ${echoFile(signature)}` };
   }
   // The open object still current is the live tenure, so its ring is evidence.
   // An earlier open is not, even when the owner reopened the same rule.
   // A closed account has no current open.
-  if (live && history.current && opened === history.current) return liveLimits(live);
-  notes.push(CLOSED_NOTE);
-  return openingLimits(opened, Boolean(live));
+  if (live && history.current && opened === history.current) return { ok: true, limits: liveLimits(live) };
+  return { ok: true, limits: openingLimits(opened, Boolean(live)) };
+}
+
+// One reader shares the mandate listing across every signature in an export.
+export function tenureReader(conn: Connection, programId: PublicKey): {
+  forSignature(mandate: PublicKey, signature: string): Promise<SignatureTenure>;
+} {
+  const cache = makeCache(conn, "", { programId });
+  return {
+    async forSignature(mandate, signature) {
+      const decided = await decideRecordTenure(cache, mandate, signature);
+      if (!decided.ok) throw new Error(decided.failure);
+      const limits = decided.limits;
+      return {
+        cap: limits.cap,
+        perTxMax: limits.perTxMax,
+        expiresAt: limits.expiresAt,
+        merchant: limits.merchant,
+        purpose: limits.purpose,
+        fromOpening: limits.fromOpening,
+      };
+    },
+  };
+}
+
+async function limitSource(
+  record: DecisionRecord,
+  cache: CheckCache,
+  failures: string[],
+  notes: string[],
+): Promise<LimitView | undefined> {
+  const decided = await decideRecordTenure(cache, new PublicKey(record.mandate), record.signature);
+  if (!decided.ok) {
+    failures.push(decided.failure);
+    return undefined;
+  }
+  if (decided.limits.fromOpening) notes.push(CLOSED_MANDATE_LIMITS_NOTE);
+  return decided.limits;
 }
 
 async function checkRecord(
