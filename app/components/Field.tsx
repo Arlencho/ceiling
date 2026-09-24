@@ -1,6 +1,7 @@
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { colors, fonts } from './theme';
+import { useScrollFocusedField } from './RuleScreen';
 
 export function Field({
   label,
@@ -21,6 +22,7 @@ export function Field({
   multiline?: boolean;
   hint?: string;
 }) {
+  const scrollFocused = useScrollFocusedField();
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>{label}</Text>
@@ -34,6 +36,12 @@ export function Field({
         autoCapitalize="none"
         autoCorrect={false}
         multiline={multiline}
+        onFocus={(event) => {
+          const target = event.nativeEvent.target;
+          if (typeof target === 'number') {
+            scrollFocused(target);
+          }
+        }}
         style={[styles.input, multiline && styles.multiline]}
       />
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}

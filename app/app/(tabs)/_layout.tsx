@@ -3,13 +3,26 @@ import { StyleSheet } from 'react-native';
 
 import { DecisionsIcon, OverviewIcon, RulesIcon } from '../../components/Icons';
 import { colors, fonts } from '../../components/theme';
+import { introductionHidesTabBar } from '../../lib/approval';
+import { useOnboarding } from '../../lib/useOnboarding';
+import { useWallet } from '../../lib/useWallet';
 
 export default function TabsLayout() {
+  const wallet = useWallet();
+  const onboarding = useOnboarding();
+  const hideTabs = introductionHidesTabBar({
+    walletReady: wallet.ready,
+    onboardingReady: onboarding.ready,
+    connected: wallet.ownerPublicKey !== null,
+    seen: onboarding.seen,
+  });
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
+        tabBarStyle: hideTabs
+          ? { display: 'none' }
+          : {
           backgroundColor: colors.bg,
           borderTopColor: colors.line,
           borderTopWidth: StyleSheet.hairlineWidth,

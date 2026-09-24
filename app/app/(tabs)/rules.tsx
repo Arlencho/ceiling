@@ -73,6 +73,11 @@ export default function RulesScreen() {
               ))}
             </View>
 
+            <Button
+              label="Scan a request"
+              accessibilityLabel="Scan a request"
+              onPress={() => router.push('/scan?target=request')}
+            />
             <Text style={styles.eyebrow}>Start another rule from</Text>
             {TEMPLATES.map((template) => (
               <Pressable
@@ -89,19 +94,6 @@ export default function RulesScreen() {
                 <Text style={styles.use}>use</Text>
               </Pressable>
             ))}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Blank rule"
-              onPress={() => router.push('/rule/new')}
-              style={styles.tpl}
-            >
-              <View style={styles.tplText}>
-                <Text style={styles.tplName}>Blank rule</Text>
-                <Text style={styles.tplSum}>cap, per payment, expiry, payee, purpose</Text>
-              </View>
-              <Text style={styles.use}>write</Text>
-            </Pressable>
-
             <Text style={styles.eyebrow}>Rulesets on this phone</Text>
             <EmptyState>
               {`${RULESET_ENVELOPE} ${PAYEE_NOT_IN_RULESET} ${PAYEE_PREFILL} Applying one to a new agent is one action. The ruleset itself is not on chain. Its name and version are written into the purpose, which is on chain and cannot change after the rule is opened.`}

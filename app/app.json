@@ -12,6 +12,7 @@
     ],
     "android": {
       "package": "com.veto.app",
+      "softwareKeyboardLayoutMode": "resize",
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -45,7 +46,16 @@
           "color": "#C9A24D",
           "defaultChannel": "decisions"
         }
-      ]
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Veto to scan a rule request.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ],
+      "./plugins/withRuleRequestCamera.js"
     ],
     "experiments": {
       "typedRoutes": true
