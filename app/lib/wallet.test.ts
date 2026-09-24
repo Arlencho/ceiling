@@ -144,6 +144,19 @@ test('authorize returns the owner public key and does not require a stored token
   assert.equal(authCalls[0]?.identity.name, APP_IDENTITY.name);
 });
 
+test('authorize identifies the app to the wallet as the org site and its icon', async () => {
+  const owner = Keypair.generate();
+  const authCalls: AuthorizeParams[] = [];
+  const wallet = fakeWallet({ owner, authCalls });
+  await authorize(wallet);
+  assert.equal(authCalls[0]?.identity, APP_IDENTITY);
+  assert.deepEqual(authCalls[0]?.identity, {
+    name: 'Veto',
+    uri: 'https://veto-hq.github.io',
+    icon: '/icon.png',
+  });
+});
+
 test('authorize passes a stored auth token so the wallet can skip the prompt', async () => {
   const owner = Keypair.generate();
   const authCalls: AuthorizeParams[] = [];
