@@ -44,6 +44,7 @@ type MessageLike = {
     data: Uint8Array;
   }[];
   instructions?: { programIdIndex: number; accounts: number[]; data: string }[];
+  addressTableLookups?: readonly unknown[];
 };
 
 type InnerIxLike = { programIdIndex: number };
@@ -309,14 +310,26 @@ function listsProgram(message: MessageLike, meta: MetaLike, program: string): bo
   return accountKeyList(message, meta).includes(program);
 }
 
+// A version 0 message names address table lookups. Until loadedAddresses is
+// an object, a programIdIndex into that table cannot be resolved, so the
+// invokes-the-program test cannot be answered.
+function loadedAddressesUnresolved(message: MessageLike, meta: MetaLike): boolean {
+  const lookups = message.addressTableLookups;
+  if (!Array.isArray(lookups) || lookups.length === 0) return false;
+  const loaded = meta?.loadedAddresses;
+  return loaded === null || loaded === undefined || typeof loaded !== "object";
+}
+
 // A log body is an array. null, an omitted key, and a null meta are the same
 // missing body, and none of them is an empty log. An empty array is a log
 // list that happened to be empty. A failed transaction stays out. When the
 // CPI list is itself null or absent, a transaction that lists the program
-// was not checked.
+// was not checked. The same gap applies when loadedAddresses is unresolved:
+// a missing log body is not checked, never absent.
 function nullLogBodyInvokesProgram(message: MessageLike, meta: MetaLike, program: string): boolean {
   if (meta?.err) return false;
   if (meta && Array.isArray(meta.logMessages)) return false;
+  if (loadedAddressesUnresolved(message, meta)) return true;
   if (transactionInvokesProgram(message, meta, program)) return true;
   const innerMissing = !meta || !Array.isArray(meta.innerInstructions);
   return innerMissing && listsProgram(message, meta, program);

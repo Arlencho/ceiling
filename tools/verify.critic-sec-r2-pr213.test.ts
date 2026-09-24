@@ -3,8 +3,8 @@
 // that omits the payment. This file runs the date_range check through
 // assessBundle with the hidden relay in every spelling of a missing log body
 // and a missing CPI list that web3.js lets through, and pins that none of them
-// confirms. The todo case is the loaded-address hole: the program reachable
-// only through a lookup table with loadedAddresses omitted still confirms.
+// confirms. Issue 216 is live here too: the program reachable only through a
+// lookup table with loadedAddresses omitted is not checked.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PublicKey, type Connection } from "@solana/web3.js";
@@ -181,18 +181,18 @@ function page<T extends { signature: string }>(rows: T[], config?: { before?: st
 
 type Hidden = (mandate: PublicKey, ledger: PublicKey, row: Row, slot: number) => unknown;
 
-const shapes: { name: string; hidden: Hidden; todo?: boolean }[] = [
+const shapes: { name: string; hidden: Hidden }[] = [
   { name: "meta null", hidden: (m, l, r, s) => relayPaid(m, l, r, s, null) },
   { name: "logMessages and innerInstructions both omitted", hidden: (m, l, r, s) => relayPaid(m, l, r, s, { err: null }) },
   { name: "logMessages and innerInstructions both null", hidden: (m, l, r, s) => relayPaid(m, l, r, s, { err: null, logMessages: null, innerInstructions: null }) },
   { name: "logMessages omitted and innerInstructions null", hidden: (m, l, r, s) => relayPaid(m, l, r, s, { err: null, innerInstructions: null }) },
   { name: "logMessages null and innerInstructions omitted", hidden: (m, l, r, s) => relayPaid(m, l, r, s, { err: null, logMessages: null }) },
   { name: "logMessages null and the CPI listed", hidden: (m, l, r, s) => relayPaid(m, l, r, s, { err: null, logMessages: null, innerInstructions: [{ index: 0, instructions: [{ programIdIndex: 6, accounts: [0, 3, 2, 4, 1, 5, 7], data: "" }] }] }) },
-  { name: "logMessages null and the CPI through an omitted loadedAddresses", hidden: relayPaidLoadedOmitted, todo: true },
+  { name: "logMessages null and the CPI through an omitted loadedAddresses", hidden: relayPaidLoadedOmitted },
 ];
 
 for (const shape of shapes) {
-  test(`a no-mandate date_range that omits a CPI payment with ${shape.name} is not checked`, { todo: shape.todo }, async () => {
+  test(`a no-mandate date_range that omits a CPI payment with ${shape.name} is not checked`, async () => {
     const mandateId = 1599n;
     const mandate = mandatePda(PROGRAM, OWNER, mandateId);
     const ledger = ledgerPda(PROGRAM, mandate);
