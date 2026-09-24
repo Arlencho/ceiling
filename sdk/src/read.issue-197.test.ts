@@ -121,7 +121,14 @@ test("decisionsForMandate does not open a second page when the mandate has more 
   const w = world();
   const rows: ConfirmedSignatureInfo[] = [];
   for (let i = 0; i < 1001; i += 1) {
-    rows.push(listed(`s${i}`, 5000 - i, 5000 - i));
+    const signature = `s${i}`;
+    rows.push(listed(signature, 5000 - i, 5000 - i));
+    w.fake.transactions.set(signature, {
+      slot: 5000 - i,
+      blockTime: 5000 - i,
+      meta: { err: null, logMessages: [] },
+      transaction: { signatures: [signature], message: { accountKeys: [], instructions: [] } },
+    });
   }
   w.fake.signatures = rows;
   await decisionsForMandate(w.connection, w.mandate);

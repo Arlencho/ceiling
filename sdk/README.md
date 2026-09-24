@@ -80,9 +80,9 @@ Pass `guardPendingOverride: true` to `charge` to refuse locally when the nonce i
 
 The decision array is ordered oldest first. Omit `limit` to take every decision on the page. `limit` takes the newest decisions, at most 1000, and never splits a transaction: the last transaction included comes back in full, so the array can be longer than `limit`. `before` starts at signatures older than the one you name. `until` stops before a signature, leaving it and anything older unread.
 
-Transactions on the page are fetched a few at a time. A 429 from the RPC is retried with backoff.
+The signature listing is one request. Transaction reads then run one at a time by default, 1000 ms after the previous RPC read (`concurrency` is how many of those reads run together). A 429 is tried up to 4 times with capped exponential backoff and jitter: the ceiling starts at 200 ms, doubles, and never exceeds 2000 ms, and the built-in wait is between half that ceiling and the ceiling. The SDK opens its own connection for these reads with `disableRetryOnRateLimit`, so the web3 client does not retry the same 429.
 
-To read older history, pass `before` set to `oldestSignature` from the previous page. Continue while `pageFull` is true. Stop when a page is not full. An empty decision array is not the end of the history: a page of failed or foreign signatures still carries that cursor.
+To read older history, pass `before` set to `oldestSignature` from the previous page. Continue while `pageFull` is true. Stop when a page is not full. An empty decision array is not the end of the history: a page of failed or foreign signatures still carries that cursor. A listed signature whose `getTransaction` returns null raises `MissingListedTransactionError` instead of dropping that signature.
 
 ```ts
 const seen = [];

@@ -1,5 +1,4 @@
-import type { Connection } from "@solana/web3.js";
-import { PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { compareDecisions, decisionsFromTx, viewFromRpc, type Decision, type RpcTransaction } from "./events.js";
 import { PROGRAM_ID } from "./idl.js";
 import {
@@ -80,7 +79,12 @@ export type DecisionsForMandateOptions = {
   before?: string;
   /** Stop before this signature. It, and anything older, is not read. */
   until?: string;
-  /** Delay used between 429 retries. Tests pass a fake. */
+  /** Transaction reads kept in flight. Default is 1. */
+  concurrency?: number;
+  /**
+   * Wait used for a 429 and for the gap between RPC reads. Tests pass a fake.
+   * An injected wait receives the backoff ceiling. The built-in wait jitters inside that ceiling.
+   */
   sleep?: (ms: number) => Promise<void>;
 };
 
@@ -96,11 +100,40 @@ export type MandateDecisions = Decision[] & {
   pageFull: boolean;
 };
 
-/** getTransaction calls kept in flight for one page. */
-export const DECISION_FETCH_CONCURRENCY = 4;
-/** First wait after a 429, doubled after each retry. */
+/** A listed signature whose getTransaction answer is null. The page is not returned short. */
+export class MissingListedTransactionError extends Error {
+  readonly signature: string;
+
+  constructor(signature: string) {
+    super(`decisionsForMandate: getTransaction returned null for listed signature ${signature}`);
+    this.name = "MissingListedTransactionError";
+    this.signature = signature;
+  }
+}
+
+/** Transaction reads kept in flight for one page. One, so a page does not burst a per-method limit. */
+export const DECISION_FETCH_CONCURRENCY = 1;
+/** Gap between RPC reads on a connection this module opens. */
+export const DECISION_FETCH_SPACING_MS = 1000;
+/** First 429 ceiling, doubled after each retry. */
 export const DECISION_FETCH_BACKOFF_MS = 200;
+/** Highest 429 ceiling. */
+export const DECISION_FETCH_BACKOFF_CAP_MS = 2000;
 const DECISION_FETCH_ATTEMPTS = 4;
+
+/**
+ * Ceiling for attempt 0 is DECISION_FETCH_BACKOFF_MS, then doubled, then capped.
+ * Pass `random` for equal jitter in `[ceil(ceiling / 2), ceiling]`.
+ */
+export function decisionFetchBackoffMs(attempt: number, random?: () => number): number {
+  const ceiling = Math.min(DECISION_FETCH_BACKOFF_CAP_MS, DECISION_FETCH_BACKOFF_MS * 2 ** attempt);
+  if (!random) return ceiling;
+  const floor = Math.ceil(ceiling / 2);
+  if (ceiling <= floor) return ceiling;
+  const span = ceiling - floor;
+  const rolled = Math.floor(random() * (span + 1));
+  return floor + Math.min(span, rolled);
+}
 
 /**
  * Decisions whose transaction touched this mandate, from one signature page.
@@ -120,13 +153,22 @@ export async function decisionsForMandate(
   const limit = clampLimit(options?.limit);
   const before = signatureCursor(options?.before, "before");
   const until = signatureCursor(options?.until, "until");
+  const concurrency = clampConcurrency(options?.concurrency);
   const pause = options?.sleep ?? sleep;
-  const listed = await listPage(connection, key, pageSize, before, until);
+  const jitter = options?.sleep === undefined;
+  const { rpc, spacingMs } = readsConnection(connection);
+  let spaced = false;
+  const pace = async (): Promise<void> => {
+    if (spaced && spacingMs > 0) await pause(spacingMs);
+    spaced = true;
+  };
+  await pace();
+  const listed = await withRateLimitRetry(() => listPage(rpc, key, pageSize, before, until), pause, jitter);
   const decisions: Decision[] = [];
   let index = 0;
   while (index < listed.items.length && decisions.length < limit) {
     const room = limit - decisions.length;
-    const width = Math.min(DECISION_FETCH_CONCURRENCY, room);
+    const width = Math.min(concurrency, room);
     const batch: DecisionPage[] = [];
     while (index < listed.items.length && batch.length < width) {
       const page = listed.items[index];
@@ -135,12 +177,13 @@ export async function decisionsForMandate(
       batch.push(page);
     }
     if (batch.length === 0) break;
-    const loaded = await Promise.all(batch.map((page) => readTransaction(connection, page.signature, pause)));
+    await pace();
+    const loaded = await Promise.all(batch.map((page) => readTransaction(rpc, page.signature, pause, jitter)));
     for (let i = 0; i < batch.length; i += 1) {
       if (decisions.length >= limit) break;
       const page = batch[i];
       const tx = loaded[i];
-      if (!page || !tx) continue;
+      if (!page || !tx) throw new MissingListedTransactionError(page?.signature ?? "unknown");
       const view = viewFromRpc(tx, page);
       // Keep every decision of this transaction, even when that passes limit.
       decisions.push(...decisionsFromTx(view, programId, key.toBase58()));
@@ -161,6 +204,17 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function readsConnection(connection: Connection): { rpc: Connection; spacingMs: number } {
+  if (!(connection instanceof Connection)) return { rpc: connection, spacingMs: 0 };
+  return {
+    rpc: new Connection(connection.rpcEndpoint, {
+      commitment: connection.commitment,
+      disableRetryOnRateLimit: true,
+    }),
+    spacingMs: DECISION_FETCH_SPACING_MS,
+  };
+}
+
 function rateLimited(err: unknown): boolean {
   if (typeof err === "object" && err !== null && "code" in err && (err as { code: unknown }).code === 429) {
     return true;
@@ -169,26 +223,39 @@ function rateLimited(err: unknown): boolean {
   return /\b429\b|too many requests/i.test(message);
 }
 
+async function withRateLimitRetry<T>(
+  run: () => Promise<T>,
+  pause: (ms: number) => Promise<void>,
+  jitter: boolean,
+): Promise<T> {
+  for (let attempt = 0; attempt < DECISION_FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      return await run();
+    } catch (err) {
+      if (!rateLimited(err) || attempt === DECISION_FETCH_ATTEMPTS - 1) throw err;
+      await pause(decisionFetchBackoffMs(attempt, jitter ? Math.random : undefined));
+    }
+  }
+  throw new Error("decisionsForMandate: rate limit retries exhausted");
+}
+
 async function readTransaction(
   connection: Connection,
   signature: string,
   pause: (ms: number) => Promise<void>,
-): Promise<RpcTransaction | null> {
-  let delay = DECISION_FETCH_BACKOFF_MS;
-  for (let attempt = 0; attempt < DECISION_FETCH_ATTEMPTS; attempt += 1) {
-    try {
-      const tx = await connection.getTransaction(signature, {
+  jitter: boolean,
+): Promise<RpcTransaction> {
+  const tx = await withRateLimitRetry(
+    () =>
+      connection.getTransaction(signature, {
         commitment: "confirmed",
         maxSupportedTransactionVersion: 0,
-      });
-      return (tx as RpcTransaction | null) ?? null;
-    } catch (err) {
-      if (!rateLimited(err) || attempt === DECISION_FETCH_ATTEMPTS - 1) throw err;
-      await pause(delay);
-      delay *= 2;
-    }
-  }
-  return null;
+      }),
+    pause,
+    jitter,
+  );
+  if (!tx) throw new MissingListedTransactionError(signature);
+  return tx as RpcTransaction;
 }
 
 function clampPage(pageSize: number | undefined): number {
@@ -205,6 +272,14 @@ function clampLimit(limit: number | undefined): number {
     throw new Error(`decisionsForMandate: limit must be an integer from 1 to ${PAGE_MAX}`);
   }
   return limit;
+}
+
+function clampConcurrency(concurrency: number | undefined): number {
+  if (concurrency === undefined) return DECISION_FETCH_CONCURRENCY;
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > PAGE_MAX) {
+    throw new Error(`decisionsForMandate: concurrency must be an integer from 1 to ${PAGE_MAX}`);
+  }
+  return concurrency;
 }
 
 function signatureCursor(value: string | undefined, name: string): string | undefined {

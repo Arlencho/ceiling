@@ -6,7 +6,7 @@ export type { Decision } from "./events.js";
 export { PROGRAM_ID } from "./idl.js";
 export { ledgerPda, mandatePda } from "./layout.js";
 export type { LedgerAccount, LedgerEntry, MandateAccount } from "./layout.js";
-export { decisionsForMandate, fetchLedger, fetchMandate } from "./read.js";
+export { MissingListedTransactionError, decisionsForMandate, fetchLedger, fetchMandate } from "./read.js";
 export type { DecisionsForMandateOptions, MandateDecisions } from "./read.js";
 export {
   REASON_ACCOUNT_FROZEN,
