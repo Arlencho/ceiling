@@ -300,7 +300,7 @@ function accountKeyList(message: MessageLike, meta: MetaLike): string[] {
 }
 
 // Static keys, then one slot per address the lookup tables declare.
-// A loaded set shorter than this leaves the tail indexes unresolved.
+// A loaded set shorter than this is unresolved wherever the missing entry sits.
 function declaredAccountCount(message: MessageLike): number {
   const staticCount = (message.staticAccountKeys ?? message.accountKeys ?? []).length;
   const lookups = message.addressTableLookups;
@@ -339,12 +339,15 @@ function listsProgram(message: MessageLike, meta: MetaLike, program: string): bo
   return accountKeyList(message, meta).includes(program);
 }
 
-// A programIdIndex at or past the resolved account key list is a lookup
-// entry the node did not load. Omitted, null, empty, and short loaded sets
-// leave that index unresolved. A missing CPI list hides its programIdIndexes,
-// so a table index the loaded set does not cover is the same gap.
+// When the log body is missing, a loaded set shorter than the addresses the
+// message declares is unresolved, whether or not innerInstructions is present.
+// A missing entry at the front, middle, or tail, or an empty set, is that gap.
+// A programIdIndex at or past the resolved key list is the second net, for a
+// message whose lookup list was stripped so the declared count falls back to
+// the static keys.
 function unresolvedProgramIndex(message: MessageLike, meta: MetaLike): boolean {
   const length = accountKeyList(message, meta).length;
+  if (declaredAccountCount(message) > length) return true;
   const compiled = message.compiledInstructions ?? [];
   const legacy = message.instructions ?? [];
   const top = compiled.length > 0 ? compiled : legacy;
@@ -357,9 +360,8 @@ function unresolvedProgramIndex(message: MessageLike, meta: MetaLike): boolean {
         if (ix.programIdIndex >= length) return true;
       }
     }
-    return false;
   }
-  return declaredAccountCount(message) > length;
+  return false;
 }
 
 // A log body is an array. null, an omitted key, and a null meta are the same
