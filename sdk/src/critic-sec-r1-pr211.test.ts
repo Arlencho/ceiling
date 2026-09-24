@@ -10,7 +10,7 @@
 // program is refused before its override fields are read.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Keypair, PublicKey, Transaction, type ConfirmedSignatureInfo } from "@solana/web3.js";
+import { Keypair, PublicKey, Transaction, type ConfirmedSignatureInfo, type TransactionError } from "@solana/web3.js";
 import { VetoAgent } from "./agent.js";
 import { PROGRAM_ID } from "./idl.js";
 import { ledgerPda } from "./layout.js";
@@ -64,7 +64,7 @@ function putStrangerMemo(w: World, signature: string, slot: number): void {
   });
 }
 
-function listed(signature: string, slot: number, err: unknown = null): ConfirmedSignatureInfo {
+function listed(signature: string, slot: number, err: TransactionError | null = null): ConfirmedSignatureInfo {
   return { signature, slot, err, memo: null, blockTime: slot * 10, confirmationStatus: "confirmed" };
 }
 
