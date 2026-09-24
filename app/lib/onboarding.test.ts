@@ -139,7 +139,7 @@ const CARD_BODIES = [
   'Your agent holds none of your money and cannot move your money on its own. It can only ask the program to pay inside the rule.',
   'You write one rule: who may be paid, the largest single payment, a total cap, and an expiry. The program enforces those limits.',
   'When it asks for more than the largest single payment, the program does not pay. The chain records why: a transaction that moved nothing, with the reason.',
-  'Your phone can tell you, and you decide: allow that one payment above the per-payment ceiling when it stays inside the total cap, or revoke the rule. Anyone can check the record against the chain.',
+  'Your phone can tell you, and you decide: allow that one payment, used once, never above the remaining cap, or revoke the rule. Anyone can check the record against the chain.',
 ] as const;
 
 const CONNECT_THESIS =

@@ -23,7 +23,7 @@ export const ONBOARDING_CARDS: readonly OnboardingCard[] = [
   },
   {
     title: 'You decide',
-    body: 'Your phone can tell you, and you decide: allow that one payment above the per-payment ceiling when it stays inside the total cap, or revoke the rule. Anyone can check the record against the chain.',
+    body: 'Your phone can tell you, and you decide: allow that one payment, used once, never above the remaining cap, or revoke the rule. Anyone can check the record against the chain.',
   },
 ];
 

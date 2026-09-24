@@ -145,7 +145,7 @@ export function overrideCommitCopy(args: {
   const cap = formatBaseUnits(args.cap, args.decimals);
   const paragraphs = [
     `You are about to grant an override of ${amount} for nonce ${args.nonce.toString()}.`,
-    `The per-payment maximum on this rule is ${perTxMax}. This override raises it to ${amount} for this one nonce only. The total cap stays ${remaining} remaining of ${cap}. ${CAP_OVERRIDE_REFUSAL}`,
+    `The per-payment maximum on this rule is ${perTxMax}. It does not change. This override allows this one payment of ${amount}, used once, never above the remaining cap (${remaining} remaining of ${cap}). ${CAP_OVERRIDE_REFUSAL}`,
     'This is written to the ledger as an override, a recorded decision. It is not a settings change.',
     'The owner signs once. The agent can then retry this nonce.',
   ];
@@ -250,7 +250,7 @@ export function overrideRowView(row: OverrideSource, decimals: number): Override
   return {
     say: 'Waived',
     italic: 'by the owner',
-    why: `An override of ${amount} for nonce ${row.nonce.toString()}. This is a recorded decision, not a settings change. The per-payment ceiling is raised for this charge only. The total cap is unchanged.`,
+    why: `An override of ${amount} for nonce ${row.nonce.toString()}. This is a recorded decision, not a settings change. It allows this one payment, used once, never above the remaining cap. The per-payment maximum does not change. The total cap is unchanged.`,
     amount,
   };
 }
