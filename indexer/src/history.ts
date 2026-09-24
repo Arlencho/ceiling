@@ -44,7 +44,8 @@ type MessageLike = {
     data: Uint8Array;
   }[];
   instructions?: { programIdIndex: number; accounts: number[]; data: string }[];
-  addressTableLookups?: readonly unknown[];
+  addressTableLookups?: readonly unknown[] | null;
+  version?: unknown;
 };
 
 type InnerIxLike = { programIdIndex: number };
@@ -191,9 +192,12 @@ async function fetchTransactions(
     }
     const message = tx.transaction.message as MessageLike;
     const meta = tx.meta as MetaLike;
+    const version = (tx as { version?: unknown }).version;
     // A missing log body is not an empty log. null, an omitted key, and a
     // null meta are the same gap. A CPI payment is only in that body.
-    if (nullLogBodyInvokesProgram(message, meta, programId)) {
+    // Listed for the program: keys that omit it, and do not cover a declared
+    // lookup table, are a contradiction beside that missing body.
+    if (nullLogBodyInvokesProgram(message, meta, programId, { version, listed: true })) {
       nullLogs.push(page.signature);
       continue;
     }
@@ -260,7 +264,8 @@ async function scanBlocksForProgram(
         const signature = item.transaction.signatures[0] ?? "";
         const message = item.transaction.message as MessageLike;
         const meta = item.meta as MetaLike;
-        if (signature && nullLogBodyInvokesProgram(message, meta, program)) {
+        const version = (item as { version?: unknown }).version;
+        if (signature && nullLogBodyInvokesProgram(message, meta, program, { version, listed: false })) {
           throw new ListedLogBodyMissingError([signature]);
         }
         const view = txPartsToView({
@@ -270,6 +275,8 @@ async function scanBlocksForProgram(
           message,
           meta,
           program,
+          version,
+          listed: false,
         });
         if (!view) continue;
         // The runtime invoke frame attributes the log, including when a
@@ -339,6 +346,30 @@ function listsProgram(message: MessageLike, meta: MetaLike, program: string): bo
   return accountKeyList(message, meta).includes(program);
 }
 
+// The response carries version. A MessageV0 instance also exposes it. Legacy
+// JSON does not, and it uses accountKeys rather than staticAccountKeys.
+function version0Message(message: MessageLike, version: unknown): boolean {
+  if (version === "legacy" || message.version === "legacy") return false;
+  if (version === 0 || message.version === 0) return true;
+  return message.staticAccountKeys != null || message.compiledInstructions != null;
+}
+
+// Same gap as a short loaded set: the lookup list was not an array, so the
+// loaded accounts are not resolved.
+function version0LookupsUnresolved(message: MessageLike, version: unknown): boolean {
+  return version0Message(message, version) && !Array.isArray(message.addressTableLookups);
+}
+
+// A declared lookup list whose loaded set covers every index is resolved.
+// The program not appearing in that list is a checked absence. A missing
+// list is not resolved: on a version 0 message the tables may have been
+// stripped, and on a legacy message there is nowhere else for the program
+// to have been.
+function lookupListResolved(message: MessageLike, meta: MetaLike): boolean {
+  if (!Array.isArray(message.addressTableLookups)) return false;
+  return declaredAccountCount(message) <= accountKeyList(message, meta).length;
+}
+
 // When the log body is missing, a loaded set shorter than the addresses the
 // message declares is unresolved, whether or not innerInstructions is present.
 // A missing entry at the front, middle, or tail, or an empty set, is that gap.
@@ -369,14 +400,24 @@ function unresolvedProgramIndex(message: MessageLike, meta: MetaLike): boolean {
 // list that happened to be empty. A failed transaction stays out. When the
 // CPI list is itself null or absent, a transaction that lists the program
 // was not checked. An unresolved programIdIndex is the same gap: the
-// invokes-the-program test cannot be answered.
-function nullLogBodyInvokesProgram(message: MessageLike, meta: MetaLike, program: string): boolean {
+// invokes-the-program test cannot be answered. A version 0 message whose
+// addressTableLookups is not an array is that same gap. On the listed path,
+// a signature returned for the program whose resolved keys do not contain
+// it is a contradiction unless that key list covers a declared lookup table.
+function nullLogBodyInvokesProgram(
+  message: MessageLike,
+  meta: MetaLike,
+  program: string,
+  source?: { version?: unknown; listed?: boolean },
+): boolean {
   if (meta?.err) return false;
   if (meta && Array.isArray(meta.logMessages)) return false;
+  if (version0LookupsUnresolved(message, source?.version)) return true;
   if (unresolvedProgramIndex(message, meta)) return true;
   if (transactionInvokesProgram(message, meta, program)) return true;
   const innerMissing = !meta || !Array.isArray(meta.innerInstructions);
-  return innerMissing && listsProgram(message, meta, program);
+  if (innerMissing && listsProgram(message, meta, program)) return true;
+  return source?.listed === true && !listsProgram(message, meta, program) && !lookupListResolved(message, meta);
 }
 
 function toPage(item: ConfirmedSignatureInfo): SignaturePage {
@@ -394,13 +435,16 @@ function txToView(
   slot: number,
   program: string,
 ): TxView | null {
+  const message = tx.transaction.message as MessageLike;
   return txPartsToView({
     signature,
     slot: tx.slot ?? slot,
     blockTime: tx.blockTime ?? null,
-    message: tx.transaction.message as MessageLike,
+    message,
     meta: tx.meta as MetaLike,
     program,
+    version: (tx as { version?: unknown }).version,
+    listed: true,
   });
 }
 
@@ -411,10 +455,12 @@ function txPartsToView(args: {
   message: MessageLike;
   meta: MetaLike;
   program: string;
+  version?: unknown;
+  listed?: boolean;
 }): TxView | null {
   if (!args.signature) return null;
   // The same gap as the guard. A missing log body must not become logs: [].
-  if (nullLogBodyInvokesProgram(args.message, args.meta, args.program)) {
+  if (nullLogBodyInvokesProgram(args.message, args.meta, args.program, { version: args.version, listed: args.listed })) {
     throw new ListedLogBodyMissingError([args.signature]);
   }
   if (!args.meta || !Array.isArray(args.meta.logMessages)) return null;

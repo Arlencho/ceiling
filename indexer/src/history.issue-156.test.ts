@@ -36,6 +36,8 @@ function tx(args: {
         compiledInstructions: [
           { programIdIndex: args.topProgram, accountKeyIndexes: [0, 1], data: Buffer.from([1]) },
         ],
+        // No tables. An omitted addressTableLookups is an unresolved version 0 message.
+        addressTableLookups: [],
       },
     },
     meta: {
