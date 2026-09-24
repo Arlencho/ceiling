@@ -82,41 +82,12 @@ function dismissCountedHelp(router: HelpDoneRouter, routes: readonly HelpStackEn
   router.dismiss(count);
 }
 
-// Used when the route list is not available. Dismiss one help route at a time
-// until the focused route is not a help page, then replace if that last page
-// is still a help page (nothing was beneath it).
-function dismissHelpByFocusedPath(router: HelpDoneRouter, readPath: () => string): void {
-  let path = readPath();
-  let guard = 0;
-  while (isHelpFlowRoute(path) && router.canDismiss() && guard < 8) {
-    router.dismiss(1);
-    const next = readPath();
-    guard += 1;
-    if (next === path) break;
-    path = next;
-  }
-  if (isHelpFlowRoute(path)) router.replace(TABS_HOME);
-}
-
-function pathReaderWorks(readPath: () => string): boolean {
-  try {
-    return typeof readPath() === 'string';
-  } catch {
-    return false;
-  }
-}
-
 export function finishHelpExport(
   router: HelpDoneRouter,
   routes?: readonly HelpStackEntry[] | null,
-  readPath?: () => string,
 ): void {
   if (routes && routes.length > 0) {
     dismissCountedHelp(router, routes);
-    return;
-  }
-  if (readPath && pathReaderWorks(readPath)) {
-    dismissHelpByFocusedPath(router, readPath);
     return;
   }
   router.replace(TABS_HOME);

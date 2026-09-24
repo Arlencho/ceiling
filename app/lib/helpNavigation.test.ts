@@ -13,6 +13,7 @@ type NavCall = { method: 'push' | 'replace' | 'back' | 'dismiss'; href?: string 
 const calls: NavCall[] = [];
 const history: string[] = [];
 let pathname = '/';
+let blockPathname = false;
 
 function Host(type: string) {
   return function MockHost(props: { children?: ReactNode; style?: unknown } & Record<string, unknown>) {
@@ -50,7 +51,15 @@ mock.module('react-native-safe-area-context', {
 
 mock.module('expo-router', {
   namedExports: {
-    usePathname: () => pathname,
+    usePathname: () => {
+      if (blockPathname) throw new Error('Invalid hook call');
+      return pathname;
+    },
+    useNavigation: () => ({
+      getState: () => ({
+        routes: history.map((entry) => ({ name: entry, path: entry })),
+      }),
+    }),
     useRouter: () => ({
       push: (href: string) => {
         calls.push({ method: 'push', href });
@@ -140,6 +149,7 @@ test.before(async () => {
 });
 
 test.beforeEach(() => {
+  blockPathname = false;
   at('/rules', ['/(tabs)/rules']);
 });
 
@@ -301,9 +311,14 @@ test('Done returns to the screen that opened help and leaves no help page or sec
 test('Done on a cold help export link replaces the page with the tabs home', async () => {
   at('/help/export', ['/help/export']);
   const exported = await mount(createElement(HelpExport));
-  await act(async () => {
-    button(exported, 'Done').props.onPress();
-  });
+  blockPathname = true;
+  try {
+    await act(async () => {
+      button(exported, 'Done').props.onPress();
+    });
+  } finally {
+    blockPathname = false;
+  }
   assert.deepEqual(calls, [{ method: 'replace', href: '/(tabs)' }]);
   assert.deepEqual(history, ['/(tabs)']);
 });
@@ -354,6 +369,34 @@ test('Done dismisses the three help screen names and leaves the tabs route', () 
   const { calls, router } = doneRouter(routes.length);
   finishHelpExport(router, routes);
   assert.deepEqual(calls, [{ method: 'dismiss', value: '3' }]);
+});
+
+test('a missing route list replaces home and does not walk the focused path', () => {
+  let reads = 0;
+  const calls: { method: 'dismiss' | 'replace'; value: string }[] = [];
+  const finish = finishHelpExport as unknown as (
+    router: {
+      canDismiss: () => boolean;
+      dismiss: (count?: number) => void;
+      replace: (href: string) => void;
+    },
+    routes: readonly string[] | null,
+    readPath: () => string,
+  ) => void;
+  finish(
+    {
+      canDismiss: () => true,
+      dismiss: (count?: number) => calls.push({ method: 'dismiss', value: String(count) }),
+      replace: (href: string) => calls.push({ method: 'replace', value: href }),
+    },
+    null,
+    () => {
+      reads += 1;
+      return '/help/export';
+    },
+  );
+  assert.equal(reads, 0);
+  assert.deepEqual(calls, [{ method: 'replace', value: '/(tabs)' }]);
 });
 
 test('Done on the only help export route replaces it even when canDismiss is true', () => {

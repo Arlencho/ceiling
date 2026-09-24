@@ -66,6 +66,11 @@ function systemBack(): void {
 mock.module('expo-router', {
   namedExports: {
     usePathname: () => pathname,
+    useNavigation: () => ({
+      getState: () => ({
+        routes: history.map((entry) => ({ name: entry, path: entry })),
+      }),
+    }),
     useRouter: () => ({
       push: (href: string) => {
         history.push(href);
