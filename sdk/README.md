@@ -59,18 +59,40 @@ The checks, in order:
 
 A charge above the per-payment maximum is refused with reason code 5. `last_nonce` does not advance, so that charge can be retried. The owner grants an override for one nonce and one amount. The mandate stores those as `override_nonce` and `override_amount`.
 
-`status()` returns them as `overrideNonce` and `overrideAmount`. While `overrideNonce` is above `lastNonce`, `nextNonce()` returns `overrideNonce` instead of `last_nonce` plus one. Retry by charging that nonce for an amount no greater than `overrideAmount`. The amount must still fit in the remaining cap. A paid charge at that nonce clears the override.
+`status()` returns them as `overrideNonce` and `overrideAmount`. While `overrideNonce` is above `lastNonce`, `nextNonce()` returns `overrideNonce` instead of `last_nonce` plus one. Any paid charge at that pending override nonce clears the override, including a smaller charge that was already queued. An agent with other charges waiting sends the retry first. Charge the refused amount, and only after checking that it is at most `overrideAmount`. The amount must still fit in the remaining cap.
 
 ```ts
+const refusedAmount = 12_000n;
 const status = await veto.status();
-if (status.overrideNonce > status.lastNonce) {
+if (status.overrideNonce > status.lastNonce && refusedAmount <= status.overrideAmount) {
   const outcome = await veto.charge({
-    amount: status.overrideAmount,
+    amount: refusedAmount,
     nonce: await veto.nextNonce(),
   });
 }
 ```
 
+Pass `guardPendingOverride: true` to `charge` to refuse locally when the nonce is a pending override and the amount differs from `overrideAmount`. Without that option the SDK sends the amount and nonce you give it, and the program decides.
+
 ## Reading decisions
 
-`decisionsForMandate` reads one page of signatures for the mandate. It does not walk every transaction on a long-lived mandate. `limit` caps how many decisions come back from that page (newest first, at most 1000). Omit `limit` and the call returns the decisions on that one page. `before` starts after a signature you have already read. `until` stops before a signature, leaving it and anything older unread. Pass `before` set to the oldest signature from the previous page to read the next older page.
+`decisionsForMandate` reads one page of signatures for the mandate. It does not walk every transaction on a long-lived mandate. Each call returns the decisions on that page, `oldestSignature` (the oldest signature on the listing, including a failed or foreign signature), and `pageFull` (true when the listing returned a full page).
+
+The decision array is ordered oldest first. Omit `limit` to take every decision on the page. `limit` takes the newest decisions, at most 1000, and never splits a transaction: the last transaction included comes back in full, so the array can be longer than `limit`. `before` starts at signatures older than the one you name. `until` stops before a signature, leaving it and anything older unread.
+
+Transactions on the page are fetched a few at a time. A 429 from the RPC is retried with backoff.
+
+To read older history, pass `before` set to `oldestSignature` from the previous page. Continue while `pageFull` is true. Stop when a page is not full. An empty decision array is not the end of the history: a page of failed or foreign signatures still carries that cursor.
+
+```ts
+const seen = [];
+let before: string | undefined;
+for (;;) {
+  const page = await decisionsForMandate(connection, mandate, { before });
+  seen.push(...page);
+  if (!page.pageFull || page.oldestSignature === null) break;
+  before = page.oldestSignature;
+}
+```
+
+Do not pass `limit` on this walk. `limit` can stop before the end of the listing, and `oldestSignature` is still the oldest signature listed, so the next page would skip signatures `limit` left unread. After a limited page, continue from the signature of the oldest decision in that result.

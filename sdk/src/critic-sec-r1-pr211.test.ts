@@ -1,8 +1,8 @@
 // Security critic, PR 211 round 1.
 // S1, S2: anyone can list a mandate account in their own transactions. A page
-// of such signatures returns [] from decisionsForMandate, and the documented
-// walk (sdk/README.md, before = oldest decision, stop on []) treats [] as the
-// end of history. The attacker needs no key of the mandate, only the fee for
+// of such signatures carries no decision. The documented walk takes its cursor
+// from the listing (oldestSignature, continue while pageFull) and still reaches
+// the older decision. The attacker needs no key of the mandate, only the fee for
 // pageSize transactions (5000 lamports each, 0.005 SOL at the default page).
 // S3, S4, S5: controls on the override-aware nextNonce. The SDK sends the
 // caller's amount and nonce unchanged, the program decides. A dead override
@@ -70,15 +70,15 @@ function listed(signature: string, slot: number, err: TransactionError | null = 
 
 const tag = (row: { signature: string; nonce: bigint }) => `${row.signature}:${row.nonce.toString()}`;
 
-/** The walk sdk/README.md documents: before = oldest signature of the previous page, stop on []. */
+/** The walk sdk/README.md documents: before is the oldest listed signature, stop when the listing page is not full. */
 async function walkPerReadme(w: World, pageSize: number): Promise<string[]> {
   const seen: string[] = [];
   let before: string | undefined;
   for (let guard = 0; guard < 10; guard += 1) {
     const rows = await decisionsForMandate(w.connection, w.mandate, { pageSize, before });
-    if (rows.length === 0) break;
     seen.push(...rows.map(tag));
-    before = rows[0]?.signature;
+    if (!rows.pageFull || rows.oldestSignature === null) break;
+    before = rows.oldestSignature;
   }
   return seen;
 }

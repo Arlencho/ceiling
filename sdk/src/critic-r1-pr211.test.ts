@@ -100,15 +100,15 @@ function listed(signature: string, slot: number): ConfirmedSignatureInfo {
 
 const tag = (row: { signature: string; nonce: bigint }) => `${row.signature}:${row.nonce.toString()}`;
 
-/** The paging protocol sdk/README.md documents: before is the oldest signature of the previous page, stop on an empty page. */
+/** The paging protocol sdk/README.md documents: before is the oldest listed signature, stop when the listing page is not full. */
 async function walkPerReadme(w: World, pageSize: number): Promise<string[]> {
   const seen: string[] = [];
   let before: string | undefined;
   for (let guard = 0; guard < 10; guard += 1) {
     const rows = await decisionsForMandate(w.connection, w.mandate, { pageSize, before });
-    if (rows.length === 0) break;
     seen.push(...rows.map(tag));
-    before = rows[0]?.signature;
+    if (!rows.pageFull || rows.oldestSignature === null) break;
+    before = rows.oldestSignature;
   }
   return seen;
 }
@@ -120,7 +120,7 @@ test("R1 a limit that lands inside a two-charge transaction does not lose the ot
   w.fake.signatures = [listed("twin", 30), listed("older", 10)];
 
   const first = await decisionsForMandate(w.connection, w.mandate, { limit: 1 });
-  assert.equal(first.length, 1);
+  assert.equal(first.length, 2);
   const oldest = first[0];
   assert.ok(oldest);
   const rest = await decisionsForMandate(w.connection, w.mandate, { before: oldest.signature });
