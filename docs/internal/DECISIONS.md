@@ -8,7 +8,7 @@ Standalone repo, no coupling to any existing product. The hackathon requires the
 started within three months of the Sep 8 launch date, and a fresh repo removes any argument about
 that. It also removes an external approval dependency from the critical path.
 
-Reversed by: nothing. Submissions close October 8, 2026 at 23:59 Pacific, which is October 9, 2026 at 08:59 in Stockholm.
+Reversed by: nothing. Submissions close October 8, 2026 ([Solana Mobile announcement](https://solanamobile.com/blog/clock-in-the-solana-mobile-hackathon)).
 
 ## 2026-09-20: the rule is enforced on chain, not on a server
 
@@ -53,7 +53,7 @@ So the claim is narrowed and sharpened: the refusal is legible. A recorded no, a
 override that would clear it, on a phone, with the key in Seed Vault.
 
 Reversed by: nothing found so far. If someone ships a recorded on-chain refusal on mobile before
-October 8, 2026 at 23:59 Pacific (October 9, 2026 at 08:59 in Stockholm), the entry needs a different wedge.
+October 8, 2026 ([Solana Mobile announcement](https://solanamobile.com/blog/clock-in-the-solana-mobile-hackathon)), the entry needs a different wedge.
 
 ## 2026-09-20: the offer feed is Nordic day-ahead electricity spot
 
@@ -176,4 +176,4 @@ Three outcomes would show the claim does not hold.
 
 - If the person using this on a Tuesday is still a hypothetical, the consumer framing is wrong and the product is developer infrastructure with an app in front of it.
 - If the export lands as a curiosity, the record is not the wedge and what remains is mobile UX on limits.
-- If someone else ships a recorded on-chain refusal on mobile before October 8, 2026 at 23:59 Pacific (October 9, 2026 at 08:59 in Stockholm), that wedge is gone and the entry needs a different one.
+- If someone else ships a recorded on-chain refusal on mobile before October 8, 2026 ([Solana Mobile announcement](https://solanamobile.com/blog/clock-in-the-solana-mobile-hackathon)), that wedge is gone and the entry needs a different one.

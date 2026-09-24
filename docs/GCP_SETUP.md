@@ -36,7 +36,7 @@ The job service account `veto-watcher@veto-watcher-260921.iam.gserviceaccount.co
 
 ## Project boundary
 
-The same Google account holds unrelated projects, including production workloads. This project is separate so the watcher agent key and its secrets sit outside those projects' IAM. The project can be deleted in one command, and its cost is its own line.
+This project is separate so the watcher agent key and its secrets sit in their own IAM. The project can be deleted in one command, and its cost is its own line.
 
 ## What the deploy created
 

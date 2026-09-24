@@ -33,7 +33,7 @@ Explorer:
 
 ## Fixtures
 
-The bullets in this section are maintained by hand. `write_docs` in `scripts/devnet-setup.sh` rewrites this file from a template that does not keep them. Re-running the script replaces the file.
+These bullets are written by `write_docs` in `scripts/devnet-setup.sh`. Re-running the script rewrites this file from that template.
 
 - Test SPL mint at 6 decimals on the classic Token program (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`).
 - Setup minted 1000000 tokens to the owner token account on 2026-09-20T20:57:14Z. Mandate `CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g` paid 0.666 of that supply to the merchant across three charges on 2026-09-20 (0.446, 0.2145, 0.0055). Later rules opened in the app, and `make e2e-devnet`, pay the same merchant from other token accounts, so the live merchant balance is that 0.666 plus every later payment. Read both balances with the verify commands below. A printed figure goes stale when a charge pays.
@@ -140,7 +140,6 @@ solana account 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV -u https://api.devne
 ```
 
 ```
-
 Public Key: 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV
 Balance: 0.00083312 SOL
 Owner: BPFLoaderUpgradeab1e11111111111111111111111

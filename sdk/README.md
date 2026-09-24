@@ -1,6 +1,6 @@
 # veto-agent-sdk
 
-TypeScript client for one `charge` and for reading the mandate, the ledger, and the decisions. The package is private. Install it from this checkout. `watcher/` is the full reference agent.
+TypeScript client for one `charge` and for reading the mandate, the ledger, and the decisions. The package is not yet published ([issue 190](https://github.com/Arlencho/veto/issues/190)). Install it from this checkout. `watcher/` is the full reference agent.
 
 Node 22 or newer.
 
@@ -46,10 +46,10 @@ In this repo the import is from `../sdk/src/index.js` until the package is built
 
 The checks, in order:
 
-1. The agent key in the file matches `config.agent`, and the mandate account's agent matches that key.
+1. The agent key in the file matches `config.agent`.
 2. The program is the id bundled in `sdk/idl/veto.json` (`3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV`). A block whose `programId` differs is refused. A localnet build passes a different program id as `{ programId }` in the options argument. The bundled id is the pin. The option is the only other id accepted.
 3. A `Connection` argument is the endpoint. When it is omitted, `config.rpcUrl` is opened. Whichever endpoint is used must report the genesis hash of `config.cluster`.
-4. The mandate account is owned by that program. Its mint and source token account match the block.
+4. The mandate account is owned by that program. Its agent matches the agent key. Its mint and source token account match the block.
 5. `mintDecimals` matches the decimals on the mint account, and that mint account is owned by the same token program as the source account.
 6. `payeeTokenAccount` is the payee's associated token account for this mint when that account exists, otherwise the payee's only token account for the mint.
 

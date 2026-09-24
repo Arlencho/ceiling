@@ -13,9 +13,7 @@ the key in Seed Vault.
 AP2 standardised the record of a yes. This is the missing half.
 
 > Status: in development for the Solana Mobile "Clock In" hackathon. Submissions close
-> October 8, 2026 at 23:59 Pacific, which is October 9, 2026 at 08:59 in Stockholm.
-> The organizer's page names October 8, 2026:
-> [Clock In](https://solanamobile.com/blog/clock-in-the-solana-mobile-hackathon).
+> October 8, 2026 ([Solana Mobile announcement](https://solanamobile.com/blog/clock-in-the-solana-mobile-hackathon)).
 > See [docs/PLAN.md](docs/PLAN.md) for the build plan,
 > [docs/PITCH.md](docs/PITCH.md) for the positioning, and
 > [docs/internal/DECISIONS.md](docs/internal/DECISIONS.md) for why each choice was made and what would reverse it.
@@ -154,8 +152,7 @@ associated token account. On the demo owner token account
 `FbhygYPyFk5PeiFppCezmMkqPqywTdAZxhkqxw79FBBE` the delegate, read 2026-09-24, is mandate
 `GVwLhzvRNqa5PnKcLakdocC3czQfYrBXGpbHb7HLPEjG` (id 3, cap 300) for 300 tokens. Mandate
 `CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g` (id 1) is still active, its source is that same
-account, spent 0.666, and it is not the delegate. A charge against id 1 is reason 7, delegation
-withdrawn. Closing a rule whose source is still that associated account returns the mandate
+account, spent 0.666, and it is not the delegate. A charge against id 1 is reason 5 when the bill is over the per-payment limit and reason 7 when it is inside the limits once the delegation is withdrawn. Closing a rule whose source is still that associated account returns the mandate
 rent and the ledger rent and leaves the token account in place.
 
 The owner can revoke in one signature, and can also revoke the SPL delegation directly without
@@ -176,7 +173,7 @@ Fund that address with a little SOL for fees. `status()` warns when the balance 
 
 In the app, open a new rule and paste that public address into the field labeled "Agent address". The same screen takes Cap, Per-payment maximum, Expiry (days from now), Payee, and Purpose. The owner key signs the open.
 
-The package `veto-agent-sdk` is private. Install it from this checkout. The field-by-field checks are in [sdk/README.md](sdk/README.md). The example loads the agent key and the JSON block the app copies (Copy all, or the same block a QR scan returns), checks that block against the chain, reads `last_nonce`, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
+The package `veto-agent-sdk` is not yet published ([issue 190](https://github.com/Arlencho/veto/issues/190)). Install it from this checkout. The field-by-field checks are in [sdk/README.md](sdk/README.md). The example loads the agent key and the JSON block the app copies (Copy all, or the same block a QR scan returns), checks that block against the chain, reads `last_nonce`, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
 
 `loadAgentConfig` accepts the JSON text or the parsed object and refuses a missing or extra field. `VetoAgent.fromConfig` pins the program to the id bundled in `sdk/idl/veto.json` unless the caller passes `{ programId }` in code, and a block whose `programId` differs from that id is refused. `mintDecimals` is checked against the mint account. `cluster` is checked against the endpoint's genesis hash (`devnet`, `testnet`, or `mainnet-beta`). A `Connection` passed to `fromConfig` is the endpoint. When it is omitted, the example opens `rpcUrl` from the block.
 

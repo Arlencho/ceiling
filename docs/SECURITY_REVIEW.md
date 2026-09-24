@@ -127,7 +127,7 @@ Test: `finding_5_purpose_limit_counts_chars_but_the_account_is_sized_in_bytes`.
 
 ### F6: LOW, a second mandate on the same token account silently disables the first
 
-> **Status: the app opens each new rule on its own token account (merged in #192).** The program still approves whatever source it is given, so two mandates on one token account still replace the single delegate. The README says that, and says a rule opened in the app does not share that account. On devnet the demo owner token account's delegate is mandate id 3, and mandate id 1 on that same account is reason 7 on a new charge.
+> **Status: the app opens each new rule on its own token account (merged in #192).** The program still approves whatever source it is given, so two mandates on one token account still replace the single delegate. The README says that, and says a rule opened in the app does not share that account. On devnet the demo owner token account's delegate is mandate id 3, and mandate id 1 on that same account is reason 5 on a new charge over the per-payment limit and reason 7 on a new charge inside the limits once the delegation is withdrawn.
 
 Category: API. File: `programs/veto/src/lib.rs:102-114`.
 SPL allows one delegate per token account. `open_mandate` calls `approve_checked` unconditionally, so
@@ -230,6 +230,6 @@ Listed so the absence of a finding is evidence rather than silence.
 
 ## Not covered
 
-The mobile app, the watcher's key handling, the merchant terminal and the RPC path are outside this
-pass. Dependency advisories were not run (`cargo audit` is not installed here); Anchor 1.2.0 and
+The mobile app, the SDK, the watcher's key handling, the merchant terminal and the RPC path are outside this
+pass. The SDK's own passes are on [PR 195](https://github.com/Arlencho/veto/pull/195) and [PR 203](https://github.com/Arlencho/veto/pull/203). Dependency advisories were not run (`cargo audit` is not installed here); Anchor 1.2.0 and
 anchor-spl 1.2.0 are the pinned versions. The devnet deployment was not probed live.

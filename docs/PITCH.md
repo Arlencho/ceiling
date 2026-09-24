@@ -30,7 +30,7 @@ A burner wallet is simple. It has no payee restriction and no expiry, and revoca
 
 An agent pays a bill repriced by a public index, unattended, against an on-chain rule. The index is the Nordic day-ahead electricity spot: public, no key, independently verifiable against the same URL. The price is the only input we do not control, which is why the refusal counts. The demo buys no electricity. Solana devnet. Our token. Our counterparty.
 
-The recording uses the decisions already on mandate `CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g`: opened 2026-09-20 20:57:50 UTC, last signature 2026-09-21 22:00:11 UTC, three paid and six refused. That rule's source is the owner's associated token account. A later rule on the same account holds the delegate, so a new charge against the quoted rule is reason 7, delegation withdrawn. The paid and refused rows already on it are unchanged.
+The recording uses the decisions already on mandate `CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g`: opened 2026-09-20 20:57:50 UTC, last signature 2026-09-21 22:00:11 UTC, three paid and six refused. That rule's source is the owner's associated token account. A later rule on the same account holds the delegate, so a new charge against the quoted rule is reason 5 when the bill is over the per-payment limit and reason 7 when it is inside the limits once the delegation is withdrawn. The paid and refused rows already on it are unchanged.
 
 [scripts/devnet-setup.sh](../scripts/devnet-setup.sh) creates the mint, mints the supply the watcher spends, and creates the counterparty token account. [tools/produce.ts](../tools/produce.ts) mints further supply of that same mint into a separate source account. When the rule allows the bill, the program executes an SPL transfer of that token to the account we created. The counterparty is a terminal we run. Public addresses are in [DEVNET.md](DEVNET.md).
 
@@ -52,7 +52,7 @@ A complete record of every payment made under this authority, a worst case fixed
 
 ## Scope through the deadline
 
-Submissions close October 8, 2026 at 23:59 Pacific, which is October 9, 2026 at 08:59 in Stockholm.
+Submissions close October 8, 2026 ([Solana Mobile announcement](https://solanamobile.com/blog/clock-in-the-solana-mobile-hackathon)).
 
 One rule type. A delegate on a token account the owner controls. Several rules, one agent each. A ruleset written once and applied to the next agent. One pay path. One refusal path with a reason and an override hint. A Decisions screen. Connect your agent on an active rule. An export anyone can re-read from the chain, including after the mandate account is closed. The quoted rule's history is the span above. No DeFi zoo, no marketplace, no W3C verifiable credential, no signing ceremony, no verifier service.
 

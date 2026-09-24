@@ -141,7 +141,7 @@ mints further supply of that same mint. Addresses are in [DEVNET.md](DEVNET.md).
 > reason and an override hint. Connect your agent, Copy all and a QR, on an active rule. An export
 > anyone can re-read from the chain. The quoted rule's history is 20 to 21 September 2026, UTC.
 >
-> Submissions close October 8, 2026 at 23:59 Pacific, which is October 9, 2026 at 08:59 in Stockholm.
+> Submissions close October 8, 2026 ([Solana Mobile announcement](https://solanamobile.com/blog/clock-in-the-solana-mobile-hackathon)).
 
 ---
 
