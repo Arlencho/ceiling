@@ -69,6 +69,21 @@ export type VetoAgentArgs = {
   programId?: PublicKey | string;
 };
 
+/** A program id passed in code. The block cannot choose the program. */
+export type FromConfigOptions = {
+  programId?: PublicKey | string;
+};
+
+/** Genesis hash reported by getGenesisHash for each cluster the block may name. */
+const CLUSTER_GENESIS: Readonly<Record<string, string>> = {
+  devnet: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+  testnet: "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY",
+  "mainnet-beta": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+};
+
+/** SPL mint layout: decimals is the byte after the 36-byte authority and the 8-byte supply. */
+const MINT_DECIMALS_OFFSET = 44;
+
 export class VetoAgent {
   readonly connection: Connection;
   readonly agent: Keypair;
@@ -87,28 +102,40 @@ export class VetoAgent {
 
   /**
    * Builds an agent from the block the app copies.
-   * Checks the block against the chain and throws on any mismatch.
-   * When connection is omitted, it is opened from config.rpcUrl.
+   * The program is PROGRAM_ID unless options.programId is set.
+   * A block whose programId differs from that id is refused.
+   * A connection argument is the endpoint. Otherwise config.rpcUrl is opened.
+   * That endpoint must report the genesis hash for config.cluster.
+   * The mint account, owned by the source token program, must show config.mintDecimals.
    */
   static async fromConfig(
     config: AgentConfig,
     agentKeypair: Keypair,
     connection?: Connection,
+    options?: FromConfigOptions,
   ): Promise<VetoAgent> {
     if (!(agentKeypair instanceof Keypair)) {
       throw new Error("VetoAgent.fromConfig: agent must be a Keypair");
     }
-    const rpc = connection ?? new Connection(config.rpcUrl, "confirmed");
     if (config.agent !== agentKeypair.publicKey.toBase58()) {
       throw new Error(
         `VetoAgent.fromConfig: config agent ${config.agent} does not equal the agent key ${agentKeypair.publicKey.toBase58()}`,
       );
     }
+    const programId = pinnedProgramId(options);
+    const blockProgram = toPublicKey(config.programId, "VetoAgent.fromConfig config programId");
+    if (!blockProgram.equals(programId)) {
+      throw new Error(
+        `VetoAgent.fromConfig: config program ${blockProgram.toBase58()} does not equal the Veto program ${programId.toBase58()}`,
+      );
+    }
+    const rpc = connection ?? new Connection(config.rpcUrl, "confirmed");
+    await assertCluster(rpc, config.cluster);
     const veto = new VetoAgent({
       connection: rpc,
       agent: agentKeypair,
       mandate: config.mandate,
-      programId: config.programId,
+      programId,
     });
     let mandate: MandateAccount;
     try {
@@ -117,7 +144,7 @@ export class VetoAgent {
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes("is not owned by the Veto program")) {
         throw new Error(
-          `VetoAgent.fromConfig: mandate ${config.mandate} is not owned by program ${config.programId}`,
+          `VetoAgent.fromConfig: mandate ${config.mandate} is not owned by program ${programId.toBase58()}`,
           { cause: err },
         );
       }
@@ -142,6 +169,7 @@ export class VetoAgent {
     if (!sourceInfo) {
       throw new Error(`VetoAgent.fromConfig: source token account ${mandate.source.toBase58()} not found`);
     }
+    await assertMintDecimals(rpc, mandate.mint, sourceInfo.owner, config.mintDecimals);
     const payee = await merchantTokenAccount(
       rpc,
       mandate.merchant,
@@ -306,6 +334,62 @@ export class VetoAgent {
 export function feeWarning(lamports: bigint): string | null {
   if (lamports >= LOW_FEE_LAMPORTS) return null;
   return `agent SOL balance is ${lamports.toString()} lamports, under ${LOW_FEE_LAMPORTS.toString()} lamports (20 base fees of ${BASE_FEE_LAMPORTS.toString()}). The agent pays the transaction fee.`;
+}
+
+function pinnedProgramId(options: FromConfigOptions | undefined): PublicKey {
+  if (options?.programId === undefined) return PROGRAM_ID;
+  return toPublicKey(options.programId, "VetoAgent.fromConfig programId");
+}
+
+async function assertCluster(connection: Connection, cluster: string): Promise<void> {
+  const expected = CLUSTER_GENESIS[cluster];
+  if (expected === undefined) {
+    throw new Error(
+      `VetoAgent.fromConfig: cluster ${JSON.stringify(cluster)} must be devnet, testnet, or mainnet-beta`,
+    );
+  }
+  let genesis: string;
+  try {
+    genesis = await connection.getGenesisHash();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `VetoAgent.fromConfig: cluster ${JSON.stringify(cluster)} genesis hash could not be read: ${JSON.stringify(message)}`,
+      { cause: err },
+    );
+  }
+  if (genesis !== expected) {
+    throw new Error(
+      `VetoAgent.fromConfig: cluster ${JSON.stringify(cluster)} does not match genesis hash ${JSON.stringify(genesis)}`,
+    );
+  }
+}
+
+async function assertMintDecimals(
+  connection: Connection,
+  mint: PublicKey,
+  tokenProgram: PublicKey,
+  decimals: number,
+): Promise<void> {
+  const info = await connection.getAccountInfo(mint, "confirmed");
+  if (!info) {
+    throw new Error(`VetoAgent.fromConfig: mint account ${mint.toBase58()} not found`);
+  }
+  if (!info.owner.equals(tokenProgram)) {
+    throw new Error(
+      `VetoAgent.fromConfig: mint account ${mint.toBase58()} is not owned by the source token program ${tokenProgram.toBase58()}`,
+    );
+  }
+  const data = info.data;
+  if (!(data instanceof Uint8Array) || data.length < MINT_DECIMALS_OFFSET + 1) {
+    throw new Error(`VetoAgent.fromConfig: mint account ${mint.toBase58()} is too short to read decimals`);
+  }
+  const onChain = data[MINT_DECIMALS_OFFSET];
+  if (onChain !== decimals) {
+    throw new Error(
+      `VetoAgent.fromConfig: mint decimals ${String(onChain)} do not equal config mintDecimals ${String(decimals)}`,
+    );
+  }
 }
 
 function resolveMandate(args: VetoAgentArgs, programId: PublicKey): PublicKey {

@@ -180,7 +180,7 @@ test("R2: cluster in the block is checked against the genesis hash", async () =>
   await assert.rejects(() => VetoAgent.fromConfig(config, w.agent, w.connection), /cluster/);
 });
 
-test("R3 evidence: without a caller connection, the block's rpcUrl answers every chain check", async () => {
+test("R3: a block rpcUrl that does not report the cluster genesis is refused, and a caller connection wins", async () => {
   const w = world();
   const seen: { method: string; address: string }[] = [];
   const stored = (address: string): { data: Buffer; owner: PublicKey; lamports: number } | null => {
@@ -217,7 +217,7 @@ test("R3 evidence: without a caller connection, the block's rpcUrl answers every
   const port = (server.address() as { port: number }).port;
   try {
     // The world's destination is the merchant's only token account, not the ATA,
-    // so give the merchant an ATA the server can answer directly.
+    // so give the merchant an ATA the caller connection can answer directly.
     const ata = getAssociatedTokenAddressSync(w.mint.publicKey, w.merchant.publicKey, true, TOKEN_PROGRAM_ID);
     w.fake.accounts.set(ata.toBase58(), {
       data: tokenAccountData(w.mint.publicKey, w.merchant.publicKey),
@@ -225,13 +225,17 @@ test("R3 evidence: without a caller connection, the block's rpcUrl answers every
       lamports: 1,
     });
     const config = block(w, { payeeTokenAccount: ata.toBase58(), rpcUrl: `http://127.0.0.1:${String(port)}` });
-    const veto = await VetoAgent.fromConfig(config, w.agent);
-    assert.equal(veto.mandate.toBase58(), config.mandate);
-    assert.deepEqual(
-      seen.map((entry) => entry.address),
-      [w.mandate.toBase58(), w.source.publicKey.toBase58(), ata.toBase58()],
+    // The server answers account reads and does not report the devnet genesis.
+    await assert.rejects(() => VetoAgent.fromConfig(config, w.agent), /cluster/);
+    assert.ok(
+      seen.some((entry) => entry.method === "getGenesisHash"),
+      "the block rpcUrl was not asked for its genesis hash",
     );
-    assert.ok(seen.every((entry) => entry.method === "getAccountInfo"));
+    const asked = seen.length;
+    const veto = await VetoAgent.fromConfig(config, w.agent, w.connection);
+    assert.equal(veto.connection, w.connection);
+    assert.equal(veto.mandate.toBase58(), config.mandate);
+    assert.equal(seen.length, asked);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }

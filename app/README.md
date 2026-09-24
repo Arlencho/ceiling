@@ -100,9 +100,14 @@ Optional:
 
 The rule screen copies one JSON block and shows the same block as a QR code
 while the rule can still pay. `loadAgentConfig` reads that block.
-`VetoAgent.fromConfig` checks it against the chain: the mandate is owned by
-the program, the mandate agent is the key in the key file, and the mint,
-source, and payee token account agree. The example then charges:
+`VetoAgent.fromConfig` checks it against the chain. The mandate must be owned
+by the program bundled with the SDK, and a block whose `programId` differs is
+refused. A different program id is accepted only as an argument passed in
+code. The mandate agent must be the key in the key file. The mint, source,
+and payee token account must agree, and `mintDecimals` must match the mint
+account. The cluster name must match the endpoint's genesis hash. A
+connection passed to `fromConfig` is used instead of `rpcUrl`. The example
+then charges:
 
 ```bash
 npx tsx examples/pay-once.ts <agent-key.json> <config.json> <amount>
@@ -124,12 +129,14 @@ This is the shape:
 }
 ```
 
-`mintDecimals` is the mint account's decimals. `payeeTokenAccount` is the
+`mintDecimals` is checked against the mint account. `payeeTokenAccount` is the
 token account a charge pays: the payee's associated token account for this
 mint when that account exists, otherwise the payee's only token account for
-the mint. `cluster` is the configured cluster name. `rpcUrl` is the RPC this
-app uses, copied as configured, including any query string. A provider URL
-with a key in that query is on the clipboard and in the QR.
+the mint. `cluster` is checked against the endpoint's genesis hash (`devnet`,
+`testnet`, or `mainnet-beta`). `rpcUrl` is the RPC this app uses, copied as
+configured, including any query string. It is the endpoint when the caller
+does not pass a connection. A provider URL with a key in that query is on the
+clipboard and in the QR.
 
 ## One-time: Expo account
 

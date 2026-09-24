@@ -109,3 +109,13 @@ test("fromConfig rejects a payee token account the charge would not pay", async 
   );
   await assert.rejects(() => VetoAgent.fromConfig(config, w.agent, w.connection), /payee/);
 });
+
+test("fromConfig refuses a block whose programId differs from the programId passed in code", async () => {
+  const w = world();
+  const pinned = Keypair.generate().publicKey;
+  const config = loadAgentConfig(fields(w));
+  await assert.rejects(
+    () => VetoAgent.fromConfig(config, w.agent, w.connection, { programId: pinned }),
+    /does not equal the Veto program/,
+  );
+});

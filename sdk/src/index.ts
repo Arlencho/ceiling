@@ -1,5 +1,5 @@
 export { VetoAgent, LOW_FEE_LAMPORTS, BASE_FEE_LAMPORTS, feeWarning } from "./agent.js";
-export type { AgentStatus, ChargeArgs, ChargeResult, VetoAgentArgs } from "./agent.js";
+export type { AgentStatus, ChargeArgs, ChargeResult, FromConfigOptions, VetoAgentArgs } from "./agent.js";
 export { loadAgentConfig } from "./config.js";
 export type { AgentConfig } from "./config.js";
 export type { Decision } from "./events.js";

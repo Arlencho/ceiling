@@ -37,8 +37,7 @@ export function loadAgentConfig(json: string | unknown): AgentConfig {
     try {
       raw = JSON.parse(json) as unknown;
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`agent config is not valid JSON: ${message}`);
+      throw new Error("agent config is not valid JSON", { cause: err });
     }
   }
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
@@ -67,8 +66,9 @@ export function loadAgentConfig(json: string | unknown): AgentConfig {
   }
   const cluster = record.cluster;
   if (typeof cluster !== "string" || !CLUSTERS.includes(cluster as (typeof CLUSTERS)[number])) {
+    const shown = typeof cluster === "string" ? JSON.stringify(cluster) : typeof cluster;
     throw new Error(
-      `Unknown cluster "${String(cluster)}". The cluster must be devnet, testnet, or mainnet-beta.`,
+      `Unknown cluster ${shown}. The cluster must be devnet, testnet, or mainnet-beta.`,
     );
   }
   return {

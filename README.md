@@ -152,7 +152,9 @@ Fund that address with a little SOL for fees. `status()` warns when the balance 
 
 In the app, open a new rule and paste that public address into the field labeled "Agent address". The same screen takes Cap, Per-payment maximum, Expiry (days from now), Payee, and Purpose. The owner key signs the open.
 
-Until [issue 190](https://github.com/Arlencho/veto/issues/190) publishes `veto-agent-sdk`, install the package from this repo checkout and run the example from there. The example loads the agent key and the JSON block the app copies (the same block a QR scan returns), checks that block against the chain, reads `last_nonce`, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot. The RPC is the `rpcUrl` in the block.
+Until [issue 190](https://github.com/Arlencho/veto/issues/190) publishes `veto-agent-sdk`, install the package from this repo checkout and run the example from there. The example loads the agent key and the JSON block the app copies (the same block a QR scan returns), checks that block against the chain, reads `last_nonce`, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
+
+The program id is the one bundled with the SDK. A block whose `programId` differs is refused. A localnet build passes a different program id as an argument in code. The example opens `rpcUrl` from the block when it does not pass a connection. A connection passed to `fromConfig` is the endpoint instead, and whichever endpoint is used must report the genesis hash of the block's cluster (`devnet`, `testnet`, or `mainnet-beta`). `mintDecimals` is checked against the mint account on that endpoint.
 
 ```bash
 cd sdk
