@@ -10,6 +10,7 @@
     "produce": "tsx produce.ts",
     "export": "tsx export.ts",
     "verify": "tsx verify.ts",
+    "token-metadata": "tsx token-metadata.ts",
     "test": "tsx --test *.test.ts",
     "typecheck": "tsc --noEmit"
   },
