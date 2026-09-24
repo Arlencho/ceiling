@@ -5,7 +5,7 @@ import { Button } from '../../components/Button';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
-import { HELP_FLOW_DEPTH } from '../../lib/helpNavigation';
+import { finishHelpExport } from '../../lib/helpNavigation';
 
 export default function HelpExportScreen() {
   const router = useRouter();
@@ -28,7 +28,7 @@ export default function HelpExportScreen() {
         submitted cannot appear, and the export does not invent a row for a gap.
       </Text>
       <View style={styles.actions}>
-        <Button label="Done" onPress={() => router.dismiss(HELP_FLOW_DEPTH)} />
+        <Button label="Done" onPress={() => finishHelpExport(router)} />
       </View>
     </Screen>
   );

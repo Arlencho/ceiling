@@ -66,6 +66,7 @@ mock.module('expo-router', {
         history.pop();
         pathname = history[history.length - 1] ?? '/';
       },
+      canDismiss: () => history.length > 1,
       // StackRouter POP keeps max(index - count + 1, 1) routes from the bottom.
       dismiss: (count = 1) => {
         calls.push({ method: 'dismiss', href: String(count) });
@@ -293,6 +294,16 @@ test('Done returns to the screen that opened help and leaves no help page or sec
     });
     assert.deepEqual([...history], openedFrom, origin.path);
   }
+});
+
+test('Done on a cold help export link replaces the page with the tabs home', async () => {
+  at('/help/export', ['/help/export']);
+  const exported = await mount(createElement(HelpExport));
+  await act(async () => {
+    button(exported, 'Done').props.onPress();
+  });
+  assert.deepEqual(calls, [{ method: 'replace', href: '/(tabs)' }]);
+  assert.deepEqual(history, ['/(tabs)']);
 });
 
 test('back from the introduction pops to help', async () => {

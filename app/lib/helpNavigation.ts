@@ -2,12 +2,32 @@
 // push /help onto itself. Next and the introduction push. Back pops, which
 // is also what the system back does, so both land on the same screen.
 // From Rules the stack is at most [rules, help, refusal, export].
-// Done dismisses the three help routes, back to the screen that opened Help.
+// Done dismisses those three routes, back to the screen that opened Help.
+// A cold veto://help/export link is the only route, so there is nothing
+// to dismiss and Done replaces that page with the tabs home.
 
 const HELP = '/help';
 
 // /help, /help/refusal, and /help/export, pushed above the opener.
 export const HELP_FLOW_DEPTH = 3;
+const TABS_HOME = '/(tabs)';
+
+type HelpDoneRouter = {
+  canDismiss: () => boolean;
+  dismiss: (count?: number) => void;
+  replace: (href: string) => void;
+};
+
+// Dismiss the help routes this flow pushed. When the export page is the only
+// route, a pop is not handled, so replace it with the tabs home instead.
+export function finishHelpExport(router: HelpDoneRouter): void {
+  if (router.canDismiss()) {
+    router.dismiss(HELP_FLOW_DEPTH);
+    return;
+  }
+  router.replace(TABS_HOME);
+}
+
 const ONBOARDING = '/onboarding';
 
 const BACK_TARGET: Record<string, string> = {
