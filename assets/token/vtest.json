@@ -1,0 +1,6 @@
+{
+  "name": "Veto test token",
+  "symbol": "VTEST",
+  "description": "A devnet test token with no value.",
+  "image": "https://raw.githubusercontent.com/Arlencho/veto/main/assets/token/vtest.png"
+}
