@@ -1,7 +1,8 @@
 # Watcher on Cloud Run
 
-The laptop `run` loop dies when the lid closes. The seven day history cannot be
-recreated afterwards. This is the Cloud Run job that runs `once` on the price
+The laptop `run` loop dies when the lid closes. The decision rows can be rebuilt
+from the on-chain ring and transaction history. The price columns for missed
+windows cannot. This is the Cloud Run job that runs `once` on the price
 window cadence, with the journal stored in Cloud Storage.
 
 The journal is read from the object at the start of a run and written back as a
@@ -12,7 +13,7 @@ could not record. The next start hydrates the object, then repairs any missing
 paid or refused row from the on-chain ledger ring before any window is
 processed, so `processWindow` can skip a nonce the chain already settled.
 
-Do not run these commands from an agent session. The owner runs them.
+The owner runs these commands by hand. They are not part of CI or any automated flow.
 
 **Project:** `veto-watcher-260921`
 **Job region:** `europe-north1` (Finland)
@@ -20,10 +21,11 @@ Do not run these commands from an agent session. The owner runs them.
 in `europe-north1`; Belgium is the nearest Scheduler region. The job it invokes
 still runs in Finland. The cron timezone is `Europe/Stockholm`.
 
-Nothing in the image is a key, an RPC endpoint, a program id, a mint, or an
-account. Those are environment and a Secret Manager mount. The image is
-compiled JavaScript. TypeScript and the rest of the build toolchain stay
-in the build stage.
+Nothing in the image is a key, an RPC endpoint, a mint, or an account. The
+program id travels with the bundled IDL (`idl/veto.json`, copied in the
+Dockerfile). Everything environment-specific arrives as environment and a
+Secret Manager mount. The image is compiled JavaScript. TypeScript and the
+rest of the build toolchain stay in the build stage.
 
 ## 1. What you need on the machine
 
@@ -136,13 +138,13 @@ If `ALERT_EMAIL` was set on deploy, the channel is already attached to both
 policies. Otherwise:
 
 ```bash
-gcloud monitoring channels create \
+gcloud beta monitoring channels create \
   --project=veto-watcher-260921 \
   --display-name='Veto watcher owner' \
   --type=email \
   --channel-labels=email_address=you@example.com
 
-CHANNEL=$(gcloud monitoring channels list \
+CHANNEL=$(gcloud beta monitoring channels list \
   --project=veto-watcher-260921 \
   --filter='labels.email_address="you@example.com" AND type=email' \
   --format='value(name)')
@@ -177,12 +179,12 @@ the free tiers below.
 
 | Piece | What we run | List price | This demo |
 |---|---|---|---|
-| Cloud Run jobs | 1 vCPU, 1 GiB (`once`) and 512 MiB (`stale`), billed per second with a 1 minute minimum | $0.000018 / vCPU-second, $0.000002 / GiB-second. Free: 240,000 vCPU-seconds and 450,000 GiB-seconds per month | About 28 billed minutes per month. Inside the free tier. |
+| Cloud Run jobs | 1 vCPU, 1 GiB (`once`) and 512 MiB (`stale`), billed for the whole run with a 1 minute minimum | $0.000018 / vCPU-second, $0.000002 / GiB-second. Free: 240,000 vCPU-seconds and 450,000 GiB-seconds per month | About 28 billed minutes per day (four `once` runs and 24 stale checks), roughly 840 per month. About 50,400 vCPU-seconds. Inside the free tier. |
 | Cloud Scheduler | 2 jobs (`cadence`, `stale-hourly`) in `europe-west1` | 3 jobs free per billing account, then $0.10 per job per month | Free |
 | Cloud Storage | One bucket, one JSONL object of a few hundred rows | About $0.02 / GB-month plus Class A/B ops | Cents or less; the object is kilobytes |
 | Secret Manager | One secret, read on each job start | $0.06 per secret per month plus $0.03 per 10,000 accesses | One secret, about 30 days * 28 reads |
 | Artifact Registry | One image in `europe-north1` | $0.10 / GB-month after 0.5 GB free | One Node image, often inside the free 0.5 GB |
-| Cloud Build | One image build per deploy | 120 free build-minutes per day | One watcher build is a few minutes |
+| Cloud Build | One image build per deploy | 2,500 free build-minutes per month (promotional tier for e2-standard-2, subject to change) | One watcher build is a few minutes |
 | Cloud Monitoring | Two policies, email channel | Email notifications are free | Free |
 | Cloud Logging | stdout from the jobs | 50 GiB free per month | Well under |
 
@@ -216,8 +218,10 @@ The `stale` command locally, against a file journal:
 cd watcher && node dist/index.js stale
 ```
 
-Exit 1 means the last recorded decision (or, if the journal is empty, the
-object's server-side `updated` time) is older than nine hours.
+Exit 1 means the last recorded decision is older than nine hours. For an empty
+journal the age comes from the object's server-side `updated` time in cloud
+runs, or from the local file's modification time. A missing journal file is
+always stale.
 
 ## 6. Tear it down
 
@@ -253,8 +257,8 @@ POLICY_STALE=$(gcloud monitoring policies list --project=$PROJECT --filter='disp
 gcloud iam service-accounts delete veto-watcher@$PROJECT.iam.gserviceaccount.com --project=$PROJECT --quiet
 ```
 
-The project itself stays. Deleting the project is a console action and is not
-required to stop spend.
+The project itself stays. The teardown leaves it in place. Deleting the project
+is a separate step (`gcloud projects delete`) and is not required to stop spend.
 
 ## Local journal behaviour
 

@@ -9,10 +9,7 @@ is under [What the deploy created](#what-the-deploy-created).
 
 `scripts/gcp-verify.sh` checks the [What was created](#what-was-created) table against the live project and changes nothing. It still expects the deployed resources to be absent, so a live run exits non-zero. See [Checking it](#checking-it).
 
-The watcher has been running from a laptop. The deck and the video are written for a week of
-decisions against real electricity prices. That week is not on chain yet. An hour the watcher
-is not running is an hour missing from that week on the 8th of October, and it cannot be
-recreated.
+The watcher currently runs from an operator machine. This project exists so it can run unattended in Cloud Run instead.
 
 ## What was created
 
@@ -20,7 +17,7 @@ recreated.
 |---|---|
 | Project | `veto-watcher-260921`, number `472736420070`, `Veto Watcher` |
 | Created | 2026-09-21T11:36:55Z |
-| Billing | linked to `01778E-30EA11-E3BA6D`, currency SEK |
+| Billing | linked, currency SEK |
 | Labels | `environment=development`, `owner=arlen`, `purpose=veto-watcher` |
 | Budget | `veto-watcher spend alert (does not stop spend)`, 200 SEK, scoped to this project alone, notifies at 50, 90 and 100 percent. It notifies. It does not stop spend. |
 | Audit | Secret Manager `DATA_READ` and `DATA_WRITE` logged, so every read of the agent key leaves a trail |
@@ -28,19 +25,17 @@ recreated.
 
 ## Before the agent key is loaded
 
-`scripts/deploy-watcher-cloud.sh` is in the tree and has been run against this project. The bucket, secret, jobs, and scheduler exist. Three checks run before the agent key is stored, including on a later run that adds a secret version.
+`scripts/deploy-watcher-cloud.sh` is in the tree and has been run against this project. The bucket, secret, jobs, and scheduler exist. Two checks run before the agent key is stored, including on a later run that adds a secret version.
 
 1. **Default compute account and secret versions.** The account a Cloud Run job picks up when nobody names one is `472736420070-compute@developer.gserviceaccount.com`. Before the script creates the secret (or adds a version), it reads the project IAM policy and, if the secret already exists, the secret IAM policy. If that account has a role that grants `secretmanager.versions.access` (`roles/owner`, `roles/secretmanager.admin`, `roles/secretmanager.secretAccessor`, or another role whose included permissions contain that permission), the script stops and names the role and the policy it was found on. It also tries the organization and folder policies. When those cannot be read it says so. A missing line at those levels is not treated as missing access.
 2. **Public access prevention on the journal bucket.** Uniform bucket-level access is already on create. The script also sets public access prevention to enforced when it creates the bucket and when the bucket already exists, then reads the setting back. If it cannot be set, the script stops.
-3. **Named inventory of who can read a secret version.** `scripts/gcp-verify.sh` lists every principal on the project policy and on each secret policy whose role grants `secretmanager.versions.access`, and for each prints the role and which policy it came from. The listing states that it cannot see bindings above the project, so a short list is not a complete list of who can read a secret version.
+`scripts/gcp-verify.sh` is a separate read-only audit. It is not part of the deploy. It lists every principal on the project policy and on each secret policy whose role grants `secretmanager.versions.access`, and for each prints the role and which policy it came from. The listing states that it cannot see bindings above the project, so a short list is not a complete list of who can read a secret version.
 
 The job service account `veto-watcher@veto-watcher-260921.iam.gserviceaccount.com` is the identity the jobs are given. It has `roles/secretmanager.secretAccessor` on the secret `veto-agent-keypair`. The default compute account is not granted a role by the script. On 2026-09-23 it held no project level role, and it was absent from the readable policies that grant `secretmanager.versions.access`.
 
 ## Project boundary
 
-The same account holds SafePlace, Aegis, and four other projects. This project is separate so the
-watcher agent key and its secrets sit outside the SafePlace production IAM boundary. The project
-can be deleted in one command, and its cost is its own line.
+The same Google account holds unrelated projects, including production workloads. This project is separate so the watcher agent key and its secrets sit outside those projects' IAM. The project can be deleted in one command, and its cost is its own line.
 
 ## What the deploy created
 
@@ -49,7 +44,7 @@ can be deleted in one command, and its cost is its own line.
 | | |
 |---|---|
 | Job service account | `veto-watcher@veto-watcher-260921.iam.gserviceaccount.com` |
-| Secret access | That account has `roles/secretmanager.secretAccessor` on `veto-agent-keypair`. The project policy also grants `roles/owner` to `user:arlen@blackaces.se`. The default compute account, `472736420070-compute@developer.gserviceaccount.com`, is not in that list and holds no project level role. |
+| Secret access | That account has `roles/secretmanager.secretAccessor` on `veto-agent-keypair`. The project policy also grants `roles/owner` to the project owner's user account. The default compute account, `472736420070-compute@developer.gserviceaccount.com`, is not in that list and holds no project level role. |
 | Journal bucket | `veto-watcher-260921-journal` |
 | Other bucket | `veto-watcher-260921_cloudbuild`, in the same bucket list |
 | Secret | `veto-agent-keypair`. The key is not in this repository and not in an image. The deploy script will not add a version until the default compute account check above has passed. |
@@ -81,13 +76,7 @@ The default compute account is what a Cloud Run job picks up when nobody names o
 gcloud projects delete veto-watcher-260921
 ```
 
-That removes the job, the scheduler, the bucket, the images and the secret with it. The budget
-lives on the billing account rather than the project and is removed separately:
-
-```
-gcloud billing budgets delete 914d5c6c-9361-437b-8ea6-dd7b50ab333d \
-  --billing-account=01778E-30EA11-E3BA6D
-```
+That removes the job, the scheduler, the bucket, the images and the secret with it. The budget `veto-watcher spend alert (does not stop spend)` lives on the billing account rather than the project. Deleting the project does not delete it. Remove that budget on the billing account when you tear the project down.
 
 ## Checking it
 

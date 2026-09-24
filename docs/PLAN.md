@@ -1,6 +1,8 @@
 # Build plan
 
-Solana Mobile "Clock In" hackathon. Submissions close **2026-10-09 at 08:59 GMT+2**.
+This file is the internal build plan. Product claims live in the [README](../README.md), [PITCH.md](PITCH.md), and [PROBLEM.md](PROBLEM.md).
+
+Solana Mobile "Clock In" hackathon. Submissions close October 8, 2026 at 23:59 Pacific, which is October 9, 2026 at 08:59 in Stockholm. The organizer's page names October 8, 2026.
 
 The project is named veto. The recorded refusal is the product. Capped on-chain agent budgets
 already exist.
@@ -26,8 +28,8 @@ Capped agent spending is not new. The table names the limits that already exist.
 | Squads v4 spending limits | Pre-approved allowances, roles, per-member caps. Audited by Neodyme, OtterSec, Trail of Bits, two formal verifications underway | Treasury operations for humans. An overspend stops, and the stop leaves no record |
 | SPL `approve` / delegate | Caps what a delegate can pull | Cap only. No purpose, no expiry, no reason, no record |
 | LazorKit | Passkey smart wallet, session keys with slot-height expiry, on-chain RBAC and spending limits | Wallet infrastructure for app developers |
-| SolAgent Pay | Session PDA with lifetime and per-request ceilings, merchant allowlist, TTL, revoke and sweep, audit viewer | An overspend "is not a policy violation logged after the fact, it is an impossible transaction". Funds are escrowed into a vault. Veto records the decline and leaves the funds in the owner's wallet |
-| Oculus | On-chain policy check per transaction, USDC reserve reimburses a breach within 60s | Reimburses a breach after the fact. Veto declines before money moves |
+| SolAgent Pay | An overspend "is not a policy violation logged after the fact, it is an impossible transaction". Funds are escrowed into a vault | Veto records the decline and leaves the funds in an account the owner controls |
+| Oculus | On-chain policy check per transaction, a USDC reserve reimburses a breach after the fact | Reimburses a breach after the fact. Veto declines before money moves |
 | x402 / AP2 | HTTP 402 settlement; signed Intent, Cart and Payment mandates as verifiable credentials | The record of a yes, held off chain as evidence for the merchant |
 | Seed Vault | Hardware-held keys, human approves every signature | The default on this platform. Unattended agent spend needs a bound beside that key |
 
@@ -52,7 +54,8 @@ Phone (owner + agent)            Solana devnet              Watcher (unattended)
 Seed Vault key --MWA-->          open_mandate
                                  grant_override
                                  revoke_mandate
-agent hot key  --------->        charge  ---> transfer OR refusal entry  <--- hourly decisions
+                                 close_mandate
+agent hot key  --------->        charge  ---> transfer OR refusal entry  <--- four decisions a Stockholm day
                                  ledger PDA                                    against the live feed
 ```
 
@@ -67,9 +70,12 @@ code, logs a readable line, and succeeds. The refusal reason codes are listed in
 [README](../README.md).
 
 Four limits enforced on chain: total cap, per-payment maximum, expiry, one allowed merchant.
-Funds stay in the owner's wallet under an SPL delegate. They are not escrowed into a vault. A
-nonce advances only on payment, so a settled charge cannot be replayed, and a refused one can
-still be retried after an override.
+The program does not escrow into a vault. `open_mandate` approves the mandate as delegate of
+the source it is given. A rule opened in the app moves the cap into a token account derived
+from the owner (`veto-rule-<mandate id>`). Close rule returns that balance and the rent.
+Revoking one of those rules does not clear another rule's account. A nonce advances only on
+payment, so a settled charge cannot be replayed, and a refused one can still be retried after
+an override.
 
 The refusal carries the override that would have cleared it. The live devnet line is in the
 README: an amount, the per-payment maximum, the remaining cap, and `override_to_clear`.
@@ -79,15 +85,16 @@ README: an amount, the per-payment maximum, the remaining cap, and `override_to_
 `https://www.elprisetjustnu.se/api/v1/prices/YYYY/MM-DD_SE3.json`, verified 2026-09-20: HTTP 200,
 no authentication, 15-minute resolution, SEK and EUR per kWh.
 
-The agent pays for charging when power is under the ceiling the owner set.
+The demo pays a bill repriced by that index, on devnet, in our token, to a terminal this
+repository runs. It buys no electricity. The bill is paid when the repriced amount is inside
+the rule.
 
-The price is a public spot for a purchase. A DEX price is a trade. Energy is the feed with a real
-moving price for something a person buys.
+The price is a public spot. A DEX price is a trade.
 
-The price is real, public, and independently verifiable against the same URL. The counterparty is
-a terminal this repository runs, because no charge point operator accepts USDC. Calling that
-terminal a real merchant would be false, and the hackathon rules disqualify misleading submission
-materials.
+The price is real, public, and independently verifiable against the same URL. The counterparty
+is a terminal this repository runs, because no charge point operator accepts this mint
+(`2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU`). Calling that terminal a real merchant would
+be false. This repository does not describe it as one.
 
 ### The watcher
 
@@ -98,62 +105,55 @@ because those resources exist.
 
 ### History
 
-The on-chain `Ledger` is a 32-entry ring. A week of activity will wrap it. The ring is the
-authoritative recent window. The full trail is reconstructed by indexing `Paid` and `Refused`
-events from transaction logs. The decision cadence stays to a handful per day so the ledger reads
-as a diary.
+The on-chain `Ledger` is a 32-entry ring. Four decisions a day is 28 entries in a week, inside
+the ring. More than a week wraps it (the 33rd entry). The ring is the authoritative recent
+window. The full trail is reconstructed by indexing `Paid` and `Refused` events from transaction
+logs. The agent can also fill the window with refusals and push a paid row out of it.
 
 ### The app
 
-One APK, in `app/`. Connect through Mobile Wallet Adapter against Seed Vault. Write a mandate. A
-today view of what the agent did and declined. A ledger with explorer links. Revoke in one tap. A
-local notification on every decision, raised by an on-device background read
-(`app/lib/decisionNotifyTask.ts`), because the agent acts while the owner is not looking.
+One APK, in `app/`. A first launch shows four introduction cards before Connect. Connect through
+Mobile Wallet Adapter against Seed Vault. With no rule, Overview shows Open your first rule.
+Write a mandate. A today view of what the agent did and declined. A ledger with explorer links.
+On an active rule, Connect your agent (Copy all and a QR). Revoke in one tap. Close rule returns
+the remaining budget on a per-rule token account. A local notification on every decision, raised
+by an on-device background read (`app/lib/decisionNotifyTask.ts`), because the agent acts while
+the owner is not looking.
 
 The agent key is generated in the app and held in `expo-secure-store`. It signs `charge` and
 nothing else. It owns no funds and cannot widen any limit.
 
-### The model
+### The form
 
-Two jobs, both above the program: turn a sentence into the four mandate numbers, and write the
-one-line why from the reason code. Enforcement does not use the model. Declining on purpose
-grounds, rather than on the numeric limits, waits until the charge path is in place.
+No model is involved. The four numbers are typed or taken from a template in `app/lib/templates.ts`.
+The why is a fixed sentence per reason code in `app/lib/reasons.ts`. The charge path is in the
+program. A refusal is one of the numeric reason codes. Declining on the meaning of the purpose
+is not in the program. Issue 24 is still open. The purpose is stored as written, at most 64
+characters.
 
 ## Milestones
 
-The watcher has to start early. A week of history cannot be backfilled. Dates below are the
-hackathon calendar.
+Dates below are the hackathon calendar. The cut lines and the old self-score live in
+[internal/BUILD_NOTES.md](internal/BUILD_NOTES.md).
 
-| By | Must be true | Cut line |
-|---|---|---|
-| **Sep 23** | Program deployed to devnet. Watcher running against the live feed, paying and refusing unattended. First real ledger entries accumulating. | None. This is the gate that makes the demo possible at all |
-| **Sep 27** | Watcher stable and logging a clean daily rhythm. Indexer reading full history from tx logs. Dev client runs on both Seekers, MWA authorize works against Seed Vault. | If the watcher restarts, the seven-day window slips to five and the pitch says five |
-| **Oct 1** | Mandate opened from the phone with one signature. Today view and ledger reading real history. Revoke works. | Open the mandate from a desktop signer, keep MWA for sign-in only |
-| **Oct 4** | Override path with the actionable suggestion. Local notifications from an on-device background read. Export and off-phone verify working. Polish. Release APK installs clean on a wiped device. Deck drafted. Security pass on the program. | Drop the model, ship the structured form |
-| **Oct 6** | Three-minute video shot on device. Deck done. | Re-shoot day is Oct 7 |
-| **Oct 8** | Submitted on Align. | True cutoff is 08:59 the next morning; the night is reserve |
-
-## Scoring
-
-| Criterion | Where the repo stands |
+| By | Must be true |
 |---|---|
-| Innovation 25% | The program records a refusal with a reason and the override that would have cleared it |
-| Presentation 25% | The deck and the video script are in the repo. The week of history they are written for is not on chain yet |
-| UX 25% | The Android app is in `app/`. Mobile Wallet Adapter and Seed Vault have not been checked on a Seeker. This is the largest open risk |
-| Stickiness 25% | The weakest criterion. The watcher decides on a cadence against the live feed, and the ledger is that history. It holds only if that history is real |
+| **Sep 23** | Program deployed to devnet. Watcher running against the live feed. First real ledger entries on chain. |
+| **Sep 27** | Watcher logging on the six-hour cadence. Indexer reading history from transaction logs. |
+| **Oct 1** | Mandate opened from the phone with one signature. Today view and ledger reading real history. Revoke works. |
+| **Oct 4** | Override path. Local notifications from an on-device background read. Export and off-phone verify. Release APK. |
+| **Oct 6** | Three-minute video shot on device. Deck done. |
+| **Oct 8** | Submitted. The deadline is October 8, 2026 at 23:59 Pacific (October 9, 2026 at 08:59 in Stockholm). |
+
+On 2026-09-24 the program is on devnet. Mandate `CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g` has three paid charges and six refusals from 2026-09-20 20:57:50 UTC through 2026-09-21 22:00:11 UTC. That span is not a week, and it cannot be backfilled. Mobile Wallet Adapter `authorize` and the Seed Vault signatures have not been checked on a Seeker.
 
 ## Risks
 
-1. **Mobile Wallet Adapter and Seed Vault still have to be checked on a Seeker.** The unit tests
-   do not cover `authorize` or the Seed Vault signatures. That check is on the Seekers.
-2. **The seven-day history needs the watcher running from Sep 23.** A later start shortens the
-   window the pitch can describe. This is the deliverable with a start date.
-3. **A refusal has to confirm.** The balance is unchanged and the ledger entry exists in the same
-   confirmed transaction. That is what the refusal test asserts.
-4. **A charge the agent never submits has no record.** Nothing on chain can provide one. The
-   record is every decision the agent submits. [PROBLEM.md](PROBLEM.md) states that limit.
-5. **SolAgent Pay ships ceilings and describes an overspend as an impossible transaction.** It
-   escrows into a vault. The difference recorded here is the refusal, on a phone.
+1. **Mobile Wallet Adapter and Seed Vault have not been checked on a Seeker.** The unit tests do not cover `authorize` or the Seed Vault signatures. Nothing in the repo is a device log of that check.
+2. **The quoted rule's history is the span above.** A later charge on that mandate does not turn the existing rows into a week.
+3. **A refusal has to confirm.** The balance is unchanged and the ledger entry exists in the same confirmed transaction. That is what the refusal test asserts.
+4. **A charge the agent never submits has no record.** Nothing on chain can provide one. The record is every decision the agent submits. [PROBLEM.md](PROBLEM.md) states that limit.
+5. **SolAgent Pay describes an overspend as an impossible transaction and escrows into a vault.** The record here is the refusal, on a phone.
 
 ## House rules
 

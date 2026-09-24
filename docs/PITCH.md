@@ -1,110 +1,61 @@
 # Pitch
 
-The claim is the recorded refusal. Capped agent spending is not the claim. Squads, session
-keys, and AP2 already stop an overspend. Veto stops it the same way: when a rule fails, the
-transfer is never executed and no tokens move. The decline is a record, with a reason and the
-override that would clear it, on a phone, with the key in Seed Vault.
+The claim is the recorded refusal. When a rule fails, the transfer is never executed and no tokens move. The decline is a record, with a reason and the override that would clear it, on a phone, with the key in Seed Vault. The prior art is the table in [PLAN.md](PLAN.md).
 
 ## Sixty seconds
 
-> The agent tries to pay. The amount is over the ceiling you set. It does not pay, it tells you
-> why, on chain, in one line, with the override that would clear it.
+> The agent tries to pay. The amount is over the ceiling you set. It does not pay. The chain records why, in one line, with the override that would clear it.
 >
-> Limits like that already exist. Squads, AP2, session keys. Every one of them stops the overspend,
-> and so does this. The difference is what is left behind. Elsewhere a blocked overspend is a
-> failed transaction: no artifact, no reason, no trail. Here the decline is recorded.
+> The decline is a record. A blocked overspend elsewhere is a failed transaction: no artifact, no reason, no trail.
 >
-> Funds stay in your wallet under a delegate. The key never leaves Seed Vault. One human, several
-> agents, one rule each. A ruleset is written once and reused on the next agent. Those other
-> designs are infrastructure. This one is on a phone.
+> A rule opened in the app keeps its budget in its own token account, derived from the owner. The mandate is the delegate on that account. The key never leaves Seed Vault. One human, several agents, one rule each. A ruleset is written once and reused on the next agent. This one is on a phone.
 >
-> The demo: one payment under the rule. One refusal over it, on chain and readable. Seven days of
-> history: an agent paying a bill repriced by a public index, unattended, against the on-chain
-> rule. Solana devnet, our token, our counterparty. Then one refusal taken off the phone and
-> verified against the chain from somewhere else.
+> The demo pays a bill repriced by a public index, on Solana devnet, in our token, to our counterparty. It buys no electricity. On the rule the video quotes (cap 100, per-payment maximum 0.5, mandate `CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g`) the chain shows decisions from 2026-09-20 20:57:50 UTC through 2026-09-21 22:00:11 UTC: three payments under the ceiling and six refusals over it. One refusal is taken off the phone and verified against the chain from somewhere else.
 >
-> That record is the point. A worst case fixed in advance, every payment made against it, and
-> every refusal the agent surfaced. AP2 standardised the record of a yes. This is the missing half.
+> That record is the point. A worst case fixed in advance, every payment made against it, and every refusal the agent submitted. AP2 standardised the record of a yes. This is the missing half.
 
 ## Position
 
-Funds stay in the owner's wallet under a delegate. The key never leaves Seed Vault. One human,
-several agents, one rule each. A ruleset is written once and reused on the next agent. The other
-designs are infrastructure. This one is on a phone.
+A rule opened in the app keeps the cap in a token account derived from the owner with the seed `veto-rule-<mandate id>`. The mandate PDA is the SPL delegate on that account. Close rule returns the remaining balance and the rent. The key never leaves Seed Vault. One human, several agents, one rule each. A ruleset is written once and reused on the next agent. The other designs are infrastructure. This one is on a phone.
 
-The names are the table in [PLAN.md](PLAN.md): Squads v4 spending limits, SPL `approve` /
-delegate, LazorKit, SolAgent Pay, Oculus, x402, AP2, and Seed Vault.
+The names are the table in [PLAN.md](PLAN.md): Squads v4 spending limits, SPL `approve` / delegate, LazorKit, SolAgent Pay, Oculus, x402, AP2, and Seed Vault.
 
-SolAgent Pay's README says an overspend "is not a policy violation logged after the fact, it is
-an impossible transaction." They escrow into a vault. The funds here stay in the owner's account
-under a delegate, and the decline is recorded.
+SolAgent Pay's README says an overspend "is not a policy violation logged after the fact, it is an impossible transaction." They escrow into a vault. The funds here stay in an account the owner controls, under a delegate, and the decline is recorded.
 
-AP2 mandates are the record of a yes, held off chain as the merchant's evidence. The word
-mandate, in this repository, is the on-chain rule. Oculus reimburses a breach from a USDC
-reserve after the fact. This declines before money moves, and the decline is recorded.
+AP2 mandates are the record of a yes, held off chain as the merchant's evidence. The word mandate, in this repository, is the on-chain rule. Oculus reimburses a breach from a USDC reserve after the fact. This declines before money moves, and the decline is recorded.
 
-A burner wallet is simple. It has no payee restriction and no expiry, and revocation means
-moving the funds. A refused attempt is a silent error in a log. A third party cannot check the
-limits that were agreed in advance and every payment made against them. The comparison is in
-[PROBLEM.md](PROBLEM.md).
+A burner wallet is simple. It has no payee restriction and no expiry, and revocation means moving the funds. A refused attempt is a silent error in a log. A third party cannot check the limits that were agreed in advance and every payment made against them. The comparison is in [PROBLEM.md](PROBLEM.md).
 
 ## The demo
 
-An agent pays a bill repriced by a public index, unattended, against an on-chain rule. The index
-is the Nordic day-ahead electricity spot: public, no key, independently verifiable against the
-same URL. The price is the only input we do not control, which is why the refusal counts. The
-recording uses history the watcher has already produced.
+An agent pays a bill repriced by a public index, unattended, against an on-chain rule. The index is the Nordic day-ahead electricity spot: public, no key, independently verifiable against the same URL. The price is the only input we do not control, which is why the refusal counts. The demo buys no electricity. Solana devnet. Our token. Our counterparty.
 
-Solana devnet. Our token. Our counterparty. [scripts/devnet-setup.sh](../scripts/devnet-setup.sh)
-creates the mint, mints the supply the watcher spends, and creates the counterparty token
-account. [tools/produce.ts](../tools/produce.ts) mints further supply of that same mint into a
-separate source account. When the rule allows the bill, the program executes an SPL transfer of
-that token to the account we created. The counterparty is a terminal we run. Public addresses
-are in [DEVNET.md](DEVNET.md).
+The recording uses the decisions already on mandate `CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g`: opened 2026-09-20 20:57:50 UTC, last signature 2026-09-21 22:00:11 UTC, three paid and six refused. That rule's source is the owner's associated token account. A later rule on the same account holds the delegate, so a new charge against the quoted rule is reason 7, delegation withdrawn. The paid and refused rows already on it are unchanged.
+
+[scripts/devnet-setup.sh](../scripts/devnet-setup.sh) creates the mint, mints the supply the watcher spends, and creates the counterparty token account. [tools/produce.ts](../tools/produce.ts) mints further supply of that same mint into a separate source account. When the rule allows the bill, the program executes an SPL transfer of that token to the account we created. The counterparty is a terminal we run. Public addresses are in [DEVNET.md](DEVNET.md).
+
+## Connect your agent
+
+On an active rule the rule screen shows Connect your agent: the fields of one JSON block, Copy all, and a QR of that same block. A rule that is not active shows "This rule is not active, so there is no config to hand an agent." and does not show Copy all or the QR. `loadAgentConfig` reads the block. `VetoAgent.fromConfig` checks it against the chain. The program id is the one bundled with the SDK unless the caller passes a different id in code. Decimals are checked on the mint account. The cluster name is checked against the endpoint's genesis hash. A connection passed to `fromConfig` is the endpoint. The example is [sdk/examples/pay-once.ts](../sdk/examples/pay-once.ts).
 
 ## Limits
 
-The SPL delegated amount is the ceiling underneath the rule. The rule narrows it by per-payment
-maximum, expiry, and a single allowed payee. The owner revokes in one signature, and can also
-revoke the delegation directly without this program. The program notices that revocation and
-reports it. The worst case is the number the owner already agreed to lose.
+The SPL delegated amount is the ceiling underneath the rule. The rule narrows it by per-payment maximum, expiry, and a single allowed payee. The owner revokes in one signature, and can also revoke the delegation directly without this program. The program notices that revocation and reports it. The worst case is the number the owner already agreed to lose.
 
-There is no record of a charge the agent never submits, and nothing on chain can provide one.
-The record is every decision the agent submits. No payment happens without a record, and no
-submitted attempt is judged by the agent instead of by the chain. The merchant also sees a
-missing response, so a dropped charge is visible from the other side.
+On a rule opened in the app, that delegation sits on the rule's own token account. Revoking one rule does not clear another rule's account. On a shared source, SPL allows one delegate, and revoke clears that delegate.
 
-A model sits above the program only. It turns a sentence into the four rule numbers and writes
-the plain-language why from a reason code. The caps do not depend on a model. Declining because
-a purchase does not match the stated purpose waits until the charge path is in place.
+There is no record of a charge the agent never submits, and nothing on chain can provide one. The record is every decision the agent submits. No payment happens without a record, and no submitted attempt is judged by the agent instead of by the chain. The terminal shows payments that arrived. It has no view of a charge the agent never submitted.
 
-A complete record of every payment made under this authority, a worst case fixed in advance by
-the rule, and every refusal the agent surfaced. The rule is the prior claim. The decisions are
-the evidence. Neither is worth anything alone. That record is what would let someone underwrite
-agent spend, dispute a drained wallet, or compare agents by how they behave at a limit. Nobody
-is buying that record in 2026.
+No model is involved. The numbers are typed or taken from a template, and the why is a fixed sentence per reason code. The program stores the purpose string as written and does not evaluate it.
+
+A complete record of every payment made under this authority, a worst case fixed in advance by the rule, and every refusal the agent surfaced. The rule is the prior claim. The decisions are the evidence. Neither is worth anything alone.
 
 ## Scope through the deadline
 
-One rule type. A delegate on the owner's own account. Several rules, one agent each. A ruleset
-written once and applied to the next agent. One pay path. One refusal path with a reason and an
-override hint. A Decisions screen. An export anyone can re-read from the chain. A week of
-history from the live feed. No DeFi zoo, no marketplace, no W3C verifiable credential, no
-signing ceremony, no verifier service.
+Submissions close October 8, 2026 at 23:59 Pacific, which is October 9, 2026 at 08:59 in Stockholm.
 
-## Words to keep out
+One rule type. A delegate on a token account the owner controls. Several rules, one agent each. A ruleset written once and applied to the next agent. One pay path. One refusal path with a reason and an override hint. A Decisions screen. Connect your agent on an active rule. An export anyone can re-read from the chain, including after the mandate account is closed. The quoted rule's history is the span above. No DeFi zoo, no marketplace, no W3C verifiable credential, no signing ceremony, no verifier service.
 
-[VIDEO.md](VIDEO.md) points here for the words the entry does not use.
+## Words
 
-- **"Hard fail", "revert", "fail closed".** Those names describe a rolled-back transaction. The line to use: it declines before money moves, and the decline is recorded.
-- **"First ever", "nobody has".** Say what is in front of you: the other designs are infrastructure, and this one is on a phone.
-- **"Capped budgets" or "spending limits" as the headline.** Capped agent spending is not new. An infrastructure vendor publishes a tutorial on it. The headline is the recorded refusal.
-- **Anything that implies the spend still happens.** "We make it legible rather than impossible" reads as if the money moves and the program only writes it down. The money does not move. The line is: everyone stops the overspend, and this record can prove it stopped.
-- **"Credential".** That word means a W3C verifiable credential. Say "export" or "on-chain decision record".
-- **"Proof of restraint" on its own.** A one million ceiling on a five dollar charge is a record of a five dollar charge. Pair the record with the rule agreed in advance. See [PROBLEM.md](PROBLEM.md).
-- **"Every attempt".** The complete record is every payment, because a spend has to pass the program to happen, and every refusal the agent submitted.
-
-## Prior art
-
-The table is in [PLAN.md](PLAN.md). It names Squads v4 spending limits, SPL `approve` /
-delegate, LazorKit, SolAgent Pay, Oculus, x402, AP2, and Seed Vault.
+The words the entry does not use are in [internal/WORDS.md](internal/WORDS.md).

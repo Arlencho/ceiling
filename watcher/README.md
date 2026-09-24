@@ -58,7 +58,10 @@ npm run open-mandate
 
 RPC, program id, mint, and the owner / merchant / agent accounts come from
 the environment, `keys/devnet-addresses.env`, `watcher/.env`, or
-`terminal/.env`. There is no hardcoded fallback for those. File keys may be
+`terminal/.env`. The charge source is `VETO_OWNER_TOKEN`. The watcher does not
+look up a per-rule account. A rule opened in the app keeps its budget in
+`veto-rule-<mandate id>`, and this process will not charge that account unless
+`VETO_OWNER_TOKEN` is set to it. There is no hardcoded fallback for those. File keys may be
 `VETO_RPC=` or `RPC=`. Both packages read both package env files, so they
 cannot silently disagree about the quoted volume. Copy `.env.example` to
 `watcher/.env` and uncomment the identity lines with values you supply. The
@@ -93,8 +96,8 @@ VETO_RPC=<dedicated>,<public> npm start
 
 On HTTP 429 the watcher backs off, tries the next URL, and logs `rpc rate limited`
 rather than `rpc failure`. Those need different responses from a person. A slot
-that only saw a rate limit stays due and is tried again; it is not written off
-as a gap.
+that only saw a rate limit is written as a gap row with reason `rpc rate limited
+on all endpoints`. A gap is not terminal, so the slot stays due and is tried again.
 
 ## How to run it
 
@@ -122,7 +125,7 @@ SIGTERM finish the current slot and exit.
 
 ## How to keep it running
 
-A week of history needs the process to outlive a laptop lid. Pick one.
+The process has to outlive a laptop lid, or the slots that pass while it is down are missing from the journal. Pick one.
 
 tmux, on the machine that can reach the RPC:
 
@@ -160,9 +163,6 @@ launchd, user agent, macOS. Save as
 Cloud Run, if the laptop cannot stay up: [CLOUD.md](CLOUD.md). That path
 persists the journal in Cloud Storage and runs `once` on the cadence.
 
-If the window of recorded days breaks, say the true number in the pitch. Do not
-round up to seven.
-
 ## How to read the JSONL
 
 Rows land in `watcher/data/decisions.jsonl` (override with `VETO_JOURNAL`). One
@@ -186,11 +186,11 @@ jq . data/decisions.jsonl | less
 | Field | |
 |---|---|
 | `decision` | `paid`, `refused`, `gap`, or `skipped` |
-| `reason` | `ok`, the on-chain reason text, `feed unavailable`, `zero amount`, `negative price` |
+| `reason` | For example `ok`, the on-chain reason text, `feed unavailable`, `zero amount`, `negative price`, `rpc rate limited on all endpoints`, `window start does not match slot`, `unreadable price: ...`, `stale nonce; chain did not confirm this window paid`, `chain shows this window paid; signature could not be recovered`, `window overtaken by a later settled charge` |
 | `reason_code` | on-chain u8, or null when the chain was not called |
 | `amount` | mint base units, decimal string of an integer |
 | `nonce` | unix seconds of the cadence slot |
-| `signature` | confirmed transaction, or null for a gap/skip |
+| `signature` | confirmed transaction, or null when no transaction confirmed for this row. A gap or skip left by a stale-nonce race carries the refused transaction's signature. A paid row can carry null when the signature could not be recovered |
 | `sek_per_kwh` | decimal string copied from the feed body |
 
 `refused` is a success path. Count it, keep going. `gap` means the feed did not
@@ -200,24 +200,31 @@ First live rows, 2026-09-20, 50 kWh, 0.5 token per-payment max, against the
 cluster in `docs/DEVNET.md`:
 
 - paid 446000 base units at 00:00 Stockholm, SEK/kWh 0.00892,
-  `25A45ZM3BEkRWP9gNzPkSFyHa3YpqtDLvng1NPCny7dKyU25Pc6SUZNAKrv65sKmJgtw6FfyfTiyAXBvzC9qTWxn`
-- refused 519500 base units at 01:30 Stockholm, SEK/kWh 0.01039, over
+  `4N13AokSVj2A9fJyCZiypzhG9P6mdpMvpjcnDvzVUi2Qp6jUx1Ud34tHUDt1TQENzXu7TFWTfrKHHCLfrpKTBJ9a`,
+  block time 2026-09-20 20:58:03 UTC, log `VETO PAID amount=446000`
+- refused 6232500 base units at 18:00 Stockholm, SEK/kWh 0.12465, over
   per-payment maximum,
-  `3TtZbJJFYDGc29GemFgyMeJXc188MiZ7LfJnUUe1Y3vGrtYtZFZyyF9mwZAt31999nMdMFXBKvzThwXugHUm7cJp`
+  `3rTpyrHEScEPhjHL3cUDYSGwGAxU6JVzbdWVZbr4YMHt3wAM7ad9JGPC26R8aQMH9aqYVzrFqbEogX1CquNcWqib`,
+  block time 2026-09-20 20:58:12 UTC
 
-Owner token account went 1000000 to 999999.554. Merchant received 0.446. The
-refused row moved nothing.
+On that 00:00 payment alone, the owner token account went from 1000000 to
+999999.554 and the merchant received 0.446. The same evening also paid 0.2145
+and 0.0055. The refused row moved nothing.
 
 ## Regenerating the IDL
 
-The program is frozen. Rebuild the client only if the program actually changes,
-and never from this package:
+Devnet stays upgradeable under the deployer key. Regenerate the IDL when the
+program changes, and never from this package. `watcher/idl/veto.json` is the
+IDL the image copies. `watcher/src/idl.ts` is a type helper whose header points
+at that JSON file. It also carries doc comments. This command writes the JSON
+and a types file without those doc comments:
 
 ```bash
 anchor idl build -p veto -o watcher/idl/veto.json -t watcher/src/idl.ts --no-docs -- --lib
 ```
 
 `--lib` is required so the build does not compile `tests/` which embed `veto.so`.
+Anchor is not required to read the committed JSON.
 
 ## Tests
 

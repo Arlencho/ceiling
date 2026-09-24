@@ -24,8 +24,7 @@ went wrong, you have failed the brief.
 
 ## Audience
 
-Judges at a Solana Mobile hackathon: the co-founder of Solana Labs, the CEO of an RPC company, two
-security researchers, and Solana Mobile staff. Then Seeker phone owners. Crypto-native, mobile
+Judges at a Solana Mobile hackathon. Then Seeker phone owners. Crypto-native, mobile
 first, design literate, and they see many wallets. Reference points are Phantom, Backpack, Jupiter,
 Tensor. Not a banking app. Not enterprise SaaS. Not playful.
 
