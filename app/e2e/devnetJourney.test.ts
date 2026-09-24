@@ -14,7 +14,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { mock } from 'node:test';
 import test from 'node:test';
 import { Buffer } from 'buffer';
@@ -51,6 +51,7 @@ import { decodeEventsFromLogs } from '../lib/events';
 import type { MandateAccount } from '../lib/mandate';
 import { openFundsRefusal, readTokenAmount } from '../lib/ruleAccount';
 import { ledgerPda } from '../lib/ring';
+import { journeyReportPaths, publishJourneyReport } from './runReport';
 import {
   persistSession,
   signAndSendTransactions,
@@ -90,7 +91,7 @@ const VERIFY_AGREE = 'Mandate limits, ledger entry, and charge transaction agree
 
 const REPO = fileUrlDir(new URL('../..', import.meta.url));
 const TOOLS = join(REPO, 'tools');
-const REPORT = fileUrlDir(new URL('./last-run.md', import.meta.url));
+const reportPaths = journeyReportPaths(dirname(fileUrlDir(new URL('./last-run.md', import.meta.url))));
 const DEPLOYER_PATH = join(REPO, 'keys', 'deployer.json');
 
 process.env.VETO_RPC = RPC;
@@ -380,8 +381,9 @@ test(
     let reclaimRun: (() => Promise<void>) | null = null;
     let journeyError: unknown;
 
+    const reportBody = () => renderReport({ rows, started, ...ids });
     const flush = () => {
-      writeFileSync(REPORT, renderReport({ rows, started, ...ids }));
+      publishJourneyReport(reportPaths, reportBody(), 'writing');
     };
     const record = (row: Row) => {
       rows.push(row);
@@ -1377,7 +1379,7 @@ test(
           }
         }
       }
-      flush();
+      publishJourneyReport(reportPaths, reportBody(), journeyError ? 'failed' : 'complete');
       rmSync(tempDir, { recursive: true, force: true });
     }
     if (journeyError) throw journeyError;

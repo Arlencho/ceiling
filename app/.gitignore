@@ -44,3 +44,7 @@ yarn-error.*
 # build artifacts
 *.apk
 *.aab
+
+# Devnet journey scratch. last-run.md is replaced only when a run completes.
+e2e/last-run.partial.md
+e2e/.last-run.md.tmp
