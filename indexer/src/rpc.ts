@@ -64,9 +64,11 @@ export class ListedTransactionMissingError extends TransportError {
   }
 }
 
-// The transaction is present and it invokes the program, but logMessages is
-// null. That is not an empty log, and it is not proof the transaction did
-// nothing. A CPI payment lives in the log body.
+// The transaction is present, but the log body is missing: meta is null, or
+// logMessages is null, omitted, or not an array. That is not an empty log,
+// and it is not proof the transaction did nothing. A CPI payment lives in
+// the log body. The same gap applies when the CPI list is null or absent
+// and the transaction lists the program.
 export class ListedLogBodyMissingError extends TransportError {
   readonly signatures: readonly string[];
 

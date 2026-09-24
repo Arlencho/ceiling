@@ -833,8 +833,8 @@ type FailureSplit = {
   // assessBundle branches on this list. Envelope lines also embed free-text
   // fields from the file, so a scan of those lines is not a transport signal.
   unread: string[];
-  // Signatures whose transaction invokes the program and whose logMessages
-  // body is null. That is not an empty population.
+  // Signatures whose log body is missing on a transaction that lists the
+  // program. null, an omitted key, and a null meta are the same gap.
   nullLogs: string[];
 };
 
@@ -998,10 +998,9 @@ function undecodableChargeFailures(
   cache: CheckCache,
   transactions: Map<string, Awaited<ReturnType<Connection["getTransaction"]>>>,
   population: Set<string>,
-): FailureSplit {
+): { failures: string[]; unread: string[] } {
   const failures: string[] = [];
   const unread: string[] = [];
-  const nullLogs: string[] = [];
   const program = cache.expectedProgramId;
   for (const signature of [...transactions.keys()].sort()) {
     if (population.has(signature)) continue;
@@ -1029,7 +1028,7 @@ function undecodableChargeFailures(
       `signature ${signature} invokes charge on ${program.toBase58()} but carries no attributable Veto decision`,
     );
   }
-  return { failures, unread, nullLogs };
+  return { failures, unread };
 }
 
 function accountText(key: unknown): string | null {
@@ -1172,7 +1171,6 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
   const charges = undecodableChargeFailures(bundle, cache, history.transactions, population);
   failures.push(...charges.failures);
   unread.push(...charges.unread);
-  nullLogs.push(...charges.nullLogs);
   return { failures, unread, nullLogs };
 }
 

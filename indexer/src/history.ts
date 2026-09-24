@@ -185,12 +185,13 @@ async function fetchTransactions(
     }
     const message = tx.transaction.message as MessageLike;
     const meta = tx.meta as MetaLike;
-    // A null log body is not an empty log. A CPI payment is only in that body.
+    // A missing log body is not an empty log. null, an omitted key, and a
+    // null meta are the same gap. A CPI payment is only in that body.
     if (nullLogBodyInvokesProgram(message, meta, programId)) {
       nullLogs.push(page.signature);
       continue;
     }
-    const view = txToView(tx, page.signature, page.slot);
+    const view = txToView(tx, page.signature, page.slot, programId);
     if (view) views.push(view);
   }
   if (nullLogs.length > 0) {
@@ -262,6 +263,7 @@ async function scanBlocksForProgram(
           blockTime: block.blockTime ?? null,
           message,
           meta,
+          program,
         });
         if (!view) continue;
         if (!view.accountKeys.includes(program)) continue;
@@ -291,7 +293,11 @@ function transactionInvokesProgram(message: MessageLike, meta: MetaLike, program
   for (const ix of top) {
     if ((keys[ix.programIdIndex] ?? "") === program) return true;
   }
-  for (const group of meta?.innerInstructions ?? []) {
+  // A null or absent CPI list is not an empty one. Recording off drops this
+  // list and the log body together, so it cannot prove the program was not
+  // invoked.
+  if (!meta || !Array.isArray(meta.innerInstructions)) return false;
+  for (const group of meta.innerInstructions) {
     for (const ix of group.instructions ?? []) {
       if ((keys[ix.programIdIndex] ?? "") === program) return true;
     }
@@ -299,13 +305,21 @@ function transactionInvokesProgram(message: MessageLike, meta: MetaLike, program
   return false;
 }
 
-// logMessages null is the RPC omitting the log list. An empty array is a log
-// list that happened to be empty. Only a successful invoke is unchecked:
-// a transaction that does not invoke the program has no payment to hide.
+function listsProgram(message: MessageLike, meta: MetaLike, program: string): boolean {
+  return accountKeyList(message, meta).includes(program);
+}
+
+// A log body is an array. null, an omitted key, and a null meta are the same
+// missing body, and none of them is an empty log. An empty array is a log
+// list that happened to be empty. A failed transaction stays out. When the
+// CPI list is itself null or absent, a transaction that lists the program
+// was not checked.
 function nullLogBodyInvokesProgram(message: MessageLike, meta: MetaLike, program: string): boolean {
-  if (!meta || meta.err) return false;
-  if (meta.logMessages !== null) return false;
-  return transactionInvokesProgram(message, meta, program);
+  if (meta?.err) return false;
+  if (meta && Array.isArray(meta.logMessages)) return false;
+  if (transactionInvokesProgram(message, meta, program)) return true;
+  const innerMissing = !meta || !Array.isArray(meta.innerInstructions);
+  return innerMissing && listsProgram(message, meta, program);
 }
 
 function toPage(item: ConfirmedSignatureInfo): SignaturePage {
@@ -317,13 +331,19 @@ function toPage(item: ConfirmedSignatureInfo): SignaturePage {
   };
 }
 
-function txToView(tx: VersionedTransactionResponse, signature: string, slot: number): TxView | null {
+function txToView(
+  tx: VersionedTransactionResponse,
+  signature: string,
+  slot: number,
+  program: string,
+): TxView | null {
   return txPartsToView({
     signature,
     slot: tx.slot ?? slot,
     blockTime: tx.blockTime ?? null,
     message: tx.transaction.message as MessageLike,
     meta: tx.meta as MetaLike,
+    program,
   });
 }
 
@@ -333,8 +353,15 @@ function txPartsToView(args: {
   blockTime: number | null;
   message: MessageLike;
   meta: MetaLike;
+  program: string;
 }): TxView | null {
   if (!args.signature) return null;
+  // The same gap as the guard. A missing log body must not become logs: [].
+  if (nullLogBodyInvokesProgram(args.message, args.meta, args.program)) {
+    throw new ListedLogBodyMissingError([args.signature]);
+  }
+  if (!args.meta || !Array.isArray(args.meta.logMessages)) return null;
+  const logs = args.meta.logMessages;
   const keys = accountKeyList(args.message, args.meta);
   const compiled = (args.message.compiledInstructions ?? []).map((ix) => ({
     programIdIndex: ix.programIdIndex,
@@ -350,8 +377,8 @@ function txPartsToView(args: {
     signature: args.signature,
     slot: args.slot,
     blockTime: args.blockTime,
-    err: args.meta?.err ?? null,
-    logs: args.meta?.logMessages ?? [],
+    err: args.meta.err ?? null,
+    logs,
     keys,
     compiled: compiled.length > 0 ? compiled : legacy,
   });
