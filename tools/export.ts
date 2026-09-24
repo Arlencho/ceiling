@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { fetchDecisionHistory } from "../indexer/src/index.js";
+import { isTransportError } from "../indexer/src/rpc.js";
 import {
   bundleToCsv,
   bundleToJson,
@@ -40,7 +41,14 @@ import {
   type LedgerAccount,
   type LedgerEntry,
   type MandateAccount,
+  type OpenedMandate,
 } from "./lib.js";
+import {
+  CLOSED_MANDATE_LIMITS_NOTE,
+  coveredOpeningTenures,
+  openingTenureForSignature,
+  tenureCovering,
+} from "./verify.js";
 
 function usage(): never {
   console.error(`export a Veto decision as JSON, or a population as JSON or CSV
@@ -119,12 +127,35 @@ export async function recordFromSignature(
       `transaction ${signature} carries ${charges.length} charges; pass mandate, nonce, and amount`,
     );
   }
-  const mandateAccount = await fetchMandate(conn, charge.mandate);
+  let mandateAccount: {
+    cap: bigint;
+    perTxMax: bigint;
+    expiresAt: bigint;
+    merchant: PublicKey;
+    purpose: string;
+  };
+  let fromOpening = false;
+  try {
+    mandateAccount = await fetchMandate(conn, charge.mandate);
+  } catch (err) {
+    if (isTransportError(err)) throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    if (!message.startsWith("mandate account not found")) throw err;
+    mandateAccount = await openingTenureForSignature(conn, programId, charge.mandate, signature);
+    fromOpening = true;
+  }
   const ledgerAddress = ledgerPda(programId, charge.mandate);
   if (!charge.ledger.equals(ledgerAddress)) {
     throw new Error("charge ledger account does not match the PDA derived from the mandate");
   }
-  const ledger = await fetchLedger(conn, ledgerAddress);
+  let ledger: LedgerAccount | null = null;
+  try {
+    ledger = await fetchLedger(conn, ledgerAddress);
+  } catch (err) {
+    if (isTransportError(err)) throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    if (!(fromOpening && message.startsWith("ledger account not found"))) throw err;
+  }
   // Same candidate set verify uses: mandate, nonce, and amount. Log kind is not
   // a filter. Two rows can share a nonce when a refusal does not advance it.
   const ringWant = {
@@ -132,15 +163,36 @@ export async function recordFromSignature(
     nonce: charge.nonce,
     amount: charge.amount,
   };
-  const matches = bindByTriple(indexedEntries(ledger), ringWant, (row) => ({
-    mandate: ledger.mandate.toBase58(),
-    nonce: row.entry.nonce,
-    amount: row.entry.amount,
-  }));
-  const logs = parseChargeLogs(tx.meta?.logMessages ?? [], programId);
-  const bound = boundVetoDecision(tx.meta?.logMessages ?? [], programId, ringWant);
+  const held = ledger;
+  const matches = held
+    ? bindByTriple(indexedEntries(held), ringWant, (row) => ({
+        mandate: held.mandate.toBase58(),
+        nonce: row.entry.nonce,
+        amount: row.entry.amount,
+      }))
+    : [];
+  const logMessages = tx.meta?.logMessages ?? [];
+  const bound = boundVetoDecision(logMessages, programId, ringWant);
   let entry: LedgerEntry;
-  if (matches.length === 0) {
+  if (!held) {
+    if (bound.status === "error") throw new Error(bound.error);
+    if (bound.status === "none") {
+      throw new Error(
+        "no matching ledger row and the transaction logs have neither PAID nor REFUSED",
+      );
+    }
+    entry = {
+      ts: tx.blockTime !== null && tx.blockTime !== undefined ? BigInt(tx.blockTime) : 0n,
+      amount: charge.amount,
+      counterparty: charge.destination,
+      nonce: charge.nonce,
+      suggestedOverride: bound.decision.suggestedOverride,
+      kind: kindByte(bound.decision.kind),
+      reason: bound.decision.reasonCode,
+    };
+    console.error("warning: ledger ring no longer holds this decision; reconstructed from the transaction");
+  } else if (matches.length === 0) {
+    const logs = parseChargeLogs(logMessages, programId);
     if (!logs) {
       throw new Error(
         "no matching ledger row and the transaction logs have neither PAID nor REFUSED",
@@ -168,6 +220,7 @@ export async function recordFromSignature(
     }
     entry = picked.entry;
   }
+  if (fromOpening) console.error(`note: ${CLOSED_MANDATE_LIMITS_NOTE}`);
   return buildRecord({
     cluster,
     genesisHash,
@@ -177,6 +230,74 @@ export async function recordFromSignature(
     entry,
     signature,
   });
+}
+
+export async function recordsFromIndexedDecisions(args: {
+  conn: Connection;
+  programId: PublicKey;
+  cluster: string;
+  genesisHash: string;
+  decisions: readonly IndexedDecision[];
+}): Promise<DecisionRecord[]> {
+  const live = new Map<string, MandateAccount>();
+  const closed = new Map<string, Map<string, OpenedMandate>>();
+  const ledgers = new Map<string, LedgerAccount | null>();
+  const records: DecisionRecord[] = [];
+  for (const decision of args.decisions) {
+    const pk = new PublicKey(decision.mandate);
+    let mandateAccount: {
+      cap: bigint;
+      perTxMax: bigint;
+      expiresAt: bigint;
+      merchant: PublicKey;
+      purpose: string;
+    };
+    let fromOpening = false;
+    const cached = live.get(decision.mandate);
+    if (cached) {
+      mandateAccount = cached;
+    } else {
+      const knownClosed = closed.get(decision.mandate);
+      if (knownClosed) {
+        mandateAccount = tenureCovering(knownClosed, decision.signature);
+        fromOpening = true;
+      } else {
+        try {
+          const account = await fetchMandate(args.conn, pk);
+          live.set(decision.mandate, account);
+          mandateAccount = account;
+        } catch (err) {
+          if (isTransportError(err)) throw err;
+          const message = err instanceof Error ? err.message : String(err);
+          if (!message.startsWith("mandate account not found")) throw err;
+          const covered = await coveredOpeningTenures(args.conn, args.programId, pk);
+          closed.set(decision.mandate, covered);
+          mandateAccount = tenureCovering(covered, decision.signature);
+          fromOpening = true;
+        }
+      }
+    }
+    if (!ledgers.has(decision.mandate)) {
+      try {
+        ledgers.set(decision.mandate, await fetchLedger(args.conn, ledgerPda(args.programId, pk)));
+      } catch {
+        ledgers.set(decision.mandate, null);
+      }
+    }
+    if (fromOpening) console.error(`note: ${CLOSED_MANDATE_LIMITS_NOTE}`);
+    const ledger = ledgers.get(decision.mandate) ?? null;
+    records.push(
+      buildRecordFromIndexed({
+        cluster: args.cluster,
+        genesisHash: args.genesisHash,
+        programId: args.programId,
+        mandateAccount,
+        decision,
+        ringEntry: overlayRing(ledger, decision),
+      }),
+    );
+  }
+  return records;
 }
 
 async function recordsFromIndexer(args: {
@@ -207,33 +328,13 @@ async function recordsFromIndexer(args: {
     kind: args.kind,
     nonce: args.nonce,
   });
-  const mandates = new Map<string, MandateAccount>();
-  const ledgers = new Map<string, LedgerAccount | null>();
-  const records: DecisionRecord[] = [];
-  for (const decision of filtered) {
-    if (!mandates.has(decision.mandate)) {
-      const pk = new PublicKey(decision.mandate);
-      mandates.set(decision.mandate, await fetchMandate(args.conn, pk));
-      try {
-        ledgers.set(decision.mandate, await fetchLedger(args.conn, ledgerPda(args.programId, pk)));
-      } catch {
-        ledgers.set(decision.mandate, null);
-      }
-    }
-    const mandateAccount = mandates.get(decision.mandate)!;
-    const ledger = ledgers.get(decision.mandate) ?? null;
-    records.push(
-      buildRecordFromIndexed({
-        cluster: args.cluster,
-        genesisHash: args.genesisHash,
-        programId: args.programId,
-        mandateAccount,
-        decision,
-        ringEntry: overlayRing(ledger, decision),
-      }),
-    );
-  }
-  return records;
+  return recordsFromIndexedDecisions({
+    conn: args.conn,
+    programId: args.programId,
+    cluster: args.cluster,
+    genesisHash: args.genesisHash,
+    decisions: filtered,
+  });
 }
 
 function writeOutput(text: string, out: string | undefined): void {

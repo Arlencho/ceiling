@@ -210,7 +210,8 @@ function programChoice(opts?: AssessOpts): { programId: PublicKey; source: strin
   return { programId: resolved.programId, source: resolved.source };
 }
 
-const CLOSED_NOTE = "mandate account is closed and the limits came from the opening transaction";
+export const CLOSED_MANDATE_LIMITS_NOTE =
+  "mandate account is closed and the limits came from the opening transaction";
 
 async function listMandateSignatures(cache: CheckCache, mandate: PublicKey): Promise<MandateSignature[]> {
   const key = mandate.toBase58();
@@ -373,6 +374,40 @@ async function closedMandateHistory(cache: CheckCache, mandatePk: PublicKey): Pr
   return remember(cache, key, { ok: true, covered, openCount, latestOpenSlot, current });
 }
 
+// The open that covered each signature, from the same walk verify uses.
+// One call reads the mandate history. Callers with many decisions look up
+// each signature in the map instead of walking again.
+export async function coveredOpeningTenures(
+  conn: Connection,
+  programId: PublicKey,
+  mandate: PublicKey,
+): Promise<Map<string, OpenedMandate>> {
+  const cache = makeCache(conn, "", { programId });
+  const history = await closedMandateHistory(cache, mandate);
+  if (!history.ok) throw new Error(history.failure);
+  return history.covered;
+}
+
+export function tenureCovering(covered: Map<string, OpenedMandate>, signature: string): OpenedMandate {
+  const opened = covered.get(signature);
+  if (!opened) {
+    throw new Error(`mandate history does not cover signature ${echoFile(signature)}`);
+  }
+  return opened;
+}
+
+// Limits of the open that still covered `signature`. Export calls this when
+// the mandate account is gone, so the record is bound to that tenure and not
+// to a later one at the same address.
+export async function openingTenureForSignature(
+  conn: Connection,
+  programId: PublicKey,
+  mandate: PublicKey,
+  signature: string,
+): Promise<OpenedMandate> {
+  return tenureCovering(await coveredOpeningTenures(conn, programId, mandate), signature);
+}
+
 function liveLimits(mandate: MandateAccount): LimitView {
   return {
     owner: mandate.owner,
@@ -468,7 +503,7 @@ async function limitSource(
   // An earlier open is not, even when the owner reopened the same rule.
   // A closed account has no current open.
   if (live && history.current && opened === history.current) return liveLimits(live);
-  notes.push(CLOSED_NOTE);
+  notes.push(CLOSED_MANDATE_LIMITS_NOTE);
   return openingLimits(opened, Boolean(live));
 }
 

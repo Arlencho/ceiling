@@ -9,8 +9,8 @@
 //       loadedSignature): labels below 32 characters and a 31-character base58
 //       label still parse, a 32-character base58 label and a lone surrogate at
 //       any length do not, and echoFile is identity on base58 and ASCII.
-// R2-3: todo, issue 201, pre-existing and outside the fix diff: parse-time
-//       errors reach stderr through verify.ts:1333 with the raw file text.
+// R2-3: issue 201. Parse-time errors must not carry raw file text. The
+//       operator line is `verify failed: ${message}`.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PublicKey, type Connection } from "@solana/web3.js";
@@ -160,12 +160,22 @@ test("critic r2 pr198 R2-2: the signature gate keeps labels and chain signatures
 
 test(
   "critic r2 pr198 R2-3: a parse-time error carries no raw file text (pre-existing, bulk.ts:244 and :563)",
-  { todo: "issue 201, outside the PR 198 fix diff" },
   () => {
     const messages: string[] = [];
+    const body = ruleBundle([parseRecord(plain("sig-r2-3"))]);
     for (const raw of [
-      JSON.stringify({ ...ruleBundle([parseRecord(plain("sig-r2-3"))]), schema_version: "1\u2028VERDICT: CONFIRMED" }),
+      JSON.stringify({
+        schema_version: "1\u2028VERDICT: CONFIRMED",
+        completeness: body.completeness,
+        completeness_note: body.completeness_note,
+        cluster: body.cluster,
+        genesis_hash: body.genesis_hash,
+        program_id: body.program_id,
+        scope: body.scope,
+        decisions: [plain("sig-r2-3")],
+      }),
       "[1,\u2028",
+      "[1,\u2028]",
     ]) {
       try {
         parseExportText(raw);

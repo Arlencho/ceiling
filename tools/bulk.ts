@@ -9,7 +9,6 @@ import {
   type DecisionRecord,
   type LedgerAccount,
   type LedgerEntry,
-  type MandateAccount,
 } from "./lib.js";
 
 export const COMPLETENESS = "payments" as const;
@@ -153,7 +152,13 @@ export function buildRecordFromIndexed(args: {
   cluster: string;
   genesisHash: string;
   programId: PublicKey;
-  mandateAccount: MandateAccount;
+  mandateAccount: {
+    cap: bigint;
+    perTxMax: bigint;
+    expiresAt: bigint;
+    merchant: PublicKey;
+    purpose: string;
+  };
   decision: IndexedDecision;
   ringEntry?: LedgerEntry | null;
 }): DecisionRecord {
@@ -241,7 +246,7 @@ export function parseBundle(input: unknown): DecisionBundle {
   }
   const o = input as Record<string, unknown>;
   const schema_version = Number(o.schema_version);
-  if (schema_version !== 1) throw new Error(`unsupported schema_version: ${o.schema_version}`);
+  if (schema_version !== 1) throw new Error(`unsupported schema_version: ${echoFile(String(o.schema_version))}`);
   if (o.completeness !== COMPLETENESS) {
     throw new Error(
       `completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${JSON.stringify(o.completeness)}`,
@@ -560,7 +565,7 @@ export function parseExportText(raw: string): ParsedExport {
   } catch (err) {
     if (looksCsv) return { kind: "bulk", bundle: parseCsv(trimmed) };
     const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`not valid JSON: ${message}`);
+    throw new Error(`not valid JSON: ${echoFile(message)}`);
   }
   if (typeof json !== "object" || json === null || Array.isArray(json)) {
     throw new Error("record must be a JSON object");
