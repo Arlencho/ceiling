@@ -6,7 +6,7 @@ import { create, type ReactTestInstance, type ReactTestRenderer } from 'react-te
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type NavCall = { method: 'push' | 'replace' | 'back'; href?: string };
+type NavCall = { method: 'push' | 'replace' | 'back' | 'dismiss'; href?: string };
 
 const calls: NavCall[] = [];
 const history: string[] = [];
@@ -65,6 +65,16 @@ mock.module('expo-router', {
         calls.push({ method: 'back' });
         history.pop();
         pathname = history[history.length - 1] ?? '/';
+      },
+      // StackRouter POP keeps max(index - count + 1, 1) routes from the bottom.
+      dismiss: (count = 1) => {
+        calls.push({ method: 'dismiss', href: String(count) });
+        const currentIndex = history.length - 1;
+        if (currentIndex > 0) {
+          const keep = Math.max(currentIndex - count + 1, 1);
+          history.splice(keep);
+          pathname = history[history.length - 1] ?? '/';
+        }
       },
     }),
     Stack: Host('Stack'),
@@ -255,6 +265,34 @@ test('back on the first help page leaves the flow', async () => {
   });
   assert.deepEqual(calls, [{ method: 'back' }]);
   assert.deepEqual(history, ['/(tabs)/rules']);
+});
+
+test('Done returns to the screen that opened help and leaves no help page or second tabs route', async () => {
+  const origins: Array<{ path: string; stack: string[]; back?: string }> = [
+    { path: '/rules', stack: ['/(tabs)/rules'] },
+    { path: '/decision/5Nf3', stack: ['/(tabs)/decisions', '/decision/5Nf3'], back: 'Decisions' },
+  ];
+  for (const origin of origins) {
+    at(origin.path, origin.stack);
+    const openedFrom = [...origin.stack];
+    const bar = await mount(createElement(TopBar, { help: true, back: origin.back }));
+    await act(async () => {
+      button(bar, 'Help').props.onPress();
+    });
+    const first = await mount(createElement(HelpIndex));
+    await act(async () => {
+      button(first, 'Next').props.onPress();
+    });
+    const second = await mount(createElement(HelpRefusal));
+    await act(async () => {
+      button(second, 'Next').props.onPress();
+    });
+    const exported = await mount(createElement(HelpExport));
+    await act(async () => {
+      button(exported, 'Done').props.onPress();
+    });
+    assert.deepEqual([...history], openedFrom, origin.path);
+  }
 });
 
 test('back from the introduction pops to help', async () => {

@@ -2,8 +2,12 @@
 // push /help onto itself. Next and the introduction push. Back pops, which
 // is also what the system back does, so both land on the same screen.
 // From Rules the stack is at most [rules, help, refusal, export].
+// Done dismisses the three help routes, back to the screen that opened Help.
 
 const HELP = '/help';
+
+// /help, /help/refusal, and /help/export, pushed above the opener.
+export const HELP_FLOW_DEPTH = 3;
 const ONBOARDING = '/onboarding';
 
 const BACK_TARGET: Record<string, string> = {
