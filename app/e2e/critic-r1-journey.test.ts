@@ -53,3 +53,14 @@ test('R4 leftover SOL goes back to the deployer', () => {
 test('R5 the committed run log has no failing row', () => {
   assert.ok(!/\|\s*fail\s*\|/.test(lastRun), 'app/e2e/last-run.md ships a red step 8');
 });
+
+test('R6 the refused event is checked through the app decoder, not only a private copy', () => {
+  const at = journey.indexOf('function assertEvent(');
+  assert.ok(at > 0, 'journey has no assertEvent');
+  const body = journey.slice(at, journey.indexOf('async function ringHas('));
+  assert.match(
+    body,
+    /hit\.suggestedOverride/,
+    'assertEvent decodes the override with its own reader at offset 57 and never asserts decodeEventsFromLogs().suggestedOverride, so #205 (app/lib/events.ts:68 waits for 73 bytes) stays hidden from the journey',
+  );
+});
