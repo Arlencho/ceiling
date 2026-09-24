@@ -149,16 +149,15 @@ function chain(blockTime: number | null): { conn: Connection; mandate: PublicKey
       return { data: hit.data, owner: hit.owner, executable: false, lamports: 1 };
     },
     async getSignaturesForAddress() {
-      return [
-        {
-          signature: "charge-at-t",
-          slot: 1,
-          err: null,
-          memo: null,
-          blockTime,
-          confirmationStatus: "confirmed" as const,
-        },
-      ];
+      // The listing has to contain the signature export is reading.
+      return ["charge-at-t", "charge-null-time"].map((signature) => ({
+        signature,
+        slot: 1,
+        err: null,
+        memo: null,
+        blockTime,
+        confirmationStatus: "confirmed" as const,
+      }));
     },
   } as unknown as Connection;
   return { conn, mandate };

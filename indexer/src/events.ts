@@ -19,8 +19,9 @@ const PROGRAM_END = /^Program ([1-9A-HJ-NP-Za-km-z]+) (?:success|failed\b.*)$/;
 // or "Program <id> failed". Program log and Program data lines belong to whichever
 // program is on top of that stack. A sibling instruction (an SPL Memo before charge,
 // a CPI into another program) cannot supply a VETO line or a Paid event.
-// A trace with no invoke line has no other program to separate, so those lines stay:
-// fixtures and older exports keep a bare "Program log:" / "Program data:" line.
+// A trace with no invoke line was not written by the runtime. It carries no
+// attributable decision for verification. Callers that still have a bare
+// "Program log:" or "Program data:" line wrap it in a frame first.
 export function linesForProgram(logs: readonly string[], programId: string): readonly string[] {
   let framed = false;
   for (const line of logs) {
@@ -29,7 +30,7 @@ export function linesForProgram(logs: readonly string[], programId: string): rea
       break;
     }
   }
-  if (!framed) return logs;
+  if (!framed) return [];
   const stack: string[] = [];
   const out: string[] = [];
   for (const line of logs) {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { SolanaJSONRPCError } from "@solana/web3.js";
 import {
   RateLimitedError,
   TransportError,
@@ -170,5 +171,13 @@ test("does not retry a cleaned-up slot", async () => {
     /cleaned up/,
   );
   assert.equal(isRetryable(new Error("Block 4 cleaned up, does not exist on node")), false);
-  assert.equal(isSkippableSlot(new Error("Block not available for slot 12")), true);
+  assert.equal(isSkippableSlot(new Error("Block not available for slot 12")), false);
+  assert.equal(
+    isSkippableSlot(new SolanaJSONRPCError({ code: -32007, message: "Slot 12 was skipped" }, "failed")),
+    true,
+  );
+  assert.equal(
+    isSkippableSlot(new SolanaJSONRPCError({ code: -32004, message: "Block not available for slot 12" }, "failed")),
+    false,
+  );
 });

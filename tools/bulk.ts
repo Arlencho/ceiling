@@ -3,12 +3,12 @@ import {
   buildRecord,
   kindByte,
   matchingRingEntry,
+  fileSignature,
   parseRecord,
   recordToPlain,
   type DecisionRecord,
   type LedgerAccount,
   type LedgerEntry,
-  type MandateAccount,
 } from "./lib.js";
 
 export const COMPLETENESS = "payments" as const;
@@ -152,7 +152,13 @@ export function buildRecordFromIndexed(args: {
   cluster: string;
   genesisHash: string;
   programId: PublicKey;
-  mandateAccount: MandateAccount;
+  mandateAccount: {
+    cap: bigint;
+    perTxMax: bigint;
+    expiresAt: bigint;
+    merchant: PublicKey;
+    purpose: string;
+  };
   decision: IndexedDecision;
   ringEntry?: LedgerEntry | null;
 }): DecisionRecord {
@@ -240,10 +246,10 @@ export function parseBundle(input: unknown): DecisionBundle {
   }
   const o = input as Record<string, unknown>;
   const schema_version = Number(o.schema_version);
-  if (schema_version !== 1) throw new Error(`unsupported schema_version: ${o.schema_version}`);
+  if (schema_version !== 1) throw new Error(`unsupported schema_version: ${echoFile(String(o.schema_version))}`);
   if (o.completeness !== COMPLETENESS) {
     throw new Error(
-      `completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${JSON.stringify(o.completeness)}`,
+      `completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${echoFile(`${JSON.stringify(o.completeness)}`)}`,
     );
   }
   if (typeof o.completeness_note !== "string" || o.completeness_note.length === 0) {
@@ -269,6 +275,7 @@ export function parseBundle(input: unknown): DecisionBundle {
   });
   for (const [i, row] of decisions.entries()) {
     if (!row.signature) throw new Error(`decisions[${i}] is missing signature`);
+    fileSignature(row.signature, `decisions[${i}].signature`);
   }
   return {
     schema_version: 1,
@@ -410,7 +417,7 @@ export function parseCsv(text: string): DecisionBundle {
     const completeness = get("completeness") || meta.completeness || "";
     if (completeness !== COMPLETENESS) {
       throw new Error(
-        `CSV row ${r} completeness must be "${COMPLETENESS}"; file has ${JSON.stringify(completeness)}`,
+        `CSV row ${r} completeness must be "${COMPLETENESS}"; file has ${echoFile(`${JSON.stringify(completeness)}`)}`,
       );
     }
     decisions.push(
@@ -442,7 +449,7 @@ export function parseCsv(text: string): DecisionBundle {
   const completeness = meta.completeness ?? firstColumnValue(index, rows, "completeness") ?? "";
   if (completeness !== COMPLETENESS) {
     throw new Error(
-      `CSV completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${JSON.stringify(completeness)}`,
+      `CSV completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${echoFile(`${JSON.stringify(completeness)}`)}`,
     );
   }
   const scopeType = (meta.scope_type || firstColumnValue(index, rows, "scope_type") || "rule") as
@@ -558,7 +565,7 @@ export function parseExportText(raw: string): ParsedExport {
   } catch (err) {
     if (looksCsv) return { kind: "bulk", bundle: parseCsv(trimmed) };
     const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`not valid JSON: ${message}`);
+    throw new Error(`not valid JSON: ${echoFile(message)}`);
   }
   if (typeof json !== "object" || json === null || Array.isArray(json)) {
     throw new Error("record must be a JSON object");
@@ -568,6 +575,18 @@ export function parseExportText(raw: string): ParsedExport {
     return { kind: "bulk", bundle: parseBundle(json) };
   }
   return { kind: "single", record: parseRecord(json) };
+}
+
+// Cc, Cf, Cs, Co, Cn, plus the Unicode line and paragraph separators. Each is
+// written as a visible \uXXXX escape. JSON.stringify does not cover this set,
+// so callers run echoFile on its result too.
+const ECHO_UNSAFE = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\u2028\u2029]/gu;
+
+export function echoFile(value: string): string {
+  return value.replace(ECHO_UNSAFE, (ch) => {
+    const cp = ch.codePointAt(0) ?? 0;
+    return `\\u${cp.toString(16).padStart(4, "0")}`;
+  });
 }
 
 export function formatBulkReport(rows: readonly RowVerdict[]): {
@@ -592,7 +611,7 @@ export function formatBulkReport(rows: readonly RowVerdict[]): {
   for (const row of rows) {
     if (row.ok) continue;
     lines.push("");
-    lines.push(`REJECTED row ${row.index} signature=${row.signature} kind=${row.kind} nonce=${row.nonce}`);
+    lines.push(`REJECTED row ${row.index} signature=${echoFile(row.signature)} kind=${echoFile(row.kind)} nonce=${echoFile(row.nonce)}`);
     for (const failure of row.failures) {
       lines.push(`- ${failure}`);
     }

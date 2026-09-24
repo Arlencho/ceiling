@@ -4,7 +4,11 @@ import { decisionLogTruncated, decodeEventsFromLogs, decodeIxData, decisionsFrom
 import {
   clampPageSize,
   createFailoverConnection,
+  asTransportError,
   isSkippableSlot,
+  isTransportError,
+  isUnavailableBlock,
+  ListedBlockMissingError,
   ListedTransactionMissingError,
   parseRpcList,
   withRetry,
@@ -203,8 +207,9 @@ async function scanBlocksForProgram(
     try {
       slots = await withRetry("getBlocks", () => connection.getBlocks(rangeStart, rangeEnd));
     } catch (err) {
-      if (!isSkippableSlot(err)) throw err;
-      continue;
+      if (isSkippableSlot(err)) continue;
+      if (isUnavailableBlock(err) || isTransportError(err)) throw asTransportError(err);
+      throw err;
     }
     for (const slot of slots) {
       slotsScanned += 1;
@@ -220,9 +225,13 @@ async function scanBlocksForProgram(
         );
       } catch (err) {
         if (isSkippableSlot(err)) continue;
+        if (isUnavailableBlock(err) || isTransportError(err)) throw asTransportError(err);
         throw err;
       }
-      if (!block) continue;
+      // getBlocks listed this slot. A null getBlock is not a skipped slot and
+      // not an empty block. Same class as a listed signature whose
+      // getTransaction answers null.
+      if (!block) throw new ListedBlockMissingError([slot]);
       for (const item of block.transactions) {
         const view = txPartsToView({
           signature: item.transaction.signatures[0] ?? "",

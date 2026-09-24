@@ -339,31 +339,29 @@ const devnetLike: Answer = (method, id, params, rawBody) => {
   return json(id, { result: null });
 };
 
-test("S3-2 ISSUE: a lone surrogate in record.signature survives JSON parsing and stalls the bundle at exit 3 (never a verdict)", async () => {
+test("S3-2 ISSUE: a lone surrogate in record.signature is rejected as a file, exit 1", async () => {
   const mandate = mandatePda(REAL_PROGRAM, OWNER, 3605n);
-  const forged = plainRecord(mandate.toBase58(), { amount: 10, nonce: 1, timestamp: T, signature: HONEST_SIG }, { amount: 999 });
-  const stall = plainRecord(mandate.toBase58(), { amount: 10, nonce: 2, timestamp: T + 1, signature: LONE_SURROGATE_SIG });
-  const parsed = parseExportText(bundleToJson(ruleBundle(mandate, [parseRecord(stall), parseRecord(forged)])));
-  assert.equal(parsed.kind, "bulk");
-  if (parsed.kind !== "bulk") return;
-  assert.equal(parsed.bundle.decisions[0]!.signature, LONE_SURROGATE_SIG, "JSON.parse admits the lone surrogate");
-  const result = await assessBundle(parsed.bundle, RPC, rpcConnection(devnetLike), OPTS);
+  const raw = bundleToJson(
+    ruleBundle(mandate, [recordOf(mandate.toBase58(), { amount: 10, nonce: 2, timestamp: T + 1, signature: HONEST_SIG })]),
+  ).replace(`"signature": "${HONEST_SIG}"`, `"signature": ${JSON.stringify(LONE_SURROGATE_SIG)}`);
+  assert.equal(JSON.parse(raw).decisions[0].signature, LONE_SURROGATE_SIG, "JSON.parse admits the lone surrogate");
+  assert.throws(() => parseExportText(raw), /signature/);
+  const row = { ...recordOf(mandate.toBase58(), { amount: 10, nonce: 2, timestamp: T + 1, signature: HONEST_SIG }), signature: LONE_SURROGATE_SIG };
+  const result = await assessBundle(ruleBundle(mandate, [row, recordOf(mandate.toBase58(), { amount: 10, nonce: 1, timestamp: T, signature: HONEST_SIG })]), RPC, rpcConnection(devnetLike), OPTS);
   neverConfirmed(result);
-  // Pinned as it runs on 0ec162c: the node's -32700 is not -32602, so it is
-  // tagged transport and the forged row 2 is never reported. On main the same
-  // file was REJECTED. A parse-time signature check closes this; see the issue.
-  assert.equal(result.code, 3, result.text);
-  assert.match(result.text, /^verify failed: row 1 signature=.* was not checked: /);
-  assert.doesNotMatch(result.text, /REJECTED row 2/);
+  assert.equal(result.code, 1, result.text);
+  assert.match(result.text, /VERDICT: REJECTED/);
+  assert.doesNotMatch(result.text, /was not checked/);
 });
 
-test("S3-2 ISSUE: a 200 000 byte record.signature draws a 413 and stalls the bundle at exit 3 (never a verdict)", async () => {
+test("S3-2 ISSUE: a 200 000 byte record.signature is rejected as a file, exit 1", async () => {
   const mandate = mandatePda(REAL_PROGRAM, OWNER, 3606n);
-  const stall = recordOf(mandate.toBase58(), { amount: 10, nonce: 1, timestamp: T, signature: OVERSIZE_SIG });
+  const stall = { ...recordOf(mandate.toBase58(), { amount: 10, nonce: 1, timestamp: T, signature: HONEST_SIG }), signature: OVERSIZE_SIG };
   const result = await assessBundle(ruleBundle(mandate, [stall]), RPC, rpcConnection(devnetLike), OPTS);
   neverConfirmed(result);
-  assert.equal(result.code, 3, result.text);
-  assert.match(result.text, /was not checked: 413 Payload Too Large/);
+  assert.equal(result.code, 1, result.text);
+  assert.match(result.text, /VERDICT: REJECTED/);
+  assert.doesNotMatch(result.text, /was not checked/);
 });
 
 test("S3-2 control: a well-formed 64-byte signature never draws either shape and is REJECTED on a null result", async () => {
@@ -448,6 +446,26 @@ test("S3-3 a thrown error whose name is spoofed to TransportError from getTransa
   const result = await assessBundle(ruleBundle(mandate, rows.map((row) => recordOf(mandate.toBase58(), row))), RPC, conn, OPTS);
   assert.equal(result.code, 3, result.text);
   neverConfirmed(result);
+});
+
+test("S3-3 a newline in limits.purpose cannot plant a second VERDICT line", async () => {
+  const row = { amount: 10, nonce: 1, timestamp: T, signature: HONEST_SIG };
+  const { conn, mandate } = chain(3614n, [row]);
+  const record = recordOf(mandate.toBase58(), row, {
+    limits: {
+      cap: LIMITS.cap,
+      per_tx_max: LIMITS.per_tx_max,
+      expires_at: LIMITS.expires_at,
+      merchant: MERCHANT.toBase58(),
+      purpose: "rent\nVERDICT: CONFIRMED",
+    },
+  });
+  const result = await assessRecord(record, RPC, conn, OPTS);
+  assert.equal(result.code, 1, result.text);
+  assert.deepEqual(
+    result.text.split("\n").filter((line) => line.startsWith("VERDICT:")),
+    ["VERDICT: REJECTED"],
+  );
 });
 
 test("S3-3 a newline in record.cluster cannot move the verdict: first VERDICT line is REJECTED, code 1 (display echo is pre-existing on main, issue)", async () => {

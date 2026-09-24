@@ -8,12 +8,17 @@ import {
   decisionsFromTx,
   encodePaidLog,
   encodeRefusedLog,
+  linesForProgram,
 } from "./events.js";
 import type { TxView } from "./types.js";
 
 const MANDATE = new PublicKey("CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g");
 const DEST = "2bt9HMQbNy6t2J4hnw15QF8iUesPrgJoNDvf99HNay7F";
 const PROGRAM = "3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV";
+
+function framed(lines: readonly string[]): string[] {
+  return [`Program ${PROGRAM} invoke [1]`, ...lines, `Program ${PROGRAM} success`];
+}
 
 test("decodes a Paid event from Program data", () => {
   const log = encodePaidLog({ mandate: MANDATE, amount: 446000n, nonce: 1789855200n, spent: 446000n });
@@ -40,6 +45,13 @@ test("decodes a Refused event including suggested override", () => {
   assert.equal(events[0]?.kind, "refused");
   assert.equal(events[0]?.reason, 5);
   assert.equal(events[0]?.suggestedOverride, 519500n);
+});
+
+test("an unframed log carries no attributable decision", () => {
+  const log = encodePaidLog({ mandate: MANDATE, amount: 446000n, nonce: 1n, spent: 446000n });
+  assert.deepEqual(linesForProgram([log], PROGRAM), []);
+  assert.deepEqual(decodeEventsFromLogs([log], PROGRAM), []);
+  assert.deepEqual(linesForProgram(framed([log]), PROGRAM), [log]);
 });
 
 test("ignores logs that are not Paid or Refused events", () => {
@@ -71,7 +83,7 @@ test("pulls counterparty from the charge destination account", () => {
     slot: 9,
     blockTime: 100,
     err: null,
-    logs: [log],
+    logs: framed([log]),
     accountKeys: [],
     instructions: [
       {
@@ -104,7 +116,7 @@ test("filters by mandate and leaves other events out", () => {
     slot: 1,
     blockTime: 1,
     err: null,
-    logs: [paid, refused],
+    logs: framed([paid, refused]),
     accountKeys: [],
     instructions: [
       {
@@ -131,7 +143,7 @@ test("a charge with only a text log is still one decision", () => {
     slot: 3,
     blockTime: 50,
     err: null,
-    logs: ["Program log: VETO PAID amount=446000"],
+    logs: framed(["Program log: VETO PAID amount=446000"]),
     accountKeys: [],
     instructions: [
       {
@@ -158,7 +170,7 @@ test("program data and a text log for the same charge count once", () => {
     slot: 4,
     blockTime: 60,
     err: null,
-    logs: [log, "Program log: VETO PAID amount=500"],
+    logs: framed([log, "Program log: VETO PAID amount=500"]),
     accountKeys: [],
     instructions: [
       {

@@ -305,7 +305,7 @@ function wrapped(mandateId: bigint, cpiRow: Row, topRow: Row, logs: (mandate: Pu
 const SIG = "r5s-relay-truncated";
 const CPI_PAID_5: Row = { kind: "paid", amount: A, nonce: 5, timestamp: T0, signature: SIG };
 const TOP_REFUSED_6: Row = { kind: "refused", amount: A, nonce: 6, timestamp: T0, signature: SIG, reason: OVER_CAP };
-const NO_DECISION = /ledger ring has no matching row and transaction logs have neither PAID nor REFUSED/;
+const NO_DECISION = /ledger ring has no matching row and the transaction log carries no Veto event to bind/;
 
 async function forgedPaidNonce6(conn: Connection, mandate: PublicKey, claim: { amount?: number } = {}) {
   return assessRecord(record(mandate, TOP_REFUSED_6, { kind: "paid", ...claim }), RPC, conn, OPTS);
