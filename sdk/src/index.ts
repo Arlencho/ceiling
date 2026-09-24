@@ -12,6 +12,23 @@ export type {
 } from "./agent.js";
 export { loadAgentConfig } from "./config.js";
 export type { AgentConfig } from "./config.js";
+export {
+  LABEL_MAX_CHARS,
+  PURPOSE_MAX_BYTES,
+  RULE_REQUEST_CHECK_ORDER,
+  RULE_REQUEST_DAYS_MAX,
+  RULE_REQUEST_DAYS_MIN,
+  RuleRequestRejected,
+  createRuleRequest,
+  parseRuleRequest,
+} from "./rule-request.js";
+export type {
+  ParsedRuleRequest,
+  RuleRequest,
+  RuleRequestError,
+  RuleRequestInput,
+  RuleRequestProblem,
+} from "./rule-request.js";
 export type { Decision } from "./events.js";
 export { PROGRAM_ID } from "./idl.js";
 export { ledgerPda, mandatePda } from "./layout.js";

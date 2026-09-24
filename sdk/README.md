@@ -12,6 +12,52 @@ npx tsx examples/pay-once.ts <agent-key.json> <config.json> <amount-in-base-unit
 
 The example prints kind, reason code, reason text, suggested override, signature, and slot.
 
+## Asking the owner for a rule
+
+The operator builds a rule request and renders it as a QR. The owner scans that QR and approves. The same URL is what `createRuleRequest` returns and what `parseRuleRequest` reads.
+
+```bash
+npx tsx examples/rule-request.ts <agent-key.json> <payee> <mint> <cap> <max> <days> "<purpose>" [agentLabel] [payeeLabel]
+```
+
+The agent key file is the JSON secret key array the agent already uses. The command prints one URL:
+
+```text
+veto://rule-request?v=1&agent=<base58>&payee=<base58>&mint=<base58>&cap=<u64>&max=<u64>&days=<1..3650>&purpose=<percent-encoded>&agentLabel=<optional>&payeeLabel=<optional>
+```
+
+`cap` and `max` are integer base units, greater than 0, with `max` at most `cap`. The app reads the mint's decimals from the chain. `days` is an integer from 1 to 3650. `purpose` is UTF-8 of at most 64 bytes. That is `PURPOSE_MAX_LEN` in `programs/veto/src/state.rs`: the mandate account stores 64 bytes of purpose text. `agentLabel` and `payeeLabel` are optional, at most 64 Unicode code points, and they are the requester's claim about a name.
+
+A space is `%20`. A plus sign stays a plus sign. Percent-encoding round-trips any UTF-8 that fits the limit.
+
+Render the printed URL as a QR. The QR payload is that URL.
+
+The owner scans the QR, or opens the link. The card states the permission: who may be paid, from which mint, the cap, the largest payment, the number of days, and the purpose. The cap, the largest payment, and the duration are ceilings the owner can lower before approving with Seed Vault. A label is shown as what that address calls itself, beside the shortened address, with the full address one tap away.
+
+```ts
+import { createRuleRequest, parseRuleRequest } from "veto-agent-sdk";
+
+const url = createRuleRequest({
+  agent,
+  payee,
+  mint,
+  cap: 1_000_000n,
+  max: 50_000n,
+  days: 30,
+  purpose: "API fees",
+  agentLabel: "billing agent",
+});
+
+const parsed = parseRuleRequest(url);
+if (!parsed.ok) {
+  // parsed.error.problem names the first problem. Nothing from the request is applied.
+}
+```
+
+In this repo the import is from `../sdk/src/index.js` until the package is built and linked.
+
+Unknown query keys are ignored. A missing required key, a non-canonical address, an amount of 0, a `max` above `cap`, a `days` outside 1 to 3650, a purpose longer than 64 bytes, a label longer than 64 characters, or percent-encoding that is not UTF-8 rejects the whole request. The shared URL cases are the `valid` and `invalid` arrays in `sdk/src/fixtures/rule-request-v1.json`.
+
 ## The block the app copies
 
 On an active rule the app shows Connect your agent. Copy all and the QR are the same JSON. `loadAgentConfig` accepts that text or the parsed object. Every field is required. An extra field is refused.

@@ -1,0 +1,1322 @@
+{
+  "description": "Shared rule request v1 fixtures. valid entries round-trip through the URL. invalid entries are URLs and name the first problem in checkOrder. rejectedInputs are createRuleRequest values that are not URLs. Amounts in expect are decimal strings. A plus sign in a query value is a plus sign, not a space. purposeMaxBytes is PURPOSE_MAX_LEN from programs/veto/src/state.rs, applied as UTF-8 bytes because the mandate account stores that many bytes. labelMaxChars counts Unicode code points.",
+  "purposeMaxBytes": 64,
+  "labelMaxChars": 64,
+  "daysMin": 1,
+  "daysMax": 3650,
+  "u64Max": "18446744073709551615",
+  "checkOrder": [
+    "not_a_url",
+    "scheme",
+    "userinfo",
+    "port",
+    "host",
+    "path",
+    "duplicate_v",
+    "missing_v",
+    "bad_v",
+    "duplicate_agent",
+    "missing_agent",
+    "bad_agent",
+    "duplicate_payee",
+    "missing_payee",
+    "bad_payee",
+    "duplicate_mint",
+    "missing_mint",
+    "bad_mint",
+    "duplicate_cap",
+    "missing_cap",
+    "bad_cap",
+    "duplicate_max",
+    "missing_max",
+    "bad_max",
+    "max_above_cap",
+    "duplicate_days",
+    "missing_days",
+    "bad_days",
+    "duplicate_purpose",
+    "missing_purpose",
+    "bad_purpose",
+    "purpose_too_long",
+    "duplicate_agent_label",
+    "bad_agent_label",
+    "agent_label_too_long",
+    "duplicate_payee_label",
+    "bad_payee_label",
+    "payee_label_too_long"
+  ],
+  "valid": [
+    {
+      "name": "prints the documented URL for API fees",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": 1000,
+        "max": 100,
+        "days": 30,
+        "purpose": "API fees"
+      },
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "API fees"
+      }
+    },
+    {
+      "name": "accepts amounts and days given as decimal strings",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees"
+      },
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "API fees"
+      }
+    },
+    {
+      "name": "accepts one day when max equals the cap",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1",
+        "max": "1",
+        "days": 1,
+        "purpose": "x"
+      },
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1&max=1&days=1&purpose=x",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1",
+        "max": "1",
+        "days": 1,
+        "purpose": "x"
+      }
+    },
+    {
+      "name": "accepts a 3650 day request",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 3650,
+        "purpose": "year"
+      },
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=3650&purpose=year",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 3650,
+        "purpose": "year"
+      }
+    },
+    {
+      "name": "accepts the u64 maximum for cap and max",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "18446744073709551615",
+        "max": "18446744073709551615",
+        "days": 1,
+        "purpose": "ceiling"
+      },
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=18446744073709551615&max=18446744073709551615&days=1&purpose=ceiling",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "18446744073709551615",
+        "max": "18446744073709551615",
+        "days": 1,
+        "purpose": "ceiling"
+      }
+    },
+    {
+      "name": "accepts an empty purpose",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": ""
+      },
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": ""
+      }
+    },
+    {
+      "name": "accepts a purpose of 64 bytes",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "name": "accepts 32 e acute characters because they are 64 bytes",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "éééééééééééééééééééééééééééééééé"
+      },
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "éééééééééééééééééééééééééééééééé"
+      }
+    },
+    {
+      "name": "round-trips a purpose that uses every UTF-8 byte length",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "a b+100%&=?#/é💡中\n\u0000􏿿"
+      },
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=a%20b%2B100%25%26%3D%3F%23%2F%C3%A9%F0%9F%92%A1%E4%B8%AD%0A%00%F4%8F%BF%BF",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "a b+100%&=?#/é💡中\n\u0000􏿿"
+      }
+    },
+    {
+      "name": "round-trips unreserved characters in a purpose",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "hello!~*'()-_."
+      },
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=hello!~*'()-_.",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "hello!~*'()-_."
+      }
+    },
+    {
+      "name": "includes both labels",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees",
+        "agentLabel": "billing agent",
+        "payeeLabel": "café shop"
+      },
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&agentLabel=billing%20agent&payeeLabel=caf%C3%A9%20shop",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "API fees",
+        "agentLabel": "billing agent",
+        "payeeLabel": "café shop"
+      }
+    },
+    {
+      "name": "accepts an agent label of 64 emoji",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees",
+        "agentLabel": "💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡"
+      },
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&agentLabel=%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "API fees",
+        "agentLabel": "💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡"
+      }
+    },
+    {
+      "name": "accepts a payee label of 64 code points",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees",
+        "payeeLabel": "👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽"
+      },
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&payeeLabel=%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "API fees",
+        "payeeLabel": "👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽"
+      }
+    },
+    {
+      "name": "leaves an empty label off the URL",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees",
+        "agentLabel": ""
+      },
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "API fees"
+      }
+    },
+    {
+      "name": "accepts the all-zero address as canonical base58",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "11111111111111111111111111111111",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees"
+      },
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=11111111111111111111111111111111&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "11111111111111111111111111111111",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "API fees"
+      }
+    },
+    {
+      "name": "ignores unknown keys and the wrong case of a known key",
+      "url": "veto://rule-request?note=%FF&Agent=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&Purpose=nope&v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&debug=1&%ZZ=1",
+      "canonical": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "API fees"
+      }
+    },
+    {
+      "name": "reads the same request when the query keys are reversed",
+      "url": "veto://rule-request?purpose=API%20fees&days=30&max=100&cap=1000&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&v=1",
+      "canonical": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "API fees"
+      }
+    },
+    {
+      "name": "accepts the scheme and host in any case",
+      "url": "VETO://Rule-Request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "canonical": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "API fees"
+      }
+    },
+    {
+      "name": "accepts a trailing slash",
+      "url": "veto://rule-request/?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "canonical": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "API fees"
+      }
+    },
+    {
+      "name": "ignores a fragment",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees#approve",
+      "canonical": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "API fees"
+      }
+    },
+    {
+      "name": "keeps a raw plus sign as a plus sign",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=a+b",
+      "canonical": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=a%2Bb",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "a+b"
+      }
+    },
+    {
+      "name": "reads a percent-encoded agent key as agent",
+      "url": "veto://rule-request?v=1&%61gent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "canonical": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "API fees"
+      }
+    },
+    {
+      "name": "leaves an empty agentLabel value off the request",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&agentLabel=",
+      "canonical": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "API fees"
+      }
+    },
+    {
+      "name": "decodes a lowercase percent-encoded e acute",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=%c3%a9",
+      "canonical": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=%C3%A9",
+      "expect": {
+        "v": 1,
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 30,
+        "purpose": "é"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "rejects text that is not a URL",
+      "url": "not a url",
+      "problem": "not_a_url",
+      "message": "the request is not a URL"
+    },
+    {
+      "name": "rejects an empty string",
+      "url": "",
+      "problem": "not_a_url",
+      "message": "the request is not a URL"
+    },
+    {
+      "name": "rejects a scheme other than veto",
+      "url": "https://rule-request/?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "problem": "scheme",
+      "message": "the scheme must be veto"
+    },
+    {
+      "name": "rejects a user name on the URL",
+      "url": "veto://operator@rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "problem": "userinfo",
+      "message": "the request must not include user info"
+    },
+    {
+      "name": "rejects a password on the URL",
+      "url": "veto://:secret@rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "problem": "userinfo",
+      "message": "the request must not include user info"
+    },
+    {
+      "name": "rejects a port on the URL",
+      "url": "veto://rule-request:443?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "problem": "port",
+      "message": "the request must not include a port"
+    },
+    {
+      "name": "rejects a host other than rule-request",
+      "url": "veto://rule-approve?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "problem": "host",
+      "message": "the host must be rule-request"
+    },
+    {
+      "name": "rejects a veto URL with no host",
+      "url": "veto:///rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "problem": "host",
+      "message": "the host must be rule-request"
+    },
+    {
+      "name": "rejects a path after the host",
+      "url": "veto://rule-request/open?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "problem": "path",
+      "message": "the path must be empty"
+    },
+    {
+      "name": "reports a repeated version before the second value",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&v=2",
+      "problem": "duplicate_v",
+      "message": "version is repeated"
+    },
+    {
+      "name": "rejects a request with no query",
+      "url": "veto://rule-request",
+      "problem": "missing_v",
+      "message": "version is missing"
+    },
+    {
+      "name": "does not treat an unknown key as the version",
+      "url": "veto://rule-request?foo=1",
+      "problem": "missing_v",
+      "message": "version is missing"
+    },
+    {
+      "name": "rejects version 2",
+      "url": "veto://rule-request?agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&v=2",
+      "problem": "bad_v",
+      "message": "version must be 1"
+    },
+    {
+      "name": "rejects a version with a leading zero",
+      "url": "veto://rule-request?agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&v=01",
+      "problem": "bad_v",
+      "message": "version must be 1"
+    },
+    {
+      "name": "rejects an empty version",
+      "url": "veto://rule-request?agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&v=",
+      "problem": "bad_v",
+      "message": "version must be 1"
+    },
+    {
+      "name": "reports a repeated agent before checking the address",
+      "url": "veto://rule-request?v=1&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&agent=not-a-key&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+      "problem": "duplicate_agent",
+      "message": "agent is repeated"
+    },
+    {
+      "name": "reports a percent-encoded repeat of agent",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&%61gent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+      "problem": "duplicate_agent",
+      "message": "agent is repeated"
+    },
+    {
+      "name": "rejects a request with no agent",
+      "url": "veto://rule-request?v=1&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "problem": "missing_agent",
+      "message": "agent is missing"
+    },
+    {
+      "name": "names a missing agent before a zero cap",
+      "url": "veto://rule-request?v=1&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&max=100&days=30&purpose=API%20fees&cap=0",
+      "problem": "missing_agent",
+      "message": "agent is missing"
+    },
+    {
+      "name": "rejects an agent that is not base58",
+      "url": "veto://rule-request?v=1&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&agent=not-a-key",
+      "problem": "bad_agent",
+      "message": "agent must be a canonical base58 address"
+    },
+    {
+      "name": "rejects an agent that decodes to fewer than 32 bytes",
+      "url": "veto://rule-request?v=1&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&agent=1111111111111111111111111111111",
+      "problem": "bad_agent",
+      "message": "agent must be a canonical base58 address"
+    },
+    {
+      "name": "rejects an agent that decodes to more than 32 bytes",
+      "url": "veto://rule-request?v=1&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&agent=111111111111111111111111111111111",
+      "problem": "bad_agent",
+      "message": "agent must be a canonical base58 address"
+    },
+    {
+      "name": "rejects an empty agent",
+      "url": "veto://rule-request?v=1&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&agent=",
+      "problem": "bad_agent",
+      "message": "agent must be a canonical base58 address"
+    },
+    {
+      "name": "rejects an agent with trailing whitespace",
+      "url": "veto://rule-request?v=1&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9%20",
+      "problem": "bad_agent",
+      "message": "agent must be a canonical base58 address"
+    },
+    {
+      "name": "names a bad agent before a bad payee",
+      "url": "veto://rule-request?v=1&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&agent=not-a-key&payee=also-bad",
+      "problem": "bad_agent",
+      "message": "agent must be a canonical base58 address"
+    },
+    {
+      "name": "rejects a repeated payee",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+      "problem": "duplicate_payee",
+      "message": "payee is repeated"
+    },
+    {
+      "name": "rejects a request with no payee",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees",
+      "problem": "missing_payee",
+      "message": "payee is missing"
+    },
+    {
+      "name": "rejects a payee outside the base58 alphabet",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&payee=0OIl",
+      "problem": "bad_payee",
+      "message": "payee must be a canonical base58 address"
+    },
+    {
+      "name": "rejects a repeated mint",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+      "problem": "duplicate_mint",
+      "message": "mint is repeated"
+    },
+    {
+      "name": "rejects a request with no mint",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&cap=1000&max=100&days=30&purpose=API%20fees",
+      "problem": "missing_mint",
+      "message": "mint is missing"
+    },
+    {
+      "name": "rejects a mint that is not 32 bytes",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&cap=1000&max=100&days=30&purpose=API%20fees&mint=GyGKxMyg1p9SsHfm15Mk",
+      "problem": "bad_mint",
+      "message": "mint must be a canonical base58 address"
+    },
+    {
+      "name": "rejects a repeated cap",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&cap=5",
+      "problem": "duplicate_cap",
+      "message": "cap is repeated"
+    },
+    {
+      "name": "rejects a request with no cap",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&max=100&days=30&purpose=API%20fees",
+      "problem": "missing_cap",
+      "message": "cap is missing"
+    },
+    {
+      "name": "rejects a cap of zero",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&max=100&days=30&purpose=API%20fees&cap=0",
+      "problem": "bad_cap",
+      "message": "cap must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects a cap of only zeros",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&max=100&days=30&purpose=API%20fees&cap=00",
+      "problem": "bad_cap",
+      "message": "cap must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects a cap with a leading zero",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&max=100&days=30&purpose=API%20fees&cap=01",
+      "problem": "bad_cap",
+      "message": "cap must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects a negative cap",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&max=100&days=30&purpose=API%20fees&cap=-1",
+      "problem": "bad_cap",
+      "message": "cap must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects a fractional cap",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&max=100&days=30&purpose=API%20fees&cap=1.5",
+      "problem": "bad_cap",
+      "message": "cap must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects a cap with an explicit plus",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&max=100&days=30&purpose=API%20fees&cap=%2B1",
+      "problem": "bad_cap",
+      "message": "cap must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects a cap in scientific notation",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&max=100&days=30&purpose=API%20fees&cap=1e2",
+      "problem": "bad_cap",
+      "message": "cap must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects an empty cap",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&max=100&days=30&purpose=API%20fees&cap=",
+      "problem": "bad_cap",
+      "message": "cap must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects a cap above the u64 maximum",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&max=100&days=30&purpose=API%20fees&cap=18446744073709551616",
+      "problem": "bad_cap",
+      "message": "cap must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects a cap with a space",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&max=100&days=30&purpose=API%20fees&cap=%201",
+      "problem": "bad_cap",
+      "message": "cap must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects a repeated max",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&max=5",
+      "problem": "duplicate_max",
+      "message": "max is repeated"
+    },
+    {
+      "name": "rejects a request with no max",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&days=30&purpose=API%20fees",
+      "problem": "missing_max",
+      "message": "max is missing"
+    },
+    {
+      "name": "rejects a max of zero",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&days=30&purpose=API%20fees&max=0",
+      "problem": "bad_max",
+      "message": "max must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects a fractional max",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&days=30&purpose=API%20fees&max=1.0",
+      "problem": "bad_max",
+      "message": "max must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects a max above the u64 maximum before comparing it with the cap",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&days=30&purpose=API%20fees&cap=1&max=18446744073709551616",
+      "problem": "bad_max",
+      "message": "max must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects a max greater than the cap",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&days=30&purpose=API%20fees&cap=10&max=11",
+      "problem": "max_above_cap",
+      "message": "max is greater than cap"
+    },
+    {
+      "name": "names max above cap before a bad days value",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&purpose=API%20fees&cap=10&max=11&days=0",
+      "problem": "max_above_cap",
+      "message": "max is greater than cap"
+    },
+    {
+      "name": "rejects a repeated days",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&days=1",
+      "problem": "duplicate_days",
+      "message": "days is repeated"
+    },
+    {
+      "name": "rejects a request with no days",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&purpose=API%20fees",
+      "problem": "missing_days",
+      "message": "days is missing"
+    },
+    {
+      "name": "rejects zero days",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&purpose=API%20fees&days=0",
+      "problem": "bad_days",
+      "message": "days must be an integer from 1 to 3650"
+    },
+    {
+      "name": "rejects 3651 days",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&purpose=API%20fees&days=3651",
+      "problem": "bad_days",
+      "message": "days must be an integer from 1 to 3650"
+    },
+    {
+      "name": "rejects a fractional days value",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&purpose=API%20fees&days=1.5",
+      "problem": "bad_days",
+      "message": "days must be an integer from 1 to 3650"
+    },
+    {
+      "name": "rejects days with a leading zero",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&purpose=API%20fees&days=01",
+      "problem": "bad_days",
+      "message": "days must be an integer from 1 to 3650"
+    },
+    {
+      "name": "rejects a negative days value",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&purpose=API%20fees&days=-1",
+      "problem": "bad_days",
+      "message": "days must be an integer from 1 to 3650"
+    },
+    {
+      "name": "rejects an empty days value",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&purpose=API%20fees&days=",
+      "problem": "bad_days",
+      "message": "days must be an integer from 1 to 3650"
+    },
+    {
+      "name": "reports a repeated purpose before the encoding is checked",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&purpose=%FF",
+      "problem": "duplicate_purpose",
+      "message": "purpose is repeated"
+    },
+    {
+      "name": "rejects a request with no purpose",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30",
+      "problem": "missing_purpose",
+      "message": "purpose is missing"
+    },
+    {
+      "name": "rejects a purpose that is not UTF-8",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=%FF",
+      "problem": "bad_purpose",
+      "message": "purpose is not percent-encoded UTF-8"
+    },
+    {
+      "name": "rejects a purpose that ends in a bare percent",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=%",
+      "problem": "bad_purpose",
+      "message": "purpose is not percent-encoded UTF-8"
+    },
+    {
+      "name": "rejects a purpose with a bad percent digit",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=%ZZ",
+      "problem": "bad_purpose",
+      "message": "purpose is not percent-encoded UTF-8"
+    },
+    {
+      "name": "rejects an overlong UTF-8 purpose",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=%C0%80",
+      "problem": "bad_purpose",
+      "message": "purpose is not percent-encoded UTF-8"
+    },
+    {
+      "name": "rejects a purpose of 65 bytes",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "problem": "purpose_too_long",
+      "message": "purpose is longer than 64 bytes"
+    },
+    {
+      "name": "rejects 33 e acute characters because they are 66 bytes",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9",
+      "problem": "purpose_too_long",
+      "message": "purpose is longer than 64 bytes"
+    },
+    {
+      "name": "rejects 64 emoji in a purpose because they are 256 bytes",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1",
+      "problem": "purpose_too_long",
+      "message": "purpose is longer than 64 bytes"
+    },
+    {
+      "name": "names a purpose that is too long before a label that is too long",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&agentLabel=%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1",
+      "problem": "purpose_too_long",
+      "message": "purpose is longer than 64 bytes"
+    },
+    {
+      "name": "names a bad version before a bad purpose",
+      "url": "veto://rule-request?agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&v=2&purpose=%FF",
+      "problem": "bad_v",
+      "message": "version must be 1"
+    },
+    {
+      "name": "rejects a repeated agent label",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&agentLabel=billing&agentLabel=other",
+      "problem": "duplicate_agent_label",
+      "message": "agentLabel is repeated"
+    },
+    {
+      "name": "rejects an agent label that is not UTF-8",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&agentLabel=%FF",
+      "problem": "bad_agent_label",
+      "message": "agentLabel is not percent-encoded UTF-8"
+    },
+    {
+      "name": "rejects an agent label of 65 characters",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&agentLabel=%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1%F0%9F%92%A1",
+      "problem": "agent_label_too_long",
+      "message": "agentLabel is longer than 64 characters"
+    },
+    {
+      "name": "rejects an agent label of 33 skin-tone emoji",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&agentLabel=%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD%F0%9F%91%8D%F0%9F%8F%BD",
+      "problem": "agent_label_too_long",
+      "message": "agentLabel is longer than 64 characters"
+    },
+    {
+      "name": "rejects a repeated payee label",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&payeeLabel=shop&payeeLabel=other",
+      "problem": "duplicate_payee_label",
+      "message": "payeeLabel is repeated"
+    },
+    {
+      "name": "rejects a payee label that is not UTF-8",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&payeeLabel=%80",
+      "problem": "bad_payee_label",
+      "message": "payeeLabel is not percent-encoded UTF-8"
+    },
+    {
+      "name": "rejects a payee label of 65 e acute characters",
+      "url": "veto://rule-request?v=1&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&payee=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&mint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&cap=1000&max=100&days=30&purpose=API%20fees&payeeLabel=%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9",
+      "problem": "payee_label_too_long",
+      "message": "payeeLabel is longer than 64 characters"
+    }
+  ],
+  "rejectedInputs": [
+    {
+      "name": "create rejects a missing agent",
+      "input": {
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees"
+      },
+      "problem": "missing_agent",
+      "message": "agent is missing"
+    },
+    {
+      "name": "create rejects a missing payee when the agent is present",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees"
+      },
+      "problem": "missing_payee",
+      "message": "payee is missing"
+    },
+    {
+      "name": "create rejects an agent that is not base58",
+      "input": {
+        "agent": "not-a-key",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees"
+      },
+      "problem": "bad_agent",
+      "message": "agent must be a canonical base58 address"
+    },
+    {
+      "name": "create rejects a numeric cap of zero",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": 0,
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees"
+      },
+      "problem": "bad_cap",
+      "message": "cap must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "create rejects a fractional cap",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": 1.5,
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees"
+      },
+      "problem": "bad_cap",
+      "message": "cap must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "create rejects a negative cap",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": -1,
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees"
+      },
+      "problem": "bad_cap",
+      "message": "cap must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "create rejects a null cap",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": null,
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees"
+      },
+      "problem": "bad_cap",
+      "message": "cap must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "create rejects a max of zero",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": 0,
+        "days": "30",
+        "purpose": "API fees"
+      },
+      "problem": "bad_max",
+      "message": "max must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "create rejects a max greater than the cap",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": 1000,
+        "max": 1001,
+        "days": "30",
+        "purpose": "API fees"
+      },
+      "problem": "max_above_cap",
+      "message": "max is greater than cap"
+    },
+    {
+      "name": "create rejects zero days",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 0,
+        "purpose": "API fees"
+      },
+      "problem": "bad_days",
+      "message": "days must be an integer from 1 to 3650"
+    },
+    {
+      "name": "create rejects 3651 days",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 3651,
+        "purpose": "API fees"
+      },
+      "problem": "bad_days",
+      "message": "days must be an integer from 1 to 3650"
+    },
+    {
+      "name": "create rejects a fractional days value",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": 1.5,
+        "purpose": "API fees"
+      },
+      "problem": "bad_days",
+      "message": "days must be an integer from 1 to 3650"
+    },
+    {
+      "name": "create rejects a boolean days value",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": true,
+        "purpose": "API fees"
+      },
+      "problem": "bad_days",
+      "message": "days must be an integer from 1 to 3650"
+    },
+    {
+      "name": "create rejects a missing purpose",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30"
+      },
+      "problem": "missing_purpose",
+      "message": "purpose is missing"
+    },
+    {
+      "name": "create rejects a numeric purpose",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": 12
+      },
+      "problem": "bad_purpose",
+      "message": "purpose must be UTF-8 text"
+    },
+    {
+      "name": "create rejects a purpose that is not well-formed UTF-16",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "\ud800"
+      },
+      "problem": "bad_purpose",
+      "message": "purpose must be UTF-8 text"
+    },
+    {
+      "name": "create rejects a purpose of 65 bytes",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "problem": "purpose_too_long",
+      "message": "purpose is longer than 64 bytes"
+    },
+    {
+      "name": "create rejects 33 e acute characters in a purpose",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "ééééééééééééééééééééééééééééééééé"
+      },
+      "problem": "purpose_too_long",
+      "message": "purpose is longer than 64 bytes"
+    },
+    {
+      "name": "create rejects 64 emoji in a purpose",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡"
+      },
+      "problem": "purpose_too_long",
+      "message": "purpose is longer than 64 bytes"
+    },
+    {
+      "name": "create rejects an agent label that is not well-formed UTF-16",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees",
+        "agentLabel": "\ud800"
+      },
+      "problem": "bad_agent_label",
+      "message": "agentLabel must be UTF-8 text"
+    },
+    {
+      "name": "create rejects an agent label of 65 characters",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees",
+        "agentLabel": "💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡💡"
+      },
+      "problem": "agent_label_too_long",
+      "message": "agentLabel is longer than 64 characters"
+    },
+    {
+      "name": "create rejects a payee label of 65 characters",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees",
+        "payeeLabel": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+      },
+      "problem": "payee_label_too_long",
+      "message": "payeeLabel is longer than 64 characters"
+    },
+    {
+      "name": "create rejects a payee label of 33 skin-tone emoji",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "payee": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "mint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "cap": "1000",
+        "max": "100",
+        "days": "30",
+        "purpose": "API fees",
+        "payeeLabel": "👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽"
+      },
+      "problem": "payee_label_too_long",
+      "message": "payeeLabel is longer than 64 characters"
+    }
+  ]
+}
