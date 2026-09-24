@@ -64,6 +64,27 @@ export class ListedTransactionMissingError extends TransportError {
   }
 }
 
+// The transaction is present, but the log body is missing: meta is null, or
+// logMessages is null, omitted, or not an array. That is not an empty log,
+// and it is not proof the transaction did nothing. A CPI payment lives in
+// the log body. The same gap applies when the CPI list is null or absent
+// and the transaction lists the program.
+export class ListedLogBodyMissingError extends TransportError {
+  readonly signatures: readonly string[];
+
+  constructor(signatures: readonly string[]) {
+    super(
+      signatures
+        .map(
+          (signature) =>
+            `the RPC returned a null log body for signature ${signature} that invokes the program`,
+        )
+        .join("; "),
+    );
+    this.signatures = signatures;
+  }
+}
+
 // getBlocks listed the slot and getBlock then answered null. That is not
 // proof the slot was skipped or empty.
 export class ListedBlockMissingError extends TransportError {

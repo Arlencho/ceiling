@@ -228,6 +228,9 @@ program, cluster, mandate, and range it checked. A missing row is a reject.
 An RPC transport error prints `verify failed` and no verdict, and exits 3.
 A listed signature whose `getTransaction` returns null is `was not checked`
 and the process exits 3. On a bulk file the line names the row that was not checked.
+A listed successful transaction that invokes the program and comes back with
+`logMessages` null is the same kind of gap: the run was not checked and exits 3,
+and the line names that signature. A null log body is not an empty log.
 
 RPC, in order: `--rpc`, then `VETO_RPC`, then `keys/devnet-addresses.env`
 `RPC=`. If none of those is set, the tool exits and names `VETO_RPC`. There

@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { PublicKey, SolanaJSONRPCError, type Connection } from "@solana/web3.js";
 import { encodePaidLog } from "../indexer/src/events.js";
-import { TransportError, createFailoverConnection, isTransportError } from "../indexer/src/rpc.js";
+import { TransportError, createFailoverConnection, isTransportError, jsonRpcCode } from "../indexer/src/rpc.js";
 import { bundleToJson, makeBundle, parseExportText, type DecisionBundle } from "./bulk.js";
 import {
   CHARGE_DISCRIMINATOR,
@@ -22,6 +22,7 @@ import {
   mandatePda,
   parseRecord,
   reasonText,
+  requireSignature,
   u64Le,
   type DecisionRecord,
 } from "./lib.js";
@@ -188,16 +189,19 @@ function chain(mandateId: bigint, rows: Row[], raise: Map<string, unknown> = new
       if (!hit) return null;
       return { data: hit.data, owner: hit.owner, executable: false, lamports: 1 };
     },
-    // The charge transactions carry slot 1. A listing slot below that keeps the
-    // tenure read off a sibling whose getTransaction is the case under test.
-    // Each record's signature is still in the listing.
+    // The charge transactions carry slot 1, and so does this listing: the
+    // tenure read only opens pages at or above the record's slot. A node
+    // lists signatures it already parsed. Oversize bodies, lone surrogates,
+    // and anything that is not 64 bytes are not in that list. -32602 is the
+    // node refusing the parameter, so that string was not listed either.
     async getSignaturesForAddress(_address: PublicKey, config?: { before?: string; limit?: number }) {
-      const newestFirst = [...rows].reverse();
+      const listable = rows.filter((row) => nodeListsSignature(row.signature, raise.get(row.signature)));
+      const newestFirst = [...listable].reverse();
       const start = config?.before ? newestFirst.findIndex((row) => row.signature === config.before) + 1 : 0;
       const limit = config?.limit ?? newestFirst.length;
       return newestFirst.slice(start, start + limit).map((row) => ({
         signature: row.signature,
-        slot: 0,
+        slot: 1,
         err: null,
         memo: null,
         blockTime: row.timestamp,
@@ -206,6 +210,15 @@ function chain(mandateId: bigint, rows: Row[], raise: Map<string, unknown> = new
     },
   } as unknown as Connection;
   return { conn, mandate };
+}
+
+function nodeListsSignature(signature: string, raised: unknown): boolean {
+  try {
+    requireSignature(signature, "signature");
+  } catch {
+    return false;
+  }
+  return jsonRpcCode(raised) !== -32602;
 }
 
 function ruleBundle(mandate: PublicKey, decisions: DecisionRecord[]): DecisionBundle {
@@ -519,5 +532,51 @@ test("S3-4 cap: a 429 carries only the redacted endpoint, never the body", async
   await assert.rejects(
     () => conn.getGenesisHash(),
     (err: unknown) => isTransportError(err) && !new RegExp(SECRET_MARKER).test(err instanceof Error ? err.message : ""),
+  );
+});
+
+test("the mandate listing uses the charge slot, so the tenure read fetches a same-slot sibling", async () => {
+  const row = { amount: 10, nonce: 1, timestamp: T, signature: HONEST_SIG };
+  const sibling = "3".repeat(87);
+  const { conn, mandate } = chain(3620n, [row]);
+  const fetched: string[] = [];
+  const baseTx = conn.getTransaction.bind(conn);
+  const baseList = conn.getSignaturesForAddress.bind(conn);
+  conn.getTransaction = (async (signature: string) => {
+    fetched.push(signature);
+    if (signature === sibling) {
+      return chargeTx(mandate, ledgerPda(REAL_PROGRAM, mandate), {
+        amount: 10,
+        nonce: 9,
+        timestamp: T,
+        signature: sibling,
+      });
+    }
+    return baseTx(signature);
+  }) as Connection["getTransaction"];
+  conn.getSignaturesForAddress = (async (address: PublicKey, config?: { before?: string; limit?: number }) => {
+    const pages = await baseList(address, config);
+    if (config?.before) return pages;
+    // Newest first. A page after the record is older and the tenure read
+    // skips it. The sibling has to sit at or before the record, at the
+    // charge's slot, or the read never asks for it.
+    const slot = pages[0]?.slot ?? 0;
+    return [
+      {
+        signature: sibling,
+        slot,
+        err: null,
+        memo: null,
+        blockTime: T,
+        confirmationStatus: "confirmed" as const,
+      },
+      ...pages,
+    ];
+  }) as Connection["getSignaturesForAddress"];
+  const result = await assessBundle(ruleBundle(mandate, [recordOf(mandate.toBase58(), row)]), RPC, conn, OPTS);
+  assert.equal(result.code, 0, result.text);
+  assert.ok(
+    fetched.includes(sibling),
+    `tenure read did not fetch the same-slot sibling; fetched ${fetched.join(",")}`,
   );
 });
