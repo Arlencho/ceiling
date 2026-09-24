@@ -49,10 +49,15 @@ type MessageLike = {
 
 type InnerIxLike = { programIdIndex: number };
 
+type LoadedAddresses = {
+  writable?: readonly (PublicKey | string)[];
+  readonly?: readonly (PublicKey | string)[];
+};
+
 type MetaLike = {
   err?: unknown;
   logMessages?: string[] | null;
-  loadedAddresses?: { writable: PublicKey[]; readonly: PublicKey[] };
+  loadedAddresses?: LoadedAddresses | null;
   innerInstructions?: Array<{ instructions?: InnerIxLike[] }> | null;
 } | null;
 
@@ -267,7 +272,8 @@ async function scanBlocksForProgram(
           program,
         });
         if (!view) continue;
-        if (!view.accountKeys.includes(program)) continue;
+        // The runtime invoke frame attributes the log, including when a
+        // lookup-table index is still unresolved.
         if (decodeEventsFromLogs(view.logs, program).length > 0) txs.push(view);
       }
     }
@@ -279,11 +285,34 @@ function keyText(key: PublicKey | string): string {
   return typeof key === "string" ? key : key.toBase58();
 }
 
+function loadedKeyTexts(keys: readonly (PublicKey | string)[] | undefined): string[] {
+  if (!Array.isArray(keys)) return [];
+  return keys.map((key) => keyText(key));
+}
+
 function accountKeyList(message: MessageLike, meta: MetaLike): string[] {
   const staticKeys = (message.staticAccountKeys ?? message.accountKeys ?? []).map((key) => keyText(key));
-  const loadedWritable = meta?.loadedAddresses?.writable.map((key) => keyText(key)) ?? [];
-  const loadedReadonly = meta?.loadedAddresses?.readonly.map((key) => keyText(key)) ?? [];
-  return [...staticKeys, ...loadedWritable, ...loadedReadonly];
+  return [
+    ...staticKeys,
+    ...loadedKeyTexts(meta?.loadedAddresses?.writable),
+    ...loadedKeyTexts(meta?.loadedAddresses?.readonly),
+  ];
+}
+
+// Static keys, then one slot per address the lookup tables declare.
+// A loaded set shorter than this leaves the tail indexes unresolved.
+function declaredAccountCount(message: MessageLike): number {
+  const staticCount = (message.staticAccountKeys ?? message.accountKeys ?? []).length;
+  const lookups = message.addressTableLookups;
+  if (!Array.isArray(lookups)) return staticCount;
+  let loaded = 0;
+  for (const lookup of lookups) {
+    if (!lookup || typeof lookup !== "object") continue;
+    const row = lookup as { writableIndexes?: unknown; readonlyIndexes?: unknown };
+    if (Array.isArray(row.writableIndexes)) loaded += row.writableIndexes.length;
+    if (Array.isArray(row.readonlyIndexes)) loaded += row.readonlyIndexes.length;
+  }
+  return staticCount + loaded;
 }
 
 function transactionInvokesProgram(message: MessageLike, meta: MetaLike, program: string): boolean {
@@ -310,26 +339,39 @@ function listsProgram(message: MessageLike, meta: MetaLike, program: string): bo
   return accountKeyList(message, meta).includes(program);
 }
 
-// A version 0 message names address table lookups. Until loadedAddresses is
-// an object, a programIdIndex into that table cannot be resolved, so the
-// invokes-the-program test cannot be answered.
-function loadedAddressesUnresolved(message: MessageLike, meta: MetaLike): boolean {
-  const lookups = message.addressTableLookups;
-  if (!Array.isArray(lookups) || lookups.length === 0) return false;
-  const loaded = meta?.loadedAddresses;
-  return loaded === null || loaded === undefined || typeof loaded !== "object";
+// A programIdIndex at or past the resolved account key list is a lookup
+// entry the node did not load. Omitted, null, empty, and short loaded sets
+// leave that index unresolved. A missing CPI list hides its programIdIndexes,
+// so a table index the loaded set does not cover is the same gap.
+function unresolvedProgramIndex(message: MessageLike, meta: MetaLike): boolean {
+  const length = accountKeyList(message, meta).length;
+  const compiled = message.compiledInstructions ?? [];
+  const legacy = message.instructions ?? [];
+  const top = compiled.length > 0 ? compiled : legacy;
+  for (const ix of top) {
+    if (ix.programIdIndex >= length) return true;
+  }
+  if (meta && Array.isArray(meta.innerInstructions)) {
+    for (const group of meta.innerInstructions) {
+      for (const ix of group.instructions ?? []) {
+        if (ix.programIdIndex >= length) return true;
+      }
+    }
+    return false;
+  }
+  return declaredAccountCount(message) > length;
 }
 
 // A log body is an array. null, an omitted key, and a null meta are the same
 // missing body, and none of them is an empty log. An empty array is a log
 // list that happened to be empty. A failed transaction stays out. When the
 // CPI list is itself null or absent, a transaction that lists the program
-// was not checked. The same gap applies when loadedAddresses is unresolved:
-// a missing log body is not checked, never absent.
+// was not checked. An unresolved programIdIndex is the same gap: the
+// invokes-the-program test cannot be answered.
 function nullLogBodyInvokesProgram(message: MessageLike, meta: MetaLike, program: string): boolean {
   if (meta?.err) return false;
   if (meta && Array.isArray(meta.logMessages)) return false;
-  if (loadedAddressesUnresolved(message, meta)) return true;
+  if (unresolvedProgramIndex(message, meta)) return true;
   if (transactionInvokesProgram(message, meta, program)) return true;
   const innerMissing = !meta || !Array.isArray(meta.innerInstructions);
   return innerMissing && listsProgram(message, meta, program);
