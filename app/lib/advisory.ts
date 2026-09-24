@@ -1,19 +1,92 @@
-import type { ConfirmedSignatureInfo, PublicKey, VersionedTransactionResponse } from '@solana/web3.js';
-
-// The memo text is parsed by the SDK's parseAdvisoryMemo. This file checks
-// that the transaction succeeded, the mandate's agent signed it, and the
-// memo instruction names that mandate as a read-only account.
 import {
-  ADVISORY_DECLINED_TEXT,
-  ADVISORY_MEMO_PREFIX,
-  MEMO_PROGRAM_ID,
-  parseAdvisoryMemo,
-} from '../../sdk/src/advisory';
+  PublicKey,
+  type ConfirmedSignatureInfo,
+  type VersionedTransactionResponse,
+} from '@solana/web3.js';
+
 import type { LedgerRow } from './ring';
 
-export { ADVISORY_DECLINED_TEXT as ADVISORY_DECLINE_LABEL, ADVISORY_MEMO_PREFIX };
+// Memo v1 names the mandate as a read-only account without the mandate's signature.
+const MEMO_PROGRAM_ID = new PublicKey('Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo');
+
+export const ADVISORY_MEMO_PREFIX = 'veto-advisory:v1';
+
+export const ADVISORY_DECLINE_LABEL = 'Agent declined (advisory)';
 
 export const KIND_ADVISORY_DECLINE = 100;
+
+const U64_MAX = (1n << 64n) - 1n;
+
+const ADVISORY_MEMO_KEYS = ['mandate', 'amount', 'nonce', 'reason', 'description_sha256'] as const;
+
+export type AdvisoryMemoBody = {
+  mandate: string;
+  amount: bigint;
+  nonce: bigint;
+  reason: string;
+  descriptionSha256: string;
+};
+
+function parseU64(value: string): bigint | null {
+  if (!/^(0|[1-9][0-9]{0,19})$/.test(value)) {
+    return null;
+  }
+  const parsed = BigInt(value);
+  if (parsed > U64_MAX) {
+    return null;
+  }
+  return parsed;
+}
+
+export function parseAdvisoryMemo(text: string): AdvisoryMemoBody | null {
+  if (!text.startsWith(ADVISORY_MEMO_PREFIX)) {
+    return null;
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(text.slice(ADVISORY_MEMO_PREFIX.length));
+  } catch {
+    return null;
+  }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    keys.length !== ADVISORY_MEMO_KEYS.length ||
+    ADVISORY_MEMO_KEYS.some((key) => !Object.hasOwn(record, key))
+  ) {
+    return null;
+  }
+  const mandate = record.mandate;
+  const amountText = record.amount;
+  const nonceText = record.nonce;
+  const reason = record.reason;
+  const hash = record.description_sha256;
+  if (typeof mandate !== 'string' || typeof reason !== 'string') {
+    return null;
+  }
+  if (typeof amountText !== 'string' || typeof nonceText !== 'string' || typeof hash !== 'string') {
+    return null;
+  }
+  if (!/^[0-9a-f]{64}$/.test(hash)) {
+    return null;
+  }
+  const amount = parseU64(amountText);
+  const nonce = parseU64(nonceText);
+  if (amount === null || nonce === null) {
+    return null;
+  }
+  try {
+    if (new PublicKey(mandate).toBase58() !== mandate) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+  return { mandate, amount, nonce, reason, descriptionSha256: hash };
+}
 
 export const ADVISORY_DETAIL_LINE =
   'The agent chose not to submit this charge; the program did not decide it.';

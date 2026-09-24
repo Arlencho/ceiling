@@ -1,8 +1,7 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true,
-    "types": ["node"]
+    "strict": true
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
   "exclude": ["node_modules", "lib/**/*.test.ts", "e2e/**/*.test.ts", "e2e/runReport.ts"]
