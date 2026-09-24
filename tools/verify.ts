@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { fetchDecisionHistory } from "../indexer/src/index.js";
-import { ListedTransactionMissingError, TransportError, asTransportError, isTransportError } from "../indexer/src/rpc.js";
+import {
+  ListedLogBodyMissingError,
+  ListedTransactionMissingError,
+  TransportError,
+  asTransportError,
+  isTransportError,
+} from "../indexer/src/rpc.js";
 import {
   COMPLETENESS,
   filterIndexed,
@@ -89,10 +95,19 @@ The program_id in the file is not used.
   process.exit(2);
 }
 
-function readInput(path: string | undefined): string {
-  if (!path || path === "-") {
-    return readFileSync(0, "utf8");
+// Reading process.stdin (the TTY check in main does) puts the pipe in
+// non-blocking mode. readFileSync(0) then throws EAGAIN while export is
+// still on RPC and has not written. The stream read waits for EOF.
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
   }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+async function readInput(path: string | undefined): Promise<string> {
+  if (!path || path === "-") return readStdin();
   return readFileSync(path, "utf8");
 }
 
@@ -818,6 +833,9 @@ type FailureSplit = {
   // assessBundle branches on this list. Envelope lines also embed free-text
   // fields from the file, so a scan of those lines is not a transport signal.
   unread: string[];
+  // Signatures whose transaction invokes the program and whose logMessages
+  // body is null. That is not an empty population.
+  nullLogs: string[];
 };
 
 function inScope(ts: bigint, bundle: DecisionBundle): boolean {
@@ -868,11 +886,11 @@ async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promis
   }
   if (bundle.scope.type === "rule") {
     failures.push(...(await rulePopulationFailures(bundle, cache)));
-    return { failures, unread: [] };
+    return { failures, unread: [], nullLogs: [] };
   }
   const population = await dateRangePopulationFailures(bundle, cache);
   failures.push(...population.failures);
-  return { failures, unread: population.unread };
+  return { failures, unread: population.unread, nullLogs: population.nullLogs };
 }
 
 function mandatePubkey(mandate: string, failures: string[]): PublicKey | null {
@@ -983,6 +1001,7 @@ function undecodableChargeFailures(
 ): FailureSplit {
   const failures: string[] = [];
   const unread: string[] = [];
+  const nullLogs: string[] = [];
   const program = cache.expectedProgramId;
   for (const signature of [...transactions.keys()].sort()) {
     if (population.has(signature)) continue;
@@ -1010,7 +1029,7 @@ function undecodableChargeFailures(
       `signature ${signature} invokes charge on ${program.toBase58()} but carries no attributable Veto decision`,
     );
   }
-  return { failures, unread };
+  return { failures, unread, nullLogs };
 }
 
 function accountText(key: unknown): string | null {
@@ -1065,17 +1084,18 @@ function truncatedForScope(
 async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckCache): Promise<FailureSplit> {
   const failures: string[] = [];
   const unread: string[] = [];
+  const nullLogs: string[] = [];
   let mandatePk: PublicKey | null = null;
   if (bundle.scope.mandate) {
     mandatePk = mandatePubkey(bundle.scope.mandate, failures);
-    if (!mandatePk) return { failures, unread };
+    if (!mandatePk) return { failures, unread, nullLogs };
     try {
       await cachedMandate(cache, bundle.scope.mandate, mandatePk);
     } catch (err) {
       const missing = missingAccountMessage(err);
       if (!missing) throw err;
       failures.push(missing);
-      return { failures, unread };
+      return { failures, unread, nullLogs };
     }
   }
   let history: Awaited<ReturnType<typeof fetchDecisionHistory>>;
@@ -1092,7 +1112,10 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
     });
   } catch (err) {
     if (err instanceof ListedTransactionMissingError) {
-      return { failures, unread: [...err.signatures] };
+      return { failures, unread: [...err.signatures], nullLogs };
+    }
+    if (err instanceof ListedLogBodyMissingError) {
+      return { failures, unread, nullLogs: [...err.signatures] };
     }
     throw err;
   }
@@ -1149,7 +1172,8 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
   const charges = undecodableChargeFailures(bundle, cache, history.transactions, population);
   failures.push(...charges.failures);
   unread.push(...charges.unread);
-  return { failures, unread };
+  nullLogs.push(...charges.nullLogs);
+  return { failures, unread, nullLogs };
 }
 
 export async function assessRecord(
@@ -1182,13 +1206,19 @@ export async function assessBundle(
   }
   const cache = makeCache(conn, rpc, opts);
   const envelopeReport = await bundleFailures(bundle, cache);
-  if (envelopeReport.unread.length > 0) {
-    const unread = envelopeReport.unread.map(
+  const gaps = [
+    ...envelopeReport.unread.map(
       (signature) =>
         `signature ${signature} was not checked: the RPC returned no transaction for a listed signature`,
-    );
-    const line = `verify failed: ${unread.join("; ")}`;
-    return { ok: false, failures: unread, text: `${line}\n`, code: 3 };
+    ),
+    ...envelopeReport.nullLogs.map(
+      (signature) =>
+        `signature ${signature} was not checked: the RPC returned a null log body for a transaction that invokes the program`,
+    ),
+  ];
+  if (gaps.length > 0) {
+    const line = `verify failed: ${gaps.join("; ")}`;
+    return { ok: false, failures: gaps, text: `${line}\n`, code: 3 };
   }
   const envelope = envelopeReport.failures;
   const rows: RowVerdict[] = [];
@@ -1361,9 +1391,17 @@ async function main(): Promise<void> {
   if (!path && process.stdin.isTTY) usage();
   const rpcs = resolveRpcList(cli);
   const rpc = rpcs.join(",");
+  let text: string;
+  try {
+    text = await readInput(path);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`verify failed: could not read input: ${message}\n`);
+    process.exit(3);
+  }
   let parsed;
   try {
-    parsed = parseExportText(readInput(path));
+    parsed = parseExportText(text);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     fail([`record is not valid schema version 1 JSON or CSV: ${message}`]);

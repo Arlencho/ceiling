@@ -9,6 +9,7 @@ import {
   isTransportError,
   isUnavailableBlock,
   ListedBlockMissingError,
+  ListedLogBodyMissingError,
   ListedTransactionMissingError,
   parseRpcList,
   withRetry,
@@ -45,10 +46,13 @@ type MessageLike = {
   instructions?: { programIdIndex: number; accounts: number[]; data: string }[];
 };
 
+type InnerIxLike = { programIdIndex: number };
+
 type MetaLike = {
   err?: unknown;
   logMessages?: string[] | null;
   loadedAddresses?: { writable: PublicKey[]; readonly: PublicKey[] };
+  innerInstructions?: Array<{ instructions?: InnerIxLike[] }> | null;
 } | null;
 
 export async function fetchDecisionHistory(opts: FetchHistoryOptions): Promise<HistoryResult> {
@@ -70,7 +74,7 @@ export async function fetchDecisionHistory(opts: FetchHistoryOptions): Promise<H
   const transactions = new Map<string, VersionedTransactionResponse | null>();
 
   if (listed.items.length > 0) {
-    txViews = await fetchTransactions(connection, listed.items, window, transactions);
+    txViews = await fetchTransactions(connection, listed.items, window, transactions, programId.toBase58());
   } else if (allowBlockScan && listed.pageCount === 0) {
     usedBlockScan = true;
     const scanned = await scanBlocksForProgram(connection, programId, {
@@ -160,9 +164,11 @@ async function fetchTransactions(
   pages: SignaturePage[],
   window: TimeWindow,
   fetched: Map<string, VersionedTransactionResponse | null>,
+  programId: string,
 ): Promise<TxView[]> {
   const views: TxView[] = [];
   const missing: string[] = [];
+  const nullLogs: string[] = [];
   for (const page of pages) {
     if (page.err) continue;
     if (outsideWindow(page.blockTime, window)) continue;
@@ -177,8 +183,19 @@ async function fetchTransactions(
       missing.push(page.signature);
       continue;
     }
+    const message = tx.transaction.message as MessageLike;
+    const meta = tx.meta as MetaLike;
+    // A null log body is not an empty log. A CPI payment is only in that body.
+    if (nullLogBodyInvokesProgram(message, meta, programId)) {
+      nullLogs.push(page.signature);
+      continue;
+    }
     const view = txToView(tx, page.signature, page.slot);
     if (view) views.push(view);
+  }
+  if (nullLogs.length > 0) {
+    nullLogs.sort();
+    throw new ListedLogBodyMissingError(nullLogs);
   }
   if (missing.length > 0) {
     missing.sort();
@@ -233,12 +250,18 @@ async function scanBlocksForProgram(
       // getTransaction answers null.
       if (!block) throw new ListedBlockMissingError([slot]);
       for (const item of block.transactions) {
+        const signature = item.transaction.signatures[0] ?? "";
+        const message = item.transaction.message as MessageLike;
+        const meta = item.meta as MetaLike;
+        if (signature && nullLogBodyInvokesProgram(message, meta, program)) {
+          throw new ListedLogBodyMissingError([signature]);
+        }
         const view = txPartsToView({
-          signature: item.transaction.signatures[0] ?? "",
+          signature,
           slot,
           blockTime: block.blockTime ?? null,
-          message: item.transaction.message as MessageLike,
-          meta: item.meta as MetaLike,
+          message,
+          meta,
         });
         if (!view) continue;
         if (!view.accountKeys.includes(program)) continue;
@@ -247,6 +270,42 @@ async function scanBlocksForProgram(
     }
   }
   return { txs, slotsScanned };
+}
+
+function keyText(key: PublicKey | string): string {
+  return typeof key === "string" ? key : key.toBase58();
+}
+
+function accountKeyList(message: MessageLike, meta: MetaLike): string[] {
+  const staticKeys = (message.staticAccountKeys ?? message.accountKeys ?? []).map((key) => keyText(key));
+  const loadedWritable = meta?.loadedAddresses?.writable.map((key) => keyText(key)) ?? [];
+  const loadedReadonly = meta?.loadedAddresses?.readonly.map((key) => keyText(key)) ?? [];
+  return [...staticKeys, ...loadedWritable, ...loadedReadonly];
+}
+
+function transactionInvokesProgram(message: MessageLike, meta: MetaLike, program: string): boolean {
+  const keys = accountKeyList(message, meta);
+  const compiled = message.compiledInstructions ?? [];
+  const legacy = message.instructions ?? [];
+  const top = compiled.length > 0 ? compiled : legacy;
+  for (const ix of top) {
+    if ((keys[ix.programIdIndex] ?? "") === program) return true;
+  }
+  for (const group of meta?.innerInstructions ?? []) {
+    for (const ix of group.instructions ?? []) {
+      if ((keys[ix.programIdIndex] ?? "") === program) return true;
+    }
+  }
+  return false;
+}
+
+// logMessages null is the RPC omitting the log list. An empty array is a log
+// list that happened to be empty. Only a successful invoke is unchecked:
+// a transaction that does not invoke the program has no payment to hide.
+function nullLogBodyInvokesProgram(message: MessageLike, meta: MetaLike, program: string): boolean {
+  if (!meta || meta.err) return false;
+  if (meta.logMessages !== null) return false;
+  return transactionInvokesProgram(message, meta, program);
 }
 
 function toPage(item: ConfirmedSignatureInfo): SignaturePage {
@@ -276,12 +335,7 @@ function txPartsToView(args: {
   meta: MetaLike;
 }): TxView | null {
   if (!args.signature) return null;
-  const staticKeys = (args.message.staticAccountKeys ?? args.message.accountKeys ?? []).map((k) =>
-    typeof k === "string" ? k : k.toBase58(),
-  );
-  const loadedWritable = args.meta?.loadedAddresses?.writable.map((k) => k.toBase58()) ?? [];
-  const loadedReadonly = args.meta?.loadedAddresses?.readonly.map((k) => k.toBase58()) ?? [];
-  const keys = [...staticKeys, ...loadedWritable, ...loadedReadonly];
+  const keys = accountKeyList(args.message, args.meta);
   const compiled = (args.message.compiledInstructions ?? []).map((ix) => ({
     programIdIndex: ix.programIdIndex,
     accountKeyIndexes: ix.accountKeyIndexes,
