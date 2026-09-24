@@ -10,6 +10,7 @@ import {
   disconnect,
   loadSession,
   signAndSendTransactions,
+  signatureConfirmation,
   type MwaWallet,
   type TransactFn,
   type WalletStore,
@@ -22,12 +23,16 @@ const REJECTED = 'The wallet rejected the request.';
 const CLOSED = 'The wallet closed the session without a signature.';
 const NOT_ON_CLUSTER =
   'The wallet did not submit the transaction. This app uses devnet. The wallet must be on devnet.';
+const NOT_YET_VISIBLE =
+  'The transaction has not appeared on devnet yet. It may still land, so check your rules before trying again. The wallet must be on devnet.';
+const SEEN_UNCONFIRMED =
+  'The transaction was seen on devnet but is not confirmed yet. It may still land, so check your rules before trying again.';
 const SOLANA_MOBILE_BASE = 'https://connect.solanamobile.com';
 
 type Association = { baseUri?: string } | undefined;
 type SignOptions = {
   timeoutMs?: number;
-  lookup?: (signature: string) => Promise<'confirmed' | 'missing' | 'failed'>;
+  lookup?: (signature: string) => Promise<'confirmed' | 'missing' | 'failed' | 'seen'>;
 };
 type ConnectOptions = { baseUri?: string; chooser?: boolean };
 
@@ -121,6 +126,40 @@ function walletReturning(result: {
   };
 }
 
+type StatusName = 'processed' | 'confirmed';
+
+let statusProbe: Promise<void> = Promise.resolve();
+
+function runAlone<T>(body: () => Promise<T>): Promise<T> {
+  const run = statusProbe.then(body, body);
+  statusProbe = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+function statusResult(name: StatusName) {
+  return {
+    context: { slot: 1 },
+    value: [{ err: null, slot: 1, confirmations: null, confirmationStatus: name }],
+  };
+}
+
+function restoreConfirmation(saved: {
+  timeoutMs: number;
+  pollMs: number;
+  now: () => number;
+  sleep: (ms: number) => Promise<void>;
+  openConnection: typeof signatureConfirmation.openConnection;
+}): void {
+  signatureConfirmation.timeoutMs = saved.timeoutMs;
+  signatureConfirmation.pollMs = saved.pollMs;
+  signatureConfirmation.now = saved.now;
+  signatureConfirmation.sleep = saved.sleep;
+  signatureConfirmation.openConnection = saved.openConnection;
+}
+
 test('a cancelled sign tells the person they cancelled', async () => {
   const owner = Keypair.generate();
   const transact = recordingTransact(
@@ -194,7 +233,7 @@ test('a sign that returns no signature says the session closed without one', asy
   );
 });
 
-test('a signature missing from the configured RPC names the network and that the wallet must be on it', async () => {
+test('a signature still absent when the wait ends says it has not appeared and may still land', async () => {
   const owner = Keypair.generate();
   const transact = recordingTransact(
     walletReturning({ owner, signatures: ['sig-not-on-devnet'] }),
@@ -206,7 +245,11 @@ test('a signature missing from the configured RPC names the network and that the
         timeoutMs: 0,
         lookup: async () => 'missing',
       }),
-    (err: unknown) => err instanceof Error && err.message === NOT_ON_CLUSTER,
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.equal(err.message, NOT_YET_VISIBLE);
+      return true;
+    },
   );
 });
 
@@ -279,4 +322,98 @@ test('primary connect targets the Solana Mobile wallet, and the chooser does not
     baseUri: SOLANA_MOBILE_BASE,
   });
   assert.equal(calls[0]?.baseUri, undefined);
+});
+
+test('a processed signature is read again and the wait says it was seen', async () => {
+  await runAlone(async () => {
+    const saved = {
+      timeoutMs: signatureConfirmation.timeoutMs,
+      pollMs: signatureConfirmation.pollMs,
+      now: signatureConfirmation.now,
+      sleep: signatureConfirmation.sleep,
+      openConnection: signatureConfirmation.openConnection,
+    };
+    let polls = 0;
+    let now = 5_000;
+    signatureConfirmation.now = () => now;
+    signatureConfirmation.sleep = async () => {
+      now += 1_000;
+    };
+    signatureConfirmation.timeoutMs = 2_500;
+    signatureConfirmation.pollMs = 1;
+    signatureConfirmation.openConnection = async () => ({
+      async getSignatureStatuses() {
+        polls += 1;
+        return statusResult('processed');
+      },
+    });
+    try {
+      const owner = Keypair.generate();
+      const transact = recordingTransact(
+        walletReturning({ owner, signatures: ['sig-processed'] }),
+        [],
+      );
+      await assert.rejects(
+        () => sign(transact, memoryStore()),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          assert.equal(err.message, SEEN_UNCONFIRMED);
+          return true;
+        },
+      );
+      assert.ok(polls >= 3, `the processed signature was read ${polls} times`);
+    } finally {
+      restoreConfirmation(saved);
+    }
+  });
+});
+
+test('each confirmation reads every poll through one connection', async () => {
+  await runAlone(async () => {
+    const saved = {
+      timeoutMs: signatureConfirmation.timeoutMs,
+      pollMs: signatureConfirmation.pollMs,
+      now: signatureConfirmation.now,
+      sleep: signatureConfirmation.sleep,
+      openConnection: signatureConfirmation.openConnection,
+    };
+    const opened: { polls: number }[] = [];
+    const plan: StatusName[] = ['processed', 'processed', 'confirmed', 'confirmed'];
+    let step = 0;
+    signatureConfirmation.pollMs = 0;
+    signatureConfirmation.timeoutMs = 1_000;
+    signatureConfirmation.openConnection = async () => {
+      const connection = {
+        polls: 0,
+        async getSignatureStatuses() {
+          this.polls += 1;
+          const name = plan[step] ?? 'confirmed';
+          step += 1;
+          return statusResult(name);
+        },
+      };
+      opened.push(connection);
+      return connection;
+    };
+    try {
+      const owner = Keypair.generate();
+      const wallet = walletReturning({ owner, signatures: ['sig-a', 'sig-b'] });
+      const transact = recordingTransact(wallet, []);
+      const transactions = [new Transaction(), new Transaction()];
+      const signatures = await signAndSendTransactions(transact, memoryStore(), transactions);
+      const first = opened.slice();
+      assert.deepEqual(signatures, ['sig-a', 'sig-b']);
+      assert.equal(first.length, 1, `opened ${first.length} connections for the first confirmation`);
+      assert.equal(first[0].polls, 4);
+
+      const again = await signAndSendTransactions(transact, memoryStore(), transactions);
+      const second = opened.slice(first.length);
+      assert.deepEqual(again, ['sig-a', 'sig-b']);
+      assert.equal(second.length, 1, `opened ${second.length} connections for the next confirmation`);
+      assert.equal(second[0].polls, 2);
+      assert.notEqual(second[0], first[0]);
+    } finally {
+      restoreConfirmation(saved);
+    }
+  });
 });

@@ -1,5 +1,5 @@
 import { Buffer } from 'buffer';
-import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, Transaction } from '@solana/web3.js';
 
 import { walletChainForCluster } from './appConfig';
 
@@ -79,6 +79,14 @@ export function clusterNotice(cluster: string): string {
 
 export function signatureNotOnClusterMessage(cluster: string): string {
   return `The wallet did not submit the transaction. ${clusterNotice(cluster)}`;
+}
+
+export function signatureNotYetVisibleMessage(cluster: string): string {
+  return `The transaction has not appeared on ${cluster} yet. It may still land, so check your rules before trying again. The wallet must be on ${cluster}.`;
+}
+
+export function signatureSeenUnconfirmedMessage(cluster: string): string {
+  return `The transaction was seen on ${cluster} but is not confirmed yet. It may still land, so check your rules before trying again.`;
 }
 
 export type ConnectedWallet = {
@@ -303,7 +311,9 @@ export function explainWalletFailure(error: unknown, cluster: string): string {
     message === USER_CANCELLED_MESSAGE ||
     message === WALLET_REJECTED_MESSAGE ||
     message === SESSION_CLOSED_MESSAGE ||
-    message.startsWith('The wallet did not submit the transaction.')
+    message.startsWith('The wallet did not submit the transaction.') ||
+    message.startsWith('The transaction has not appeared on ') ||
+    message.startsWith('The transaction was seen on ')
   ) {
     return message;
   }
@@ -352,23 +362,23 @@ function associationConfig(baseUri: string | undefined): AssociationConfig | und
   return baseUri ? { baseUri } : undefined;
 }
 
-export type SignatureLookup = (signature: string) => Promise<'confirmed' | 'missing' | 'failed'>;
+export type SignatureStatusName = 'confirmed' | 'missing' | 'failed' | 'seen';
 
-async function readSignatureOnConfiguredRpc(
-  signature: string,
-): Promise<'confirmed' | 'missing' | 'failed'> {
-  const { Connection } = await import('@solana/web3.js');
-  const { loadConfig } = await import('./config');
-  const connection = new Connection(loadConfig().rpcUrl, 'confirmed');
-  let row: { err: unknown; confirmationStatus?: string | null } | null = null;
-  try {
-    const status = await connection.getSignatureStatuses([signature], {
-      searchTransactionHistory: true,
-    });
-    row = status.value[0] ?? null;
-  } catch {
-    return 'missing';
-  }
+export type SignatureLookup = (signature: string) => Promise<SignatureStatusName>;
+
+type SignatureStatusRow = {
+  err: unknown;
+  confirmationStatus?: string | null;
+} | null;
+
+type SignatureStatusConnection = {
+  getSignatureStatuses(
+    signatures: string[],
+    config?: { searchTransactionHistory: boolean },
+  ): Promise<{ value: SignatureStatusRow[] }>;
+};
+
+function signatureStatusName(row: SignatureStatusRow): SignatureStatusName {
   if (!row) {
     return 'missing';
   }
@@ -378,8 +388,36 @@ async function readSignatureOnConfiguredRpc(
   if (row.confirmationStatus === 'confirmed' || row.confirmationStatus === 'finalized') {
     return 'confirmed';
   }
+  // processed is already on this cluster. It is not the same as absent.
+  if (row.confirmationStatus === 'processed') {
+    return 'seen';
+  }
   return 'missing';
 }
+
+async function readSignatureOnConfiguredRpc(
+  signature: string,
+  connection: SignatureStatusConnection,
+): Promise<SignatureStatusName> {
+  let row: SignatureStatusRow = null;
+  try {
+    const status = await connection.getSignatureStatuses([signature], {
+      searchTransactionHistory: true,
+    });
+    row = status.value[0] ?? null;
+  } catch {
+    return 'missing';
+  }
+  return signatureStatusName(row);
+}
+
+async function openConfiguredConnection(): Promise<SignatureStatusConnection> {
+  const { loadConfig } = await import('./config');
+  return new Connection(loadConfig().rpcUrl, 'confirmed');
+}
+
+const defaultSignatureLookup: SignatureLookup = async (signature) =>
+  readSignatureOnConfiguredRpc(signature, await signatureConfirmation.openConnection());
 
 export const signatureConfirmation = {
   timeoutMs: 20_000,
@@ -389,8 +427,19 @@ export const signatureConfirmation = {
     new Promise((resolve) => {
       setTimeout(resolve, ms);
     }),
-  lookup: readSignatureOnConfiguredRpc,
+  lookup: defaultSignatureLookup,
+  openConnection: openConfiguredConnection,
 };
+
+function lookupOverride(options?: { lookup?: SignatureLookup }): SignatureLookup | undefined {
+  if (options?.lookup) {
+    return options.lookup;
+  }
+  if (signatureConfirmation.lookup !== defaultSignatureLookup) {
+    return signatureConfirmation.lookup;
+  }
+  return undefined;
+}
 
 async function confirmSignatures(
   signatures: string[],
@@ -398,11 +447,19 @@ async function confirmSignatures(
   options?: { timeoutMs?: number; lookup?: SignatureLookup },
 ): Promise<void> {
   const timeoutMs = options?.timeoutMs ?? signatureConfirmation.timeoutMs;
-  const lookup = options?.lookup ?? signatureConfirmation.lookup;
+  const override = lookupOverride(options);
+  let lookup: SignatureLookup;
+  if (override) {
+    lookup = override;
+  } else {
+    const connection = await signatureConfirmation.openConnection();
+    lookup = (signature) => readSignatureOnConfiguredRpc(signature, connection);
+  }
   for (const signature of signatures) {
     const started = signatureConfirmation.now();
+    let seen = false;
     for (;;) {
-      let status: 'confirmed' | 'missing' | 'failed' = 'missing';
+      let status: SignatureStatusName = 'missing';
       try {
         status = await lookup(signature);
       } catch {
@@ -414,8 +471,13 @@ async function confirmSignatures(
       if (status === 'failed') {
         throw new Error(`The transaction was found on ${cluster} but it failed.`);
       }
+      if (status === 'seen') {
+        seen = true;
+      }
       if (signatureConfirmation.now() - started >= timeoutMs) {
-        throw new Error(signatureNotOnClusterMessage(cluster));
+        throw new Error(
+          seen ? signatureSeenUnconfirmedMessage(cluster) : signatureNotYetVisibleMessage(cluster),
+        );
       }
       await signatureConfirmation.sleep(signatureConfirmation.pollMs);
     }

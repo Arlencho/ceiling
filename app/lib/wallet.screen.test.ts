@@ -12,8 +12,8 @@ process.env.EXPO_PUBLIC_VETO_EXPLORER_CLUSTER = 'devnet';
 const CANCELLED = 'You cancelled the wallet request.';
 const REJECTED = 'The wallet rejected the request.';
 const CLOSED = 'The wallet closed the session without a signature.';
-const NOT_ON_CLUSTER =
-  'The wallet did not submit the transaction. This app uses devnet. The wallet must be on devnet.';
+const NOT_YET_VISIBLE =
+  'The transaction has not appeared on devnet yet. It may still land, so check your rules before trying again. The wallet must be on devnet.';
 
 const owner = Keypair.generate();
 const memory = new Map<string, string>();
@@ -148,5 +148,5 @@ test('the screen that asked shows each wallet outcome', async () => {
   await shown('cancel', CANCELLED);
   await shown('reject', REJECTED);
   await shown('empty', CLOSED);
-  await shown('missing', NOT_ON_CLUSTER);
+  await shown('missing', NOT_YET_VISIBLE);
 });
