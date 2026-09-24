@@ -210,6 +210,26 @@ bound to a merchant the chain does enforce.
 | 9 | zero amount |
 | 10 | account frozen |
 
+## Advisory purpose check
+
+A purpose check is the agent's own check of a charge against the rule's on-chain purpose. The
+agent operator supplies it, and it is model-agnostic.
+
+On a decline the agent submits no charge and records a memo signed by its own key that names the
+rule. The app and the SDK show it as Agent declined (advisory). It is not a program refusal, and
+verify does not treat it as one.
+
+The program still enforces every number. Whoever runs the agent can skip the check.
+
+One such check is [sdk/examples/purpose-check.ts](sdk/examples/purpose-check.ts). From `sdk/`,
+after `npm ci`:
+
+```bash
+PURPOSE_CHECK_URL=<endpoint> npx tsx examples/purpose-check.ts <agent-key.json> <mandate> <amount> "<description>"
+```
+
+`amount` is base units. When `VETO_RPC` is unset, the example uses `https://api.devnet.solana.com`.
+
 ## Overrides are on the record
 
 The owner can wave one specific payment through above the per-payment ceiling. It takes an owner
@@ -354,9 +374,10 @@ What a key can do under a mandate.
 - **Known limit.** The ledger records every decision this program reaches. A frozen source or
   destination is inspected in `evaluate` and recorded as a refusal. Anchor account validation
   failures (wrong mint, wrong source, wrong ledger) and token-program declines this program does
-  not inspect are errors with no entry. It cannot record a charge the agent never attempted, and
-  nothing on chain can. No payment happens without a record, and no submitted attempt is judged by
-  the agent instead of by the chain.
+  not inspect are errors with no entry. The program ledger has no entry for a charge the agent
+  never submitted. A purpose decline is the memo in [Advisory purpose check](#advisory-purpose-check),
+  and verify does not treat it as a program decision. No payment happens without a record, and no
+  submitted attempt is judged by the agent instead of by the chain.
 
 ## License
 
