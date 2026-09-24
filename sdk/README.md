@@ -74,6 +74,32 @@ if (status.overrideNonce > status.lastNonce && refusedAmount <= status.overrideA
 
 Pass `guardPendingOverride: true` to `charge` to refuse locally when the nonce is a pending override and the amount differs from `overrideAmount`. Without that option the SDK sends the amount and nonce you give it, and the program decides.
 
+## Advisory purpose check
+
+`purposeCheck` is optional. Pass it to `VetoAgent` (or to `fromConfig` in the options argument). It is an async function you write. The SDK does not call a model, and it does not ship one.
+
+The function receives the rule's on-chain purpose, the amount in base units, the mint decimals, the payee (the mandate's merchant address), the mandate address, and the description you pass to `chargeWithPurposeCheck`. It returns `{ allow, reason }`.
+
+`chargeWithPurposeCheck({ amount, nonce, description })` calls that function first.
+
+When `allow` is true, the SDK submits `charge` the same way `charge()` does. The program still enforces every number: the cap, the per-payment maximum, the nonce, expiry, the merchant, the delegation, and the rest. A purpose check cannot raise a limit.
+
+When `allow` is not true, the SDK does not submit `charge`. It sends one transaction to the SPL Memo program `Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo`. The agent key signs that transaction and pays the fee. The mandate address is included as a read-only account and does not sign. That memo program accepts the mandate in the account list without a signature. The other memo program requires every account on the instruction to sign, so it cannot name the mandate this way. The memo text is `veto-advisory:v1` followed by compact JSON with `mandate`, `amount`, `nonce`, `reason`, and `description_sha256`. `reason` is at most 256 UTF-8 bytes, cut on a character boundary, then JSON-escaped. `description_sha256` is the hex sha256 of the description. The call returns `{ kind: "advisory_declined", reason, signature }`.
+
+That record is the agent's own decision. It is not a program refusal. `verify` does not treat it as a decision. An advisory decline does not advance `last_nonce`: the program never sees the charge, so that nonce can still be charged later.
+
+Whoever runs the agent can skip the check. `charge()` never calls `purposeCheck`, even when one is set.
+
+`decisionsForMandate` returns an advisory record (`kind: "advisory_declined"`) only when the transaction succeeded, the memo is signed by the mandate's agent key, the memo names that mandate as a read-only non-signer, and the text parses as `veto-advisory:v1`. `reasonText` is `Agent declined (advisory)`. The memo's reason is `advisoryReason`. A stranger's memo that names the mandate is ignored. A memo that does not parse is ignored. Neither one is a decision, and neither one changes the page cursor: `oldestSignature` and `pageFull` still describe the signature listing.
+
+`examples/purpose-check.ts` is one such check. It posts the context to the HTTP endpoint in `PURPOSE_CHECK_URL` and expects `{ "allow": boolean, "reason": string }`. If the endpoint errors, or the body is not that shape, the check declines.
+
+```bash
+PURPOSE_CHECK_URL=<endpoint> npx tsx examples/purpose-check.ts <agent-key.json> <mandate> <amount> "<description>"
+```
+
+`VETO_RPC` overrides the endpoint. When it is unset, the example uses `https://api.devnet.solana.com`.
+
 ## Reading decisions
 
 `decisionsForMandate` reads one page of signatures for the mandate. It does not walk every transaction on a long-lived mandate. Each call returns the decisions on that page, `oldestSignature` (the oldest signature on the listing, including a failed or foreign signature), and `pageFull` (true when the listing returned a full page).

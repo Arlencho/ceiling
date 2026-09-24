@@ -12,7 +12,13 @@ const PROGRAM_END = /^Program ([1-9A-HJ-NP-Za-km-z]+) (?:success|failed\b.*)$/;
 
 const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
-export type DecisionKind = "paid" | "refused";
+export type DecisionKind = "paid" | "refused" | "advisory_declined";
+
+export type TxMessageHeader = {
+  numRequiredSignatures: number;
+  numReadonlySignedAccounts: number;
+  numReadonlyUnsignedAccounts: number;
+};
 
 export type Decision = {
   signature: string;
@@ -26,6 +32,10 @@ export type Decision = {
   reason: number;
   reasonText: string;
   suggestedOverride: bigint;
+  /** Set when kind is advisory_declined. The reason written in the memo. */
+  advisoryReason?: string;
+  /** Set when kind is advisory_declined. Lowercase hex sha256 of the description. */
+  descriptionSha256?: string;
 };
 
 type CompiledIx = {
@@ -42,6 +52,11 @@ export type TxView = {
   logs: string[];
   accountKeys: string[];
   instructions: CompiledIx[];
+  /** Absent when the RPC message has no header. Advisory reads need it to name the signers. */
+  header?: TxMessageHeader | null;
+  /** Static account keys. Loaded addresses, when present, follow them in accountKeys. */
+  staticKeyCount?: number;
+  loadedWritableCount?: number;
 };
 
 type KeyLike = string | PublicKey | { toBase58: () => string; pubkey?: unknown };
@@ -54,6 +69,11 @@ type RpcInstruction = {
 };
 
 type RpcMessage = {
+  header?: {
+    numRequiredSignatures?: number;
+    numReadonlySignedAccounts?: number;
+    numReadonlyUnsignedAccounts?: number;
+  };
   accountKeys?: KeyLike[];
   staticAccountKeys?: KeyLike[];
   instructions?: RpcInstruction[];
@@ -243,15 +263,38 @@ function keyToBase58(value: KeyLike): string {
   throw new Error("events.keyToBase58: not a public key");
 }
 
-function accountKeysOf(tx: RpcTransaction): string[] {
+function messageKeys(tx: RpcTransaction): {
+  keys: string[];
+  staticKeyCount: number;
+  loadedWritableCount: number;
+} {
   const message = tx.transaction?.message;
   const staticKeys = message?.staticAccountKeys ?? message?.accountKeys ?? [];
-  const loaded = tx.meta?.loadedAddresses;
-  return [
-    ...staticKeys.map((key) => keyToBase58(key)),
-    ...(loaded?.writable ?? []).map((key) => keyToBase58(key)),
-    ...(loaded?.readonly ?? []).map((key) => keyToBase58(key)),
-  ];
+  const loadedW = tx.meta?.loadedAddresses?.writable ?? [];
+  const loadedR = tx.meta?.loadedAddresses?.readonly ?? [];
+  return {
+    keys: [
+      ...staticKeys.map((key) => keyToBase58(key)),
+      ...loadedW.map((key) => keyToBase58(key)),
+      ...loadedR.map((key) => keyToBase58(key)),
+    ],
+    staticKeyCount: staticKeys.length,
+    loadedWritableCount: loadedW.length,
+  };
+}
+
+function headerOf(message: RpcMessage | undefined): TxMessageHeader | null {
+  const header = message?.header;
+  if (!header) return null;
+  const { numRequiredSignatures, numReadonlySignedAccounts, numReadonlyUnsignedAccounts } = header;
+  if (
+    typeof numRequiredSignatures !== "number" ||
+    typeof numReadonlySignedAccounts !== "number" ||
+    typeof numReadonlyUnsignedAccounts !== "number"
+  ) {
+    return null;
+  }
+  return { numRequiredSignatures, numReadonlySignedAccounts, numReadonlyUnsignedAccounts };
 }
 
 function instructionsOf(message: RpcMessage | undefined, keys: string[]): CompiledIx[] {
@@ -272,15 +315,19 @@ export function viewFromRpc(
   tx: RpcTransaction,
   fallback: { signature: string; slot: number },
 ): TxView {
-  const keys = accountKeysOf(tx);
+  const message = tx.transaction?.message;
+  const listed = messageKeys(tx);
   return {
     signature: tx.transaction?.signatures?.[0] || fallback.signature,
     slot: typeof tx.slot === "number" ? tx.slot : fallback.slot,
     blockTime: tx.blockTime ?? null,
     err: tx.meta?.err ?? null,
     logs: tx.meta?.logMessages ?? [],
-    accountKeys: keys,
-    instructions: instructionsOf(tx.transaction?.message, keys),
+    accountKeys: listed.keys,
+    instructions: instructionsOf(message, listed.keys),
+    header: headerOf(message),
+    staticKeyCount: listed.staticKeyCount,
+    loadedWritableCount: listed.loadedWritableCount,
   };
 }
 
