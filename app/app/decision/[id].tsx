@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect } from 'react';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 
+import { AdvisoryDeclineDetail } from '../../components/AdvisoryDecline';
 import { Button } from '../../components/Button';
 import { ConnectGate } from '../../components/ConnectGate';
 import { EmptyState } from '../../components/EmptyState';
@@ -10,6 +11,7 @@ import { RefusalCard } from '../../components/RefusalCard';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
+import { KIND_ADVISORY_DECLINE } from '../../lib/advisory';
 import { KIND_OVERRIDE, KIND_REFUSED } from '../../lib/constants';
 import { findLedgerDecision, parseDecisionId } from '../../lib/exportRecord';
 import { explorerTxUrl, formatBaseUnits, formatClock, formatUnix, isListedDecision } from '../../lib/format';
@@ -83,7 +85,7 @@ export default function DecisionDetailScreen() {
     void Linking.openURL(explorerTxUrl(row.signature, cluster, rpcUrl));
   };
 
-  const seq = row ? nonceSequence(chain.rows, row.nonce) : null;
+  const seq = row && row.kind !== KIND_ADVISORY_DECLINE ? nonceSequence(chain.rows, row.nonce) : null;
   const seqText = seq ? sequenceLine(seq, chain.decimals) : null;
   const overrideView = row && row.kind === KIND_OVERRIDE ? overrideRowView(row, chain.decimals) : null;
 
@@ -102,7 +104,13 @@ export default function DecisionDetailScreen() {
           </EmptyState>
         ) : (
           <View style={styles.block}>
-            {row.kind === KIND_REFUSED ? (
+            {row.kind === KIND_ADVISORY_DECLINE ? (
+              <AdvisoryDeclineDetail
+                when={`${formatUnix(row.ts)} · ${formatClock(row.ts)}`}
+                reason={row.reasonText}
+                amount={formatBaseUnits(row.amount, chain.decimals)}
+              />
+            ) : row.kind === KIND_REFUSED ? (
               <RefusalCard
                 row={row}
                 decimals={chain.decimals}
@@ -160,10 +168,12 @@ export default function DecisionDetailScreen() {
                 <Text style={styles.eyebrow}>Proof</Text>
                 <Text style={styles.hint}>anyone can check this against the chain</Text>
               </View>
-              <ProofRow
-                label="program"
-                value={chain.config?.programId ? truncateAddress(chain.config.programId) : 'from config'}
-              />
+              {row.kind === KIND_ADVISORY_DECLINE ? null : (
+                <ProofRow
+                  label="program"
+                  value={chain.config?.programId ? truncateAddress(chain.config.programId) : 'from config'}
+                />
+              )}
               <ProofRow label="rule" value={mandate ? truncateAddress(mandate.address) : 'unknown'} />
               <ProofRow
                 label="transaction"
@@ -171,15 +181,19 @@ export default function DecisionDetailScreen() {
                 ok={Boolean(row.signature)}
               />
               {row.slot != null ? <ProofRow label="slot" value={String(row.slot)} /> : null}
-              <ProofRow label="payee" value={mandate ? truncateAddress(mandate.merchant) : 'on the rule'} />
+              {row.kind === KIND_ADVISORY_DECLINE ? null : (
+                <ProofRow label="payee" value={mandate ? truncateAddress(mandate.merchant) : 'on the rule'} />
+              )}
             </View>
 
             <View style={styles.actions}>
-              <Button
-                label="Share this decision"
-                accessibilityLabel="Share this decision"
-                onPress={onShare}
-              />
+              {row.kind === KIND_ADVISORY_DECLINE ? null : (
+                <Button
+                  label="Share this decision"
+                  accessibilityLabel="Share this decision"
+                  onPress={onShare}
+                />
+              )}
               <Button
                 label="Open in explorer"
                 invert={false}

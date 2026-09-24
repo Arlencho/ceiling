@@ -1,3 +1,4 @@
+import { KIND_ADVISORY_DECLINE } from './advisory';
 import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, kindName, statusName } from './constants';
 import type { RingEntry } from './ring';
 
@@ -70,7 +71,32 @@ export function isLocalDay(unixSeconds: bigint, nowMs: number): boolean {
 }
 
 export function isListedDecision(kind: number): boolean {
-  return kind === KIND_PAID || kind === KIND_REFUSED || kind === KIND_OVERRIDE;
+  return (
+    kind === KIND_PAID ||
+    kind === KIND_REFUSED ||
+    kind === KIND_OVERRIDE ||
+    kind === KIND_ADVISORY_DECLINE
+  );
+}
+
+export function decisionTotals(rows: readonly { kind: number }[]): {
+  paid: number;
+  refused: number;
+  override: number;
+} {
+  let paid = 0;
+  let refused = 0;
+  let override = 0;
+  for (const row of rows) {
+    if (row.kind === KIND_PAID) {
+      paid += 1;
+    } else if (row.kind === KIND_REFUSED) {
+      refused += 1;
+    } else if (row.kind === KIND_OVERRIDE) {
+      override += 1;
+    }
+  }
+  return { paid, refused, override };
 }
 
 export function todaysAgentDecisions<T extends RingEntry>(entries: readonly T[], nowMs: number): T[] {

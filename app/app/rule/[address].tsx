@@ -1,10 +1,11 @@
 import { PublicKey } from '@solana/web3.js';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../../components/Button';
+import { DecisionRow } from '../../components/DecisionRow';
 import { ConnectAgentPanel } from '../../components/ConnectAgentPanel';
 import { ConnectGate } from '../../components/ConnectGate';
 import { EmptyState } from '../../components/EmptyState';
@@ -22,9 +23,11 @@ import {
   readPayeeTokenAccount,
   type AgentChargeConfig,
 } from '../../lib/agentConnect';
-import { createClient, readRuleFunds, type RuleFunds } from '../../lib/chain';
+import { ADVISORY_DECLINE_LABEL, KIND_ADVISORY_DECLINE } from '../../lib/advisory';
+import { createClient, fetchAdvisoryDeclines, readRuleFunds, type RuleFunds } from '../../lib/chain';
 import { STATUS_REVOKED } from '../../lib/constants';
-import { formatBaseUnits, formatTimeLeft } from '../../lib/format';
+import { formatBaseUnits, formatTimeLeft, newestFirst } from '../../lib/format';
+import type { LedgerRow } from '../../lib/ring';
 import { isActive } from '../../lib/mandate';
 import { mayClaimAbsence } from '../../lib/mandateRead';
 import { notActiveHint } from '../../lib/reasons';
@@ -60,6 +63,9 @@ export default function RuleDetailScreen() {
   const [payeeFor, setPayeeFor] = useState<string | null>(null);
   const [payeeError, setPayeeError] = useState<string | null>(null);
   const [payeeErrorFor, setPayeeErrorFor] = useState<string | null>(null);
+  const [otherAdvisory, setOtherAdvisory] = useState<LedgerRow[]>([]);
+  const [otherAdvisoryFor, setOtherAdvisoryFor] = useState<string | null>(null);
+  const [advisoryError, setAdvisoryError] = useState<string | null>(null);
   const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
   const mandate = chain.mandates.find((row) => row.address === address) ?? null;
   const index = mandate ? chain.mandates.findIndex((row) => row.address === mandate.address) : -1;
@@ -90,6 +96,43 @@ export default function RuleDetailScreen() {
 
   const openedAddress = mandate?.address ?? null;
   const notify = useNotificationExplanation(openedAddress);
+  const selectedAdvisory = useMemo(() => {
+    if (!mandate || chain.mandate?.address !== mandate.address) {
+      return null;
+    }
+    return newestFirst(chain.rows).filter((row) => row.kind === KIND_ADVISORY_DECLINE);
+  }, [mandate, chain.mandate?.address, chain.rows]);
+  const advisoryRows =
+    selectedAdvisory ?? (mandate && otherAdvisoryFor === mandate.address ? otherAdvisory : []);
+
+  useEffect(() => {
+    if (!mandate || !chain.config || chain.mandate?.address === mandate.address) {
+      return;
+    }
+    let cancelled = false;
+    const ruleAddress = mandate.address;
+    const client = createClient(chain.config);
+    void fetchAdvisoryDeclines(client, new PublicKey(mandate.address), new PublicKey(mandate.agent))
+      .then((rows) => {
+        if (cancelled) {
+          return;
+        }
+        setOtherAdvisory(rows);
+        setOtherAdvisoryFor(ruleAddress);
+        setAdvisoryError(null);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setOtherAdvisory([]);
+        setOtherAdvisoryFor(ruleAddress);
+        setAdvisoryError('Could not read agent declines for this rule.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mandate, chain.config, chain.mandate?.address, chain.nowMs]);
 
   useEffect(() => {
     if (!mandate || !chain.config) {
@@ -348,6 +391,24 @@ export default function RuleDetailScreen() {
                 {fundsError ?? 'Reading where this rule keeps its budget.'}
               </Text>
             )}
+
+            {advisoryError ? <Text style={styles.note}>{advisoryError}</Text> : null}
+            {advisoryRows.length > 0 ? (
+              <View style={styles.block}>
+                <Text style={styles.h2}>{ADVISORY_DECLINE_LABEL}</Text>
+                {advisoryRows.map((row) => (
+                  <DecisionRow
+                    key={row.signature ?? `${row.ts.toString()}-${row.nonce.toString()}`}
+                    row={row}
+                    decimals={amountDecimals}
+                    cluster={chain.config?.explorerCluster ?? 'devnet'}
+                    rpcUrl={chain.config?.rpcUrl ?? ''}
+                    mandateAddress={mandate.address}
+                    perTxMax={mandate.perTxMax}
+                  />
+                ))}
+              </View>
+            ) : null}
 
             <Text style={styles.keys}>
               <Text style={styles.bold}>Owner key</Text> lives in Seed Vault and is the only key that

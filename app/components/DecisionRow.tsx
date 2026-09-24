@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ADVISORY_DECLINE_LABEL, KIND_ADVISORY_DECLINE } from '../lib/advisory';
 import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED } from '../lib/constants';
 import { encodeDecisionId } from '../lib/exportRecord';
 import { explorerTxUrl, formatBaseUnits, formatClock } from '../lib/format';
@@ -45,6 +46,37 @@ export function DecisionRow({
     }
     void Linking.openURL(explorerTxUrl(row.signature, cluster, rpcUrl));
   };
+
+  if (row.kind === KIND_ADVISORY_DECLINE) {
+    const txLabel = row.signature
+      ? `transaction ${row.signature.slice(0, 4)}...${row.signature.slice(-4)}`
+      : null;
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${ADVISORY_DECLINE_LABEL} ${amount}`}
+        onPress={openDetail}
+        style={styles.advisory}
+      >
+        <Text style={styles.time}>{clock}</Text>
+        <View style={styles.body}>
+          <Text style={styles.advisorySay}>{ADVISORY_DECLINE_LABEL}</Text>
+          {row.reasonText ? <Text style={styles.why}>{row.reasonText}</Text> : null}
+          {txLabel ? (
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={txLabel}
+              onPress={openTx}
+              hitSlop={6}
+            >
+              <Text style={styles.tx}>{txLabel}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        <Text style={styles.amt}>{amount}</Text>
+      </Pressable>
+    );
+  }
 
   if (refused && variant === 'today') {
     return (
@@ -206,5 +238,22 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontFamily: fonts.mono,
     paddingTop: 4,
+  },
+  advisory: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 10,
+    paddingLeft: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.brass,
+  },
+  advisorySay: {
+    color: colors.brass,
+    fontSize: 20,
+    fontFamily: fonts.serif,
+    lineHeight: 24,
   },
 });

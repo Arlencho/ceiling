@@ -10,8 +10,8 @@ import { ReadState } from '../../components/ReadState';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
-import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, LEDGER_CAPACITY } from '../../lib/constants';
-import { groupByLocalDay, isListedDecision, newestFirst } from '../../lib/format';
+import { LEDGER_CAPACITY } from '../../lib/constants';
+import { decisionTotals, groupByLocalDay, isListedDecision, newestFirst } from '../../lib/format';
 import { displayPurpose } from '../../lib/ruleView';
 import { useChain } from '../../lib/useChain';
 import { truncateAddress } from '../../lib/wallet';
@@ -26,9 +26,7 @@ export default function DecisionsScreen() {
     () => newestFirst(chain.rows).filter((row) => isListedDecision(row.kind)),
     [chain.rows],
   );
-  const paid = charges.filter((row) => row.kind === KIND_PAID).length;
-  const refused = charges.filter((row) => row.kind === KIND_REFUSED).length;
-  const waived = charges.filter((row) => row.kind === KIND_OVERRIDE).length;
+  const totals = decisionTotals(charges);
   const days = useMemo(() => groupByLocalDay(charges), [charges]);
 
   const onRefresh = useCallback(() => {
@@ -62,7 +60,7 @@ export default function DecisionsScreen() {
             <View style={styles.head}>
               <Text style={styles.h2}>Decisions</Text>
               <Text style={styles.meta}>
-                {paid} paid · {refused} refused · {waived} override
+                {totals.paid} paid · {totals.refused} refused · {totals.override} override
               </Text>
             </View>
             {charges.length === 0 ? (

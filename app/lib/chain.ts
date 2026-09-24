@@ -52,6 +52,7 @@ import {
 import { displayPurpose } from './ruleView';
 import { assessOverride, type OverrideAssessment } from './override';
 import { decodeMandateAccount, type MandateAccount } from './mandate';
+import { mergeDecisionRows, readAdvisoryDeclines } from './advisory';
 import {
   attachSignatures,
   decodeLedgerAccount,
@@ -795,9 +796,39 @@ export function decisionsFromTx(
   return out;
 }
 
+export async function fetchAdvisoryDeclines(
+  client: ChainClient,
+  mandate: PublicKey,
+  agent: PublicKey,
+): Promise<LedgerRow[]> {
+  let signatures: ConfirmedSignatureInfo[];
+  try {
+    signatures = await listSignatures(client, mandate, 4);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to list mandate signatures: ${detail}`);
+  }
+  return readAdvisoryDeclines({
+    mandate,
+    agent,
+    signatures,
+    loadTransaction: async (signature) => {
+      try {
+        return await client.connection.getTransaction(signature, {
+          commitment: 'confirmed',
+          maxSupportedTransactionVersion: 0,
+        });
+      } catch {
+        return null;
+      }
+    },
+  });
+}
+
 export async function fetchLedgerRows(
   client: ChainClient,
   mandate: PublicKey,
+  agent?: PublicKey,
 ): Promise<{ snapshot: LedgerSnapshot; rows: LedgerRow[] }> {
   const snapshot = await fetchLedger(client, mandate);
   const ledgerAddress = new PublicKey(snapshot.address);
@@ -811,10 +842,6 @@ export async function fetchLedgerRows(
 
   const decoded: DecodedTxDecision[] = [];
   const ok = signatures.filter((info) => !info.err);
-  if (ok.length === 0) {
-    return { snapshot, rows: attachSignatures(snapshot.entries, decoded) };
-  }
-
   const chunkSize = 10;
   for (let i = 0; i < ok.length; i += chunkSize) {
     const chunk = ok.slice(i, i + chunkSize);
@@ -845,7 +872,12 @@ export async function fetchLedgerRows(
     }
   }
 
-  return { snapshot, rows: attachSignatures(snapshot.entries, decoded) };
+  const rows = attachSignatures(snapshot.entries, decoded);
+  if (!agent) {
+    return { snapshot, rows };
+  }
+  const advisory = await fetchAdvisoryDeclines(client, mandate, agent);
+  return { snapshot, rows: mergeDecisionRows(rows, advisory) };
 }
 
 export async function listSignatures(
