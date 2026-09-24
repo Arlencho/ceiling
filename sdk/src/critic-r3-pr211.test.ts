@@ -65,35 +65,31 @@ function paidRpcTx(w: ReturnType<typeof world>, signature: string, nonce: bigint
 const SIG_A = encodeBase58(Buffer.alloc(64, 3));
 const SIG_B = encodeBase58(Buffer.alloc(64, 4));
 
-test(
-  "H1: a caller's httpHeaders reach the listing and the transaction reads",
-  { todo: "red on be03ab5: read.ts:210-213 rebuilds the Connection from rpcEndpoint and commitment only, so header auth, a custom fetch and fetchMiddleware are dropped" },
-  async () => {
-    const w = world();
-    const seenHeader: Array<string | undefined> = [];
-    const rpc = await serve((body, req, res) => {
-      seenHeader.push(req.headers["x-veto-critic"] as string | undefined);
-      if (req.headers["x-veto-critic"] !== "r3") {
-        json(res, 401, { jsonrpc: "2.0", id: body.id, error: { code: 401, message: "unauthorized" } });
-        return;
-      }
-      if (body.method === "getSignaturesForAddress") {
-        json(res, 200, { jsonrpc: "2.0", id: body.id, result: [{ signature: SIG_A, slot: 20, err: null, memo: null, blockTime: 200 }] });
-        return;
-      }
-      json(res, 200, { jsonrpc: "2.0", id: body.id, result: paidRpcTx(w, SIG_A, 1n) });
-    });
-    try {
-      const connection = new Connection(rpc.url, { commitment: "confirmed", httpHeaders: { "x-veto-critic": "r3" } });
-      const rows = await decisionsForMandate(connection, w.mandate, { sleep: async () => {} });
-      assert.equal(rows.length, 1);
-      assert.equal(rows[0]?.nonce, 1n);
-      assert.deepEqual(seenHeader, ["r3", "r3"]);
-    } finally {
-      await rpc.close();
+test("H1: a caller's httpHeaders reach the listing and the transaction reads", async () => {
+  const w = world();
+  const seenHeader: Array<string | undefined> = [];
+  const rpc = await serve((body, req, res) => {
+    seenHeader.push(req.headers["x-veto-critic"] as string | undefined);
+    if (req.headers["x-veto-critic"] !== "r3") {
+      json(res, 401, { jsonrpc: "2.0", id: body.id, error: { code: 401, message: "unauthorized" } });
+      return;
     }
-  },
-);
+    if (body.method === "getSignaturesForAddress") {
+      json(res, 200, { jsonrpc: "2.0", id: body.id, result: [{ signature: SIG_A, slot: 20, err: null, memo: null, blockTime: 200 }] });
+      return;
+    }
+    json(res, 200, { jsonrpc: "2.0", id: body.id, result: paidRpcTx(w, SIG_A, 1n) });
+  });
+  try {
+    const connection = new Connection(rpc.url, { commitment: "confirmed", httpHeaders: { "x-veto-critic": "r3" } });
+    const rows = await decisionsForMandate(connection, w.mandate, { sleep: async () => {} });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.nonce, 1n);
+    assert.deepEqual(seenHeader, ["r3", "r3"]);
+  } finally {
+    await rpc.close();
+  }
+});
 
 test("H2: a null getTransaction through the module's own connection surfaces as MissingListedTransactionError and is not retried", async () => {
   const w = world();

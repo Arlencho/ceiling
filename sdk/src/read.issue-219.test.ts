@@ -1,0 +1,181 @@
+import assert from "node:assert/strict";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import type { AddressInfo } from "node:net";
+import test from "node:test";
+import { Connection, type ConnectionConfig } from "@solana/web3.js";
+import { PROGRAM_ID } from "./idl.js";
+import { ledgerPda } from "./layout.js";
+import { decisionsForMandate } from "./read.js";
+import { TOKEN_PROGRAM, encodeBase58, framed, legacyChargeTx, paidLog, world } from "./testkit.js";
+
+// Issue 219. decisionsForMandate paces its reads on a connection of its own.
+// A custom header and a custom fetch on the caller's connection must still
+// reach the signature listing and every transaction read.
+
+type Rpc = { id: unknown; method: string; params: unknown[] };
+
+async function serve(
+  handle: (rpc: Rpc, req: IncomingMessage, res: ServerResponse) => void,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const server = createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => handle(JSON.parse(Buffer.concat(chunks).toString("utf8")) as Rpc, req, res));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+  const { port } = server.address() as AddressInfo;
+  return {
+    url: `http://127.0.0.1:${port}`,
+    close: () => new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve()))),
+  };
+}
+
+function json(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { "content-type": "application/json" });
+  res.end(JSON.stringify(body));
+}
+
+function paidRpcTx(w: ReturnType<typeof world>, signature: string, nonce: bigint) {
+  const ledger = ledgerPda(PROGRAM_ID, w.mandate);
+  const tx = legacyChargeTx({
+    signature,
+    slot: 20,
+    blockTime: 200,
+    logs: framed(PROGRAM_ID.toBase58(), [paidLog(w.mandate, nonce, nonce, nonce)]),
+    amount: nonce,
+    nonce,
+    keys: [
+      w.agent.publicKey,
+      w.mandate,
+      ledger,
+      w.source.publicKey,
+      w.destination.publicKey,
+      w.mint.publicKey,
+      TOKEN_PROGRAM,
+      PROGRAM_ID,
+    ],
+  });
+  const transaction = tx.transaction;
+  const keys = transaction?.message?.accountKeys ?? [];
+  if (!transaction) throw new Error("legacyChargeTx returned no transaction");
+  return {
+    ...tx,
+    meta: { ...tx.meta, fee: 5000, preBalances: keys.map(() => 1), postBalances: keys.map(() => 1) },
+    transaction: {
+      ...transaction,
+      message: {
+        ...transaction.message,
+        header: { numRequiredSignatures: 1, numReadonlySignedAccounts: 0, numReadonlyUnsignedAccounts: 0 },
+        recentBlockhash: encodeBase58(Buffer.alloc(32, 9)),
+      },
+    },
+  };
+}
+
+const SIG = encodeBase58(Buffer.alloc(64, 8));
+
+test("a custom header and a custom fetch reach every decision request", async () => {
+  const w = world();
+  const seen: string[] = [];
+  let fetches = 0;
+  const rpc = await serve((body, req, res) => {
+    seen.push(String(req.headers["x-veto-read"] ?? ""));
+    if (req.headers["x-veto-read"] !== "kept") {
+      json(res, 401, { jsonrpc: "2.0", id: body.id, error: { code: 401, message: "unauthorized" } });
+      return;
+    }
+    if (body.method === "getSignaturesForAddress") {
+      json(res, 200, {
+        jsonrpc: "2.0",
+        id: body.id,
+        result: [{ signature: SIG, slot: 20, err: null, memo: null, blockTime: 200 }],
+      });
+      return;
+    }
+    json(res, 200, { jsonrpc: "2.0", id: body.id, result: paidRpcTx(w, SIG, 4n) });
+  });
+  const fetch: NonNullable<ConnectionConfig["fetch"]> = async (input, init) => {
+    fetches += 1;
+    return globalThis.fetch(input, init);
+  };
+  try {
+    const connection = new Connection(rpc.url, {
+      commitment: "confirmed",
+      httpHeaders: { "x-veto-read": "kept" },
+      fetch,
+      wsEndpoint: "ws://127.0.0.1:9",
+    });
+    const rows = await decisionsForMandate(connection, w.mandate, { sleep: async () => {} });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.nonce, 4n);
+    assert.deepEqual(seen, ["kept", "kept"]);
+    assert.equal(fetches, seen.length);
+  } finally {
+    await rpc.close();
+  }
+});
+
+test("a custom fetchMiddleware reaches every decision request", async () => {
+  const w = world();
+  const seen: string[] = [];
+  const rpc = await serve((body, req, res) => {
+    seen.push(String(req.headers["x-veto-mw"] ?? ""));
+    if (req.headers["x-veto-mw"] !== "on") {
+      json(res, 401, { jsonrpc: "2.0", id: body.id, error: { code: 401, message: "unauthorized" } });
+      return;
+    }
+    if (body.method === "getSignaturesForAddress") {
+      json(res, 200, {
+        jsonrpc: "2.0",
+        id: body.id,
+        result: [{ signature: SIG, slot: 20, err: null, memo: null, blockTime: 200 }],
+      });
+      return;
+    }
+    json(res, 200, { jsonrpc: "2.0", id: body.id, result: paidRpcTx(w, SIG, 5n) });
+  });
+  const fetchMiddleware: NonNullable<ConnectionConfig["fetchMiddleware"]> = (info, init, next) => {
+    const headers = new Headers(init?.headers);
+    headers.set("x-veto-mw", "on");
+    next(info, { ...init, headers });
+  };
+  try {
+    const connection = new Connection(rpc.url, {
+      commitment: "confirmed",
+      fetchMiddleware,
+      wsEndpoint: "ws://127.0.0.1:9",
+    });
+    const rows = await decisionsForMandate(connection, w.mandate, { sleep: async () => {} });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.nonce, 5n);
+    assert.deepEqual(seen, ["on", "on"]);
+  } finally {
+    await rpc.close();
+  }
+});
+
+test("a caller that turns off the http agent still gets the decision", async () => {
+  const w = world();
+  let calls = 0;
+  const rpc = await serve((body, _req, res) => {
+    calls += 1;
+    if (body.method === "getSignaturesForAddress") {
+      json(res, 200, {
+        jsonrpc: "2.0",
+        id: body.id,
+        result: [{ signature: SIG, slot: 20, err: null, memo: null, blockTime: 200 }],
+      });
+      return;
+    }
+    json(res, 200, { jsonrpc: "2.0", id: body.id, result: paidRpcTx(w, SIG, 6n) });
+  });
+  try {
+    const connection = new Connection(rpc.url, { commitment: "confirmed", httpAgent: false });
+    const rows = await decisionsForMandate(connection, w.mandate, { sleep: async () => {} });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.nonce, 6n);
+    assert.equal(calls, 2);
+  } finally {
+    await rpc.close();
+  }
+});
