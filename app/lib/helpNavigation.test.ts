@@ -148,29 +148,44 @@ test('the three help pages do not show a Help control', async () => {
 });
 
 test('Help stays hidden on a help or onboarding route when the bar would otherwise show it', async () => {
-  for (const path of ['/help', '/help/refusal', '/help/export', '/onboarding']) {
+  for (const path of ['/help', '/help/refusal', '/help/export', '/help/export?from=rules', '/onboarding']) {
     at(path);
     const root = await mount(createElement(TopBar, { help: true, back: 'Back' }));
     assert.equal(labelsOf(root).includes('Help'), false, `${path} rendered Help`);
   }
 });
 
-test('opening help from a help or onboarding route replaces /help', async () => {
-  const nav = await import('./helpNavigation');
-  for (const path of ['/help', '/help/refusal', '/help/export?from=rules', '/onboarding']) {
-    const seen: NavCall[] = [];
-    nav.openHelp(
-      {
-        push: (href: string) => {
-          seen.push({ method: 'push', href });
-        },
-        replace: (href: string) => {
-          seen.push({ method: 'replace', href });
-        },
-      },
-      path,
-    );
-    assert.deepEqual(seen, [{ method: 'replace', href: '/help' }], path);
+test('back on a help or onboarding route pops the screen under it', async () => {
+  const steps: Array<{ path: string; stack: string[]; after: string[] }> = [
+    {
+      path: '/help',
+      stack: ['/(tabs)/rules', '/help'],
+      after: ['/(tabs)/rules'],
+    },
+    {
+      path: '/help/refusal',
+      stack: ['/(tabs)/rules', '/help', '/help/refusal'],
+      after: ['/(tabs)/rules', '/help'],
+    },
+    {
+      path: '/help/export?from=rules',
+      stack: ['/(tabs)/rules', '/help', '/help/refusal', '/help/export?from=rules'],
+      after: ['/(tabs)/rules', '/help', '/help/refusal'],
+    },
+    {
+      path: '/onboarding',
+      stack: ['/(tabs)/rules', '/help', '/onboarding'],
+      after: ['/(tabs)/rules', '/help'],
+    },
+  ];
+  for (const step of steps) {
+    at(step.path, step.stack);
+    const root = await mount(createElement(TopBar, { help: true, back: 'Back' }));
+    await act(async () => {
+      button(root, 'Back').props.onPress();
+    });
+    assert.deepEqual(calls, [{ method: 'back' }], step.path);
+    assert.deepEqual(history, step.after, step.path);
   }
 });
 
@@ -184,50 +199,52 @@ test('Help from another screen pushes one help route', async () => {
   assert.deepEqual(history, ['/(tabs)/rules', '/help']);
 });
 
-test('opening the introduction from help replaces that screen', async () => {
+test('opening the introduction from help pushes it on the help page', async () => {
   at('/help');
   const root = await mount(createElement(HelpIndex));
   await act(async () => {
     button(root, 'Show the introduction').props.onPress();
   });
-  assert.deepEqual(calls, [{ method: 'replace', href: '/onboarding' }]);
-  assert.deepEqual(history, ['/(tabs)/rules', '/onboarding']);
+  assert.deepEqual(calls, [{ method: 'push', href: '/onboarding' }]);
+  assert.deepEqual(history, ['/(tabs)/rules', '/help', '/onboarding']);
 });
 
-test('next through the help pages replaces the current screen', async () => {
+test('next through the help pages pushes the next page', async () => {
   at('/help');
   const first = await mount(createElement(HelpIndex));
   await act(async () => {
     button(first, 'Next').props.onPress();
   });
-  assert.deepEqual(calls, [{ method: 'replace', href: '/help/refusal' }]);
-  assert.deepEqual(history, ['/(tabs)/rules', '/help/refusal']);
+  assert.deepEqual(calls, [{ method: 'push', href: '/help/refusal' }]);
+  assert.deepEqual(history, ['/(tabs)/rules', '/help', '/help/refusal']);
 
-  at('/help/refusal');
   const second = await mount(createElement(HelpRefusal));
   await act(async () => {
     button(second, 'Next').props.onPress();
   });
-  assert.deepEqual(calls, [{ method: 'replace', href: '/help/export' }]);
-  assert.deepEqual(history, ['/(tabs)/rules', '/help/export']);
+  assert.deepEqual(calls, [
+    { method: 'push', href: '/help/refusal' },
+    { method: 'push', href: '/help/export' },
+  ]);
+  assert.deepEqual(history, ['/(tabs)/rules', '/help', '/help/refusal', '/help/export']);
 });
 
-test('back on a later help page returns to the previous page without stacking a copy', async () => {
-  at('/help/refusal');
+test('back on a later help page pops to the previous page', async () => {
+  at('/help/refusal', ['/(tabs)/rules', '/help', '/help/refusal']);
   const refusal = await mount(createElement(HelpRefusal));
   await act(async () => {
     button(refusal, 'Back').props.onPress();
   });
-  assert.deepEqual(calls, [{ method: 'replace', href: '/help' }]);
+  assert.deepEqual(calls, [{ method: 'back' }]);
   assert.deepEqual(history, ['/(tabs)/rules', '/help']);
 
-  at('/help/export');
+  at('/help/export', ['/(tabs)/rules', '/help', '/help/refusal', '/help/export']);
   const exported = await mount(createElement(HelpExport));
   await act(async () => {
     button(exported, 'Back').props.onPress();
   });
-  assert.deepEqual(calls, [{ method: 'replace', href: '/help/refusal' }]);
-  assert.deepEqual(history, ['/(tabs)/rules', '/help/refusal']);
+  assert.deepEqual(calls, [{ method: 'back' }]);
+  assert.deepEqual(history, ['/(tabs)/rules', '/help', '/help/refusal']);
 });
 
 test('back on the first help page leaves the flow', async () => {
@@ -240,12 +257,12 @@ test('back on the first help page leaves the flow', async () => {
   assert.deepEqual(history, ['/(tabs)/rules']);
 });
 
-test('back from the introduction returns to help without pushing another screen', async () => {
-  at('/onboarding');
+test('back from the introduction pops to help', async () => {
+  at('/onboarding', ['/(tabs)/rules', '/help', '/onboarding']);
   const root = await mount(createElement(TopBar, { back: 'Back', help: false }));
   await act(async () => {
     button(root, 'Back').props.onPress();
   });
-  assert.deepEqual(calls, [{ method: 'replace', href: '/help' }]);
+  assert.deepEqual(calls, [{ method: 'back' }]);
   assert.deepEqual(history, ['/(tabs)/rules', '/help']);
 });

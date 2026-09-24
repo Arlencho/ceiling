@@ -412,8 +412,8 @@ test('Help can open the introduction again after it was skipped', async () => {
   await act(async () => {
     button(help, 'Show the introduction').props.onPress();
   });
-  assert.deepEqual(nav.pushes, []);
-  assert.deepEqual(nav.replaces, ['/onboarding']);
+  assert.deepEqual(nav.pushes, ['/onboarding']);
+  assert.deepEqual(nav.replaces, []);
 
   const route = await mount(
     createElement(
@@ -460,8 +460,8 @@ test('a connected owner can read the introduction again and leave on Done', asyn
     button(route, 'Done with the introduction').props.onPress();
     await new Promise((resolve) => setImmediate(resolve));
   });
-  assert.deepEqual(nav.replaces, ['/help']);
-  assert.equal(nav.backs, 0);
+  assert.deepEqual(nav.replaces, []);
+  assert.equal(nav.backs, 1);
   assert.equal(transactCalls, calls);
   assert.equal(memory.get(ui.seenKey), '1');
 });

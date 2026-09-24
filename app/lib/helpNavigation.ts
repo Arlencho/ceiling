@@ -1,5 +1,7 @@
-// Help, its three pages, and the introduction share one stack slot.
-// Entering from anywhere else pushes. Moving inside the flow replaces.
+// The Help control is hidden on /help and /onboarding, so the flow cannot
+// push /help onto itself. Next and the introduction push. Back pops, which
+// is also what the system back does, so both land on the same screen.
+// From Rules the stack is at most [rules, help, refusal, export].
 
 const HELP = '/help';
 const ONBOARDING = '/onboarding';
@@ -25,23 +27,8 @@ export function showHelpControl(help: boolean, pathname: string): boolean {
   return help && !isHelpOrOnboarding(pathname);
 }
 
+// The page under this route after Next or "Show the introduction" pushes.
+// A pop, from the on-screen Back or the system back, reveals it.
 export function helpFlowBackTarget(pathname: string): string | null {
   return BACK_TARGET[routePath(pathname)] ?? null;
-}
-
-type HelpRouter = {
-  push: (href: string) => void;
-  replace: (href: string) => void;
-  back: () => void;
-};
-
-export function openHelp(router: Pick<HelpRouter, 'push' | 'replace'>, pathname: string): void {
-  if (isHelpOrOnboarding(pathname)) router.replace(HELP);
-  else router.push(HELP);
-}
-
-export function leaveHelpOrOnboarding(router: Pick<HelpRouter, 'replace' | 'back'>, pathname: string): void {
-  const target = helpFlowBackTarget(pathname);
-  if (target) router.replace(target);
-  else router.back();
 }

@@ -33,7 +33,7 @@ export default function HelpRefusalScreen() {
         that charge only. The total cap does not.
       </Text>
       <View style={styles.actions}>
-        <Button label="Next" onPress={() => router.replace('/help/export')} />
+        <Button label="Next" onPress={() => router.push('/help/export')} />
       </View>
     </Screen>
   );

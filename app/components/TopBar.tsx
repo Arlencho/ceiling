@@ -1,7 +1,7 @@
 import { usePathname, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { leaveHelpOrOnboarding, openHelp, showHelpControl } from '../lib/helpNavigation';
+import { showHelpControl } from '../lib/helpNavigation';
 import { colors, fonts } from './theme';
 
 export function TopBar({
@@ -24,7 +24,7 @@ export function TopBar({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={back}
-          onPress={() => leaveHelpOrOnboarding(router, pathname)}
+          onPress={() => router.back()}
           hitSlop={8}
         >
           <Text style={styles.back}>{`\u2190 ${back}`}</Text>
@@ -40,7 +40,7 @@ export function TopBar({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Help"
-            onPress={() => openHelp(router, pathname)}
+            onPress={() => router.push('/help')}
             hitSlop={8}
           >
             <Text style={styles.help}>Help</Text>

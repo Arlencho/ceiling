@@ -39,9 +39,9 @@ export default function HelpRuleScreen() {
           label="Show the introduction"
           accessibilityLabel="Show the introduction"
           invert={false}
-          onPress={() => router.replace('/onboarding')}
+          onPress={() => router.push('/onboarding')}
         />
-        <Button label="Next" onPress={() => router.replace('/help/refusal')} />
+        <Button label="Next" onPress={() => router.push('/help/refusal')} />
       </View>
     </Screen>
   );
