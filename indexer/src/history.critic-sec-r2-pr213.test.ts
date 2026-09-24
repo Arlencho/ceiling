@@ -4,12 +4,12 @@
 // null meta, on both paths. This file crosses every spelling of a missing log
 // body with every spelling of a missing CPI list and every placement of the
 // program in the transaction keys, on the listed path and the block-scan
-// path, and pins the two shapes the fix deliberately still reads as absent.
-// The two todo cases are the loaded-address hole: the program reachable only
+// path. Two shapes stay absent on purpose: an empty CPI list, and a CPI list
+// that names another program. Issue 216 is live: a program reachable only
 // through an address lookup table, with loadedAddresses omitted or with meta
-// null. web3.js types loadedAddresses optional and meta nullable, so both
-// survive getTransaction and getBlock; no Agave node emits either for a v0
-// transaction, so they do not gate this round.
+// null, is not checked when the log body is missing. web3.js types
+// loadedAddresses optional and meta nullable, so both survive getTransaction
+// and getBlock.
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Connection } from "@solana/web3.js";
@@ -58,7 +58,6 @@ const placements: {
   meta: Record<string, unknown>;
   withInner: "cpi" | "other" | "empty" | "missing";
   expectGap: boolean;
-  todo?: boolean;
 }[] = [
   {
     name: "top-level invoke of the program",
@@ -162,7 +161,6 @@ const placements: {
     meta: { err: null, innerInstructions: cpiTo(2) },
     withInner: "cpi",
     expectGap: true,
-    todo: true,
   },
   {
     name: "transaction that does not list the program at all",
@@ -246,10 +244,10 @@ for (const p of placements) {
       const meta = logs.patch(inner.patch(p.meta));
       const label = `${p.name}, ${inner.name}, ${logs.name}`;
       const verdict = p.expectGap ? "is not checked" : "is absent, not a gap";
-      test(`listed: ${label} ${verdict}`, { todo: p.todo }, async () => {
+      test(`listed: ${label} ${verdict}`, async () => {
         await expectListed({ message: p.message, meta }, p.expectGap);
       });
-      test(`block scan: ${label} ${verdict}`, { todo: p.todo }, async () => {
+      test(`block scan: ${label} ${verdict}`, async () => {
         await expectScanned({ message: p.message, meta }, p.expectGap);
       });
     }
@@ -266,14 +264,13 @@ const missingMeta: { name: string; meta: unknown }[] = [
 for (const m of missingMeta) {
   for (const p of placements.filter((x) => x.withInner === "missing")) {
     const label = `${p.name}, ${m.name}`;
-    // With no meta there are no loaded addresses: a program that lives only
-    // in loadedAddresses is not in the keys the guard can see.
-    const loadedOnly = p.name.includes("loadedAddresses");
+    // A null meta leaves loadedAddresses unresolved. A placement that names
+    // an address table still cannot answer the invokes test.
     const verdict = p.expectGap ? "is not checked" : "is absent, not a gap";
-    test(`listed: ${label} ${verdict}`, { todo: loadedOnly && p.expectGap }, async () => {
+    test(`listed: ${label} ${verdict}`, async () => {
       await expectListed({ message: p.message, meta: m.meta }, p.expectGap);
     });
-    test(`block scan: ${label} ${verdict}`, { todo: loadedOnly && p.expectGap }, async () => {
+    test(`block scan: ${label} ${verdict}`, async () => {
       await expectScanned({ message: p.message, meta: m.meta }, p.expectGap);
     });
   }
@@ -290,7 +287,7 @@ for (const p of placements) {
   });
 }
 
-for (const p of placements.filter((x) => x.expectGap && !x.todo)) {
+for (const p of placements.filter((x) => x.expectGap)) {
   test(`listed control: ${p.name}, failed with logMessages null stays out`, async () => {
     const result = await listedHistory({ message: p.message, meta: { ...p.meta, err: { InstructionError: [0, "Custom"] }, logMessages: null } });
     assert.equal(result.decisions.length, 0);
