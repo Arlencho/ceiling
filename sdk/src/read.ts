@@ -1,4 +1,4 @@
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey, type ConnectionConfig } from "@solana/web3.js";
 import { compareDecisions, decisionsFromTx, viewFromRpc, type Decision, type RpcTransaction } from "./events.js";
 import { PROGRAM_ID } from "./idl.js";
 import {
@@ -86,6 +86,19 @@ export type DecisionsForMandateOptions = {
    * An injected wait receives the backoff ceiling. The built-in wait jitters inside that ceiling.
    */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Connection used as given for these paced reads.
+   * When this is set, connectionConfig is not applied.
+   * Build it with disableRetryOnRateLimit so web3.js does not also retry a 429.
+   */
+  readConnection?: Connection;
+  /**
+   * Config merged onto the connection opened for these reads, at the caller's
+   * endpoint and commitment, with disableRetryOnRateLimit set.
+   * web3.js does not expose headers, fetch, middleware, or the http agent on
+   * an existing Connection, so pass them here.
+   */
+  connectionConfig?: ConnectionConfig;
 };
 
 /**
@@ -156,7 +169,7 @@ export async function decisionsForMandate(
   const concurrency = clampConcurrency(options?.concurrency);
   const pause = options?.sleep ?? sleep;
   const jitter = options?.sleep === undefined;
-  const { rpc, spacingMs } = readsConnection(connection);
+  const { rpc, spacingMs } = readsConnection(connection, options);
   let spaced = false;
   const pace = async (): Promise<void> => {
     if (spaced && spacingMs > 0) await pause(spacingMs);
@@ -204,10 +217,31 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function readsConnection(connection: Connection): { rpc: Connection; spacingMs: number } {
-  if (!(connection instanceof Connection)) return { rpc: connection, spacingMs: 0 };
+/**
+ * Paced reads use a connection with disableRetryOnRateLimit so web3.js does not
+ * also retry a 429. web3.js does not expose a connection's config.
+ * readConnection is used as given. connectionConfig is merged onto a new
+ * connection at the caller's endpoint and commitment. With neither, that
+ * connection carries the endpoint and commitment only.
+ * A value that is not a web3 Connection has no endpoint to rebuild, so it is used as given.
+ */
+function readsConnection(
+  connection: Connection,
+  options: DecisionsForMandateOptions | undefined,
+): { rpc: Connection; spacingMs: number } {
+  if (options?.readConnection) {
+    const rpc = options.readConnection;
+    return { rpc, spacingMs: rpc instanceof Connection ? DECISION_FETCH_SPACING_MS : 0 };
+  }
+  if (!(connection instanceof Connection)) {
+    if (options?.connectionConfig !== undefined) {
+      throw new Error("decisionsForMandate: connectionConfig requires a web3 Connection");
+    }
+    return { rpc: connection, spacingMs: 0 };
+  }
   return {
     rpc: new Connection(connection.rpcEndpoint, {
+      ...options?.connectionConfig,
       commitment: connection.commitment,
       disableRetryOnRateLimit: true,
     }),

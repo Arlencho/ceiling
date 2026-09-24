@@ -80,7 +80,15 @@ Pass `guardPendingOverride: true` to `charge` to refuse locally when the nonce i
 
 The decision array is ordered oldest first. Omit `limit` to take every decision on the page. `limit` takes the newest decisions, at most 1000, and never splits a transaction: the last transaction included comes back in full, so the array can be longer than `limit`. `before` starts at signatures older than the one you name. `until` stops before a signature, leaving it and anything older unread.
 
-The signature listing is one request. Transaction reads then run one at a time by default, 1000 ms after the previous RPC read (`concurrency` is how many of those reads run together). A 429 is tried up to 4 times with capped exponential backoff and jitter: the ceiling starts at 200 ms, doubles, and never exceeds 2000 ms, and the built-in wait is between half that ceiling and the ceiling. The SDK opens its own connection for these reads with `disableRetryOnRateLimit`, so the web3 client does not retry the same 429.
+The signature listing is one request. Transaction reads then run one at a time by default, 1000 ms after the previous RPC read (`concurrency` is how many of those reads run together). A 429 is tried up to 4 times with capped exponential backoff and jitter: the ceiling starts at 200 ms, doubles, and never exceeds 2000 ms, and the built-in wait is between half that ceiling and the ceiling. With neither `readConnection` nor `connectionConfig`, the SDK opens its own connection from the caller's endpoint and commitment and sets `disableRetryOnRateLimit`, so the web3 client does not retry the same 429.
+
+web3.js does not expose a connection's config, so a caller with custom headers, fetch, middleware or agent passes `connectionConfig` once or passes its own `readConnection` built with `disableRetryOnRateLimit: true`. `connectionConfig` (headers, fetch, middleware, agent, websocket endpoint) is merged with the caller's endpoint and commitment, and the connection opened for these reads sets `disableRetryOnRateLimit`. A `readConnection` is used as given.
+
+```ts
+const page = await decisionsForMandate(connection, mandate, {
+  connectionConfig: { httpHeaders: { "x-read-key": "<read key>" } },
+});
+```
 
 To read older history, pass `before` set to `oldestSignature` from the previous page. Continue while `pageFull` is true. Stop when a page is not full. An empty decision array is not the end of the history: a page of failed or foreign signatures still carries that cursor. A listed signature whose `getTransaction` returns null raises `MissingListedTransactionError` instead of dropping that signature.
 
