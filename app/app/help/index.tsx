@@ -23,8 +23,8 @@ export default function HelpRuleScreen() {
       </Text>
       <Text style={styles.body}>
         The numbers are fixed once the rule is opened. They cannot be edited afterwards. An override
-        does not change those numbers. It is a recorded waiver of the per-payment ceiling for one
-        nonce. Revoke ends authority for the agent. It does not move anything already paid, and the
+        does not change those numbers. It allows one payment, used once, never above the remaining
+        cap. Revoke ends authority for the agent. It does not move anything already paid, and the
         decisions stay readable.
       </Text>
       <Text style={styles.body}>

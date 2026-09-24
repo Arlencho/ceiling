@@ -316,7 +316,8 @@ test('the commit copy names the amount, the nonce, and that the cap cannot rise'
   const text = copy.paragraphs.join(' ');
   assert.ok(text.includes('override of 180 for nonce 7'));
   assert.ok(text.includes('per-payment maximum on this rule is 60'));
-  assert.ok(text.includes('raises it to 180 for this one nonce only'));
+  assert.ok(text.includes('allows this one payment of 180, used once, never above the remaining cap'));
+  assert.equal(text.includes('raises it to'), false);
   assert.ok(text.includes('180 remaining of 200'));
   assert.ok(text.includes(CAP_OVERRIDE_REFUSAL));
   assert.ok(text.includes('recorded decision'));

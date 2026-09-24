@@ -44,7 +44,7 @@ export function RefusalCard({
         <View style={styles.override}>
           <View style={styles.overrideText}>
             <Text style={styles.overrideK}>Override that would clear it</Text>
-            <Text style={styles.overrideHint}>raise per-payment max to this</Text>
+            <Text style={styles.overrideHint}>allow this one payment of</Text>
           </View>
           <Text style={styles.overrideV}>{formatBaseUnits(row.suggestedOverride, decimals)}</Text>
         </View>
