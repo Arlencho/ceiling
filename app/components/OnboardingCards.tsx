@@ -5,6 +5,7 @@ import {
   ONBOARDING_CARDS,
   SEED_VAULT_LINE,
 } from '../lib/onboarding';
+import { SEEKER_APPROVAL_LINE } from '../lib/wallet';
 import { Button } from './Button';
 import { colors, fonts } from './theme';
 
@@ -13,13 +14,17 @@ const SAVE_ERROR = 'Could not save that choice on this phone.';
 export function OnboardingCards({
   onSkip,
   onConnect,
+  onConnectOther,
   connectBusy = false,
   showConnect,
+  showOtherWallet = false,
 }: {
   onSkip: () => Promise<void> | void;
   onConnect: () => Promise<void> | void;
+  onConnectOther?: () => Promise<void> | void;
   connectBusy?: boolean;
   showConnect: boolean;
+  showOtherWallet?: boolean;
 }) {
   const [step, setStep] = useState(0);
   const [pending, setPending] = useState(false);
@@ -65,14 +70,28 @@ export function OnboardingCards({
       </View>
       <View style={styles.actions}>
         {last && showConnect ? (
-          <Button
-            label={connectBusy || pending ? 'Connecting...' : 'Connect'}
-            accessibilityLabel="Connect"
-            busy={connectBusy || pending}
-            onPress={() => {
-              void run(onConnect);
-            }}
-          />
+          <>
+            <Text style={styles.body}>{SEEKER_APPROVAL_LINE}</Text>
+            <Button
+              label={connectBusy || pending ? 'Connecting...' : 'Connect'}
+              accessibilityLabel="Connect"
+              busy={connectBusy || pending}
+              onPress={() => {
+                void run(onConnect);
+              }}
+            />
+            {showOtherWallet && onConnectOther ? (
+              <Button
+                label="Use another wallet"
+                accessibilityLabel="Use another wallet"
+                invert={false}
+                busy={connectBusy || pending}
+                onPress={() => {
+                  void run(onConnectOther);
+                }}
+              />
+            ) : null}
+          </>
         ) : null}
         {showDone ? (
           <Button

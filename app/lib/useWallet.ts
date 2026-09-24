@@ -2,11 +2,14 @@ import { createContext, createElement, useCallback, useContext, useEffect, useMe
 import type { ReactNode } from 'react';
 import { Keypair, Transaction } from '@solana/web3.js';
 
+import { isSolanaMobileWalletInstalled, SOLANA_MOBILE_WALLET_BASE_URI } from './installedPackage';
 import { secureStore, transact } from './mwa';
 import {
+  configuredCluster,
   connect,
   createAgentKeypair,
   disconnect,
+  explainWalletFailure,
   loadAgentKeypair,
   restore,
   signAndSendTransactions,
@@ -16,34 +19,31 @@ export type WalletState = {
   ready: boolean;
   busy: boolean;
   error: string | null;
+  cluster: string | null;
+  solanaMobileInstalled: boolean;
   ownerPublicKey: string | null;
   agentPublicKey: string | null;
-  connect: () => Promise<void>;
+  connect: (choice?: { chooser?: boolean }) => Promise<void>;
   disconnect: () => Promise<void>;
   signAndSend: (transactions: Transaction[]) => Promise<string[]>;
   getAgentKeypair: () => Promise<Keypair | null>;
   createAgentKeypair: () => Promise<Keypair>;
 };
 
-function messageFromUnknown(error: unknown): string {
-  const message = error instanceof Error ? error.message : '';
-  const lower = message.toLowerCase();
-  if (lower.includes('cancel') || lower.includes('declin') || lower.includes('reject')) {
-    return 'Authorization was cancelled';
+async function plainFailure(error: unknown): Promise<string> {
+  try {
+    return explainWalletFailure(error, await configuredCluster());
+  } catch {
+    return explainWalletFailure(error, 'devnet');
   }
-  if (lower.includes('not found') || lower.includes('no wallet')) {
-    return 'No Mobile Wallet Adapter wallet was found';
-  }
-  if (message) {
-    return message;
-  }
-  return 'Wallet request failed';
 }
 
 function useWalletState(): WalletState {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cluster, setCluster] = useState<string | null>(null);
+  const [solanaMobileInstalled, setSolanaMobileInstalled] = useState(false);
   const [ownerPublicKey, setOwnerPublicKey] = useState<string | null>(null);
   const [agentPublicKey, setAgentPublicKey] = useState<string | null>(null);
 
@@ -51,15 +51,21 @@ function useWalletState(): WalletState {
     let cancelled = false;
     (async () => {
       try {
-        const snapshot = await restore(secureStore);
+        const [snapshot, clusterName, mobileInstalled] = await Promise.all([
+          restore(secureStore),
+          configuredCluster(),
+          isSolanaMobileWalletInstalled(),
+        ]);
         if (cancelled) {
           return;
         }
         setAgentPublicKey(snapshot.agentPublicKey);
         setOwnerPublicKey(snapshot.session?.ownerPublicKey ?? null);
+        setCluster(clusterName);
+        setSolanaMobileInstalled(mobileInstalled);
       } catch (err) {
         if (!cancelled) {
-          setError(messageFromUnknown(err));
+          setError(await plainFailure(err));
         }
       } finally {
         if (!cancelled) {
@@ -72,15 +78,23 @@ function useWalletState(): WalletState {
     };
   }, []);
 
-  const onConnect = useCallback(async () => {
+  const onConnect = useCallback(async (choice?: { chooser?: boolean }) => {
     setBusy(true);
     setError(null);
     try {
-      const next = await connect(transact, secureStore);
+      const direct =
+        choice?.chooser || !(await isSolanaMobileWalletInstalled())
+          ? undefined
+          : SOLANA_MOBILE_WALLET_BASE_URI;
+      const next = await connect(transact, secureStore, Keypair.generate, {
+        chooser: choice?.chooser,
+        baseUri: direct,
+      });
       setOwnerPublicKey(next.ownerPublicKey);
       setAgentPublicKey(next.agentPublicKey);
+      setCluster(await configuredCluster());
     } catch (err) {
-      setError(messageFromUnknown(err));
+      setError(await plainFailure(err));
     } finally {
       setBusy(false);
     }
@@ -92,7 +106,7 @@ function useWalletState(): WalletState {
     try {
       await disconnect(transact, secureStore);
     } catch (err) {
-      setError(messageFromUnknown(err));
+      setError(await plainFailure(err));
     } finally {
       setOwnerPublicKey(null);
       setBusy(false);
@@ -105,9 +119,9 @@ function useWalletState(): WalletState {
     try {
       return await signAndSendTransactions(transact, secureStore, transactions);
     } catch (err) {
-      const message = messageFromUnknown(err);
+      const message = await plainFailure(err);
       setError(message);
-      throw err instanceof Error ? err : new Error(message);
+      throw new Error(message);
     } finally {
       setBusy(false);
     }
@@ -126,6 +140,8 @@ function useWalletState(): WalletState {
       ready,
       busy,
       error,
+      cluster,
+      solanaMobileInstalled,
       ownerPublicKey,
       agentPublicKey,
       connect: onConnect,
@@ -138,6 +154,8 @@ function useWalletState(): WalletState {
       ready,
       busy,
       error,
+      cluster,
+      solanaMobileInstalled,
       ownerPublicKey,
       agentPublicKey,
       onConnect,
