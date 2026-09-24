@@ -1,11 +1,12 @@
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
+  Connection,
   Keypair,
   PublicKey,
   Transaction,
   TransactionInstruction,
-  type Connection,
 } from "@solana/web3.js";
+import type { AgentConfig } from "./config.js";
 import { decisionsFromTx, viewFromRpc, type DecisionKind, type RpcTransaction } from "./events.js";
 import { CHARGE_DISCRIMINATOR, PROGRAM_ID } from "./idl.js";
 import {
@@ -82,6 +83,78 @@ export class VetoAgent {
     this.agent = args.agent;
     this.programId = args.programId ? toPublicKey(args.programId, "VetoAgent programId") : PROGRAM_ID;
     this.mandate = resolveMandate(args, this.programId);
+  }
+
+  /**
+   * Builds an agent from the block the app copies.
+   * Checks the block against the chain and throws on any mismatch.
+   * When connection is omitted, it is opened from config.rpcUrl.
+   */
+  static async fromConfig(
+    config: AgentConfig,
+    agentKeypair: Keypair,
+    connection?: Connection,
+  ): Promise<VetoAgent> {
+    if (!(agentKeypair instanceof Keypair)) {
+      throw new Error("VetoAgent.fromConfig: agent must be a Keypair");
+    }
+    const rpc = connection ?? new Connection(config.rpcUrl, "confirmed");
+    if (config.agent !== agentKeypair.publicKey.toBase58()) {
+      throw new Error(
+        `VetoAgent.fromConfig: config agent ${config.agent} does not equal the agent key ${agentKeypair.publicKey.toBase58()}`,
+      );
+    }
+    const veto = new VetoAgent({
+      connection: rpc,
+      agent: agentKeypair,
+      mandate: config.mandate,
+      programId: config.programId,
+    });
+    let mandate: MandateAccount;
+    try {
+      mandate = await fetchMandate(rpc, veto.mandate, veto.programId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("is not owned by the Veto program")) {
+        throw new Error(
+          `VetoAgent.fromConfig: mandate ${config.mandate} is not owned by program ${config.programId}`,
+          { cause: err },
+        );
+      }
+      throw new Error(`VetoAgent.fromConfig: ${message}`, { cause: err });
+    }
+    if (!mandate.agent.equals(agentKeypair.publicKey)) {
+      throw new Error(
+        `VetoAgent.fromConfig: mandate agent ${mandate.agent.toBase58()} does not equal the agent key ${agentKeypair.publicKey.toBase58()}`,
+      );
+    }
+    if (!mandate.mint.equals(new PublicKey(config.mint))) {
+      throw new Error(
+        `VetoAgent.fromConfig: mint ${mandate.mint.toBase58()} does not equal the config mint ${config.mint}`,
+      );
+    }
+    if (!mandate.source.equals(new PublicKey(config.sourceTokenAccount))) {
+      throw new Error(
+        `VetoAgent.fromConfig: source token account ${mandate.source.toBase58()} does not equal the config source ${config.sourceTokenAccount}`,
+      );
+    }
+    const sourceInfo = await rpc.getAccountInfo(mandate.source, "confirmed");
+    if (!sourceInfo) {
+      throw new Error(`VetoAgent.fromConfig: source token account ${mandate.source.toBase58()} not found`);
+    }
+    const payee = await merchantTokenAccount(
+      rpc,
+      mandate.merchant,
+      mandate.mint,
+      sourceInfo.owner,
+      "VetoAgent.fromConfig",
+    );
+    if (!payee.equals(new PublicKey(config.payeeTokenAccount))) {
+      throw new Error(
+        `VetoAgent.fromConfig: payee token account ${payee.toBase58()} does not equal the config payee ${config.payeeTokenAccount}`,
+      );
+    }
+    return veto;
   }
 
   /** Submits charge and reads the one Veto decision in that transaction. */
@@ -265,6 +338,7 @@ async function merchantTokenAccount(
   merchant: PublicKey,
   mint: PublicKey,
   tokenProgram: PublicKey,
+  label = "VetoAgent.charge",
 ): Promise<PublicKey> {
   // The destination is the merchant associated token account for this mint and
   // the source token program. Listing is only for a merchant with no such account,
@@ -279,7 +353,7 @@ async function merchantTokenAccount(
   for (const item of listed.value) {
     const data = item.account.data;
     if (!(data instanceof Uint8Array) || data.length < 32) {
-      throw new Error("VetoAgent.charge: token account data was not bytes");
+      throw new Error(`${label}: token account data was not bytes`);
     }
     const accountMint = new PublicKey(data.subarray(0, 32));
     if (!accountMint.equals(mint)) continue;
@@ -288,19 +362,19 @@ async function merchantTokenAccount(
   if (matches.some((key) => key.equals(ata))) return ata;
   if (matches.length === 0) {
     throw new Error(
-      `VetoAgent.charge: no token account for merchant ${merchant.toBase58()} and mint ${mint.toBase58()}`,
+      `${label}: no token account for merchant ${merchant.toBase58()} and mint ${mint.toBase58()}`,
     );
   }
   if (matches.length > 1) {
     const list = matches.map((key) => key.toBase58()).join(", ");
     throw new Error(
-      `VetoAgent.charge: merchant ${merchant.toBase58()} has ${matches.length} token accounts for mint ${mint.toBase58()}: ${list}`,
+      `${label}: merchant ${merchant.toBase58()} has ${matches.length} token accounts for mint ${mint.toBase58()}: ${list}`,
     );
   }
   const only = matches[0];
   if (!only) {
     throw new Error(
-      `VetoAgent.charge: no token account for merchant ${merchant.toBase58()} and mint ${mint.toBase58()}`,
+      `${label}: no token account for merchant ${merchant.toBase58()} and mint ${mint.toBase58()}`,
     );
   }
   return only;

@@ -2,7 +2,7 @@
 // The legacy delegate warning (issues 166 and 200). Before a revoke or a close
 // that will send SPL revoke on a shared token account, the screen must name the
 // other rule whose delegate that signature clears, and must stay quiet when no
-// revoke is sent. The todo covers the other-kind source, filed as issue 202.
+// revoke is sent. The other-kind source is issue 202.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test, { mock } from 'node:test';
@@ -218,7 +218,6 @@ test('critic r3: the screen re-reads the delegate before each signature, ahead o
 
 test(
   'critic r3: a rule on an other-kind source names the other rule too (issue 202)',
-  { todo: 'issue 202: readRuleFunds reads the delegate only for the associated kind' },
   async () => {
     const { readRuleFunds } = await chainModule;
     const { connection, mint, row, other } = sharedAccount({ source: 'other', status: STATUS_EXPIRED });

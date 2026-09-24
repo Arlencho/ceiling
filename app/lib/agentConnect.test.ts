@@ -16,7 +16,9 @@ import {
   agentChargeConfig,
   agentChargeConfigJson,
   agentChargeRows,
+  agentConnectStatus,
   parseAgentChargeConfig,
+  payeeLookup,
   readPayeeTokenAccount,
   type AgentChargeConfig,
   type PayeeLookup,
@@ -41,6 +43,8 @@ function Host(type: string) {
     return createElement(type, { ...props, style }, props.children);
   };
 }
+
+mock.module('expo-constants', { defaultExport: { expoConfig: { extra: {} } } });
 
 mock.module('react-native', {
   namedExports: {
@@ -132,6 +136,9 @@ test('the rule screen offers one agent config block to copy and as a QR code', (
   assert.match(src, /ConnectAgentPanel/);
   assert.match(src, /agentChargeConfigJson\(chargeConfig\)/);
   assert.match(src, /readPayeeTokenAccount/);
+  assert.match(src, /isActive\(mandate, nowSec\)/);
+  assert.match(src, /agentConnectStatus/);
+  assert.match(src, /next\.tokenProgram/);
   assert.match(src, /onCopy=\{\(json\) => \{/);
   assert.equal(
     AGENT_CONNECT_LINE,
@@ -190,13 +197,12 @@ test('the copied config matches the documented shape, and the SDK loader when th
 
   const example = read('../../sdk/examples/pay-once.ts');
   assert.match(example, /JSON\.parse\(readFileSync\(keyFile/);
-  assert.doesNotMatch(example, /payeeTokenAccount|sourceTokenAccount|mintDecimals/);
+  assert.match(example, /loadAgentConfig/);
+  assert.match(example, /fromConfig/);
+  assert.match(example, /<agent-key\.json> <config\.json> <amount>/);
 
   const loaders = sdkLoaderExports();
-  if (loaders.length === 0) {
-    assert.deepEqual(loaders, []);
-    return;
-  }
+  assert.ok(loaders.length > 0, 'the SDK exports a loader for the agent block');
   for (const loader of loaders) {
     const mod = (await import(`../../sdk/src/${loader.file}`)) as Record<string, (value: unknown) => unknown>;
     const fn = mod[loader.name];
@@ -209,6 +215,115 @@ test('the copied config matches the documented shape, and the SDK loader when th
     }
     assert.deepEqual(loaded, parsed);
   }
+});
+
+test('an inactive rule reports that there is no config to hand an agent', () => {
+  const status = agentConnectStatus({
+    active: false,
+    ready: false,
+    decimalsMissing: false,
+    payeeProblem: null,
+    fundsError: null,
+    fundsLoaded: true,
+    configProblem: null,
+  });
+  assert.equal(status, 'This rule is not active, so there is no config to hand an agent.');
+  assert.equal(
+    agentConnectStatus({
+      active: true,
+      ready: true,
+      decimalsMissing: false,
+      payeeProblem: null,
+      fundsError: null,
+      fundsLoaded: true,
+      configProblem: null,
+    }),
+    null,
+  );
+});
+
+test('reading the payee with the token program from rule funds asks the mint once', async () => {
+  const { readRuleFunds } = await import('./chain');
+  const { deriveRuleTokenAccount } = await import('./ruleAccount');
+  const owner = Keypair.generate().publicKey;
+  const mint = Keypair.generate().publicKey;
+  const merchant = Keypair.generate().publicKey;
+  const source = await deriveRuleTokenAccount(owner, 85n, TOKEN_PROGRAM_ID);
+  const ata = getAssociatedTokenAddressSync(mint, merchant, true, TOKEN_PROGRAM_ID);
+  let mintReads = 0;
+  const mintData = new Uint8Array(82);
+  mintData[44] = 6;
+  const connection = {
+    async getAccountInfo(address: PublicKey) {
+      if (address.equals(mint)) {
+        mintReads += 1;
+        return { data: mintData, owner: TOKEN_PROGRAM_ID };
+      }
+      if (address.equals(source) || address.equals(ata)) {
+        return { data: accountWithMint(mint), owner: TOKEN_PROGRAM_ID };
+      }
+      return null;
+    },
+    async getTokenAccountsByOwner() {
+      return { value: [] };
+    },
+  };
+  const funds = await readRuleFunds(
+    {
+      config: {
+        rpcUrl: 'https://api.devnet.solana.com',
+        programId: Keypair.generate().publicKey.toBase58(),
+        mint: mint.toBase58(),
+        explorerCluster: 'devnet',
+        mintDecimals: 6,
+      },
+      connection: connection as never,
+      programId: Keypair.generate().publicKey,
+    },
+    {
+      address: Keypair.generate().publicKey.toBase58(),
+      owner: owner.toBase58(),
+      agent: Keypair.generate().publicKey.toBase58(),
+      mint: mint.toBase58(),
+      source: source.toBase58(),
+      merchant: merchant.toBase58(),
+      mandateId: 85n,
+      cap: 10n,
+      spent: 0n,
+      perTxMax: 10n,
+      expiresAt: 1n,
+      overrideAmount: 0n,
+      overrideNonce: 0n,
+      lastNonce: 0n,
+      purpose: 'once',
+      status: 0,
+      spendCount: 0,
+      refusalCount: 0,
+      bump: 1,
+    },
+  );
+  assert.equal(mintReads, 1);
+  assert.equal(funds.tokenProgram, TOKEN_PROGRAM_ID.toBase58());
+  const payee = await readPayeeTokenAccount(
+    payeeLookup(connection),
+    merchant,
+    mint,
+    new PublicKey(funds.tokenProgram),
+  );
+  assert.equal(payee.toBase58(), ata.toBase58());
+  assert.equal(mintReads, 1);
+});
+
+test('the app block round-trips through the SDK loader', async () => {
+  const loader = sdkLoaderExports().find((item) => item.name === 'loadAgentConfig');
+  assert.ok(loader, 'loadAgentConfig is exported');
+  const mod = (await import(`../../sdk/src/${loader.file}`)) as {
+    loadAgentConfig: (json: string | unknown) => AgentChargeConfig;
+  };
+  const config = sample();
+  const json = agentChargeConfigJson(config);
+  assert.deepEqual(mod.loadAgentConfig(json), config);
+  assert.deepEqual(mod.loadAgentConfig(JSON.parse(json)), config);
 });
 
 test('the QR code is the same JSON Copy all hands to the clipboard', async () => {

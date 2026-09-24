@@ -147,6 +147,36 @@ export function parseAgentChargeConfig(raw: unknown): AgentChargeConfig {
   });
 }
 
+export function agentConnectStatus(args: {
+  active: boolean;
+  ready: boolean;
+  decimalsMissing: boolean;
+  payeeProblem: string | null;
+  fundsError: string | null;
+  fundsLoaded: boolean;
+  configProblem: string | null;
+}): string | null {
+  if (!args.active) {
+    return 'This rule is not active, so there is no config to hand an agent.';
+  }
+  if (args.ready) {
+    return null;
+  }
+  if (args.decimalsMissing) {
+    return 'The mint account did not include decimals, so this config is not ready.';
+  }
+  if (args.payeeProblem) {
+    return args.payeeProblem;
+  }
+  if (!args.fundsLoaded && args.fundsError) {
+    return args.fundsError;
+  }
+  if (args.configProblem) {
+    return args.configProblem;
+  }
+  return 'Reading the mint decimals and the payee token account.';
+}
+
 export function agentChargeRows(config: AgentChargeConfig): { label: string; value: string }[] {
   return [
     { label: 'Mandate', value: config.mandate },
@@ -186,18 +216,22 @@ export async function readPayeeTokenAccount(
   lookup: PayeeLookup,
   merchant: PublicKey,
   mint: PublicKey,
+  tokenProgram?: PublicKey,
 ): Promise<PublicKey> {
-  const mintInfo = await lookup.getAccountInfo(mint);
-  if (!mintInfo) {
-    throw new Error(`Mint ${mint.toBase58()} was not found on chain, so the payee token account is not known.`);
+  let program = tokenProgram;
+  if (!program) {
+    const mintInfo = await lookup.getAccountInfo(mint);
+    if (!mintInfo) {
+      throw new Error(`Mint ${mint.toBase58()} was not found on chain, so the payee token account is not known.`);
+    }
+    program = mintInfo.owner;
   }
-  const tokenProgram = mintInfo.owner;
-  const ata = getAssociatedTokenAddressSync(mint, merchant, true, tokenProgram);
+  const ata = getAssociatedTokenAddressSync(mint, merchant, true, program);
   const ataInfo = await lookup.getAccountInfo(ata);
   if (ataInfo) {
     return ata;
   }
-  const filter = tokenProgram.equals(TOKEN_PROGRAM_ID) ? { mint } : { programId: tokenProgram };
+  const filter = program.equals(TOKEN_PROGRAM_ID) ? { mint } : { programId: program };
   const listed = await lookup.getTokenAccountsByOwner(merchant, filter);
   const matches: PublicKey[] = [];
   for (const item of listed) {

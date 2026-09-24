@@ -18,7 +18,7 @@ export function ConnectAgentPanel({
   onCopy: (json: string) => void;
 }) {
   return (
-    <View style={styles.panel} accessibilityLabel="Connect your agent">
+    <View style={styles.panel}>
       <SectionTitle>Connect your agent</SectionTitle>
       {configJson ? (
         <View style={styles.block}>

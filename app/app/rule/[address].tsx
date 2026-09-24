@@ -17,6 +17,7 @@ import {
   agentChargeConfig,
   agentChargeConfigJson,
   agentChargeRows,
+  agentConnectStatus,
   payeeLookup,
   readPayeeTokenAccount,
   type AgentChargeConfig,
@@ -97,48 +98,60 @@ export default function RuleDetailScreen() {
     let cancelled = false;
     const ruleAddress = mandate.address;
     const client = createClient(chain.config);
-    void readRuleFunds(client, mandate)
-      .then((next) => {
-        if (!cancelled) {
-          setLoadedFunds(next);
-          setLoadedFor(ruleAddress);
-          setLoadedError(null);
-          setErrorFor(null);
-        }
-      })
-      .catch((err: unknown) => {
+    const activeNow = isActive(mandate, nowSec);
+    void (async () => {
+      let next: RuleFunds;
+      try {
+        next = await readRuleFunds(client, mandate);
+      } catch (err: unknown) {
         if (!cancelled) {
           setLoadedFunds(null);
           setLoadedFor(null);
           setLoadedError(err instanceof Error ? err.message : 'Could not read the rule account');
           setErrorFor(ruleAddress);
         }
-      });
-    void readPayeeTokenAccount(
-      payeeLookup(client.connection),
-      new PublicKey(mandate.merchant),
-      new PublicKey(mandate.mint),
-    )
-      .then((payee) => {
+        return;
+      }
+      if (cancelled) {
+        return;
+      }
+      setLoadedFunds(next);
+      setLoadedFor(ruleAddress);
+      setLoadedError(null);
+      setErrorFor(null);
+      if (!activeNow) {
+        setPayeeAccount(null);
+        setPayeeFor(null);
+        setPayeeError(null);
+        setPayeeErrorFor(null);
+        return;
+      }
+      try {
+        const payee = await readPayeeTokenAccount(
+          payeeLookup(client.connection),
+          new PublicKey(mandate.merchant),
+          new PublicKey(mandate.mint),
+          next.tokenProgram ? new PublicKey(next.tokenProgram) : undefined,
+        );
         if (!cancelled) {
           setPayeeAccount(payee.toBase58());
           setPayeeFor(ruleAddress);
           setPayeeError(null);
           setPayeeErrorFor(null);
         }
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         if (!cancelled) {
           setPayeeAccount(null);
           setPayeeFor(null);
           setPayeeError(err instanceof Error ? err.message : 'Could not read the payee token account');
           setPayeeErrorFor(ruleAddress);
         }
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [mandate, chain.config]);
+  }, [mandate, chain.config, nowSec]);
 
   const gateSignature = async (): Promise<{ sign: false } | { sign: true; kind: RuleAccountKind }> => {
     if (!mandate || !chain.config) {
@@ -158,8 +171,9 @@ export default function RuleDetailScreen() {
 
   const payeeToken = mandate && payeeFor === mandate.address ? payeeAccount : null;
   const payeeProblem = mandate && payeeErrorFor === mandate.address ? payeeError : null;
+  const active = mandate ? isActive(mandate, nowSec) : false;
   let chargeConfig: AgentChargeConfig | null = null;
-  if (mandate && chain.config && funds && funds.decimals != null && payeeToken) {
+  if (active && mandate && chain.config && funds && funds.decimals != null && payeeToken) {
     chargeConfig = agentChargeConfig({
       mandate: mandate.address,
       programId: chain.config.programId,
@@ -173,17 +187,17 @@ export default function RuleDetailScreen() {
     });
   }
   const configJson = chargeConfig ? agentChargeConfigJson(chargeConfig) : null;
-  const connectStatus = configJson
-    ? null
-    : funds && funds.decimals == null
-      ? 'The mint account did not include decimals, so this config is not ready.'
-      : payeeProblem
-        ? payeeProblem
-        : !funds && fundsError
-          ? fundsError
-          : !chain.config
-            ? (chain.configError ?? 'Config is missing.')
-            : 'Reading the mint decimals and the payee token account.';
+  const connectStatus = mandate
+    ? agentConnectStatus({
+        active,
+        ready: chargeConfig !== null,
+        decimalsMissing: Boolean(funds && funds.decimals == null),
+        payeeProblem,
+        fundsError,
+        fundsLoaded: funds !== null,
+        configProblem: chain.config ? null : (chain.configError ?? 'Config is missing.'),
+      })
+    : null;
 
   const onCopyConfig = async (json: string) => {
     setFormError(null);

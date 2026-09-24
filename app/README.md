@@ -98,10 +98,17 @@ Optional:
 
 ## Connect an agent
 
-The rule screen copies one JSON block and shows the same block as a QR code.
-`sdk/examples/pay-once.ts` does not load this block: it reads an agent key
-file, a mandate address, and an amount. The package exports no loader for
-this object. This is the shape:
+The rule screen copies one JSON block and shows the same block as a QR code
+while the rule can still pay. `loadAgentConfig` reads that block.
+`VetoAgent.fromConfig` checks it against the chain: the mandate is owned by
+the program, the mandate agent is the key in the key file, and the mint,
+source, and payee token account agree. The example then charges:
+
+```bash
+npx tsx examples/pay-once.ts <agent-key.json> <config.json> <amount>
+```
+
+This is the shape:
 
 ```json
 {
@@ -121,7 +128,8 @@ this object. This is the shape:
 token account a charge pays: the payee's associated token account for this
 mint when that account exists, otherwise the payee's only token account for
 the mint. `cluster` is the configured cluster name. `rpcUrl` is the RPC this
-app uses. The block has no secret.
+app uses, copied as configured, including any query string. A provider URL
+with a key in that query is on the clipboard and in the QR.
 
 ## One-time: Expo account
 
