@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse, Agent } from "node:http";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 import { Connection, type ConnectionConfig } from "@solana/web3.js";
@@ -154,11 +154,11 @@ test("a custom fetchMiddleware reaches every decision request", async () => {
   }
 });
 
-test("a caller that turns off the http agent still gets the decision", async () => {
+test("a custom http agent is the agent on every decision request", async () => {
   const w = world();
-  let calls = 0;
+  const agent = new Agent();
+  const seen: unknown[] = [];
   const rpc = await serve((body, _req, res) => {
-    calls += 1;
     if (body.method === "getSignaturesForAddress") {
       json(res, 200, {
         jsonrpc: "2.0",
@@ -169,13 +169,20 @@ test("a caller that turns off the http agent still gets the decision", async () 
     }
     json(res, 200, { jsonrpc: "2.0", id: body.id, result: paidRpcTx(w, SIG, 6n) });
   });
+  const fetch: NonNullable<ConnectionConfig["fetch"]> = async (input, init) => {
+    seen.push((init as { agent?: unknown } | undefined)?.agent);
+    return globalThis.fetch(input, init);
+  };
   try {
-    const connection = new Connection(rpc.url, { commitment: "confirmed", httpAgent: false });
+    const connection = new Connection(rpc.url, { commitment: "confirmed", httpAgent: agent, fetch });
     const rows = await decisionsForMandate(connection, w.mandate, { sleep: async () => {} });
     assert.equal(rows.length, 1);
     assert.equal(rows[0]?.nonce, 6n);
-    assert.equal(calls, 2);
+    assert.equal(seen.length, 2);
+    assert.equal(seen[0], agent);
+    assert.equal(seen[1], agent);
   } finally {
+    agent.destroy();
     await rpc.close();
   }
 });
