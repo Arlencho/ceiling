@@ -50,12 +50,28 @@ The run prints a summary table and writes the same table to
 `app/e2e/last-run.md`. This does not replace the Seeker check above. Seed
 Vault is still required for a signature on a device.
 
+## First launch
+
+A fresh install, with no stored session and with `veto.onboarding.seen` unset,
+shows four introduction cards before Connect. The cards are "It can only ask",
+"One rule", "A recorded no", and "You decide". The last card also says the
+owner key stays in Seed Vault. Skip, or Connect on the last card, stores
+`veto.onboarding.seen`. Help on the top bar stays on the other screens, and
+Help can show the introduction again. The introduction route itself has no
+Help control.
+
+With no rule on chain, Overview shows Open your first rule. The new rule
+screen has a hint under Cap, Per-payment maximum, Expiry, Payee, and Agent
+address.
+
 ## Sign-in
 
 Connect runs `transact`, then `authorize`, against the Seed Vault wallet through
-Mobile Wallet Adapter. The owner public key is shown truncated. The
-authorization token is stored in `expo-secure-store` so a returning user is not
-prompted again. Disconnect deauthorizes that token and clears it.
+Mobile Wallet Adapter. The agent public key is shown truncated on Overview,
+Rules, Decisions, and the rule screen. The rule screen also truncates the
+payee. The owner public key is not rendered. The authorization token is stored
+in `expo-secure-store` so a returning user is not prompted again. Disconnect
+deauthorizes that token and clears it.
 
 When the new rule screen leaves the agent address empty, the phone generates
 an agent keypair with `@solana/web3.js` and stores it in `expo-secure-store`.
@@ -63,6 +79,15 @@ A filled address is the public key of an agent that runs elsewhere, and this
 phone does not store a secret for it. The agent is a different key from the
 owner. It holds authority and no funds. The owner private key is never written
 to storage.
+
+Opening a rule derives a token account from the owner with the seed
+`veto-rule-<mandate id>` (`createAccountWithSeed`). The same owner signature
+creates that account, moves the cap into it from the owner's associated token
+account, and opens the mandate with that account as the source. Close rule
+returns the remaining balance and closes the token account, so the rent comes
+back with the mandate rent and the ledger rent. Revoke clears the delegate on
+that account only. A rule whose source is still the associated token account
+still closes, and that token account stays.
 
 ## Owner screens
 
@@ -115,7 +140,7 @@ cp .env.example .env
 
 Required:
 
-- `EXPO_PUBLIC_VETO_RPC` (the cluster RPC, never committed as a default)
+- `EXPO_PUBLIC_VETO_RPC` (the cluster RPC; blank in `.env.example`, preset to the public devnet RPC in the `eas.json` production profile, together with the program id and the mint)
 - `EXPO_PUBLIC_VETO_PROGRAM_ID`
 - `EXPO_PUBLIC_VETO_MINT` (needed to open a mandate)
 
@@ -126,8 +151,12 @@ Optional:
 
 ## Connect an agent
 
-The rule screen copies one JSON block and shows the same block as a QR code
-while the rule can still pay. `loadAgentConfig` reads that block.
+The rule screen shows Connect your agent. Copy all and the QR appear only
+while the rule is active (status active, and not past expiry) and the mint
+decimals and payee token account have been read. Both controls carry the same
+JSON. A rule that is not active shows "This rule is not active, so there is
+no config to hand an agent." and shows neither control. `loadAgentConfig`
+reads that block.
 `VetoAgent.fromConfig` checks it against the chain. The mandate must be owned
 by the program bundled with the SDK, and a block whose `programId` differs is
 refused. A different program id is accepted only as an argument passed in
@@ -177,9 +206,8 @@ npm install
 npx eas-cli login
 ```
 
-The first Android cloud build will ask Expo to create a project if one is
-not linked, and will ask EAS to generate a keystore. Let EAS store the
-keystore.
+A project is already linked in `app.json` (`extra.eas.projectId`). The first
+cloud build will ask EAS to generate a keystore. Let EAS store the keystore.
 
 ## Development client APK
 

@@ -33,10 +33,12 @@ Explorer:
 
 ## Fixtures
 
+These bullets are written by `write_docs` in `scripts/devnet-setup.sh`. Re-running the script rewrites this file from that template.
+
 - Test SPL mint at 6 decimals on the classic Token program (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`).
-- Owner token account was funded with 1000000 tokens at setup on 2026-09-20T20:57:14Z (a round number, not a dust amount). Paid charges since then moved 0.666 tokens to the merchant. `spl-token balance` on the owner token account prints `999999.334` (checked 2026-09-23).
-- Merchant token account was created empty at setup. Those same charges left it at `0.666`. `spl-token balance` on the merchant token account prints `0.666` (checked 2026-09-23), not zero.
-- Agent funded with 0.5 SOL for fees and holding **zero tokens**. The setup does not create an agent token account.
+- Setup minted 1000000 tokens to the owner token account on 2026-09-20T20:57:14Z. Mandate `CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g` paid 0.666 of that supply to the merchant across three charges on 2026-09-20 (0.446, 0.2145, 0.0055). Later rules opened in the app, and `make e2e-devnet`, pay the same merchant from other token accounts, so the live merchant balance is that 0.666 plus every later payment. Read both balances with the verify commands below. A printed figure goes stale when a charge pays.
+- The owner token account is still the source for mandates id 1 and id 3. A rule opened in the app uses a different account, seed `veto-rule-<mandate id>`, derived from that rule's owner. There is not one owner token account for every rule.
+- The agent was funded with 0.5 SOL. The live balance is that amount minus fees. The setup does not create an agent token account. On 2026-09-24 `getTokenAccountsByOwner` for the agent returned no accounts.
 
 ## Keypairs (secrets, not in git)
 
@@ -65,7 +67,7 @@ Reading the program on devnet does not use this section. The verify commands bel
 
 `make setup` and `make localnet` deploy. Both run this script. They need the maintainer backup of `keys/program.json`, the keypair for `declare_id` `3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV`. That file is not in git (`keys/` is gitignored). If it is missing, the script stops with `keys/program.json is missing; the program keypair must be restored from backup` and does not mint a replacement. A fresh clone cannot run either target until that backup is restored. `npx tsx produce.ts` is also not a read: it needs `keys/owner.json` from the same backup.
 
-Toolchain used when this file was written: anchor-cli 1.2.0, solana-cli 4.1.2.
+Toolchain named when this file was first written: anchor-cli 1.2.0, solana-cli 4.1.2. Anchor 1.2.0 is the version CI installs. The repo does not pin the Solana CLI. CI installs the stable release.
 
 ```bash
 VETO_RPC=https://api.devnet.solana.com ./scripts/devnet-setup.sh
@@ -78,9 +80,9 @@ The script:
 1. Points the Solana CLI at `https://api.devnet.solana.com` and refuses to continue if the URL looks like mainnet.
 2. Requires `keys/program.json` from the maintainer backup. A missing file is an error. It creates `keys/` and the other keypairs in the table when they are missing.
 3. Airdrops SOL to the deployer, retrying on rate limits.
-4. Builds the program. It copies `keys/program.json` to `target/deploy/veto-keypair.json`, runs `anchor keys sync` so the bytecode ID check matches the deploy address, then restores `programs/veto/src` so program source is not left dirty and is not committed.
-5. Runs `anchor deploy --provider.cluster devnet`.
-6. Creates the mint, owner token account, merchant token account, funds the owner, and funds the agent with SOL only.
+4. Builds the program. It stops if `programs/veto/src` has local edits. It copies `keys/program.json` to `target/deploy/veto-keypair.json`, deletes `target/deploy/veto.so`, runs `anchor keys sync`, then `anchor build --no-idl`, then restores `programs/veto/src` and `Anchor.toml`.
+5. Runs `anchor deploy --no-idl --provider.cluster` with the `VETO_RPC` URL (not the cluster name). A failed deploy retries with `-- --with-compute-unit-price 5000`.
+6. Creates the mint, owner token account, and merchant token account when they are absent. It mints 1000000 tokens only when the owner balance is below that. It transfers 0.5 SOL to the agent only when the agent holds fewer than 400000000 lamports.
 7. Fetches the program account and rewrites this file.
 
 Re-running with the same `keys/` directory keeps these addresses and upgrades the existing program.
@@ -94,18 +96,21 @@ solana config set --url https://api.devnet.solana.com --keypair keys/deployer.js
 solana config get
 ```
 
-Build and deploy (the wrapper script is the supported path; these are the commands it runs):
+Build and deploy (the wrapper script is the supported path; these are the core commands it runs, after it has refused to continue when `programs/veto/src` is dirty):
 
 ```bash
 mkdir -p target/deploy
 cp keys/program.json target/deploy/veto-keypair.json
+rm -f target/deploy/veto.so
 anchor keys sync --program-name veto
 anchor build --no-idl
-git checkout -- programs/veto/src
-anchor deploy --no-idl --provider.cluster devnet --provider.wallet keys/deployer.json --program-name veto --program-keypair keys/program.json
+git checkout -- programs/veto/src Anchor.toml
+anchor deploy --no-idl --provider.cluster https://api.devnet.solana.com --provider.wallet keys/deployer.json --program-name veto --program-keypair keys/program.json
 ```
 
-Demo fixtures:
+If that deploy exits non-zero, the script retries the same command with `-- --with-compute-unit-price 5000`.
+
+Demo fixtures (each command runs only when the account is missing, the owner balance is under 1000000 tokens, or the agent holds fewer than 400000000 lamports):
 
 ```bash
 spl-token create-token --decimals 6 --mint-authority GYus8c91vyc7XDrgqfDaYcmVTERb4hQWcf6fLr2SyR1 --fee-payer keys/deployer.json -u https://api.devnet.solana.com -- keys/mint.json
@@ -135,7 +140,6 @@ solana account 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV -u https://api.devne
 ```
 
 ```
-
 Public Key: 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV
 Balance: 0.00083312 SOL
 Owner: BPFLoaderUpgradeab1e11111111111111111111111

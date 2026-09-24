@@ -1,10 +1,12 @@
 # Veto history indexer
 
 Rebuilds the full Paid and Refused trail from transaction logs. The on-chain
-ledger is a 32-entry ring. That ring is the authoritative recent window. A week
-of decisions will wrap it, so seven-day history has to come from the logs.
+ledger is a 32-entry ring. That ring is the authoritative recent window. Four
+decisions a day stay inside it for a week. The 33rd entry overwrites the oldest,
+so longer history has to come from the logs.
 
-This package is a library the app and the export tool can call, plus a CLI.
+This package is a library the export tool calls, plus a CLI. The app does not
+import it.
 
 It does not assume the ring is complete. It does not invent rows for missing
 signatures.
@@ -17,10 +19,11 @@ signatures.
 3. The charge instruction's destination account, which is the counterparty the
    ring stores for those kinds.
 
-If the RPC's signature index is empty (Agave 4.1.2 `solana-test-validator`
-returns `[]` here), the indexer scans retained blocks instead. That fallback
-is how a local cluster can still prove the decoder. Public Solana RPC has a
-real signature index, and that is the path the CLI prefers.
+When `getSignaturesForAddress` returns an empty first page, the indexer scans
+retained blocks instead (`allowBlockScan` defaults on in the library and the
+CLI). Public Solana RPC has a signature index, and that is the path the CLI
+uses when the page is not empty. `tools/export.ts` passes block scan through
+only when `--block-scan` is set.
 
 Opened, override and revoked ring rows have no `Paid`/`Refused` event. They
 are not synthesized.
@@ -70,7 +73,7 @@ Table (default):
 npx tsx src/cli.ts --rpc "$VETO_RPC" --mandate <MANDATE_PDA>
 ```
 
-JSON (for the app / export):
+JSON (for export):
 
 ```bash
 npx tsx src/cli.ts --json --mandate <MANDATE_PDA>
@@ -88,8 +91,15 @@ signatures. On a test validator the CLI reports that it scanned slots instead.
 
 Library:
 
+The package is private and unpublished. `main` is `./dist/index.js`, which
+exists after `npm run build`. In-repo callers import the source, as
+`tools/export.ts` does:
+
 ```ts
-import { fetchDecisionHistory, fetchLedgerRing, compareRingToHistory } from "veto-indexer";
+import { fetchDecisionHistory } from "../indexer/src/index.js";
 ```
+
+`fetchLedgerRing` and `compareRingToHistory` are on the same module. The bare
+specifier `veto-indexer` does not resolve from a fresh clone.
 
 Amounts are `bigint` in the library and decimal strings in JSON. Never floats.

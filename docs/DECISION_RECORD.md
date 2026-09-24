@@ -51,8 +51,10 @@ README links for 2026-09-20 evening.
 
 ## Fields
 
-Every field below is read from the chain. The program is frozen: nothing was
-added to it for this export.
+Every field below is read from the chain. The export did not add a field to the
+program. Devnet is upgradeable under the deployer key in [DEVNET.md](DEVNET.md).
+Setting the mainnet upgrade authority to none stays the intent in the README
+threat model. This program is not deployed on mainnet.
 
 | Field | JSON type | On-chain source |
 |---|---|---|
@@ -123,20 +125,23 @@ account's owner equals `limits.merchant`.
 
 ## Signature recovery
 
-The ledger ring does not store a transaction signature. The program is frozen,
-so this file does not invent a new field for it.
+The ledger ring does not store a transaction signature. The export did not add
+a field for it.
 
-Export recovers the signature by fetching the transaction (`--signature`) or by
-scanning `getSignaturesForAddress` on the mandate until it finds the `charge`
-whose amount, nonce and kind match the ledger entry (`--mandate`).
+Export recovers the signature by fetching the transaction (`--signature`) or,
+for `--mandate`, by scanning `getSignaturesForAddress` on the program and
+rebuilding the Paid and Refused events from the transaction logs, keeping the
+rows for that mandate. The indexer does that scan. Ledger matching happens
+after, on amount, nonce, and kind.
 
 That depends on the cluster retaining transaction history:
 
 - Public Solana devnet does.
-- `solana-test-validator` only does if started with
-  `--enable-rpc-transaction-history`. Without that flag, `getTransaction` works
-  for a short recent window and then returns null. Verify then rejects, honestly,
-  rather than pretending the signature was checked.
+- Current `solana-test-validator` serves transaction history by default. The
+  old `--enable-rpc-transaction-history` flag is not in `solana-test-validator
+  --help` on solana-cli 4.1.2. Retention is bounded by `--limit-ledger-size`.
+  Once the ledger prunes past the slot, `getTransaction` returns null, and
+  verify says the signature was not checked rather than pretending it was.
 
 If the 32-entry ring has wrapped past this decision, the ledger account no
 longer holds the row. Export from `--signature` still works: the transaction,
@@ -181,9 +186,16 @@ It confirms, independently:
    `program_id` in the file is not trusted. A confirmed record prints
    `checked against program <id> (<source>)`, where the source is `flag`,
    `VETO_PROGRAM_ID`, or `idl`.
-3. The `charge` instruction amount and nonce match the record.
-4. The mandate account in that transaction matches `mandate`, and its
+3. The `charge` instruction amount and nonce match the record. A transaction
+   with more than one charge is bound by mandate, nonce, and amount. Export
+   of that signature needs `--mandate`, `--nonce`, and `--amount` together.
+4. The mandate named in the transaction matches `mandate`, and its
    `cap` / `per_tx_max` / `expires_at` / `merchant` / `purpose` match `limits`.
+   Limits come from the live account when that account is the opening that
+   covers the signature. When the live account is a later opening, or the
+   account is closed, limits come from the `open_mandate` whose tenure
+   contains the signature. A closed account prints `mandate account is closed
+   and the limits came from the opening transaction`.
 5. The ledger PDA derived from the mandate still holds a matching row (amount,
    nonce, kind, reason, suggested override, counterparty, timestamp), unless
    the ring has wrapped, in which case the transaction logs must match and the
@@ -210,9 +222,12 @@ For a date_range scope, verify rebuilds the population with the indexer over
 that same range (and that mandate, when one is named) and rejects the file
 unless the signature set matches. A row whose timestamp is outside that
 range is a failure, even when the row itself is genuine. A date_range with
-no mandate is every charge on the program in that range. The bulk verdict prints the scope,
+no mandate is every charge on the program in that range. A date-range log
+that ends with `Log truncated` fails the file. The bulk verdict prints the scope,
 program, cluster, mandate, and range it checked. A missing row is a reject.
-An RPC transport error prints `verify failed` and no verdict, and exits 3. On a bulk file the line names the row that was not checked.
+An RPC transport error prints `verify failed` and no verdict, and exits 3.
+A listed signature whose `getTransaction` returns null is `was not checked`
+and the process exits 3. On a bulk file the line names the row that was not checked.
 
 RPC, in order: `--rpc`, then `VETO_RPC`, then `keys/devnet-addresses.env`
 `RPC=`. If none of those is set, the tool exits and names `VETO_RPC`. There
@@ -224,7 +239,8 @@ against that cluster. A record from another genesis will not confirm.
 
 ## Commands
 
-From a machine that is not the phone. Node 20 or newer. Keypairs are only
+From a machine that is not the phone. Node 22 or newer (the indexer declares
+`engines.node` of `>=22`, and export loads it). Keypairs are only
 needed to **produce** a decision, never to export or verify one.
 
 ```bash
@@ -236,9 +252,10 @@ cd ../tools && npm ci
 # Uses gitignored keys/ from scripts/devnet-setup.sh.
 VETO_RPC=https://api.devnet.solana.com npx tsx produce.ts
 
-# JSON for one decision, by signature.
-VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --signature <tx>
+# JSON for one decision, by signature. A transaction with more than one
+# charge also needs --mandate, --nonce, and --amount.
 VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --signature <tx> --out refused.json
+VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --signature <tx> --mandate <mandate> --nonce <nonce> --amount <amount> --out one.json
 
 # Everything under one rule, or a UTC date range. JSON default, or CSV.
 VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --mandate <mandate> --out rule.json
@@ -249,11 +266,17 @@ VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --from 2026-09-20 --to 
 VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts refused.json
 VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts rule.json
 VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts rule.csv
-VETO_RPC=https://api.devnet.solana.com npx tsx export.ts --signature <tx> | VETO_RPC=https://api.devnet.solana.com npx tsx verify.ts
 ```
 
-`produce.ts` opens its own source token account so it does not replace the SPL
-delegate on the demo owner ATA that the watcher uses.
+Write the file with `--out`, then pass that path to `verify.ts`. After
+`close_mandate` removes the account, export still writes the decision. Limits
+come from the opening transaction that covered the signature, and the tool
+prints `mandate account is closed and the limits came from the opening transaction`.
+
+`produce.ts` creates a fresh keypair as its source token account
+(`SystemProgram.createAccount`), mints into that account, and opens the mandate
+against it. It does not replace the SPL delegate on the demo owner associated
+token account that the watcher charges.
 
 `--kind paid` or `--kind refused` is an optional filter on a bulk export. The
 default includes both. Refused rows are never dropped unless you ask.

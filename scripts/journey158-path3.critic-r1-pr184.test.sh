@@ -53,15 +53,24 @@ else
     ok "#177 solana program show runs without a key file in the doc and the template"
 fi
 
-# #178: spl-token balance printed 999999.334 (owner) and 0.666 (merchant) on
-# 2026-09-23. The doc must state those, not "holding zero".
-if grep -q 'holding zero tokens' "$ROOT/docs/DEVNET.md" | grep -v agent; then :; fi
+# #178: the three charges on 2026-09-20 paid 0.666. Later journeys pay the
+# same merchant, so a live owner or merchant balance in the doc goes stale.
+# The doc and the write_docs template state the payment and print no live figure.
+template=$(awk '/^write_docs\(\) \{/{p=1} p{print} p && /^\}$/{exit}' "$ROOT/scripts/devnet-setup.sh")
 if grep -E '^- Merchant token account' "$ROOT/docs/DEVNET.md" | grep -q 'holding zero'; then
-    bad "#178 docs/DEVNET.md says the merchant token account holds zero; spl-token balance prints 0.666"
-elif ! grep -q '999999\.334' "$ROOT/docs/DEVNET.md" || ! grep -q '`0\.666`' "$ROOT/docs/DEVNET.md"; then
-    bad "#178 docs/DEVNET.md does not state the live balances 999999.334 and 0.666"
+    bad "#178 docs/DEVNET.md says the merchant token account holds zero; the three charges paid 0.666"
+elif grep -q '999999\.334' "$ROOT/docs/DEVNET.md" || printf '%s\n' "$template" | grep -q '999999\.334'; then
+    bad "#178 docs/DEVNET.md or the write_docs template prints the live owner balance 999999.334"
+elif ! grep -q 'paid 0\.666 of that supply to the merchant across three charges' "$ROOT/docs/DEVNET.md"; then
+    bad "#178 docs/DEVNET.md does not state that 0.666 was paid across three charges"
+elif ! printf '%s\n' "$template" | grep -q 'paid 0\.666 of that supply to the merchant across three charges'; then
+    bad "#178 the write_docs template does not state that 0.666 was paid across three charges"
+elif ! grep -q 'A printed figure goes stale when a charge pays' "$ROOT/docs/DEVNET.md"; then
+    bad "#178 docs/DEVNET.md does not say a printed figure goes stale"
+elif ! printf '%s\n' "$template" | grep -q 'A printed figure goes stale when a charge pays'; then
+    bad "#178 the write_docs template does not say a printed figure goes stale"
 else
-    ok "#178 docs/DEVNET.md states the live owner and merchant balances"
+    ok "#178 docs/DEVNET.md states 0.666 paid across three charges and no live balance"
 fi
 
 # #179: a fresh export of CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g is nine

@@ -22,7 +22,7 @@ burner is free, instant, and needs no program.
 
 | | Burner wallet | Mandate |
 |---|---|---|
-| Funding | Pre-fund, then top up forever | Nothing moves; funds stay in the main wallet under a delegate |
+| Funding | Pre-fund, then top up forever | The cap sits in a token account the owner controls, under a delegate. A rule opened in the app uses its own account |
 | Payee restriction | None. It can pay anyone | One named merchant, enforced on chain |
 | Expiry | None. It is live until you empty it | A timestamp the program checks |
 | Revocation | Move the funds out | One signature |
@@ -37,11 +37,12 @@ them. A burner wallet cannot show that.
 
 Veto is that mandate on Solana, and the record of the decisions under it.
 
-The owner sets the four limits and a purpose string. The purpose is stored on chain as written.
-Funds stay in the owner's wallet. The mandate account is an SPL delegate on that wallet. The
-owner key stays in Seed Vault and is reached through Mobile Wallet Adapter. A separate agent
-key can submit a charge. It cannot change a limit, change the merchant, extend the expiry, or
-move funds outside the mandate.
+The owner sets the four limits and a purpose string. The purpose is stored on chain as written
+and is not evaluated. A rule opened in the app moves the cap into a token account derived from
+the owner. The mandate PDA is the SPL delegate on that account. The program does not escrow
+into a vault. The owner key stays in Seed Vault and is reached through Mobile Wallet Adapter.
+A separate agent key can submit a charge. It cannot change a limit, change the merchant, extend
+the expiry, or move funds outside the mandate.
 
 When a charge is inside the limits, the program pays the merchant and writes the payment. When
 a charge breaks a limit, the transfer instruction is not executed, no tokens move, and the
@@ -67,17 +68,4 @@ verifiable credential. There is no signing ceremony and no verifier service.
 
 Capped agent spending on chain is not new. The prior art is named in the [README](../README.md).
 
-Insurers, agent platforms, compliance functions, and counterparties are the people who would
-use a record like this to underwrite agent spend, to dispute a drained wallet, or to compare
-agents at a limit. Nobody is buying that record in 2026.
-
-## How we would know this was wrong
-
-Three outcomes would show the claim does not hold.
-
-- If the person using this on a Tuesday is still a hypothetical, the consumer framing is wrong
-  and the product is developer infrastructure wearing an app.
-- If the export lands as a curiosity, the record is not the wedge and the differentiator is only
-  mobile UX on limits, which is a much weaker position.
-- If someone else ships a recorded on-chain refusal on mobile before 2026-10-09, that wedge is
-  gone and the entry needs a different one.
+The record is the prior claim and the decisions under it. Submissions close October 8, 2026 ([Solana Mobile announcement](https://solanamobile.com/blog/clock-in-the-solana-mobile-hackathon)).

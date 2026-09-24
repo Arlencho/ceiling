@@ -1,10 +1,6 @@
 # Deck
 
-Slide by slide. The app that shipped has a rule and a decision, and the fleet sits in the
-existing slides. Presentation is 25% of the score and clarity of vision is one of the five
-things the evaluation process names.
-
-Ten slides. Nothing here needs a screenshot that does not exist yet, except where marked.
+Slide by slide for the submission. Ten slides. The organizer's page names presentation and demo as one of the four things judges look at. It does not publish a percentage.
 
 ---
 
@@ -27,7 +23,7 @@ No logo slide, no team slide, no agenda. The first slide is the refusal card.
 
 ## 2. The two bad options
 
-> AI can already decide what to buy. Crypto gives you two options: sign every transaction, or hand
+> Software already spends from wallets people own. Two options: sign every transaction, or hand
 > an agent a blank check.
 
 Left: a wall of approval prompts. Right: a drained wallet. Thirty seconds.
@@ -45,7 +41,8 @@ Four limits, on the rule:
 
 One human, several agents, one rule each. A ruleset is written once and reused on the next agent.
 
-> The key never leaves Seed Vault. Funds never leave your wallet. The agent gets authority, not
+> The key never leaves Seed Vault. A rule opened in the app keeps its budget in its own token
+> account, and the mandate is the delegate on that account. The agent gets authority, not
 > ownership.
 
 ---
@@ -56,23 +53,20 @@ These are the limits that already exist.
 
 | | What it does |
 |---|---|
-| Squads v4 | Audited, formally verified spending limits |
+| Squads v4 | Audited spending limits, formal verification underway |
 | SPL delegate | A cap on what a delegate may pull |
 | LazorKit | Session keys with on-chain roles and limits |
 | SolAgent Pay | Session PDA, ceilings, allowlist, TTL |
 | AP2 | Signed mandates carrying limits and validity |
 
 > Capped agent spending on Solana is not new. An infrastructure vendor publishes a tutorial on it.
-> We are not claiming it.
 
 ---
 
 ## 5. What every one of them has in common
 
-> They all stop it. So do we.
->
-> The difference is what is left behind. Everywhere else a blocked overspend is a failed
-> transaction: no artifact, no reason, no trail.
+> The difference is what is left behind. Elsewhere a blocked overspend is a failed
+> transaction: no artifact, no reason, no trail. Here the decline is recorded.
 
 Quote SolAgent Pay's own README on screen, verbatim, in their words: an overspend "is not a policy
 violation logged after the fact, it is an impossible transaction."
@@ -81,7 +75,7 @@ Here the transfer is not executed. The decline is recorded.
 
 ---
 
-## 6. We make it legible
+## 6. The log line
 
 Screenshot of an explorer showing a confirmed transaction, with the program log visible:
 
@@ -111,16 +105,17 @@ Same decision as slide 1.
 
 ---
 
-## 8. A real week
+## 8. The diary on the quoted rule
 
-Screenshot: the Decisions screen with multi-day history. **Needs the watcher to have been running.**
+Screenshot: Decisions for mandate `CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g`. Signatures from 2026-09-20 20:57:50 UTC through 2026-09-21 22:00:11 UTC. Three paid, six refused. It paid when the amount was under 0.5. It has no signature after that.
 
-> The agent pays a bill repriced by a public index, unattended, against an on-chain rule, when
-> that bill is under the ceiling. The price is the only input we do not control, which is why the
-> refusal counts, and you can check it at the same URL we do.
+> The agent pays a bill repriced by a public index, on devnet, in our token, to our counterparty.
+> It buys no electricity. On this rule it paid three bills under the ceiling and refused six over
+> it, across that span. The price is the only input we do not control, and you can check it at
+> the same URL.
 >
-> Solana devnet. Our token. Our counterparty: a terminal we run. When the rule allows the bill,
-> the program executes an SPL transfer of that token to an account we created.
+> When the rule allows the bill, the program executes an SPL transfer of that token to an account
+> we created.
 
 The index is the Nordic day-ahead spot. The mint and the counterparty account are created by
 [scripts/devnet-setup.sh](../scripts/devnet-setup.sh). [tools/produce.ts](../tools/produce.ts)
@@ -135,32 +130,19 @@ mints further supply of that same mint. Addresses are in [DEVNET.md](DEVNET.md).
 >
 > AP2 standardised the record of a yes. This is the missing half.
 
-Eventually that record is what lets someone underwrite agent spend, dispute a drained wallet with
-a trail, or compare agents by how they behave at a limit. Nobody is buying it in 2026.
-
 **Thirty seconds.**
 
 ---
 
 ## 10. Scope
 
-> One rule type. Delegate, not vault. Several rules, one agent each. A ruleset written once and
-> applied to the next agent. One pay path. One refusal path with a reason and an override hint.
-> An export anyone can re-read from the chain. A real week of history.
+> One rule type. A delegate on a token account the owner controls. Several rules, one agent each.
+> A ruleset written once and applied to the next agent. One pay path. One refusal path with a
+> reason and an override hint. Connect your agent, Copy all and a QR, on an active rule. An export
+> anyone can re-read from the chain. The quoted rule's history is 20 to 21 September 2026, UTC.
 >
-> Shipped by Oct 8. Not a bank. Not a marketplace.
+> Submissions close October 8, 2026 ([Solana Mobile announcement](https://solanamobile.com/blog/clock-in-the-solana-mobile-hackathon)).
 
 ---
 
-## Words that never appear
-
-Checked against `docs/PITCH.md` before export:
-
-"credential", "first ever", "nobody has", "hard fail", "fail closed", "revert", "proof of
-restraint" unqualified, "every attempt", "capped budgets" as a headline claim. No em dash.
-
-## Build notes
-
-Screenshots needed, and the slide each belongs to: 1 the refusal card, 6 the explorer log, 8 the
-Decisions screen with multi-day history. All three depend on the watcher having run, which is why
-Sep 23 is the gate.
+Words the entry does not use: [internal/WORDS.md](internal/WORDS.md). Screenshot notes: [internal/RECORDING.md](internal/RECORDING.md).

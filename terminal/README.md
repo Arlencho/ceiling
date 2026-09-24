@@ -29,11 +29,13 @@ npm test
 npm run typecheck
 ```
 
-Config comes from the same sources as the watcher and indexer: the
-environment, `keys/devnet-addresses.env`, `watcher/.env`, and `terminal/.env`
-(see `.env.example`). File keys may be `VETO_RPC=` or `RPC=`. Both packages
-read both package env files, so a volume set in one place is the volume both
-use; two different values is an error at load, not a silent disagreement.
+Config comes from the same sources as the watcher: the environment,
+`keys/devnet-addresses.env`, `watcher/.env`, and `terminal/.env` (see
+`.env.example`). The indexer uses the same scheme with `indexer/.env` in place
+of the watcher and terminal env files. File keys may be `VETO_RPC=` or `RPC=`.
+The watcher and the terminal both read both package env files, so a volume set
+in one place is the volume both use; two different values is an error at load,
+not a silent disagreement.
 RPC, program id, mint, and the merchant token account are required from those
 sources. There is no hardcoded fallback. For the recorded devnet cluster:
 
@@ -62,7 +64,8 @@ shows, top to bottom:
    verification moment.
 4. The merchant token account with its live balance and the payments received
    so far, each with an explorer link. When the watcher's `charge` settles,
-   the row appears here on the next reload.
+   the row appears here within about 15 seconds (the payments list is cached
+   for 15 seconds; the page reloads every 5).
 
 The day file is cached, because that day's prices are fixed. A later failed
 read does not invent a new fetch time for the cached price: the page keeps

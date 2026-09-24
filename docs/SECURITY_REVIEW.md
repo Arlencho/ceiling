@@ -2,7 +2,8 @@
 
 Adversarial pass for [#18](https://github.com/Arlencho/veto/issues/18). Scope: `programs/veto/src/lib.rs`
 and `programs/veto/src/state.rs` at commit `4b50a63`, plus the README threat model those files are
-supposed to back. The program was not changed. Every verdict below was produced by running an attack
+supposed to back. Line numbers in the tables below are at that commit. On current main those lines
+have moved. The program was not changed in this review. Every verdict below was produced by running an attack
 against the compiled program, not by reading it; the attacks live in `programs/veto/tests/red_team.rs`
 and run under `make test`.
 
@@ -11,7 +12,7 @@ Toolchain used: anchor-cli 1.2.0, solana-cli 4.1.2, rustc 1.89.0, LiteSVM 0.10.0
 ```
 $ make build && cargo test --manifest-path programs/veto/Cargo.toml
 tests/red_team.rs            20 passed; 0 failed
-tests/refusal_is_recorded.rs  4 passed; 0 failed
+tests/refusal_is_recorded.rs  4 passed; 0 failed   # at commit 4b50a63; the file has 6 tests on current main
 ```
 
 Severity scale: CRITICAL exploitable now with funds at risk, HIGH exploitable with effort, MEDIUM
@@ -33,7 +34,7 @@ class of decline that leaves no record.
 | C3 | No arithmetic can overflow or wrap, including the override path and the spent accumulator | Holds | `spent + amount` is `checked_add` twice, once in `evaluate` (reported as `OVER_CAP`) and once on the paid path (`MathOverflow`, unreachable because `evaluate` ran first). Counters are `saturating_add`, `remaining` is `saturating_sub`, `effective_per_tx_max` is a `max`, ring index is modulo. Workspace release profile has `overflow-checks = true`, so any operator missed would panic rather than wrap. With `cap = per_tx_max = u64::MAX` and 50 already spent, charging `u64::MAX` and `u64::MAX - 50 + 1` are refused `OVER_CAP`; `u64::MAX - 50` passes the cap arithmetic and is refused on funds. An override of exactly `remaining` is accepted and `remaining + 1` is `OverrideAboveCap`. Test: `claim_a_charge_that_would_overflow_spent_is_refused_as_over_cap_not_wrapped` | `lib.rs:184-188`, `lib.rs:380-383`, `state.rs:83-93`, `state.rs:136-141`, `Cargo.toml` (`[profile.release] overflow-checks = true`) | none |
 | C4 | The mandate PDA cannot be substituted by an attacker-controlled account, and the re-derivation check closes that | Holds, with a precision note | Three independent walls, tested separately. (a) `Account<Mandate>` requires the account to be owned by this program with the Mandate discriminator, so an attacker cannot present data the program did not write; the only writer is `open_mandate`, which pins `owner = signer` and `source.owner == signer`. (b) A forged program-owned Mandate was injected into the test VM at a non-PDA address with the victim's owner, id and bump and the attacker's agent: `charge` fails `InvalidMandatePda` before any policy runs. (c) The same forgery placed at the PDA its own fields derive to passes re-derivation and is then refused `DELEGATE_MISSING`, because the victim's token account is delegated to the victim's PDA and not to this address; and even that refusal is redundant, since the CPI would fail on the delegate check inside the token program. The README credits the re-derivation; the runtime owner check is the primary wall and the SPL delegate is the last. Tests: `claim_an_attackers_own_mandate_cannot_reach_the_victims_source_or_ledger`, `claim_a_program_owned_forgery_at_the_wrong_address_fails_rederivation`, `claim_a_forgery_at_its_own_pda_is_still_not_the_delegate_of_the_victims_source` | `lib.rs:136-150`, `lib.rs:386`, `lib.rs:459`, `lib.rs:475-481` | INFO (wording) |
 | C5 | The ledger PDA is bound to its mandate by seeds and cannot be swapped for another | Holds | `seeds = [b"ledger", mandate.key()]` with runtime `bump` on every instruction that touches it. Passing mandate 1 with mandate 2's ledger fails `ConstraintSeeds`; passing the ledger as the mandate fails `AccountDiscriminatorMismatch`. `ledger.mandate` is stored but never read on chain, and `VetoError::LedgerMismatch` is declared and never raised; the seeds constraint does the whole job. Test: `claim_a_ledger_of_another_mandate_and_a_ledger_posing_as_a_mandate_are_rejected` | `lib.rs:483-488`, `lib.rs:514-519`, `lib.rs:539-545`, `lib.rs:587` | INFO (dead error variant) |
-| C6 | The zero-copy `Ledger` and `Entry` layouts have no padding holes and no way to read uninitialised memory as a decision | Holds, with a reader contract | `#[zero_copy]` and `#[account(zero_copy)]` expand to `repr(C)` plus derived `bytemuck::Pod`, and `Pod` cannot be derived for a type with padding, so the build itself is the proof. Confirmed by hand: `Entry` is 8+8+32+8+8+1+1+6 = 72 bytes at align 8, `Ledger` is 32+4+2+1+1 + 32*72 = 2344 bytes at align 8, both equal to the sum of their fields. Memory is never uninitialised: `init` allocates zeroed data and `load_init` requires a zero discriminator. The one thing to know is that an all-zero slot decodes as a well-formed `Entry` with `kind = KIND_OPENED (0)`, `reason = REASON_OK (0)`, `ts = 0`. That is a reader contract, not a hole: readers must bound by `min(total, 32)`, and both shipped readers do (`indexer/src/ring.ts:65`, `tools/lib.ts:392`). Test: `claim_zero_copy_layouts_have_no_padding_and_a_zero_slot_is_a_known_shape` | `state.rs:101-133`, `lib.rs:84-88`, `lib.rs:448-455` | INFO (document the reader contract) |
+| C6 | The zero-copy `Ledger` and `Entry` layouts have no padding holes and no way to read uninitialised memory as a decision | Holds, with a reader contract | `#[zero_copy]` and `#[account(zero_copy)]` expand to `repr(C)` plus derived `bytemuck::Pod`, and `Pod` cannot be derived for a type with padding, so the build itself is the proof. Confirmed by hand: `Entry` is 8+8+32+8+8+1+1+6 = 72 bytes at align 8, `Ledger` is 32+4+2+1+1 + 32*72 = 2344 bytes at align 8, both equal to the sum of their fields. Memory is never uninitialised: `init` allocates zeroed data and `load_init` requires a zero discriminator. The one thing to know is that an all-zero slot decodes as a well-formed `Entry` with `kind = KIND_OPENED (0)`, `reason = REASON_OK (0)`, `ts = 0`. That is a reader contract, not a hole: readers must bound by `min(total, 32)`, and both shipped readers do. On current main that bound is `indexer/src/ring.ts` (`Math.min(total, LEDGER_CAPACITY)`) and `indexedEntries` in `tools/lib.ts`. Test: `claim_zero_copy_layouts_have_no_padding_and_a_zero_slot_is_a_known_shape` | `state.rs:101-133`, `lib.rs:84-88`, `lib.rs:448-455` | INFO (document the reader contract) |
 | C7 | A revoked or expired mandate cannot be revived | Holds | No instruction writes `STATUS_ACTIVE` except `open_mandate` on a fresh `init`. After revoke: charge is refused `NOT_ACTIVE`, `grant_override` and a second revoke fail `MandateNotActive`, and re-approving the delegation by hand outside the program does not bring it back. Past expiry the refusal fires on the clock even while the stored status still says ACTIVE, and the status then flips to EXPIRED. Close plus re-open at the same `mandate_id` produces a new mandate with `spent = 0` and an empty ring at the same address; that needs the owner's signature and a fresh `approve_checked`, so it is a new mandate, not a revival. Tests: `claim_a_revoked_mandate_cannot_be_charged_overridden_or_revived`, `claim_an_expired_mandate_is_refused_even_while_its_status_is_still_active` | `lib.rs:300-335`, `lib.rs:360-364`, `lib.rs:224-226` | none |
 | C8 | An override cannot be replayed, cannot exceed the remaining cap, and cannot be granted by the agent | Holds | Agent: see C1. Cap: `amount <= remaining()` at grant and `spent + amount <= cap` at charge, so a cap that shrinks between grant and use still wins. Replay: paying with the override nonce clears `override_nonce` and sets `last_nonce`, after which the same nonce is `STALE_NONCE` and a fresh nonce for the same amount is `OVER_PER_TX_MAX` (existing test). Two `charge` instructions with the same nonce inside one transaction pay once. Tests: `claim_an_override_cannot_exceed_remaining_cap_and_cannot_be_used_twice`, `claim_the_same_nonce_twice_in_one_transaction_pays_once`, and `an_override_clears_the_exact_charge_it_was_granted_for` in the original suite | `lib.rs:269-282`, `lib.rs:189-193`, `lib.rs:371`, `lib.rs:377-383` | none |
 | C9 | The nonce rule cannot be used to strand a mandate or to replay a settled charge | Replay holds; strand breaks, at LOW | Replay: `last_nonce` is written only on the paid path and only from a nonce that was strictly greater, so it is monotonic and a settled nonce is never paid twice. Strand: the agent picks the nonce, so one paid charge at `u64::MAX` makes every later charge `STALE_NONCE` forever, with 499 of the 500 cap unspendable and no owner instruction to reset it. Only the agent can do this and it costs the owner nothing except a revoke and a re-open. The override half of this line is worse and is finding F2. Test: `finding_3_a_paid_charge_at_nonce_u64_max_strands_the_mandate` | `lib.rs:371`, `lib.rs:189` | LOW (F3) |
@@ -44,7 +45,7 @@ class of decline that leaves no record.
 
 > **Status: fixed in #37.** The text below describes the defect as it stood at the time of the
 > review and is kept as the record of what was found. `revoke_mandate` now accepts any status
-> except REVOKED. See docs/DECISIONS.md.
+> except REVOKED. See docs/internal/DECISIONS.md.
 
 Issue: [#33](https://github.com/Arlencho/veto/issues/33). Category: Auth.
 File: `programs/veto/src/lib.rs:302` (precondition), `lib.rs:224` and `lib.rs:194` (the flips), `lib.rs:338-345` (close has no revoke CPI).
@@ -67,7 +68,7 @@ Test: `finding_1_expired_status_still_allows_revoke_and_drops_the_delegation`.
 
 > **Status: fixed in #37.** The text below is the defect as found. `grant_override` now rejects a
 > nonce at or below `last_nonce`. The orphaned-override half is an accepted known limit, bounded by
-> assertions in `red_team.rs`. See docs/DECISIONS.md.
+> assertions in `red_team.rs`. See docs/internal/DECISIONS.md.
 
 Issue: [#34](https://github.com/Arlencho/veto/issues/34). Category: API.
 File: `programs/veto/src/lib.rs:267-282` (no `nonce > last_nonce` check), `lib.rs:190-193` (override
@@ -98,7 +99,7 @@ Test: `finding_3_a_paid_charge_at_nonce_u64_max_strands_the_mandate`.
 
 > **Status: fixed in #37.** The text below is the defect as found. `evaluate` now checks the state
 > of both token accounts before the CPI and records reason 10, so a frozen account is a recorded
-> refusal like any other decline. See docs/DECISIONS.md.
+> refusal like any other decline. See docs/internal/DECISIONS.md.
 
 Issue: [#35](https://github.com/Arlencho/veto/issues/35). Category: Data.
 File: `programs/veto/src/lib.rs:351-393` (`evaluate` does not read `state`), `lib.rs:168-181` (CPI).
@@ -126,6 +127,8 @@ Test: `finding_5_purpose_limit_counts_chars_but_the_account_is_sized_in_bytes`.
 
 ### F6: LOW, a second mandate on the same token account silently disables the first
 
+> **Status: the app opens each new rule on its own token account (merged in #192).** The program still approves whatever source it is given, so two mandates on one token account still replace the single delegate. The README says that, and says a rule opened in the app does not share that account. On devnet the demo owner token account's delegate is mandate id 3, and mandate id 1 on that same account is reason 5 on a new charge over the per-payment limit and reason 7 on a new charge inside the limits once the delegation is withdrawn.
+
 Category: API. File: `programs/veto/src/lib.rs:102-114`.
 SPL allows one delegate per token account. `open_mandate` calls `approve_checked` unconditionally, so
 opening mandate 2 on the same `source` re-points the delegation; mandate 1 still reads ACTIVE with its
@@ -135,6 +138,8 @@ time. The program could also refuse to open when `source.delegate` is already se
 Test: `finding_6_a_second_mandate_on_the_same_source_disables_the_first_silently`.
 
 ### F7: LOW, the agent can evict every PAID row from the on-chain ring with 32 refusals
+
+> **Status: the README ring paragraph says the window is agent-evictable, and that longer history rests on transaction retention or the indexer.**
 
 Category: Data. File: `programs/veto/src/state.rs:136-141`.
 Refusals are written on the agent's signature at will. After one payment and 32 refused charges the
@@ -225,6 +230,6 @@ Listed so the absence of a finding is evidence rather than silence.
 
 ## Not covered
 
-The mobile app, the watcher's key handling, the merchant terminal and the RPC path are outside this
-pass. Dependency advisories were not run (`cargo audit` is not installed here); Anchor 1.2.0 and
+The mobile app, the SDK, the watcher's key handling, the merchant terminal and the RPC path are outside this
+pass. The SDK's own passes are on [PR 195](https://github.com/Arlencho/veto/pull/195) and [PR 203](https://github.com/Arlencho/veto/pull/203). Dependency advisories were not run (`cargo audit` is not installed here); Anchor 1.2.0 and
 anchor-spl 1.2.0 are the pinned versions. The devnet deployment was not probed live.

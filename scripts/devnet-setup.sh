@@ -283,10 +283,12 @@ Explorer:
 
 ## Fixtures
 
+These bullets are written by `write_docs` in `scripts/devnet-setup.sh`. Re-running the script rewrites this file from that template.
+
 - Test SPL mint at {decimals} decimals on the classic Token program (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`).
-- Owner token account funded at setup with {fund} tokens (a round number, not a dust amount). Later paid charges reduce that balance. `spl-token balance` on the owner token account prints what the cluster holds now.
-- Merchant token account created empty at setup. Later paid charges increase that balance. `spl-token balance` on the merchant token account prints what the cluster holds now, which is not zero once a charge has been paid.
-- Agent funded with {agent_sol} SOL for fees and holding **zero tokens**. The setup does not create an agent token account.
+- Setup minted {fund} tokens to the owner token account on 2026-09-20T20:57:14Z. Mandate `CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g` paid 0.666 of that supply to the merchant across three charges on 2026-09-20 (0.446, 0.2145, 0.0055). Later rules opened in the app, and `make e2e-devnet`, pay the same merchant from other token accounts, so the live merchant balance is that 0.666 plus every later payment. Read both balances with the verify commands below. A printed figure goes stale when a charge pays.
+- The owner token account is still the source for mandates id 1 and id 3. A rule opened in the app uses a different account, seed `veto-rule-<mandate id>`, derived from that rule's owner. There is not one owner token account for every rule.
+- The agent was funded with {agent_sol} SOL. The live balance is that amount minus fees. The setup does not create an agent token account. On 2026-09-24 `getTokenAccountsByOwner` for the agent returned no accounts.
 
 ## Keypairs (secrets, not in git)
 
@@ -311,11 +313,11 @@ git status --ignored -- keys
 
 ## Recreate from nothing
 
-Reading the program on this cluster does not use this section. The verify commands below call `{rpc}` and do not need a keypair.
+Reading the program on {cluster} does not use this section. The verify commands below, and export / verify in the README, call `{rpc}` and do not need a keypair.
 
 `make setup` and `make localnet` deploy. Both run this script. They need the maintainer backup of `keys/program.json`, the keypair for `declare_id` `{program_id}`. That file is not in git (`keys/` is gitignored). If it is missing, the script stops with `keys/program.json is missing; the program keypair must be restored from backup` and does not mint a replacement. A fresh clone cannot run either target until that backup is restored. `npx tsx produce.ts` is also not a read: it needs `keys/owner.json` from the same backup.
 
-Toolchain used when this file was written: anchor-cli 1.2.0, solana-cli 4.1.2.
+Toolchain named when this file was first written: anchor-cli 1.2.0, solana-cli 4.1.2. Anchor 1.2.0 is the version CI installs. The repo does not pin the Solana CLI. CI installs the stable release.
 
 ```bash
 VETO_RPC={rpc} ./scripts/devnet-setup.sh
@@ -328,9 +330,9 @@ The script:
 1. Points the Solana CLI at `{rpc}` and refuses to continue if the URL looks like mainnet.
 2. Requires `keys/program.json` from the maintainer backup. A missing file is an error. It creates `keys/` and the other keypairs in the table when they are missing.
 3. Airdrops SOL to the deployer, retrying on rate limits.
-4. Builds the program. It copies `keys/program.json` to `target/deploy/veto-keypair.json`, runs `anchor keys sync` so the bytecode ID check matches the deploy address, then restores `programs/veto/src` so program source is not left dirty and is not committed.
-5. Runs `anchor deploy --provider.cluster {cluster}`.
-6. Creates the mint, owner token account, merchant token account, funds the owner, and funds the agent with SOL only.
+4. Builds the program. It stops if `programs/veto/src` has local edits. It copies `keys/program.json` to `target/deploy/veto-keypair.json`, deletes `target/deploy/veto.so`, runs `anchor keys sync`, then `anchor build --no-idl`, then restores `programs/veto/src` and `Anchor.toml`.
+5. Runs `anchor deploy --no-idl --provider.cluster` with the `VETO_RPC` URL (not the cluster name). A failed deploy retries with `-- --with-compute-unit-price 5000`.
+6. Creates the mint, owner token account, and merchant token account when they are absent. It mints {fund} tokens only when the owner balance is below that. It transfers {agent_sol} SOL to the agent only when the agent holds fewer than 400000000 lamports.
 7. Fetches the program account and rewrites this file.
 
 Re-running with the same `keys/` directory keeps these addresses and upgrades the existing program.
@@ -344,18 +346,21 @@ solana config set --url {rpc} --keypair keys/deployer.json --commitment confirme
 solana config get
 ```
 
-Build and deploy (the wrapper script is the supported path; these are the commands it runs):
+Build and deploy (the wrapper script is the supported path; these are the core commands it runs, after it has refused to continue when `programs/veto/src` is dirty):
 
 ```bash
 mkdir -p target/deploy
 cp keys/program.json target/deploy/veto-keypair.json
+rm -f target/deploy/veto.so
 anchor keys sync --program-name veto
 anchor build --no-idl
-git checkout -- programs/veto/src
-anchor deploy --no-idl --provider.cluster {cluster} --provider.wallet keys/deployer.json --program-name veto --program-keypair keys/program.json
+git checkout -- programs/veto/src Anchor.toml
+anchor deploy --no-idl --provider.cluster {rpc} --provider.wallet keys/deployer.json --program-name veto --program-keypair keys/program.json
 ```
 
-Demo fixtures:
+If that deploy exits non-zero, the script retries the same command with `-- --with-compute-unit-price 5000`.
+
+Demo fixtures (each command runs only when the account is missing, the owner balance is under {fund} tokens, or the agent holds fewer than 400000000 lamports):
 
 ```bash
 spl-token create-token --decimals {decimals} --mint-authority {deployer} --fee-payer keys/deployer.json -u {rpc} -- keys/mint.json

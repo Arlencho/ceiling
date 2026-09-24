@@ -12,8 +12,9 @@ the key in Seed Vault.
 
 AP2 standardised the record of a yes. This is the missing half.
 
-> Status: in development for the Solana Mobile "Clock In" hackathon, submissions close
-> 2026-10-09. See [docs/PLAN.md](docs/PLAN.md) for the build plan,
+> Status: in development for the Solana Mobile "Clock In" hackathon. Submissions close
+> October 8, 2026 ([Solana Mobile announcement](https://solanamobile.com/blog/clock-in-the-solana-mobile-hackathon)).
+> See [docs/PLAN.md](docs/PLAN.md) for the build plan,
 > [docs/PITCH.md](docs/PITCH.md) for the positioning, and
 > [docs/internal/DECISIONS.md](docs/internal/DECISIONS.md) for why each choice was made and what would reverse it.
 
@@ -27,7 +28,7 @@ Capped agent spending on Solana is not new, and this project does not claim it.
 | SPL `approve` / delegate | Caps what a delegate may pull | Cap only. No purpose, no expiry, no reason, no record |
 | [LazorKit](https://github.com/lazor-kit/lazor-kit) | Passkey smart wallet, session keys with slot-height expiry, on-chain RBAC and spending limits | Wallet infrastructure for app developers |
 | [SolAgent Pay](https://github.com/altaranexus-ship-it/solagent-pay) | Session PDA with lifetime and per-request ceilings, merchant allowlist, TTL, revoke and sweep | An overspend "is not a policy violation logged after the fact, it is an impossible transaction". Funds are escrowed into a vault. Veto records the decline and leaves the funds in the owner's wallet |
-| [Oculus](https://github.com/useoculusagent/useoculusagent) | On-chain policy check per transaction, a USDC reserve reimburses a breach within 60 seconds | Reimburses a breach after the fact. Veto declines before money moves, and the decline is a record |
+| [Oculus](https://github.com/useoculusagent/useoculusagent) | On-chain policy check per transaction, a USDC reserve reimburses a breach after the fact | Reimburses a breach after the fact. Veto declines before money moves, and the decline is a record |
 | [x402](https://metamask.io/news/what-is-x402) / [AP2](https://www.cobo.com/post/ap2-protocol-complete-guide-to-agent-payments-for-web3-developers-2026) | HTTP 402 settlement; signed Intent, Cart and Payment mandates as verifiable credentials | The record of a yes, held off chain as the merchant's evidence |
 
 Capped on-chain agent budgets are documented well enough that infrastructure vendors publish
@@ -36,14 +37,16 @@ tutorials on them. The claim here is narrower: **the refusal is an artifact.**
 ## The refusal is the product
 
 When a rule fails, the token transfer instruction is never executed, so zero tokens move. The SPL
-delegation underneath is a second ceiling the program itself cannot exceed.
+delegation on the source token account is a second ceiling the program itself cannot exceed.
 
 When `charge` declines it does not return an error. An error would roll back every account write,
 and the refusal would leave no trace. The instruction transfers nothing, writes a refusal to an
 on-chain ledger with a reason code and the override that would have cleared it, logs a readable
 line, and returns `Ok`.
 
-A refusal has a signature you can open in an explorer. This is the 18:00 SE3 refusal linked below:
+A refusal has a signature you can open in an explorer. This refusal is for the 18:00 Stockholm
+window. The nonce `1789920000` is 2026-09-20 16:00:00 UTC, which is 18:00 in Stockholm. The
+transaction confirmed at 2026-09-20 20:58:12 UTC:
 
 ```
 VETO REFUSED reason=5 (over per-payment maximum) amount=6232500 per_tx_max=500000 remaining=99339500 override_to_clear=6232500
@@ -132,10 +135,28 @@ it rather than a copy of the key.
 | Can | open a mandate, override one payment, revoke, close | submit a charge |
 | Cannot | be impersonated by the agent | change any limit, change the merchant, extend the expiry, or move funds outside the mandate |
 
-Funds never leave the owner's wallet. The mandate PDA is an SPL delegate on the owner's own token
-account, not a vault holding the money. The owner can revoke in one signature, and can also revoke
-the SPL delegation directly without this program, which the program notices and reports as a
-refusal reason rather than crashing on.
+The program does not escrow into a vault. `open_mandate` approves the mandate PDA as an SPL
+delegate on the source token account for the cap. `charge` moves tokens only within that
+delegation.
+
+A rule opened in the app gets its own token account. The address is `createAccountWithSeed`
+from the owner, seed `veto-rule-<mandate id>`. One owner signature creates that account, moves
+the cap into it from the owner's associated token account, and opens the mandate with that
+account as the source. Close rule sends the remaining balance back to the owner and closes the
+token account, so that rent comes back together with the mandate rent and the ledger rent.
+Revoke clears the delegate on that account only. Another rule's token account is not touched.
+
+SPL allows one delegate per token account. A later `open_mandate` on the same source replaces
+that delegate. Rules opened before the app grew a per-rule account can still share the owner's
+associated token account. On the demo owner token account
+`FbhygYPyFk5PeiFppCezmMkqPqywTdAZxhkqxw79FBBE` the delegate, read 2026-09-24, is mandate
+`GVwLhzvRNqa5PnKcLakdocC3czQfYrBXGpbHb7HLPEjG` (id 3, cap 300) for 300 tokens. Mandate
+`CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g` (id 1) is still active, its source is that same
+account, spent 0.666, and it is not the delegate. A charge against id 1 is reason 5 when the bill is over the per-payment limit and reason 7 when it is inside the limits once the delegation is withdrawn. Closing a rule whose source is still that associated account returns the mandate
+rent and the ledger rent and leaves the token account in place.
+
+The owner can revoke in one signature, and can also revoke the SPL delegation directly without
+this program. The program notices that and records reason 7.
 
 ## Put your agent under a rule
 
@@ -152,9 +173,9 @@ Fund that address with a little SOL for fees. `status()` warns when the balance 
 
 In the app, open a new rule and paste that public address into the field labeled "Agent address". The same screen takes Cap, Per-payment maximum, Expiry (days from now), Payee, and Purpose. The owner key signs the open.
 
-Until [issue 190](https://github.com/Arlencho/veto/issues/190) publishes `veto-agent-sdk`, install the package from this repo checkout and run the example from there. The example loads the agent key and the JSON block the app copies (the same block a QR scan returns), checks that block against the chain, reads `last_nonce`, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
+The package `veto-agent-sdk` is not yet published ([issue 190](https://github.com/Arlencho/veto/issues/190)). Install it from this checkout. The field-by-field checks are in [sdk/README.md](sdk/README.md). The example loads the agent key and the JSON block the app copies (Copy all, or the same block a QR scan returns), checks that block against the chain, reads `last_nonce`, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
 
-The program id is the one bundled with the SDK. A block whose `programId` differs is refused. A localnet build passes a different program id as an argument in code. The example opens `rpcUrl` from the block when it does not pass a connection. A connection passed to `fromConfig` is the endpoint instead, and whichever endpoint is used must report the genesis hash of the block's cluster (`devnet`, `testnet`, or `mainnet-beta`). `mintDecimals` is checked against the mint account on that endpoint.
+`loadAgentConfig` accepts the JSON text or the parsed object and refuses a missing or extra field. `VetoAgent.fromConfig` pins the program to the id bundled in `sdk/idl/veto.json` unless the caller passes `{ programId }` in code, and a block whose `programId` differs from that id is refused. `mintDecimals` is checked against the mint account. `cluster` is checked against the endpoint's genesis hash (`devnet`, `testnet`, or `mainnet-beta`). A `Connection` passed to `fromConfig` is the endpoint. When it is omitted, the example opens `rpcUrl` from the block.
 
 ```bash
 cd sdk
@@ -201,7 +222,7 @@ committed to stays absolute.
 An agent pays a bill repriced by a public index, unattended, against an on-chain rule. The index
 is the [Nordic day-ahead electricity spot](https://www.elprisetjustnu.se/). The feed is public,
 needs no key, and anyone can verify the same numbers against the same URL. The price is the only
-input we do not control, which is why the refusal counts.
+input we do not control, which is why the refusal counts. The demo buys no electricity.
 
 Solana devnet. Our token. Our counterparty. [scripts/devnet-setup.sh](scripts/devnet-setup.sh)
 creates the mint, mints the supply the watcher spends, and creates the counterparty token
@@ -258,6 +279,8 @@ Makefile. Anchor 1.2 emits an SBPFv3 ELF that LiteSVM 0.10 cannot load, so the t
 SBPF v0. And `target/` is gitignored, so a fresh clone has no program keypair and Anchor needs
 `--ignore-keys` rather than rewriting the program id to match a throwaway key.
 
+`make e2e-devnet` runs the devnet journey through the app and the agent SDK. It needs the gitignored deployer key and writes the summary to `app/e2e/last-run.md`. The steps are in [app/README.md](app/README.md).
+
 To provision a chain and the demo fixtures, `make setup` for devnet or `make localnet` against a
 local validator. Both deploy. Both refuse unless `keys/program.json` is restored from the
 maintainer backup (the keypair for program `3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV`). That
@@ -267,7 +290,10 @@ export / verify below. `npx tsx produce.ts` is not a read. It needs `keys/owner.
 same backup. See [docs/DEVNET.md](docs/DEVNET.md).
 
 The history indexer lives in `indexer/`. It walks program logs rather than trusting the 32-entry
-ring, because a busy week wraps the ring and the full trail has to survive that. `make
+ring. More than a week of decisions at four a day fills that ring, and the 33rd entry overwrites
+the oldest. The agent signs every refusal, so 32 refusals can push a paid row out of the window.
+`total` still counts, the transactions remain, and durable history is the RPC's transaction
+retention or a running indexer. `make
 indexer-test` typechecks and tests it. `make indexer-seed` opens a mandate and submits one paid
 charge and several refused ones so the CLI can be compared against the ring. The target passes
 `VETO_RPC` (default `https://api.devnet.solana.com`) and `VETO_PROGRAM_ID` (default
@@ -310,16 +336,15 @@ What a key can do under a mandate.
   charge at all; only the named agent signs `charge`.
 - **A forged mandate account cannot be substituted.** `charge` re-derives the mandate address from
   the fields stored inside it and rejects a mismatch, and the CPI signs as that PDA.
-- **The upgrade authority is a single key on devnet, and will be burned on mainnet.** The
-  devnet program is deployed with the upgradeable loader; its upgrade authority is the deployer
-  key listed in [docs/DEVNET.md](docs/DEVNET.md). Whoever holds that key can replace the program
-  logic and, through it, move anything still delegated to a mandate PDA. Every bound in this list
-  is a bound on the program as deployed, under that assumption, and every devnet record verified
-  by `tools/verify.ts` rests on it. Decision: on mainnet the upgrade authority is set to none
-  before the first mandate is opened, after the external audit. A record is only worth checking
-  if the program that wrote it cannot be changed underneath it, and a multisig shrinks the set of
-  people who can do that without removing it. A fix to a frozen mainnet program is a new program
-  id and a new mandate, which is the honest story for an immutable ledger. Devnet stays
+- **Devnet upgrade authority.** The devnet program is owned by the upgradeable loader. Its
+  upgrade authority is the deployer key listed in [docs/DEVNET.md](docs/DEVNET.md), confirmed
+  on chain. Whoever holds that key can replace the program logic and, through it, move anything
+  still delegated to a mandate PDA. Every bound in this list is a bound on the program as
+  deployed, and every devnet record verified by `tools/verify.ts` rests on that. The intent for
+  mainnet, where this program is not deployed, is to set the upgrade authority to none before
+  the first mandate is opened, after an external audit. A multisig would shrink the set of
+  people who can replace the program and would still leave that replacement possible. A fix
+  after the authority is set to none is a new program id and a new mandate. Devnet stays
   upgradeable under the single deployer key so findings can be fixed in place.
 - **Known limit.** The ledger records every decision this program reaches. A frozen source or
   destination is inspected in `evaluate` and recorded as a refusal. Anchor account validation

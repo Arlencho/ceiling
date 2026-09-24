@@ -115,11 +115,10 @@ test("R11 the README agent section matches the private package and the example u
   const mention = lines.findIndex((line) => line.includes("`veto-agent-sdk`"));
   assert.notEqual(mention, -1, "README names the package");
   const sentence = lines[mention]!;
-  if (pkg.private === true) {
-    assert.doesNotMatch(sentence, /Install this repo's package/);
-    assert.match(sentence, /issues\/190/);
-    assert.match(sentence, /from this repo checkout/);
-  }
+  assert.equal(pkg.private, true, "veto-agent-sdk is not yet published");
+  assert.match(sentence, /not yet published/);
+  assert.match(sentence, /issues\/190/);
+  assert.doesNotMatch(sentence, /Install this repo's package/);
   const fenceStart = lines.indexOf("```bash", mention);
   const fenceEnd = lines.indexOf("```", fenceStart + 1);
   const block = lines.slice(fenceStart + 1, fenceEnd);

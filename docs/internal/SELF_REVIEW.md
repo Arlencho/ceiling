@@ -1,6 +1,6 @@
 # Self-review of the commits merged to main without an independent critic
 
-Reviewed on 2026-09-20 against main at `7cd1d43`. Scope: the seven areas named in the task, highest
+Reviewed on 2026-09-20 against main at `7cd1d43`. The suite counts in the table are from that review. Status on 2026-09-24: issues #39, #40, and #41 are closed. `.github/workflows/ci.yml` has jobs for the program, scripts, app, terminal, watcher, watcher-image, tools, indexer, and sdk. Scope: the seven areas named in the task, highest
 risk first. This is a review: nothing in this PR changes behaviour or a test. Every verdict below
 was reached by reading the code and running it; the evidence column names the command or the
 file and line. Issues are filed for every finding at medium or worse.
