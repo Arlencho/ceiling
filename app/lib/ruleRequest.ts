@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer';
 import { PublicKey } from '@solana/web3.js';
 
 import { PURPOSE_MAX_LEN } from './constants';
@@ -6,6 +7,9 @@ const U64_MAX = 18446744073709551615n;
 const REQUIRED_KEYS = ['v', 'agent', 'payee', 'mint', 'cap', 'max', 'days', 'purpose'] as const;
 const OPTIONAL_KEYS = ['agentLabel', 'payeeLabel'] as const;
 const KNOWN_KEYS = new Set<string>([...REQUIRED_KEYS, ...OPTIONAL_KEYS]);
+// Purpose is capped in UTF-8 bytes (the account stores PURPOSE_MAX_LEN bytes).
+// Labels are capped in Unicode code points.
+const LABEL_MAX_CHARS = 64;
 
 export type RuleRequestV1 = {
   v: 1;
@@ -40,7 +44,7 @@ export function canonicalAddress(text: string): string | null {
 
 export function isRuleRequestUrl(input: string): boolean {
   const withoutHash = stripHash(input.trim());
-  return /^veto:\/\/rule-request\/?(?:\?.*)?$/.test(withoutHash);
+  return /^veto:\/\/rule-request\/?(?:\?.*)?$/i.test(withoutHash);
 }
 
 export function ruleRequestHref(url: string): string | null {
@@ -106,7 +110,8 @@ function requestFromPairs(pairs: Map<string, string[]>): ParsedRuleRequest {
   }
   for (const key of REQUIRED_KEYS) {
     const value = pairs.get(key)?.[0];
-    if (value == null || value.length === 0) {
+    // An empty purpose is a purpose. Every other required field must be present and non-empty.
+    if (value == null || (key !== 'purpose' && value.length === 0)) {
       return { ok: false, reason: `The request is missing ${key}.` };
     }
   }
@@ -147,8 +152,19 @@ function requestFromPairs(pairs: Map<string, string[]>): ParsedRuleRequest {
     return { ok: false, reason: 'The days value must be a whole number of days from 1 to 3650.' };
   }
   const purpose = pairs.get('purpose')?.[0] ?? '';
-  if (Array.from(purpose).length > PURPOSE_MAX_LEN) {
-    return { ok: false, reason: `The purpose is longer than ${PURPOSE_MAX_LEN} characters.` };
+  if (!isWellFormedUtf16(purpose)) {
+    return { ok: false, reason: 'The purpose is not percent-encoded UTF-8.' };
+  }
+  if (Buffer.byteLength(purpose, 'utf8') > PURPOSE_MAX_LEN) {
+    return { ok: false, reason: `The purpose is longer than ${PURPOSE_MAX_LEN} bytes.` };
+  }
+  const agentLabel = readLabel(pairs.get('agentLabel'), 'agent label');
+  if (isRejected(agentLabel)) {
+    return agentLabel;
+  }
+  const payeeLabel = readLabel(pairs.get('payeeLabel'), 'payee label');
+  if (isRejected(payeeLabel)) {
+    return payeeLabel;
   }
   return {
     ok: true,
@@ -161,15 +177,51 @@ function requestFromPairs(pairs: Map<string, string[]>): ParsedRuleRequest {
       max,
       days,
       purpose,
-      agentLabel: optionalLabel(pairs.get('agentLabel')),
-      payeeLabel: optionalLabel(pairs.get('payeeLabel')),
+      agentLabel,
+      payeeLabel,
     },
   };
 }
 
-function optionalLabel(values: string[] | undefined): string | null {
-  const value = values?.[0]?.trim() ?? '';
-  return value.length === 0 ? null : value;
+function readLabel(
+  values: string[] | undefined,
+  noun: 'agent label' | 'payee label',
+): string | null | { ok: false; reason: string } {
+  const value = values?.[0] ?? '';
+  if (value.length === 0) {
+    return null;
+  }
+  if (!isWellFormedUtf16(value)) {
+    return { ok: false, reason: `The ${noun} is not percent-encoded UTF-8.` };
+  }
+  if (Array.from(value).length > LABEL_MAX_CHARS) {
+    return { ok: false, reason: `The ${noun} is longer than ${LABEL_MAX_CHARS} characters.` };
+  }
+  return value;
+}
+
+function isRejected(value: string | null | { ok: false; reason: string }): value is { ok: false; reason: string } {
+  return typeof value === 'object' && value !== null;
+}
+
+// Lone surrogates are not UTF-8. decodeURIComponent rejects bad percent-encoding,
+// and this catches a string that arrived already decoded.
+function isWellFormedUtf16(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const unit = value.charCodeAt(i);
+    if (unit < 0xd800 || unit > 0xdfff) {
+      continue;
+    }
+    if (unit >= 0xdc00 || i + 1 >= value.length) {
+      return false;
+    }
+    const next = value.charCodeAt(i + 1);
+    if (next < 0xdc00 || next > 0xdfff) {
+      return false;
+    }
+    i += 1;
+  }
+  return true;
 }
 
 function parseBaseUnitAmount(raw: string): bigint | null {
@@ -211,11 +263,17 @@ function parseQuery(query: string): Map<string, string[]> {
     const eq = part.indexOf('=');
     const rawKey = eq === -1 ? part : part.slice(0, eq);
     const rawValue = eq === -1 ? '' : part.slice(eq + 1);
-    const key = decodeURIComponent(rawKey);
-    const value = decodeURIComponent(rawValue);
+    let key: string;
+    try {
+      key = decodeURIComponent(rawKey);
+    } catch {
+      // An unknown key that is not UTF-8 is ignored, same as any other unknown key.
+      continue;
+    }
     if (!KNOWN_KEYS.has(key)) {
       continue;
     }
+    const value = decodeURIComponent(rawValue);
     const list = pairs.get(key) ?? [];
     list.push(value);
     pairs.set(key, list);
