@@ -96,6 +96,33 @@ Optional:
 - `EXPO_PUBLIC_VETO_EXPLORER_CLUSTER` (default `devnet`)
 - `EXPO_PUBLIC_VETO_MINT_DECIMALS` (fallback if the mint account cannot be read)
 
+## Connect an agent
+
+The rule screen copies one JSON block and shows the same block as a QR code.
+`sdk/examples/pay-once.ts` does not load this block: it reads an agent key
+file, a mandate address, and an amount. The package exports no loader for
+this object. This is the shape:
+
+```json
+{
+  "mandate": "<mandate address>",
+  "programId": "<program id>",
+  "mint": "<mint address>",
+  "mintDecimals": 6,
+  "sourceTokenAccount": "<rule token account>",
+  "payeeTokenAccount": "<payee token account>",
+  "agent": "<agent address>",
+  "cluster": "devnet",
+  "rpcUrl": "<rpc url this app uses>"
+}
+```
+
+`mintDecimals` is the mint account's decimals. `payeeTokenAccount` is the
+token account a charge pays: the payee's associated token account for this
+mint when that account exists, otherwise the payee's only token account for
+the mint. `cluster` is the configured cluster name. `rpcUrl` is the RPC this
+app uses. The block has no secret.
+
 ## One-time: Expo account
 
 These commands are interactive. Do not run them from an unattended agent.

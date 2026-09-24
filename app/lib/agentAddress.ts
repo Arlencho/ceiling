@@ -1,7 +1,7 @@
 import { PublicKey } from '@solana/web3.js';
 
 export const AGENT_ADDRESS_HINT =
-  "the agent's public address, from wherever the agent runs; leave empty to create one on this phone.";
+  'The public address of the key your agent signs with, from wherever it runs. Leave it empty only for testing: opening then creates a key on this phone and stores it.';
 
 const NOT_A_PUBLIC_KEY = 'agent address must be a base58 public key';
 

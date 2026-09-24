@@ -1,9 +1,11 @@
+import { PublicKey } from '@solana/web3.js';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../../components/Button';
+import { ConnectAgentPanel } from '../../components/ConnectAgentPanel';
 import { ConnectGate } from '../../components/ConnectGate';
 import { EmptyState } from '../../components/EmptyState';
 import { ReadState } from '../../components/ReadState';
@@ -11,6 +13,14 @@ import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
 import { copyAgentAddress } from '../../lib/agentAddress';
+import {
+  agentChargeConfig,
+  agentChargeConfigJson,
+  agentChargeRows,
+  payeeLookup,
+  readPayeeTokenAccount,
+  type AgentChargeConfig,
+} from '../../lib/agentConnect';
 import { createClient, readRuleFunds, type RuleFunds } from '../../lib/chain';
 import { STATUS_REVOKED } from '../../lib/constants';
 import { formatBaseUnits, formatTimeLeft } from '../../lib/format';
@@ -45,6 +55,10 @@ export default function RuleDetailScreen() {
   const [errorFor, setErrorFor] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
   const [closedNote, setClosedNote] = useState<string | null>(null);
+  const [payeeAccount, setPayeeAccount] = useState<string | null>(null);
+  const [payeeFor, setPayeeFor] = useState<string | null>(null);
+  const [payeeError, setPayeeError] = useState<string | null>(null);
+  const [payeeErrorFor, setPayeeErrorFor] = useState<string | null>(null);
   const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
   const mandate = chain.mandates.find((row) => row.address === address) ?? null;
   const index = mandate ? chain.mandates.findIndex((row) => row.address === mandate.address) : -1;
@@ -100,6 +114,27 @@ export default function RuleDetailScreen() {
           setErrorFor(ruleAddress);
         }
       });
+    void readPayeeTokenAccount(
+      payeeLookup(client.connection),
+      new PublicKey(mandate.merchant),
+      new PublicKey(mandate.mint),
+    )
+      .then((payee) => {
+        if (!cancelled) {
+          setPayeeAccount(payee.toBase58());
+          setPayeeFor(ruleAddress);
+          setPayeeError(null);
+          setPayeeErrorFor(null);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setPayeeAccount(null);
+          setPayeeFor(null);
+          setPayeeError(err instanceof Error ? err.message : 'Could not read the payee token account');
+          setPayeeErrorFor(ruleAddress);
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -119,6 +154,46 @@ export default function RuleDetailScreen() {
       return { sign: false };
     }
     return { sign: true, kind: latest.kind };
+  };
+
+  const payeeToken = mandate && payeeFor === mandate.address ? payeeAccount : null;
+  const payeeProblem = mandate && payeeErrorFor === mandate.address ? payeeError : null;
+  let chargeConfig: AgentChargeConfig | null = null;
+  if (mandate && chain.config && funds && funds.decimals != null && payeeToken) {
+    chargeConfig = agentChargeConfig({
+      mandate: mandate.address,
+      programId: chain.config.programId,
+      mint: mandate.mint,
+      mintDecimals: funds.decimals,
+      sourceTokenAccount: mandate.source,
+      payeeTokenAccount: payeeToken,
+      agent: mandate.agent,
+      cluster: chain.config.explorerCluster,
+      rpcUrl: chain.config.rpcUrl,
+    });
+  }
+  const configJson = chargeConfig ? agentChargeConfigJson(chargeConfig) : null;
+  const connectStatus = configJson
+    ? null
+    : funds && funds.decimals == null
+      ? 'The mint account did not include decimals, so this config is not ready.'
+      : payeeProblem
+        ? payeeProblem
+        : !funds && fundsError
+          ? fundsError
+          : !chain.config
+            ? (chain.configError ?? 'Config is missing.')
+            : 'Reading the mint decimals and the payee token account.';
+
+  const onCopyConfig = async (json: string) => {
+    setFormError(null);
+    setMessage(null);
+    try {
+      await Clipboard.setStringAsync(json);
+      setMessage('Agent config copied.');
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Copy failed');
+    }
   };
 
   const onCopyAgent = async () => {
@@ -274,6 +349,15 @@ export default function RuleDetailScreen() {
                 Limits are fixed once the rule is opened. They cannot be widened later.
               </EmptyState>
             )}
+
+            <ConnectAgentPanel
+              rows={chargeConfig ? agentChargeRows(chargeConfig) : []}
+              configJson={configJson}
+              status={connectStatus}
+              onCopy={(json) => {
+                void onCopyConfig(json);
+              }}
+            />
 
             {funds?.otherRule ? (
               <Text style={styles.note}>{otherDelegateWarning(funds.otherRule)}</Text>
