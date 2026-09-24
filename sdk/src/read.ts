@@ -1,5 +1,6 @@
 import { Connection, PublicKey, type ConnectionConfig } from "@solana/web3.js";
-import { compareDecisions, decisionsFromTx, viewFromRpc, type Decision, type RpcTransaction } from "./events.js";
+import { advisoryDecisionsFromTx, MEMO_PROGRAM_ID } from "./advisory.js";
+import { compareDecisions, decisionsFromTx, viewFromRpc, type Decision, type RpcTransaction, type TxView } from "./events.js";
 import { PROGRAM_ID } from "./idl.js";
 import {
   decodeLedger,
@@ -151,6 +152,9 @@ export function decisionFetchBackoffMs(attempt: number, random?: () => number): 
 /**
  * Decisions whose transaction touched this mandate, from one signature page.
  * A Veto frame without its Program data event is not a decision.
+ * An advisory memo is a decision only when it succeeded, the mandate's agent
+ * signed it, it names that mandate, and it parses as veto-advisory:v1.
+ * A stranger's memo is ignored and stays on the signature cursor.
  * Walk older history with `before` set to `oldestSignature` while `pageFull` is true.
  */
 export async function decisionsForMandate(
@@ -178,6 +182,15 @@ export async function decisionsForMandate(
   await pace();
   const listed = await withRateLimitRetry(() => listPage(rpc, key, pageSize, before, until), pause, jitter);
   const decisions: Decision[] = [];
+  let agentKey: string | null | undefined;
+  const agentFor = async (view: TxView): Promise<string | null> => {
+    if (!view.instructions.some((ix) => ix.programId === MEMO_PROGRAM_ID.toBase58())) return null;
+    if (agentKey === undefined) {
+      await pace();
+      agentKey = await memoAgent(rpc, key, programId, pause, jitter);
+    }
+    return agentKey;
+  };
   let index = 0;
   while (index < listed.items.length && decisions.length < limit) {
     const room = limit - decisions.length;
@@ -198,12 +211,31 @@ export async function decisionsForMandate(
       const tx = loaded[i];
       if (!page || !tx) throw new MissingListedTransactionError(page?.signature ?? "unknown");
       const view = viewFromRpc(tx, page);
+      const signer = await agentFor(view);
+      const found = decisionsFromTx(view, programId, key.toBase58());
+      if (signer) found.push(...advisoryDecisionsFromTx(view, key.toBase58(), signer));
       // Keep every decision of this transaction, even when that passes limit.
-      decisions.push(...decisionsFromTx(view, programId, key.toBase58()));
+      decisions.push(...found);
     }
   }
   decisions.sort(compareDecisions);
   return stamp(decisions, listed.oldestSignature, listed.pageFull);
+}
+
+async function memoAgent(
+  connection: Connection,
+  mandate: PublicKey,
+  programId: string,
+  pause: (ms: number) => Promise<void>,
+  jitter: boolean,
+): Promise<string | null> {
+  try {
+    const account = await withRateLimitRetry(() => fetchMandate(connection, mandate, programId), pause, jitter);
+    return account.agent.toBase58();
+  } catch (err) {
+    if (rateLimited(err)) throw err;
+    return null;
+  }
 }
 
 function stamp(decisions: Decision[], oldestSignature: string | null, pageFull: boolean): MandateDecisions {

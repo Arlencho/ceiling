@@ -7,7 +7,13 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import type { AgentConfig } from "./config.js";
-import { decisionsFromTx, viewFromRpc, type DecisionKind, type RpcTransaction } from "./events.js";
+import {
+  advisoryMemoInstruction,
+  advisoryMemoText,
+  type PurposeCheck,
+  type PurposeCheckContext,
+} from "./advisory.js";
+import { decisionsFromTx, viewFromRpc, type RpcTransaction } from "./events.js";
 import { CHARGE_DISCRIMINATOR, PROGRAM_ID } from "./idl.js";
 import {
   asU64,
@@ -36,13 +42,22 @@ export type ChargeArgs = {
 };
 
 export type ChargeResult = {
-  kind: DecisionKind;
+  kind: "paid" | "refused";
   reasonCode: number;
   reasonText: string;
   suggestedOverride: bigint;
   signature: string;
   slot: number;
 };
+
+/** The agent declined before submit. This is not a program refusal. */
+export type AdvisoryDeclined = {
+  kind: "advisory_declined";
+  reason: string;
+  signature: string;
+};
+
+export type { PurposeCheck, PurposeCheckContext, PurposeCheckResult } from "./advisory.js";
 
 export type AgentStatus = {
   mandate: string;
@@ -75,11 +90,17 @@ export type VetoAgentArgs = {
   owner?: PublicKey | string;
   mandateId?: bigint | number;
   programId?: PublicKey | string;
+  /**
+   * Optional check run by chargeWithPurposeCheck. charge() does not call it.
+   * Whoever runs the agent can skip the check by calling charge().
+   */
+  purposeCheck?: PurposeCheck;
 };
 
 /** A program id passed in code. The block cannot choose the program. */
 export type FromConfigOptions = {
   programId?: PublicKey | string;
+  purposeCheck?: PurposeCheck;
 };
 
 /** Genesis hash reported by getGenesisHash for each cluster the block may name. */
@@ -97,6 +118,7 @@ export class VetoAgent {
   readonly agent: Keypair;
   readonly mandate: PublicKey;
   readonly programId: PublicKey;
+  private readonly purposeCheck: PurposeCheck | undefined;
 
   constructor(args: VetoAgentArgs) {
     if (!(args.agent instanceof Keypair)) {
@@ -106,6 +128,7 @@ export class VetoAgent {
     this.agent = args.agent;
     this.programId = args.programId ? toPublicKey(args.programId, "VetoAgent programId") : PROGRAM_ID;
     this.mandate = resolveMandate(args, this.programId);
+    this.purposeCheck = args.purposeCheck;
   }
 
   /**
@@ -144,6 +167,7 @@ export class VetoAgent {
       agent: agentKeypair,
       mandate: config.mandate,
       programId,
+      purposeCheck: options?.purposeCheck,
     });
     let mandate: MandateAccount;
     try {
@@ -256,7 +280,7 @@ export class VetoAgent {
       throw new Error(`VetoAgent.charge: transaction ${signature} carries ${detail}`);
     }
     const decision = matches[0];
-    if (!decision) {
+    if (!decision || (decision.kind !== "paid" && decision.kind !== "refused")) {
       throw new Error(`VetoAgent.charge: transaction ${signature} carries no attributable Veto decision`);
     }
     return {
@@ -267,6 +291,77 @@ export class VetoAgent {
       signature,
       slot: view.slot,
     };
+  }
+
+  /**
+   * Runs purposeCheck, then charge() when it allows.
+   * A decline does not submit charge. It sends one Memo transaction signed by the agent.
+   * The mandate is a read-only non-signer. The memo is veto-advisory:v1 and compact JSON.
+   */
+  async chargeWithPurposeCheck(args: {
+    amount: bigint | number;
+    nonce: bigint | number;
+    description: string;
+  }): Promise<ChargeResult | AdvisoryDeclined> {
+    const amount = asU64(args.amount, "VetoAgent.chargeWithPurposeCheck amount");
+    const nonce = asU64(args.nonce, "VetoAgent.chargeWithPurposeCheck nonce");
+    if (typeof args.description !== "string") {
+      throw new Error("VetoAgent.chargeWithPurposeCheck: description must be a string");
+    }
+    if (!this.purposeCheck) {
+      throw new Error("VetoAgent.chargeWithPurposeCheck: purposeCheck is not set");
+    }
+    const mandate = await this.loadMandate();
+    if (!mandate.agent.equals(this.agent.publicKey)) {
+      throw new Error("VetoAgent.chargeWithPurposeCheck: signer is not the agent named in the mandate");
+    }
+    const sourceInfo = await this.connection.getAccountInfo(mandate.source, "confirmed");
+    if (!sourceInfo) {
+      throw new Error(
+        `VetoAgent.chargeWithPurposeCheck: source token account ${mandate.source.toBase58()} not found`,
+      );
+    }
+    const decimals = await readMintDecimals(this.connection, mandate.mint, sourceInfo.owner);
+    const ctx: PurposeCheckContext = {
+      purpose: mandate.purpose,
+      amount,
+      decimals,
+      payee: mandate.merchant.toBase58(),
+      mandate: this.mandate.toBase58(),
+      description: args.description,
+    };
+    let result: { allow?: unknown; reason?: unknown };
+    try {
+      result = await this.purposeCheck(ctx);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`VetoAgent.chargeWithPurposeCheck: ${message}`, { cause: err });
+    }
+    if (!result || typeof result !== "object" || result.allow !== true) {
+      const reason = result && typeof result === "object" && typeof result.reason === "string"
+        ? result.reason
+        : "purpose check declined";
+      return this.recordAdvisoryDecline({ amount, nonce, reason, description: args.description });
+    }
+    return this.charge({ amount, nonce });
+  }
+
+  private async recordAdvisoryDecline(args: {
+    amount: bigint;
+    nonce: bigint;
+    reason: string;
+    description: string;
+  }): Promise<AdvisoryDeclined> {
+    const memo = advisoryMemoText({
+      mandate: this.mandate.toBase58(),
+      amount: args.amount,
+      nonce: args.nonce,
+      reason: args.reason,
+      description: args.description,
+    });
+    const ix = advisoryMemoInstruction(this.agent.publicKey, this.mandate, memo.text);
+    const signature = await this.submit(ix, "VetoAgent.chargeWithPurposeCheck");
+    return { kind: "advisory_declined", reason: memo.reason, signature };
   }
 
   /**
@@ -324,7 +419,7 @@ export class VetoAgent {
     }
   }
 
-  private async submit(ix: TransactionInstruction): Promise<string> {
+  private async submit(ix: TransactionInstruction, label = "VetoAgent.charge"): Promise<string> {
     const latest = await this.connection.getLatestBlockhash("confirmed");
     const tx = new Transaction();
     tx.feePayer = this.agent.publicKey;
@@ -340,7 +435,7 @@ export class VetoAgent {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`VetoAgent.charge: ${message}`, { cause: err });
+      throw new Error(`${label}: ${message}`, { cause: err });
     }
     const confirmed = await this.connection.confirmTransaction(
       {
@@ -352,7 +447,7 @@ export class VetoAgent {
     );
     if (confirmed.value.err) {
       throw new Error(
-        `VetoAgent.charge: transaction ${signature} failed: ${JSON.stringify(confirmed.value.err)}`,
+        `${label}: transaction ${signature} failed: ${JSON.stringify(confirmed.value.err)}`,
       );
     }
     return signature;
@@ -391,6 +486,31 @@ async function assertCluster(connection: Connection, cluster: string): Promise<v
       `VetoAgent.fromConfig: cluster ${JSON.stringify(cluster)} does not match genesis hash ${JSON.stringify(genesis)}`,
     );
   }
+}
+
+async function readMintDecimals(
+  connection: Connection,
+  mint: PublicKey,
+  tokenProgram: PublicKey,
+): Promise<number> {
+  const info = await connection.getAccountInfo(mint, "confirmed");
+  if (!info) {
+    throw new Error(`VetoAgent.chargeWithPurposeCheck: mint account ${mint.toBase58()} not found`);
+  }
+  if (!info.owner.equals(tokenProgram)) {
+    throw new Error(
+      `VetoAgent.chargeWithPurposeCheck: mint account ${mint.toBase58()} is not owned by the source token program ${tokenProgram.toBase58()}`,
+    );
+  }
+  const data = info.data;
+  if (!(data instanceof Uint8Array) || data.length < MINT_DECIMALS_OFFSET + 1) {
+    throw new Error(`VetoAgent.chargeWithPurposeCheck: mint account ${mint.toBase58()} is too short to read decimals`);
+  }
+  const decimals = data[MINT_DECIMALS_OFFSET];
+  if (decimals === undefined) {
+    throw new Error(`VetoAgent.chargeWithPurposeCheck: mint account ${mint.toBase58()} is too short to read decimals`);
+  }
+  return decimals;
 }
 
 async function assertMintDecimals(
