@@ -75,17 +75,22 @@ test('a supplied agent address reaches the open_mandate instruction unchanged, a
 
   const source = getAssociatedTokenAddressSync(MINT, owner, false, TOKEN_PROGRAM);
   const connection = {
-    getBalance: async () => 50_000_000,
     getAccountInfo: async (address: PublicKey) => {
       if (address.equals(MINT)) {
-        return { data: Buffer.alloc(0), owner: TOKEN_PROGRAM, executable: false, lamports: 1 };
+        const data = Buffer.alloc(82);
+        data[44] = 6;
+        return { data, owner: TOKEN_PROGRAM, executable: false, lamports: 1 };
       }
       if (address.equals(source)) {
-        return { data: Buffer.alloc(165), owner: TOKEN_PROGRAM, executable: false, lamports: 1 };
+        const data = Buffer.alloc(165);
+        data.writeBigUInt64LE(1_000_000n, 64);
+        return { data, owner: TOKEN_PROGRAM, executable: false, lamports: 1 };
       }
-      // No mandate PDA exists yet, so the first id is free.
+      // No mandate PDA or rule token account exists yet, so the first id is free.
       return null;
     },
+    getBalance: async () => 50_000_000,
+    getMinimumBalanceForRentExemption: async () => 1_000_000,
     getLatestBlockhash: async () => ({
       blockhash: PublicKey.default.toBase58(),
       lastValidBlockHeight: 1,
@@ -120,8 +125,9 @@ test('a supplied agent address reaches the open_mandate instruction unchanged, a
 
   assert.equal(signed.length, 1, 'exactly one transaction reaches the wallet prompt');
   const tx = signed[0]!;
-  assert.equal(tx.instructions.length, 1);
-  const ix = tx.instructions[0]!;
+  const programIxs = tx.instructions.filter((item) => item.programId.equals(PROGRAM_ID));
+  assert.equal(programIxs.length, 1, 'one open_mandate instruction');
+  const ix = programIxs[0]!;
   assert.ok(ix.programId.equals(PROGRAM_ID));
   assert.equal(
     Buffer.from(ix.data.subarray(16, 48)).toString('hex'),
@@ -133,10 +139,16 @@ test('a supplied agent address reaches the open_mandate instruction unchanged, a
     Buffer.from(merchant.toBytes()).toString('hex'),
   );
   assert.ok(
-    ix.keys.every((meta) => !meta.pubkey.equals(agent)),
+    tx.instructions.every((item) => item.keys.every((meta) => !meta.pubkey.equals(agent))),
     'the agent is data, not an account, so it never has to sign the open',
   );
   assert.ok(ix.keys[0]!.pubkey.equals(owner) && ix.keys[0]!.isSigner, 'the owner is the only signer');
+  assert.ok(
+    tx.instructions.every((item) =>
+      item.keys.every((meta) => !meta.isSigner || meta.pubkey.equals(owner)),
+    ),
+    'no instruction adds a signer besides the owner',
+  );
 });
 
 test('the owner key as agent is refused by the chain layer before any RPC and before the wallet prompt', async () => {

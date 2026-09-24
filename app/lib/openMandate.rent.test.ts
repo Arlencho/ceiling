@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
 
 import { Buffer } from 'buffer';
-import { getAssociatedTokenAddressSync } from '@solana/spl-token';
+import { ACCOUNT_SIZE, getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { Keypair, PublicKey, type Connection } from '@solana/web3.js';
 
 import type { ChainClient } from './chain';
@@ -58,10 +58,14 @@ function connectionFor(args: {
         : async (space: number) => args.rent!(space),
     getAccountInfo: async (address: PublicKey) => {
       if (address.equals(MINT)) {
-        return { data: Buffer.alloc(0), owner: TOKEN_PROGRAM, executable: false, lamports: 1 };
+        const data = Buffer.alloc(82);
+        data[44] = 6;
+        return { data, owner: TOKEN_PROGRAM, executable: false, lamports: 1 };
       }
       if (address.equals(source)) {
-        return { data: Buffer.alloc(165), owner: TOKEN_PROGRAM, executable: false, lamports: 1 };
+        const data = Buffer.alloc(165);
+        data.writeBigUInt64LE(1_000n, 64);
+        return { data, owner: TOKEN_PROGRAM, executable: false, lamports: 1 };
       }
       return null;
     },
@@ -72,21 +76,31 @@ function connectionFor(args: {
   };
 }
 
+function quoteRent(rentExempt: (space: number) => number): (space: number) => number {
+  return (space) => {
+    if (space === ACCOUNT_SIZE) return rentExempt(ACCOUNT_SIZE);
+    if (space === 0) return rentExempt(0);
+    if (space === MANDATE_ACCOUNT_SIZE) return MANDATE_RENT;
+    if (space === LEDGER_ACCOUNT_SIZE) return LEDGER_RENT;
+    throw new Error(`unexpected account size ${space}`);
+  };
+}
+
+function fullRent(rentExempt: (space: number) => number): number {
+  return rentExempt(ACCOUNT_SIZE) + MANDATE_RENT + LEDGER_RENT + OPEN_FEE_MARGIN_LAMPORTS;
+}
+
 test('opening a rule with no SOL names the rent and the fee margin and does not ask for a signature', async () => {
-  const { openMandate } = await chainModule;
+  const { openMandate, rentExemptLamports } = await chainModule;
   const owner = Keypair.generate().publicKey;
   const merchant = Keypair.generate().publicKey;
   const agent = Keypair.generate().publicKey;
   let prompts = 0;
-  const needed = MANDATE_RENT + LEDGER_RENT + OPEN_FEE_MARGIN_LAMPORTS;
+  const needed = fullRent(rentExemptLamports);
   const connection = connectionFor({
     owner,
     balance: 0,
-    rent: (space) => {
-      if (space === MANDATE_ACCOUNT_SIZE) return MANDATE_RENT;
-      if (space === LEDGER_ACCOUNT_SIZE) return LEDGER_RENT;
-      throw new Error(`unexpected account size ${space}`);
-    },
+    rent: quoteRent(rentExemptLamports),
   });
 
   await assert.rejects(
@@ -107,14 +121,14 @@ test('opening a rule with no SOL names the rent and the fee margin and does not 
 });
 
 test('a balance one lamport under rent plus the fee margin is refused before the signature', async () => {
-  const { openMandate } = await chainModule;
+  const { openMandate, rentExemptLamports } = await chainModule;
   const owner = Keypair.generate().publicKey;
   let prompts = 0;
-  const needed = MANDATE_RENT + LEDGER_RENT + OPEN_FEE_MARGIN_LAMPORTS;
+  const needed = fullRent(rentExemptLamports);
   const connection = connectionFor({
     owner,
     balance: needed - 1,
-    rent: (space) => (space === MANDATE_ACCOUNT_SIZE ? MANDATE_RENT : LEDGER_RENT),
+    rent: quoteRent(rentExemptLamports),
   });
 
   await assert.rejects(
@@ -133,15 +147,15 @@ test('a balance one lamport under rent plus the fee margin is refused before the
 });
 
 test('a balance that covers rent and the fee margin reaches the signature', async () => {
-  const { openMandate } = await chainModule;
+  const { openMandate, rentExemptLamports } = await chainModule;
   const owner = Keypair.generate().publicKey;
   let prompts = 0;
-  const needed = MANDATE_RENT + LEDGER_RENT + OPEN_FEE_MARGIN_LAMPORTS;
+  const needed = fullRent(rentExemptLamports);
   const stop = new Error('stop before send');
   const connection = connectionFor({
     owner,
     balance: needed,
-    rent: (space) => (space === MANDATE_ACCOUNT_SIZE ? MANDATE_RENT : LEDGER_RENT),
+    rent: quoteRent(rentExemptLamports),
   });
 
   await assert.rejects(
@@ -163,10 +177,7 @@ test('with no rent RPC the refusal still names mandate plus ledger rent and the 
   const { openMandate, rentExemptLamports } = await chainModule;
   const owner = Keypair.generate().publicKey;
   let prompts = 0;
-  const needed =
-    rentExemptLamports(MANDATE_ACCOUNT_SIZE) +
-    rentExemptLamports(LEDGER_ACCOUNT_SIZE) +
-    OPEN_FEE_MARGIN_LAMPORTS;
+  const needed = fullRent(rentExemptLamports);
   const connection = connectionFor({ owner, balance: 0 });
 
   await assert.rejects(
@@ -183,10 +194,12 @@ test('with no rent RPC the refusal still names mandate plus ledger rent and the 
       const message = err instanceof Error ? err.message : String(err);
       assert.match(message, /rent/i);
       assert.match(message, new RegExp(String(needed)));
+      assert.match(message, /fee margin/i);
       return true;
     },
   );
   assert.equal(prompts, 0);
   assert.equal(rentExemptLamports(MANDATE_ACCOUNT_SIZE), MANDATE_RENT);
   assert.equal(rentExemptLamports(LEDGER_ACCOUNT_SIZE), LEDGER_RENT);
+  assert.equal(rentExemptLamports(ACCOUNT_SIZE) + MANDATE_RENT + LEDGER_RENT + OPEN_FEE_MARGIN_LAMPORTS, needed);
 });

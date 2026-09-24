@@ -6,6 +6,7 @@ import {
 } from '@solana/web3.js';
 
 import {
+  CLOSE_MANDATE_DISC,
   GRANT_OVERRIDE_DISC,
   OPEN_MANDATE_DISC,
   REVOKE_MANDATE_DISC,
@@ -83,6 +84,23 @@ export function openMandateInstruction(args: OpenMandateIxArgs): {
     ],
   });
   return { instruction, mandate, ledger };
+}
+
+export function closeMandateInstruction(args: {
+  programId: PublicKey;
+  owner: PublicKey;
+  mandate: PublicKey;
+}): TransactionInstruction {
+  const ledger = ledgerPda(args.programId, args.mandate);
+  return new TransactionInstruction({
+    programId: args.programId,
+    data: Buffer.from(CLOSE_MANDATE_DISC),
+    keys: [
+      { pubkey: args.owner, isSigner: true, isWritable: true },
+      { pubkey: args.mandate, isSigner: false, isWritable: true },
+      { pubkey: ledger, isSigner: false, isWritable: true },
+    ],
+  });
 }
 
 export function revokeMandateInstruction(args: {

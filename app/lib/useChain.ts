@@ -13,6 +13,7 @@ import type { ReactNode } from 'react';
 import { agentKeyForOpen } from './agentAddress';
 import { tryLoadConfig, type AppConfig } from './config';
 import {
+  closeMandate,
   createClient,
   fetchGenesisHash,
   fetchLedgerRows,
@@ -24,6 +25,7 @@ import {
   probeOverride,
   revokeMandate,
   type ChainClient,
+  type CloseResult,
   type GrantOverrideResult,
   type OpenMandateInput,
   type OpenMandateResult,
@@ -65,6 +67,7 @@ export type ChainState = {
   selectMandate: (address: string) => Promise<void>;
   open: (input: Omit<OpenMandateInput, 'owner' | 'agent'> & { agent?: PublicKey }) => Promise<OpenMandateResult>;
   revoke: (address?: string) => Promise<RevokeResult>;
+  close: (address?: string) => Promise<CloseResult>;
   probeOverride: (mandateAddress: string, row: LedgerRow) => Promise<OverrideAssessment>;
   grantOverride: (mandateAddress: string, row: LedgerRow) => Promise<GrantOverrideResult>;
 };
@@ -281,6 +284,33 @@ function useChainState(): ChainState {
     [mandate, mandates, refresh, wallet],
   );
 
+  const close = useCallback(
+    async (address?: string) => {
+      const loaded = tryLoadConfig();
+      if (!loaded.ok) {
+        throw new Error(loaded.error);
+      }
+      if (!wallet.ownerPublicKey) {
+        throw new Error('Connect with Seed Vault first');
+      }
+      const target =
+        (address ? mandates.find((row) => row.address === address) : null) ?? mandate;
+      if (!target) {
+        throw new Error('No mandate on chain to close');
+      }
+      const client = createClient(loaded.config);
+      const result = await closeMandate(
+        client,
+        wallet.signAndSend,
+        new PublicKey(wallet.ownerPublicKey),
+        target,
+      );
+      await refresh();
+      return result;
+    },
+    [mandate, mandates, refresh, wallet],
+  );
+
   const probeLiveOverride = useCallback(
     async (mandateAddress: string, row: LedgerRow) => {
       const loaded = tryLoadConfig();
@@ -353,6 +383,7 @@ function useChainState(): ChainState {
       selectMandate,
       open,
       revoke,
+      close,
       probeOverride: probeLiveOverride,
       grantOverride: grantLiveOverride,
     }),
@@ -376,6 +407,7 @@ function useChainState(): ChainState {
       selectMandate,
       open,
       revoke,
+      close,
       probeLiveOverride,
       grantLiveOverride,
     ],
