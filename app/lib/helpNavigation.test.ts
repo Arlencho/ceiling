@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
 
+import { finishHelpExport, type HelpStackRoute } from './helpNavigation';
+
 import { act, createElement, type ReactElement, type ReactNode } from 'react';
 import { create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -304,6 +306,73 @@ test('Done on a cold help export link replaces the page with the tabs home', asy
   });
   assert.deepEqual(calls, [{ method: 'replace', href: '/(tabs)' }]);
   assert.deepEqual(history, ['/(tabs)']);
+});
+
+function doneRouter(stackLength: number) {
+  const calls: Array<{ method: 'dismiss' | 'replace'; value: string }> = [];
+  return {
+    calls,
+    router: {
+      canDismiss: () => stackLength > 1,
+      dismiss: (count?: number) => calls.push({ method: 'dismiss', value: String(count) }),
+      replace: (href: string) => calls.push({ method: 'replace', value: href }),
+    },
+  };
+}
+
+test('Done dismisses a stack that is only help pages and replaces the page that pop must leave', () => {
+  const { calls, router } = doneRouter(3);
+  finishHelpExport(router, ['/help', '/help/refusal', '/help/export']);
+  assert.deepEqual(calls, [
+    { method: 'dismiss', value: '3' },
+    { method: 'replace', value: '/(tabs)' },
+  ]);
+});
+
+test('Done on a cold refusal link dismisses both help pages and replaces the last one', () => {
+  const { calls, router } = doneRouter(2);
+  finishHelpExport(router, ['/help/refusal', '/help/export']);
+  assert.deepEqual(calls, [
+    { method: 'dismiss', value: '2' },
+    { method: 'replace', value: '/(tabs)' },
+  ]);
+});
+
+test('Done on a warm export link dismisses that page and keeps the open decision', () => {
+  const { calls, router } = doneRouter(3);
+  finishHelpExport(router, ['/decisions', '/decision/5Nf3', '/help/export']);
+  assert.deepEqual(calls, [{ method: 'dismiss', value: '1' }]);
+});
+
+test('Done dismisses the three help screen names and leaves the tabs route', () => {
+  const routes: HelpStackRoute[] = [
+    { name: '(tabs)' },
+    { name: 'help/index' },
+    { name: 'help/refusal' },
+    { name: 'help/export' },
+  ];
+  const { calls, router } = doneRouter(routes.length);
+  finishHelpExport(router, routes);
+  assert.deepEqual(calls, [{ method: 'dismiss', value: '3' }]);
+});
+
+test('Done on the only help export route replaces it even when canDismiss is true', () => {
+  const calls: Array<{ method: 'dismiss' | 'replace'; value: string }> = [];
+  finishHelpExport(
+    {
+      canDismiss: () => true,
+      dismiss: (count?: number) => calls.push({ method: 'dismiss', value: String(count) }),
+      replace: (href: string) => calls.push({ method: 'replace', value: href }),
+    },
+    [{ name: 'help/export', path: '/help/export' }],
+  );
+  assert.deepEqual(calls, [{ method: 'replace', value: '/(tabs)' }]);
+});
+
+test('Done stops at the first route that is not a help page', () => {
+  const { calls, router } = doneRouter(4);
+  finishHelpExport(router, ['/rules', '/help', '/onboarding', '/help/export']);
+  assert.deepEqual(calls, [{ method: 'dismiss', value: '1' }]);
 });
 
 test('back from the introduction pops to help', async () => {

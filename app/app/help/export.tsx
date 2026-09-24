@@ -1,14 +1,45 @@
-import { useRouter } from 'expo-router';
+import { useNavigation, usePathname, useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../../components/Button';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
-import { finishHelpExport } from '../../lib/helpNavigation';
+import { finishHelpExport, type HelpStackEntry } from '../../lib/helpNavigation';
+
+function focusedPathReader(): (() => string) | undefined {
+  return typeof usePathname === 'function' ? usePathname : undefined;
+}
+
+function DoneButton({ readRoutes }: { readRoutes: () => readonly HelpStackEntry[] | null }) {
+  const router = useRouter();
+  return (
+    <Button
+      label="Done"
+      onPress={() => finishHelpExport(router, readRoutes(), focusedPathReader())}
+    />
+  );
+}
+
+// The stack is available once the screen is inside a navigator. Rendering this
+// only in that case keeps the hook call unconditional.
+function DoneFromStack() {
+  const navigation = useNavigation();
+  return (
+    <DoneButton
+      readRoutes={() => {
+        const state = navigation.getState();
+        if (!state) return null;
+        return state.routes.map((route) => ({
+          name: route.name,
+          path: route.path,
+        }));
+      }}
+    />
+  );
+}
 
 export default function HelpExportScreen() {
-  const router = useRouter();
   return (
     <Screen>
       <TopBar back="Back" meta="3 of 3" help={false} />
@@ -28,7 +59,11 @@ export default function HelpExportScreen() {
         submitted cannot appear, and the export does not invent a row for a gap.
       </Text>
       <View style={styles.actions}>
-        <Button label="Done" onPress={() => finishHelpExport(router)} />
+        {typeof useNavigation === 'function' ? (
+          <DoneFromStack />
+        ) : (
+          <DoneButton readRoutes={() => null} />
+        )}
       </View>
     </Screen>
   );
