@@ -3,6 +3,7 @@ import {
   buildRecord,
   kindByte,
   matchingRingEntry,
+  fileSignature,
   parseRecord,
   recordToPlain,
   type DecisionRecord,
@@ -269,6 +270,7 @@ export function parseBundle(input: unknown): DecisionBundle {
   });
   for (const [i, row] of decisions.entries()) {
     if (!row.signature) throw new Error(`decisions[${i}] is missing signature`);
+    fileSignature(row.signature, `decisions[${i}].signature`);
   }
   return {
     schema_version: 1,
@@ -570,6 +572,18 @@ export function parseExportText(raw: string): ParsedExport {
   return { kind: "single", record: parseRecord(json) };
 }
 
+// Cc, Cf, Cs, Co, Cn, plus the Unicode line and paragraph separators. Each is
+// written as a visible \uXXXX escape. JSON.stringify does not cover this set,
+// so callers run echoFile on its result too.
+const ECHO_UNSAFE = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\u2028\u2029]/gu;
+
+export function echoFile(value: string): string {
+  return value.replace(ECHO_UNSAFE, (ch) => {
+    const cp = ch.codePointAt(0) ?? 0;
+    return `\\u${cp.toString(16).padStart(4, "0")}`;
+  });
+}
+
 export function formatBulkReport(rows: readonly RowVerdict[]): {
   text: string;
   confirmed: number;
@@ -592,7 +606,7 @@ export function formatBulkReport(rows: readonly RowVerdict[]): {
   for (const row of rows) {
     if (row.ok) continue;
     lines.push("");
-    lines.push(`REJECTED row ${row.index} signature=${row.signature} kind=${row.kind} nonce=${row.nonce}`);
+    lines.push(`REJECTED row ${row.index} signature=${echoFile(row.signature)} kind=${echoFile(row.kind)} nonce=${echoFile(row.nonce)}`);
     for (const failure of row.failures) {
       lines.push(`- ${failure}`);
     }

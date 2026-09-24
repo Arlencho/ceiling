@@ -353,17 +353,20 @@ test("critic sec r4 C1: no Veto event, two text lines (paid then refused, same a
   const forged = await assessRecord(record(mandate, TOP_REFUSED_6, { kind: "paid" }), RPC, conn, OPTS);
   assert.equal(forged.ok, false, forged.text);
   // Round 5: the text branch is gone (7cfed05), so two text lines and no event bind nothing.
-  assert.match(forged.text, /ledger ring has no matching row and transaction logs have neither PAID nor REFUSED/);
+  assert.match(forged.text, /ledger ring has no matching row and the transaction log carries no Veto event to bind/);
+  assert.doesNotMatch(forged.text, /transaction carries 2 Veto decisions for nonce 6/);
   const refused = await assessRecord(record(mandate, TOP_REFUSED_6), RPC, conn, OPTS);
   assert.equal(refused.ok, false, "two unbound text lines must not confirm any record");
 });
 
-test("critic sec r4 C2: no Veto event, two text lines, ring holds the refused row: paid claim REJECTS on kind (ledger) and on the line count", async () => {
+test("critic sec r4 C2: no Veto event, two text lines, ring holds the refused row: paid claim REJECTS on kind (ledger)", async () => {
   const { conn, mandate } = setup(56n, CPI_PAID_5, TOP_REFUSED_6, { wrapped: false, logs: (m) => relayThenTop(m, CPI_PAID_5, TOP_REFUSED_6, false) });
   const forged = await assessRecord(record(mandate, TOP_REFUSED_6, { kind: "paid" }), RPC, conn, OPTS);
   assert.equal(forged.ok, false, forged.text);
   assert.match(forged.text, /kind \(ledger\): record has paid, chain has refused/);
-  // Round 5: no event means no logs cross-check; the ring row alone rejects.
+  assert.match(forged.text, /transaction log carries no Veto event; decision taken from the ledger row/);
+  // No event means no logs cross-check. The removed text-fallback count error is not the reason.
+  assert.doesNotMatch(forged.text, /transaction carries 2 Veto decisions for nonce 6/);
   assert.doesNotMatch(forged.text, /VERDICT: CONFIRMED/);
 });
 

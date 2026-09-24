@@ -933,6 +933,58 @@ function requireString(value: unknown, field: string): string {
   return value;
 }
 
+function base58Alphabet(value: string): boolean {
+  for (const ch of value) {
+    if (B58.indexOf(ch) < 0) return false;
+  }
+  return true;
+}
+
+function isWellFormed(value: string): boolean {
+  const check = (String.prototype as { isWellFormed?: (this: string) => boolean }).isWellFormed;
+  if (!check) throw new Error("String.prototype.isWellFormed is required");
+  return check.call(value);
+}
+
+export function requireSignature(value: unknown, field: string): string {
+  const s = requireString(value, field);
+  // A 64-byte signature is at most 88 base58 characters. Longer input is the
+  // oversize body that draws HTTP 413, and it must not be decoded.
+  if (s.length > 88) throw new Error(`${field} is not a signature`);
+  for (const ch of s) {
+    if (B58.indexOf(ch) < 0) throw new Error(`${field} is not a signature`);
+  }
+  const decoded = decodeBase58(s);
+  if (decoded.length !== 64) throw new Error(`${field} is not a signature`);
+  return s;
+}
+
+// A signature read from a file. A string that is not well formed is rejected
+// at every length, because a lone surrogate makes the node answer -32700 and
+// the walk stalls. A 64-byte signature is at least 64 characters. An
+// all-base58 string of pubkey length (32 characters or more) is still a chain
+// body when it is shorter than 64 characters, and it must decode to 64 bytes.
+// Below 32 characters the string is a label, including a short all-base58 id.
+export function fileSignature(value: unknown, field: string): string {
+  const s = requireString(value, field);
+  if (!isWellFormed(s)) throw new Error(`${field} is not a signature`);
+  if (s.length >= 64 || (s.length >= 32 && base58Alphabet(s))) return requireSignature(s, field);
+  return s;
+}
+
+// A DecisionRecord already in memory. Well-formedness is checked at every
+// length. Chain shape is checked once the string is long enough to be a
+// 64-byte signature. A pubkey-sized label is left for the node to answer.
+export function loadedSignature(value: string, field: string): string {
+  if (!isWellFormed(value)) throw new Error(`${field} is not a signature`);
+  if (value.length >= 64) return requireSignature(value, field);
+  return value;
+}
+
+function readSignature(value: unknown): string {
+  return fileSignature(value, "signature");
+}
+
 function requirePubkey(value: unknown, field: string): string {
   const s = requireString(value, field);
   try {
@@ -980,7 +1032,7 @@ export function parseRecord(input: unknown): DecisionRecord {
     reason_code,
     reason_text: requireString(o.reason_text, "reason_text"),
     suggested_override: requireSafeInt(o.suggested_override, "suggested_override"),
-    signature: requireString(o.signature, "signature"),
+    signature: readSignature(o.signature),
   };
   return record;
 }

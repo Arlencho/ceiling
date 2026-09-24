@@ -6,6 +6,7 @@ import { ListedTransactionMissingError, TransportError, asTransportError, isTran
 import {
   COMPLETENESS,
   filterIndexed,
+  echoFile,
   formatBulkReport,
   parseExportText,
   type DecisionBundle,
@@ -26,6 +27,7 @@ import {
   kindByte,
   ledgerPda,
   mandateLifecycle,
+  loadedSignature,
   mandatePda,
   parseArgs,
   parseChargeFromTx,
@@ -105,7 +107,7 @@ function fail(failures: string[]): never {
 
 function eq(a: bigint | string | number, b: bigint | string | number, field: string, failures: string[]): void {
   if (a.toString() !== b.toString()) {
-    failures.push(`${field}: record has ${a}, chain has ${b}`);
+    failures.push(`${field}: record has ${echoFile(a.toString())}, chain has ${echoFile(b.toString())}`);
   }
 }
 
@@ -429,13 +431,13 @@ async function limitSource(
   try {
     if (live) {
       if (typeof cache.conn.getSignaturesForAddress !== "function") {
-        failures.push(`mandate history does not list signature ${record.signature}`);
+        failures.push(`mandate history does not list signature ${echoFile(record.signature)}`);
         return undefined;
       }
       const pages = await listMandateSignatures(cache, mandatePk);
       const listed = pages.some((page) => page.signature === record.signature);
       if (!listed) {
-        failures.push(`mandate history does not list signature ${record.signature}`);
+        failures.push(`mandate history does not list signature ${echoFile(record.signature)}`);
         return undefined;
       }
       if (!(await mustReadMandateTenure(cache, mandatePk, record.signature))) {
@@ -459,7 +461,7 @@ async function limitSource(
   if (live && history.openCount < 2 && !belowLatest) return liveLimits(live);
   const opened = history.covered.get(record.signature);
   if (!opened) {
-    failures.push(`mandate history does not cover signature ${record.signature}`);
+    failures.push(`mandate history does not cover signature ${echoFile(record.signature)}`);
     return undefined;
   }
   // The open object still current is the live tenure, so its ring is evidence.
@@ -479,32 +481,30 @@ async function checkRecord(
   const notes: string[] = [];
   const conn = cache.conn;
   const programId = cache.expectedProgramId;
+  try {
+    loadedSignature(record.signature, "signature");
+  } catch (err) {
+    failures.push(failureText(err));
+    return { failures, notes };
+  }
   if (record.program_id !== programId.toBase58()) {
     failures.push(
-      `program_id: record has ${record.program_id}, this tool checks ${programId.toBase58()}`,
+      `program_id: record has ${echoFile(record.program_id)}, this tool checks ${programId.toBase58()}`,
     );
     return { failures, notes };
   }
   const mandatePk = new PublicKey(record.mandate);
 
-  let genesis = cache.genesis;
-  if (!genesis) {
-    try {
-      genesis = await conn.getGenesisHash();
-    } catch (err) {
-      rethrowUnlessInvalidParam(err);
-    }
-    cache.genesis = genesis;
-  }
+  const genesis = await cachedGenesis(cache);
   eq(record.genesis_hash, genesis, "genesis_hash", failures);
   const derivedCluster = clusterForGenesis(genesis);
   if (record.cluster !== derivedCluster) {
-    failures.push(`cluster: record has ${record.cluster}, genesis ${genesis} is ${derivedCluster}`);
+    failures.push(`cluster: record has ${echoFile(record.cluster)}, genesis ${genesis} is ${derivedCluster}`);
   }
 
   if (record.reason_text !== reasonText(record.reason_code)) {
     failures.push(
-      `reason_text: record has "${record.reason_text}", canonical text for code ${record.reason_code} is "${reasonText(record.reason_code)}"`,
+      `reason_text: record has ${echoFile(JSON.stringify(record.reason_text))}, canonical text for code ${record.reason_code} is ${echoFile(JSON.stringify(reasonText(record.reason_code)))}`,
     );
   }
   if (record.kind === "paid" && record.reason_code !== 0) {
@@ -520,12 +520,12 @@ async function checkRecord(
   const tx = await cachedTransaction(cache, record.signature);
   if (!tx) {
     failures.push(
-      `signature ${record.signature} not found on ${shownRpc(rpc)} (wrong cluster, tampered signature, or history pruned)`,
+      `signature ${echoFile(record.signature)} not found on ${shownRpc(rpc)} (wrong cluster, tampered signature, or history pruned)`,
     );
     return { failures, notes };
   }
   if (tx.meta?.err) {
-    failures.push(`transaction failed on chain: ${JSON.stringify(tx.meta.err)}`);
+    failures.push(`transaction failed on chain: ${echoFile(JSON.stringify(tx.meta.err))}`);
   }
 
   const charges = parseChargeFromTx(tx, programId);
@@ -567,12 +567,14 @@ async function checkRecord(
   eq(record.limits.expires_at, limits.expiresAt, "limits.expires_at", failures);
   eq(record.limits.merchant, limits.merchant.toBase58(), "limits.merchant", failures);
   if (record.limits.purpose !== limits.purpose) {
-    failures.push(`limits.purpose: record has "${record.limits.purpose}", chain has "${limits.purpose}"`);
+    failures.push(
+      `limits.purpose: record has ${echoFile(JSON.stringify(record.limits.purpose))}, chain has ${echoFile(JSON.stringify(limits.purpose))}`,
+    );
   }
   const derived = mandatePda(programId, limits.owner, limits.mandateId);
   if (!derived.equals(mandatePk)) {
     failures.push(
-      `mandate PDA re-derived from on-chain owner+mandate_id is ${derived.toBase58()}, record has ${record.mandate}`,
+      `mandate PDA re-derived from on-chain owner+mandate_id is ${derived.toBase58()}, record has ${echoFile(record.mandate)}`,
     );
   }
 
@@ -616,7 +618,7 @@ async function checkRecord(
   };
   const held = ledger;
   if (held && !held.mandate.equals(mandatePk)) {
-    failures.push(`ledger.mandate is ${held.mandate.toBase58()}, expected ${record.mandate}`);
+    failures.push(`ledger.mandate is ${held.mandate.toBase58()}, expected ${echoFile(record.mandate)}`);
   }
   // A reopened account's ring belongs to the live tenure. Rows in it can repeat
   // an earlier tenure's nonce and amount, so they do not confirm that tenure.
@@ -630,9 +632,14 @@ async function checkRecord(
       : [];
   const bound = boundVetoDecision(tx.meta?.logMessages ?? [], programId, want);
   const blockTime = txBlockTime(tx);
-  if (rows.length === 0) {
+  const logKind = bound.status === "one" ? kindByte(bound.decision.kind) : null;
+  const sameKind = logKind === null ? rows : rows.filter((row) => row.entry.kind === logKind);
+  // The log names a kind and the ring has no row of that kind. This decision
+  // has rolled off. Binding the other kind's row would describe a different charge.
+  const rolledOff = bound.status === "one" && rows.length > 0 && sameKind.length === 0;
+  if (rows.length === 0 || rolledOff) {
     if (bound.status === "none") {
-      failures.push("ledger ring has no matching row and transaction logs have neither PAID nor REFUSED");
+      failures.push("ledger ring has no matching row and the transaction log carries no Veto event to bind");
     } else if (bound.status === "error") {
       failures.push(bound.error);
     } else {
@@ -643,7 +650,9 @@ async function checkRecord(
       eq(record.amount, logs.amount, "amount (logs)", failures);
       eq(record.suggested_override, logs.suggestedOverride, "suggested_override (logs)", failures);
       if (record.reason_text !== logs.reasonText) {
-        failures.push(`reason_text: record has "${record.reason_text}", logs have "${logs.reasonText}"`);
+        failures.push(
+          `reason_text: record has ${echoFile(JSON.stringify(record.reason_text))}, logs have ${echoFile(JSON.stringify(logs.reasonText))}`,
+        );
       }
       if (blockTime !== null) {
         eq(record.timestamp, BigInt(blockTime), "timestamp (transaction)", failures);
@@ -651,7 +660,6 @@ async function checkRecord(
     }
   } else {
     const timePick = ringEntryForSignature(rows, blockTime, record.signature);
-    const logKind = bound.status === "one" ? kindByte(bound.decision.kind) : null;
     const picked = ringRowForLogKind(timePick, rows, blockTime, record.signature, logKind);
     if ("error" in picked) {
       failures.push(picked.error);
@@ -677,12 +685,18 @@ async function checkRecord(
         }
       }
     }
+    // No decision frame: a triple match is not this signature's row.
+    // The ledger comparisons above still ran; the logs cross-check did not.
+    if (bound.status === "none") {
+      notes.push("transaction log carries no Veto event; decision taken from the ledger row");
+      failures.push("ledger ring row cannot be tied to this transaction: its log carries no decision");
+    }
   }
 
   // Same triple as the ring. The first Veto line in the transaction is not the decision.
-  if (rows.length > 0 && bound.status === "error") {
+  if (rows.length > 0 && !rolledOff && bound.status === "error") {
     failures.push(bound.error);
-  } else if (rows.length > 0 && bound.status === "one") {
+  } else if (rows.length > 0 && !rolledOff && bound.status === "one") {
     eq(record.kind, bound.decision.kind, "kind (logs)", failures);
     eq(record.reason_code, bound.decision.reasonCode, "reason_code (logs)", failures);
   }
@@ -697,20 +711,20 @@ function confirmedLines(record: DecisionRecord, rpc: string, genesis: string, pr
     `rpc                 ${shownRpc(rpc)}`,
     `cluster             ${clusterForGenesis(genesis)}`,
     `genesis_hash        ${genesis}`,
-    `program_id          ${record.program_id}`,
-    `checked against program ${record.program_id} (${programSource})`,
-    `mandate             ${record.mandate}`,
-    `signature           ${record.signature}`,
-    `kind                ${record.kind}`,
+    `program_id          ${echoFile(record.program_id)}`,
+    `checked against program ${echoFile(record.program_id)} (${programSource})`,
+    `mandate             ${echoFile(record.mandate)}`,
+    `signature           ${echoFile(record.signature)}`,
+    `kind                ${echoFile(record.kind)}`,
     `amount              ${record.amount.toString()}`,
-    `counterparty        ${record.counterparty}`,
+    `counterparty        ${echoFile(record.counterparty)}`,
     `timestamp           ${record.timestamp.toString()}`,
     `nonce               ${record.nonce.toString()}`,
-    `reason              ${record.reason_code} (${record.reason_text})`,
+    `reason              ${record.reason_code} (${echoFile(record.reason_text)})`,
     `suggested_override  ${record.suggested_override.toString()}`,
     `limits              cap=${record.limits.cap.toString()} per_tx_max=${record.limits.per_tx_max.toString()} expires_at=${record.limits.expires_at.toString()}`,
-    `merchant            ${record.limits.merchant}`,
-    `purpose             ${record.limits.purpose}`,
+    `merchant            ${echoFile(record.limits.merchant)}`,
+    `purpose             ${echoFile(record.limits.purpose)}`,
     "",
     "Mandate limits, ledger entry, and charge transaction agree.",
   ];
@@ -741,37 +755,39 @@ async function bundleFailures(bundle: DecisionBundle, cache: CheckCache): Promis
   const failures: string[] = [];
   const expected = cache.expectedProgramId.toBase58();
   if (bundle.program_id !== expected) {
-    failures.push(`program_id: envelope has ${bundle.program_id}, this tool checks ${expected}`);
+    failures.push(`program_id: envelope has ${echoFile(bundle.program_id)}, this tool checks ${expected}`);
   }
-  const genesis = cache.genesis ?? (cache.genesis = await cache.conn.getGenesisHash());
+  const genesis = await cachedGenesis(cache);
   if (bundle.genesis_hash !== genesis) {
-    failures.push(`genesis_hash: envelope has ${bundle.genesis_hash}, chain has ${genesis}`);
+    failures.push(`genesis_hash: envelope has ${echoFile(bundle.genesis_hash)}, chain has ${echoFile(genesis)}`);
   }
   const cluster = clusterForGenesis(genesis);
   if (bundle.cluster !== cluster) {
-    failures.push(`cluster: envelope has ${bundle.cluster}, genesis ${genesis} is ${cluster}`);
+    failures.push(`cluster: envelope has ${echoFile(bundle.cluster)}, genesis ${genesis} is ${cluster}`);
   }
   const seen = new Set<string>();
   for (const record of bundle.decisions) {
     if (seen.has(record.signature)) {
-      failures.push(`signature ${record.signature} appears more than once`);
+      failures.push(`signature ${echoFile(record.signature)} appears more than once`);
     }
     seen.add(record.signature);
     if (record.program_id !== bundle.program_id) {
       failures.push(
-        `program_id: row ${record.signature} has ${record.program_id}, envelope has ${bundle.program_id}`,
+        `program_id: row ${echoFile(record.signature)} has ${echoFile(record.program_id)}, envelope has ${echoFile(bundle.program_id)}`,
       );
     }
     if (record.genesis_hash !== bundle.genesis_hash) {
       failures.push(
-        `genesis_hash: row ${record.signature} has ${record.genesis_hash}, envelope has ${bundle.genesis_hash}`,
+        `genesis_hash: row ${echoFile(record.signature)} has ${echoFile(record.genesis_hash)}, envelope has ${echoFile(bundle.genesis_hash)}`,
       );
     }
     if (record.cluster !== bundle.cluster) {
-      failures.push(`cluster: row ${record.signature} has ${record.cluster}, envelope has ${bundle.cluster}`);
+      failures.push(`cluster: row ${echoFile(record.signature)} has ${echoFile(record.cluster)}, envelope has ${echoFile(bundle.cluster)}`);
     }
     if (bundle.scope.mandate && record.mandate !== bundle.scope.mandate) {
-      failures.push(`mandate: row ${record.signature} has ${record.mandate}, scope has ${bundle.scope.mandate}`);
+      failures.push(
+        `mandate: row ${echoFile(record.signature)} has ${echoFile(record.mandate)}, scope has ${echoFile(bundle.scope.mandate)}`,
+      );
     }
   }
   if (bundle.scope.type === "rule") {
@@ -787,7 +803,7 @@ function mandatePubkey(mandate: string, failures: string[]): PublicKey | null {
   try {
     return new PublicKey(mandate);
   } catch {
-    failures.push(`scope.mandate ${mandate} is not a pubkey`);
+    failures.push(`scope.mandate ${echoFile(mandate)} is not a pubkey`);
     return null;
   }
 }
@@ -1018,7 +1034,7 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
   for (const row of bundle.decisions) {
     if (inScope(row.timestamp, bundle)) continue;
     failures.push(
-      `signature ${row.signature} has timestamp ${row.timestamp.toString()} outside scope ${fromLabel}..${toLabel}`,
+      `signature ${echoFile(row.signature)} has timestamp ${row.timestamp.toString()} outside scope ${fromLabel}..${toLabel}`,
     );
   }
   const fileSigs = new Set(
@@ -1031,7 +1047,7 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
   }
   for (const signature of [...fileSigs].sort()) {
     if (!population.has(signature)) {
-      failures.push(`signature ${signature} is in the file and not in the indexed date_range`);
+      failures.push(`signature ${echoFile(signature)} is in the file and not in the indexed date_range`);
     }
   }
   // The ring cannot be truncated by a log flood. A date_range that names a
@@ -1084,7 +1100,7 @@ export async function assessBundle(
 ): Promise<Verdict> {
   if (bundle.completeness !== COMPLETENESS) {
     const failures = [
-      `completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${JSON.stringify(bundle.completeness)}`,
+      `completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${echoFile(JSON.stringify(bundle.completeness))}`,
     ];
     return { ok: false, failures, text: rejectedText(failures), code: 1 };
   }
@@ -1107,7 +1123,7 @@ export async function assessBundle(
     } catch (err) {
       if (isTransportError(err)) {
         const detail = err instanceof Error ? err.message : String(err);
-        const line = `verify failed: row ${i + 1} signature=${record.signature} was not checked: ${detail}`;
+        const line = `verify failed: row ${i + 1} signature=${echoFile(record.signature)} was not checked: ${detail}`;
         return { ok: false, failures: [line], text: `${line}\n`, code: 3 };
       }
       const message = err instanceof Error ? err.message : String(err);
@@ -1138,7 +1154,7 @@ export async function assessBundle(
     for (const row of rows) {
       if (row.ok) continue;
       lines.push("");
-      lines.push(`REJECTED row ${row.index} signature=${row.signature} kind=${row.kind} nonce=${row.nonce}`);
+      lines.push(`REJECTED row ${row.index} signature=${echoFile(row.signature)} kind=${echoFile(row.kind)} nonce=${echoFile(row.nonce)}`);
       for (const failure of row.failures) lines.push(`- ${failure}`);
     }
   }
@@ -1155,11 +1171,11 @@ function populationLines(bundle: DecisionBundle, cache: CheckCache): string[] {
   const scope = bundle.scope;
   const lines = [
     `scope               ${scope.type}`,
-    `mandate             ${scope.mandate ?? "none"}`,
+    `mandate             ${scope.mandate === null ? "none" : echoFile(scope.mandate)}`,
     `from                ${scope.from === null ? "none" : String(scope.from)}`,
     `to                  ${scope.to === null ? "none" : String(scope.to)}`,
     `program_id          ${cache.expectedProgramId.toBase58()}`,
-    `cluster             ${cache.genesis ? clusterForGenesis(cache.genesis) : bundle.cluster}`,
+    `cluster             ${cache.genesis ? clusterForGenesis(cache.genesis) : echoFile(bundle.cluster)}`,
     `checked against program ${cache.expectedProgramId.toBase58()} (${cache.programSource})`,
   ];
   if (scope.mandate) {
@@ -1204,9 +1220,23 @@ function failureText(err: unknown): string {
 }
 
 function jsonRpcErrorCode(err: unknown): number | null {
-  if (typeof err !== "object" || err === null || !("code" in err)) return null;
-  const code = (err as { code: unknown }).code;
-  return typeof code === "number" ? code : null;
+  if (typeof err !== "object" || err === null) return null;
+  const rec = err as { rpcCode?: unknown; code?: unknown };
+  if (typeof rec.rpcCode === "number") return rec.rpcCode;
+  if (typeof rec.code === "number") return rec.code;
+  return null;
+}
+
+async function cachedGenesis(cache: CheckCache): Promise<string> {
+  if (cache.genesis) return cache.genesis;
+  let genesis: string;
+  try {
+    genesis = await cache.conn.getGenesisHash();
+  } catch (err) {
+    rethrowUnlessInvalidParam(err);
+  }
+  cache.genesis = genesis;
+  return genesis;
 }
 
 // JSON-RPC -32602 is the node refusing a parameter from the file. A signature

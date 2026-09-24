@@ -15,6 +15,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PublicKey, type Connection } from "@solana/web3.js";
+import { encodePaidLog, encodeRefusedLog } from "../indexer/src/events.js";
 import { buildRecordFromIndexed, makeBundle, overlayRing, type IndexedDecision } from "./bulk.js";
 import {
   CHARGE_DISCRIMINATOR,
@@ -103,12 +104,22 @@ function encodeLedger(mandate: PublicKey, rows: Row[]): Buffer {
 }
 
 function chargeTx(mandate: PublicKey, ledger: PublicKey, row: Row): unknown {
-  const logs =
+  const program = REAL_PROGRAM.toBase58();
+  const text =
     row.kind === "paid"
-      ? [`Program log: VETO PAID amount=${row.amount}`]
-      : [
-          `Program log: VETO REFUSED reason=5 (${reasonText(5)}) amount=${row.amount} per_tx_max=${LIMITS.per_tx_max} remaining=1 override_to_clear=${row.amount}`,
-        ];
+      ? `Program log: VETO PAID amount=${row.amount}`
+      : `Program log: VETO REFUSED reason=5 (${reasonText(5)}) amount=${row.amount} per_tx_max=${LIMITS.per_tx_max} remaining=1 override_to_clear=${row.amount}`;
+  const event =
+    row.kind === "paid"
+      ? encodePaidLog({ mandate, amount: BigInt(row.amount), nonce: BigInt(row.nonce), spent: BigInt(row.amount) })
+      : encodeRefusedLog({
+          mandate,
+          amount: BigInt(row.amount),
+          nonce: BigInt(row.nonce),
+          reason: 5,
+          suggestedOverride: BigInt(row.amount),
+        });
+  const logs = [`Program ${program} invoke [1]`, text, event, `Program ${program} success`];
   return {
     slot: 1,
     blockTime: row.timestamp,
