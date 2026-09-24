@@ -53,4 +53,24 @@ The checks, in order:
 5. `mintDecimals` matches the decimals on the mint account, and that mint account is owned by the same token program as the source account.
 6. `payeeTokenAccount` is the payee's associated token account for this mint when that account exists, otherwise the payee's only token account for the mint.
 
-`charge` reads `last_nonce` for the next nonce when the example asks for it, submits one `charge`, and reads the decision in that transaction.
+`charge` uses `nextNonce()` when the example asks for the next nonce. That is `last_nonce` plus one, or `overrideNonce` when an override is pending above `last_nonce`. It submits one `charge` and reads the decision in that transaction.
+
+## Retrying after the owner grants an override
+
+A charge above the per-payment maximum is refused with reason code 5. `last_nonce` does not advance, so that charge can be retried. The owner grants an override for one nonce and one amount. The mandate stores those as `override_nonce` and `override_amount`.
+
+`status()` returns them as `overrideNonce` and `overrideAmount`. While `overrideNonce` is above `lastNonce`, `nextNonce()` returns `overrideNonce` instead of `last_nonce` plus one. Retry by charging that nonce for an amount no greater than `overrideAmount`. The amount must still fit in the remaining cap. A paid charge at that nonce clears the override.
+
+```ts
+const status = await veto.status();
+if (status.overrideNonce > status.lastNonce) {
+  const outcome = await veto.charge({
+    amount: status.overrideAmount,
+    nonce: await veto.nextNonce(),
+  });
+}
+```
+
+## Reading decisions
+
+`decisionsForMandate` reads one page of signatures for the mandate. It does not walk every transaction on a long-lived mandate. `limit` caps how many decisions come back from that page (newest first, at most 1000). Omit `limit` and the call returns the decisions on that one page. `before` starts after a signature you have already read. `until` stops before a signature, leaving it and anything older unread. Pass `before` set to the oldest signature from the previous page to read the next older page.

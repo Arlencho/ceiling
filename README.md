@@ -173,7 +173,7 @@ Fund that address with a little SOL for fees. `status()` warns when the balance 
 
 In the app, open a new rule and paste that public address into the field labeled "Agent address". The same screen takes Cap, Per-payment maximum, Expiry (days from now), Payee, and Purpose. The owner key signs the open.
 
-The package `veto-agent-sdk` is not yet published ([issue 190](https://github.com/Arlencho/veto/issues/190)). Install it from this checkout. The field-by-field checks are in [sdk/README.md](sdk/README.md). The example loads the agent key and the JSON block the app copies (Copy all, or the same block a QR scan returns), checks that block against the chain, reads `last_nonce`, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
+The package `veto-agent-sdk` is not yet published ([issue 190](https://github.com/Arlencho/veto/issues/190)). Install it from this checkout. The field-by-field checks are in [sdk/README.md](sdk/README.md). The example loads the agent key and the JSON block the app copies (Copy all, or the same block a QR scan returns), checks that block against the chain, reads the next nonce, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
 
 `loadAgentConfig` accepts the JSON text or the parsed object and refuses a missing or extra field. `VetoAgent.fromConfig` pins the program to the id bundled in `sdk/idl/veto.json` unless the caller passes `{ programId }` in code, and a block whose `programId` differs from that id is refused. `mintDecimals` is checked against the mint account. `cluster` is checked against the endpoint's genesis hash (`devnet`, `testnet`, or `mainnet-beta`). A `Connection` passed to `fromConfig` is the endpoint. When it is omitted, the example opens `rpcUrl` from the block.
 
@@ -216,6 +216,11 @@ The owner can wave one specific payment through above the per-payment ceiling. I
 signature, applies to exactly one nonce, and is written to the ledger as an override. An override
 raises the per-payment ceiling only. It can never raise the total cap, so the number the owner
 committed to stays absolute.
+
+The agent retries that refused charge at the nonce the owner named. `VetoAgent.status()` returns
+`overrideAmount` and `overrideNonce`. While `overrideNonce` is above `lastNonce`, `nextNonce()`
+returns `overrideNonce`. Charge that nonce for an amount no greater than `overrideAmount`, and
+still within the remaining cap. The steps are in [sdk/README.md](sdk/README.md).
 
 ## The demo
 

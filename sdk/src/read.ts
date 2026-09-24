@@ -67,23 +67,39 @@ export type DecisionPage = {
   blockTime: number | null;
 };
 
+export type DecisionsForMandateOptions = {
+  pageSize?: number;
+  programId?: PublicKey | string;
+  /** Newest decisions to take from this page. Defaults to the whole page. */
+  limit?: number;
+  /** Start at signatures older than this one. */
+  before?: string;
+  /** Stop before this signature. It, and anything older, is not read. */
+  until?: string;
+};
+
 /**
- * Decisions whose transaction touched this mandate.
+ * Decisions whose transaction touched this mandate, from one signature page.
  * A Veto frame without its Program data event is not a decision.
+ * Pass `before` as the oldest signature already read to fetch the next older page.
  */
 export async function decisionsForMandate(
   connection: Connection,
   mandate: PublicKey | string,
-  options?: { pageSize?: number; programId?: PublicKey | string },
+  options?: DecisionsForMandateOptions,
 ): Promise<Decision[]> {
   const key = toPublicKey(mandate, "decisionsForMandate");
   const programId = options?.programId
     ? toPublicKey(options.programId, "decisionsForMandate programId").toBase58()
     : PROGRAM_ID.toBase58();
   const pageSize = clampPage(options?.pageSize);
-  const pages = await listSignatures(connection, key, pageSize);
+  const limit = clampLimit(options?.limit);
+  const before = signatureCursor(options?.before, "before");
+  const until = signatureCursor(options?.until, "until");
+  const pages = await listPage(connection, key, pageSize, before, until);
   const decisions: Decision[] = [];
   for (const page of pages) {
+    if (decisions.length >= limit) break;
     if (page.err) continue;
     const tx = await connection.getTransaction(page.signature, {
       commitment: "confirmed",
@@ -91,7 +107,10 @@ export async function decisionsForMandate(
     });
     if (!tx) continue;
     const view = viewFromRpc(tx as RpcTransaction, page);
-    decisions.push(...decisionsFromTx(view, programId, key.toBase58()));
+    for (const decision of decisionsFromTx(view, programId, key.toBase58())) {
+      if (decisions.length >= limit) break;
+      decisions.push(decision);
+    }
   }
   decisions.sort(compareDecisions);
   return decisions;
@@ -105,31 +124,41 @@ function clampPage(pageSize: number | undefined): number {
   return pageSize;
 }
 
-async function listSignatures(
+function clampLimit(limit: number | undefined): number {
+  if (limit === undefined) return PAGE_MAX;
+  if (!Number.isInteger(limit) || limit < 1 || limit > PAGE_MAX) {
+    throw new Error(`decisionsForMandate: limit must be an integer from 1 to ${PAGE_MAX}`);
+  }
+  return limit;
+}
+
+function signatureCursor(value: string | undefined, name: string): string | undefined {
+  if (value === undefined) return undefined;
+  if (value.length === 0) {
+    throw new Error(`decisionsForMandate: ${name} must be a signature`);
+  }
+  return value;
+}
+
+async function listPage(
   connection: Connection,
   mandate: PublicKey,
   pageSize: number,
+  before: string | undefined,
+  until: string | undefined,
 ): Promise<DecisionPage[]> {
+  const batch = await connection.getSignaturesForAddress(mandate, { limit: pageSize, before, until });
   const items: DecisionPage[] = [];
-  let before: string | undefined;
   const seen = new Set<string>();
-  for (;;) {
-    const batch = await connection.getSignaturesForAddress(mandate, { limit: pageSize, before });
-    if (batch.length === 0) break;
-    for (const item of batch) {
-      if (seen.has(item.signature)) continue;
-      seen.add(item.signature);
-      items.push({
-        signature: item.signature,
-        slot: item.slot,
-        err: item.err,
-        blockTime: item.blockTime ?? null,
-      });
-    }
-    if (batch.length < pageSize) break;
-    const last = batch[batch.length - 1];
-    if (!last || last.signature === before) break;
-    before = last.signature;
+  for (const item of batch) {
+    if (seen.has(item.signature)) continue;
+    seen.add(item.signature);
+    items.push({
+      signature: item.signature,
+      slot: item.slot,
+      err: item.err,
+      blockTime: item.blockTime ?? null,
+    });
   }
   return items;
 }

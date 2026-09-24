@@ -7,6 +7,7 @@ export { PROGRAM_ID } from "./idl.js";
 export { ledgerPda, mandatePda } from "./layout.js";
 export type { LedgerAccount, LedgerEntry, MandateAccount } from "./layout.js";
 export { decisionsForMandate, fetchLedger, fetchMandate } from "./read.js";
+export type { DecisionsForMandateOptions } from "./read.js";
 export {
   REASON_ACCOUNT_FROZEN,
   REASON_DELEGATE_MISSING,

@@ -174,7 +174,8 @@ export class FakeConnection {
   sent: Buffer[] = [];
   signature = "sig";
   lastTokenFilter: { mint?: PublicKey; programId?: PublicKey } | undefined;
-  signatureQueries: { limit?: number; before?: string }[] = [];
+  signatureQueries: { limit?: number; before?: string; until?: string }[] = [];
+  opened: string[] = [];
 
   async getAccountInfo(key: PublicKey): Promise<StoredAccount | null> {
     return this.accounts.get(key.toBase58()) ?? null;
@@ -225,6 +226,7 @@ export class FakeConnection {
   }
 
   async getTransaction(signature: string): Promise<RpcTransaction | null> {
+    this.opened.push(signature);
     if (signature === "do-not-fetch") {
       throw new Error("fetched a signature that should have been skipped");
     }
@@ -233,13 +235,17 @@ export class FakeConnection {
 
   async getSignaturesForAddress(
     _address: PublicKey,
-    config?: { limit?: number; before?: string },
+    config?: { limit?: number; before?: string; until?: string },
   ): Promise<ConfirmedSignatureInfo[]> {
-    this.signatureQueries.push({ limit: config?.limit, before: config?.before });
+    this.signatureQueries.push({ limit: config?.limit, before: config?.before, until: config?.until });
     let rows = this.signatures;
     if (config?.before) {
       const idx = rows.findIndex((row) => row.signature === config.before);
       rows = idx >= 0 ? rows.slice(idx + 1) : [];
+    }
+    if (config?.until) {
+      const idx = rows.findIndex((row) => row.signature === config.until);
+      if (idx >= 0) rows = rows.slice(0, idx);
     }
     return rows.slice(0, config?.limit ?? rows.length);
   }

@@ -56,6 +56,8 @@ export type AgentStatus = {
   spendCount: number;
   refusalCount: number;
   lastNonce: bigint;
+  overrideAmount: bigint;
+  overrideNonce: bigint;
   agentLamports: bigint;
   feeWarning: string | null;
 };
@@ -251,9 +253,17 @@ export class VetoAgent {
     };
   }
 
-  /** last_nonce on the mandate, plus one. A refused charge does not advance it. */
+  /**
+   * Nonce for the next charge.
+   * A pending override is override_nonce above last_nonce, and that is the nonce
+   * the retry must use. Otherwise this is last_nonce plus one.
+   * A refused charge does not advance last_nonce.
+   */
   async nextNonce(): Promise<bigint> {
     const mandate = await this.loadMandate();
+    if (mandate.overrideNonce > mandate.lastNonce) {
+      return mandate.overrideNonce;
+    }
     if (mandate.lastNonce >= U64_MAX) {
       throw new Error("VetoAgent.nextNonce: last_nonce is the maximum u64");
     }
@@ -282,6 +292,8 @@ export class VetoAgent {
       spendCount: mandate.spendCount,
       refusalCount: mandate.refusalCount,
       lastNonce: mandate.lastNonce,
+      overrideAmount: mandate.overrideAmount,
+      overrideNonce: mandate.overrideNonce,
       agentLamports: lamports,
       feeWarning: feeWarning(lamports),
     };

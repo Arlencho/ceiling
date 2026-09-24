@@ -100,7 +100,7 @@ function putCharge(
   );
 }
 
-test("decisionsForMandate pages signatures and keeps only attributable Veto decisions", async () => {
+test("decisionsForMandate keeps only attributable Veto decisions from one signature page", async () => {
   const w = world();
   putCharge(
     w.fake,
@@ -133,7 +133,7 @@ test("decisionsForMandate pages signatures and keeps only attributable Veto deci
     { signature: "do-not-fetch", slot: 15, err: { InstructionError: [0, "Custom"] }, memo: null, blockTime: 150, confirmationStatus: "confirmed" },
     { signature: "older", slot: 10, err: null, memo: null, blockTime: 100, confirmationStatus: "confirmed" },
   ];
-  const rows = await decisionsForMandate(w.connection, w.mandate, { pageSize: 1 });
+  const rows = await decisionsForMandate(w.connection, w.mandate, { pageSize: 3 });
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.signature, "older");
   assert.equal(rows[0]?.kind, "paid");
@@ -143,8 +143,9 @@ test("decisionsForMandate pages signatures and keeps only attributable Veto deci
   assert.equal(rows[0]?.reasonText, "ok");
   assert.deepEqual(
     w.fake.signatureQueries.map((query) => query.before ?? ""),
-    ["", "newer", "do-not-fetch", "older"],
+    [""],
   );
+  assert.equal(w.fake.opened.includes("do-not-fetch"), false);
 });
 
 test("decisionsForMandate can be called without a keypair", async () => {
