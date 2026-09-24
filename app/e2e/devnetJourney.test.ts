@@ -5,6 +5,10 @@
 //
 // Needs keys/deployer.json (gitignored). That key is the mint authority for
 // the demo mint in docs/DEVNET.md. The payee is the merchant already on devnet.
+// Each rule is exported while its mandate account still exists. Closed-mandate
+// export waits until issue 204 is fixed on main. The finally block returns
+// leftover SOL and tokens to that deployer key and closes the generated
+// wallets' token accounts.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -18,7 +22,9 @@ import {
   AccountLayout,
   TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountIdempotentInstruction,
+  createCloseAccountInstruction,
   createMintToInstruction,
+  createTransferCheckedInstruction,
   getAssociatedTokenAddressSync,
 } from '@solana/spl-token';
 import {
@@ -36,6 +42,7 @@ import {
   KIND_PAID,
   KIND_REFUSED,
   KIND_REVOKED,
+  REASON_NOT_ACTIVE,
   REASON_OVER_PER_TX_MAX,
   STATUS_ACTIVE,
   STATUS_REVOKED,
@@ -79,6 +86,7 @@ const OWNER_LAMPORTS = 400_000_000;
 const AGENT_LAMPORTS = 50_000_000;
 const DEPLOYER_RESERVE = 100_000_000;
 const REFUSED_EVENT_DISC = Buffer.from([230, 49, 133, 208, 106, 62, 106, 169]);
+const VERIFY_AGREE = 'Mandate limits, ledger entry, and charge transaction agree.';
 
 const REPO = fileUrlDir(new URL('../..', import.meta.url));
 const TOOLS = join(REPO, 'tools');
@@ -113,6 +121,8 @@ type ChargeNote = {
   amount: bigint;
   nonce: bigint;
   mandate: string;
+  reasonCode: number;
+  suggestedOverride: bigint;
 };
 
 type Row = {
@@ -331,9 +341,11 @@ function renderReport(args: {
 
 function runTool(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
+    const env: NodeJS.ProcessEnv = { ...process.env, VETO_RPC: RPC };
+    delete env.FORCE_COLOR;
     const child = spawn('npx', ['tsx', ...args], {
       cwd: TOOLS,
-      env: { ...process.env, VETO_RPC: RPC },
+      env,
     });
     let stdout = '';
     let stderr = '';
@@ -365,6 +377,8 @@ test(
     const decisions: ChargeNote[] = [];
     const tempDir = mkdtempSync(join(tmpdir(), 'veto-e2e-'));
     const ids = { owner: '', agent: '', ruleA: '', ruleB: '' };
+    let reclaimRun: (() => Promise<void>) | null = null;
+    let journeyError: unknown;
 
     const flush = () => {
       writeFileSync(REPORT, renderReport({ rows, started, ...ids }));
@@ -442,9 +456,11 @@ test(
       const deployer = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(deployerFile) as number[]));
       const owner = Keypair.generate();
       const agentSdk = SdkKeypair.generate();
-      const agentForApp = new PublicKey(agentSdk.publicKey.toBytes());
+      const agent = Keypair.fromSecretKey(Uint8Array.from(agentSdk.secretKey));
+      const agentForApp = agent.publicKey;
+      assert.equal(agent.publicKey.toBase58(), agentSdk.publicKey.toBase58(), 'agent keypair mismatch');
       ids.owner = owner.publicKey.toBase58();
-      ids.agent = agentSdk.publicKey.toBase58();
+      ids.agent = agent.publicKey.toBase58();
       flush();
 
       const store = memoryStore();
@@ -456,6 +472,138 @@ test(
       const transact: TransactFn = (callback) => callback(wallet);
       const signAndSend = (transactions: Transaction[]) =>
         signAndSendTransactions(transact, store, transactions);
+
+      const rules: Array<{ label: string; address: PublicKey }> = [];
+      const ownerAta = getAssociatedTokenAddressSync(mint, owner.publicKey, false, TOKEN_PROGRAM_ID);
+
+      async function reclaim(): Promise<void> {
+        const closed: string[] = [];
+        const closeErrors: string[] = [];
+        for (const rule of rules) {
+          try {
+            const existing = await connection.getAccountInfo(rule.address, 'confirmed');
+            if (!existing) continue;
+            const mandate = await fetchMandate(client, rule.address);
+            const result = await closeMandate(client, signAndSend, owner.publicKey, mandate);
+            closed.push(`${rule.label} ${result.signature}`);
+          } catch (err) {
+            closeErrors.push(`${rule.label}: ${errorText(err)}`);
+          }
+        }
+
+        const deployerAta = getAssociatedTokenAddressSync(mint, deployer.publicKey, false, TOKEN_PROGRAM_ID);
+        const tx = new Transaction();
+        const signers: Keypair[] = [deployer];
+        let tokens = 0n;
+        let ataRent = 0;
+        const tokenIxs: Transaction['instructions'] = [];
+
+        const sweepToken = (wallet: Keypair, ata: PublicKey, account: AccountInfo<Buffer> | null) => {
+          if (!account || !account.owner.equals(TOKEN_PROGRAM_ID)) return;
+          const view = decodeToken(account.data);
+          if (view.amount > 0n) {
+            tokens += view.amount;
+            tokenIxs.push(
+              createTransferCheckedInstruction(
+                ata,
+                mint,
+                deployerAta,
+                wallet.publicKey,
+                view.amount,
+                DECIMALS,
+                [],
+                TOKEN_PROGRAM_ID,
+              ),
+            );
+          }
+          ataRent += account.lamports;
+          tokenIxs.push(createCloseAccountInstruction(ata, deployer.publicKey, wallet.publicKey, [], TOKEN_PROGRAM_ID));
+          if (!signers.some((signer) => signer.publicKey.equals(wallet.publicKey))) signers.push(wallet);
+        };
+
+        const ownerAtaInfo = await connection.getAccountInfo(ownerAta, 'confirmed');
+        sweepToken(owner, ownerAta, ownerAtaInfo);
+        const agentAta = getAssociatedTokenAddressSync(mint, agent.publicKey, false, TOKEN_PROGRAM_ID);
+        const agentAtaInfo = await connection.getAccountInfo(agentAta, 'confirmed');
+        sweepToken(agent, agentAta, agentAtaInfo);
+        if (tokens > 0n) {
+          tx.add(
+            createAssociatedTokenAccountIdempotentInstruction(
+              deployer.publicKey,
+              deployerAta,
+              deployer.publicKey,
+              mint,
+              TOKEN_PROGRAM_ID,
+            ),
+          );
+        }
+        if (tokenIxs.length > 0) tx.add(...tokenIxs);
+
+        const ownerSol = await connection.getBalance(owner.publicKey, 'confirmed');
+        if (ownerSol > 0) {
+          tx.add(
+            SystemProgram.transfer({
+              fromPubkey: owner.publicKey,
+              toPubkey: deployer.publicKey,
+              lamports: ownerSol,
+            }),
+          );
+          if (!signers.some((signer) => signer.publicKey.equals(owner.publicKey))) signers.push(owner);
+        }
+        const agentSol = await connection.getBalance(agent.publicKey, 'confirmed');
+        if (agentSol > 0) {
+          tx.add(
+            SystemProgram.transfer({
+              fromPubkey: agent.publicKey,
+              toPubkey: deployer.publicKey,
+              lamports: agentSol,
+            }),
+          );
+          if (!signers.some((signer) => signer.publicKey.equals(agent.publicKey))) signers.push(agent);
+        }
+
+        let signature = '';
+        if (tx.instructions.length > 0) {
+          const latest = await connection.getLatestBlockhash('confirmed');
+          tx.feePayer = deployer.publicKey;
+          tx.recentBlockhash = latest.blockhash;
+          tx.sign(...signers);
+          signature = await connection.sendRawTransaction(tx.serialize(), { preflightCommitment: 'confirmed' });
+          await connection.confirmTransaction(
+            { signature, blockhash: latest.blockhash, lastValidBlockHeight: latest.lastValidBlockHeight },
+            'confirmed',
+          );
+          await eventually(async () => {
+            assert.equal(await connection.getBalance(owner.publicKey, 'confirmed'), 0, 'owner SOL was not returned');
+            assert.equal(await connection.getBalance(agent.publicKey, 'confirmed'), 0, 'agent SOL was not returned');
+            assert.equal(await connection.getAccountInfo(ownerAta, 'confirmed'), null, 'owner token account stayed open');
+            assert.equal(await connection.getAccountInfo(agentAta, 'confirmed'), null, 'agent token account stayed open');
+          });
+        }
+
+        const detail = [
+          `returned ${tokens.toString()} tokens`,
+          `${ownerSol} owner lamports`,
+          `${agentSol} agent lamports`,
+          `${ataRent} token-account lamports`,
+          `to ${deployer.publicKey.toBase58()}`,
+          closed.length > 0 ? `closed ${closed.join(', ')}` : '',
+        ]
+          .filter((part) => part.length > 0)
+          .join(', ');
+        console.log(detail);
+        if (closeErrors.length > 0) {
+          throw new Error(`${detail}. could not close leftover rules: ${closeErrors.join('; ')}`);
+        }
+        record({
+          step: 'cleanup',
+          action: 'return remaining SOL and tokens to deployer',
+          signature,
+          result: 'pass',
+          detail,
+        });
+      }
+      reclaimRun = reclaim;
 
       const agentFor = (mandate: string) =>
         new VetoAgent({
@@ -531,6 +679,8 @@ test(
         assert.ok(hit, `missing ${kind} event for amount ${amount.toString()} nonce ${nonce.toString()}`);
         if (reason !== undefined) assert.equal(hit.reason, reason);
         if (suggested !== undefined) {
+          // todo(#205): assert.equal(hit.suggestedOverride, suggested)
+          // The app decoder still requires 73 bytes, so a 65-byte refusal reports 0.
           assert.equal(suggestedOverrideFromLogs(logs), suggested);
           assert.ok(
             logs.some((line) => line.includes(`override_to_clear=${suggested.toString()}`)),
@@ -576,7 +726,6 @@ test(
         `deployer holds ${deployerBalance} lamports, and funding needs ${fundNeed} plus a ${DEPLOYER_RESERVE} reserve`,
       );
 
-      const ownerAta = getAssociatedTokenAddressSync(mint, owner.publicKey, false, TOKEN_PROGRAM_ID);
       const fundSig = await step('setup', 'fund owner and agent from deployer', async () => {
         const latest = await connection.getLatestBlockhash('confirmed');
         const tx = new Transaction();
@@ -652,6 +801,7 @@ test(
           mint,
         });
         ids.ruleA = opened.mandate.address;
+        rules.push({ label: 'rule A', address: new PublicKey(opened.mandate.address) });
         flush();
         assert.equal(opened.mandate.agent, ids.agent);
         assert.equal(opened.mandate.mint, MINT_STR);
@@ -702,6 +852,7 @@ test(
           mint,
         });
         ids.ruleB = opened.mandate.address;
+        rules.push({ label: 'rule B', address: new PublicKey(opened.mandate.address) });
         flush();
         assert.notEqual(opened.mandate.address, openedA.mandate.address);
         assert.notEqual(opened.mandate.source, openedA.mandate.source);
@@ -776,6 +927,8 @@ test(
           amount: PAY_A,
           nonce,
           mandate: openedA.mandate.address,
+          reasonCode: 0,
+          suggestedOverride: 0n,
         });
         return { signature: outcome.signature, detail: `paid ${PAY_A.toString()} nonce ${nonce.toString()}` };
       });
@@ -814,6 +967,8 @@ test(
           amount: OVER_A,
           nonce,
           mandate: openedA.mandate.address,
+          reasonCode: REASON_OVER_PER_TX_MAX,
+          suggestedOverride: OVER_A,
         });
         return {
           signature: outcome.signature,
@@ -883,6 +1038,8 @@ test(
           amount: OVER_A,
           nonce: refusedNonce,
           mandate: openedA.mandate.address,
+          reasonCode: 0,
+          suggestedOverride: 0n,
         });
         return { signature: outcome.signature, detail: `paid ${OVER_A.toString()} nonce ${refusedNonce.toString()}` };
       });
@@ -915,6 +1072,8 @@ test(
           amount: PAY_B,
           nonce,
           mandate: openedB.mandate.address,
+          reasonCode: 0,
+          suggestedOverride: 0n,
         });
         return { signature: outcome.signature, detail: `paid ${PAY_B.toString()} nonce ${nonce.toString()}` };
       });
@@ -941,6 +1100,43 @@ test(
       });
       void revoked;
 
+      const refusedAgain = await step('6', 'agent charges revoked rule A', async () => {
+        const before = await books();
+        const nonce = await vetoA.nextNonce();
+        const outcome = await vetoA.charge({ amount: PAY_A, nonce });
+        assert.equal(outcome.kind, 'refused');
+        assert.equal(outcome.reasonCode, REASON_NOT_ACTIVE);
+        assert.equal(outcome.reasonText, 'mandate not active');
+        const after = await books();
+        sameToken(after.a, before.a, 'rule A after a charge on the revoked rule');
+        sameToken(after.b, before.b, 'rule B after a charge on the revoked rule');
+        sameToken(after.payee, before.payee, 'payee after a charge on the revoked rule');
+        sameToken(after.owner, before.owner, 'owner after a charge on the revoked rule');
+        const live = await fetchMandate(client, mandateA);
+        assert.equal(live.status, STATUS_REVOKED);
+        assert.equal(live.spent, PAY_A + OVER_A);
+        assert.equal(live.lastNonce, refusedNonce);
+        await ringHas(mandateA, KIND_REFUSED, PAY_A, nonce, REASON_NOT_ACTIVE, 0n);
+        const logs = await logsOf(outcome.signature);
+        assert.ok(logs.some((line) => line.includes('VETO REFUSED') && line.includes('reason=1 (')));
+        assertEvent(logs, outcome.signature, KIND_REFUSED, PAY_A, nonce, REASON_NOT_ACTIVE, 0n);
+        decisions.push({
+          label: 'rule A after revoke',
+          signature: outcome.signature,
+          kind: 'refused',
+          amount: PAY_A,
+          nonce,
+          mandate: openedA.mandate.address,
+          reasonCode: REASON_NOT_ACTIVE,
+          suggestedOverride: 0n,
+        });
+        return {
+          signature: outcome.signature,
+          detail: `refused ${PAY_A.toString()} nonce ${nonce.toString()} reason ${REASON_NOT_ACTIVE}`,
+        };
+      });
+      void refusedAgain;
+
       const paidBAgain = await step('6', 'agent pays under rule B after rule A is revoked', async () => {
         const before = await books();
         const nonce = await vetoB.nextNonce();
@@ -966,10 +1162,126 @@ test(
           amount: PAY_B_AFTER,
           nonce,
           mandate: openedB.mandate.address,
+          reasonCode: 0,
+          suggestedOverride: 0n,
         });
         return { signature: outcome.signature, detail: `paid ${PAY_B_AFTER.toString()} nonce ${nonce.toString()}` };
       });
       void paidBAgain;
+
+      // Issue 204 is still open on main, so export runs only while the mandate account exists.
+      async function tool(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
+        let last: { code: number | null; stdout: string; stderr: string } = {
+          code: null,
+          stdout: '',
+          stderr: 'tool did not run',
+        };
+        for (let attempt = 0; attempt < 6; attempt += 1) {
+          last = await runTool(args);
+          const text = `${last.stderr}\n${last.stdout}`;
+          const rateLimited = /429|Too Many Requests|rate limited/i.test(text);
+          const transient =
+            last.code === null ||
+            last.code === 3 ||
+            rateLimited ||
+            /ECONNRESET|ETIMEDOUT|timed out|fetch failed|503|502/i.test(text);
+          if (last.code === 0 || (last.code === 1 && !rateLimited) || !transient || attempt === 5) return last;
+          const wait = 5_000 * (attempt + 1);
+          console.log(`${args[0]} rate limited, waiting ${wait}ms`);
+          await sleep(wait);
+        }
+        return last;
+      }
+
+      async function exportDecisions(mandate: string): Promise<string[]> {
+        const mine = decisions.filter((decision) => decision.mandate === mandate);
+        assert.ok(mine.length > 0, `no decisions recorded for ${mandate}`);
+        const paths: string[] = [];
+        for (const decision of mine) {
+          const out = join(tempDir, `${decision.signature}.json`);
+          const exportedRun = await tool([
+            'export.ts',
+            '--signature',
+            decision.signature,
+            '--rpc',
+            RPC,
+            '--out',
+            out,
+          ]);
+          if (exportedRun.code !== 0) {
+            throw new Error(`export ${decision.label} failed: ${exportedRun.stderr || exportedRun.stdout}`.trim());
+          }
+          const recordJson = JSON.parse(readFileSync(out, 'utf8')) as {
+            kind?: string;
+            amount?: number;
+            reason_code?: number;
+            signature?: string;
+            mandate?: string;
+            suggested_override?: number;
+          };
+          assert.equal(recordJson.signature, decision.signature);
+          assert.equal(recordJson.kind, decision.kind);
+          assert.equal(recordJson.amount, Number(decision.amount));
+          assert.equal(recordJson.mandate, decision.mandate);
+          assert.equal(recordJson.reason_code, decision.reasonCode);
+          assert.equal(recordJson.suggested_override, Number(decision.suggestedOverride));
+          const verified = await tool(['verify.ts', out, '--rpc', RPC]);
+          if (
+            verified.code !== 0 ||
+            !verified.stdout.includes('VERDICT: CONFIRMED') ||
+            !verified.stdout.includes(VERIFY_AGREE)
+          ) {
+            throw new Error(
+              `verify ${decision.label} failed (${verified.code}): ${verified.stdout}\n${verified.stderr}`.trim(),
+            );
+          }
+          paths.push(out);
+          await sleep(2_000);
+          record({
+            step: '8',
+            action: `verify ${decision.label}`,
+            signature: decision.signature,
+            result: 'pass',
+            detail: 'VERDICT: CONFIRMED',
+          });
+        }
+        return paths;
+      }
+
+      await step('8', 'export and verify rule A decisions', async () => {
+        // The chain steps already drew the public devnet rate limit. Let it recover before export.
+        await sleep(12_000);
+        assert.ok(await info(mandateA), 'rule A is already closed');
+        const paths = await exportDecisions(openedA.mandate.address);
+        assert.equal(paths.length, 4, 'rule A should export both payments and both refusals');
+        return { signature: '', detail: `${paths.length} records CONFIRMED` };
+      });
+
+      await step('8', 'tamper one amount and verify again', async () => {
+        const target = decisions.find((decision) => decision.label === 'rule A within limit');
+        assert.ok(target, 'rule A within-limit decision was not recorded');
+        assert.ok(await info(mandateA), 'rule A mandate is already closed, so the ledger line cannot be checked');
+        const sourcePath = join(tempDir, `${target.signature}.json`);
+        const tamperedPath = join(tempDir, 'tampered.json');
+        const body = JSON.parse(readFileSync(sourcePath, 'utf8')) as { amount?: number };
+        body.amount = 1;
+        writeFileSync(tamperedPath, `${JSON.stringify(body, null, 2)}\n`);
+        const verified = await tool(['verify.ts', tamperedPath, '--rpc', RPC]);
+        const chainAmount = Number(target.amount);
+        const instructionLine = `amount (instruction): record has 1, chain has ${chainAmount}`;
+        const ledgerLine = `amount (ledger): record has 1, chain has ${chainAmount}`;
+        if (
+          verified.code !== 1 ||
+          !verified.stdout.includes('VERDICT: REJECTED') ||
+          !verified.stdout.includes(instructionLine) ||
+          !verified.stdout.includes(ledgerLine)
+        ) {
+          throw new Error(
+            `tampered record was not rejected with both amount lines (${verified.code}): ${verified.stdout}\n${verified.stderr}`.trim(),
+          );
+        }
+        return { signature: target.signature, detail: 'VERDICT: REJECTED' };
+      });
 
       const remainingA = CAP_A - PAY_A - OVER_A;
       await step('7', 'close rule A', async () => {
@@ -1005,74 +1317,12 @@ test(
         };
       });
 
-      const exported: string[] = [];
-      await step('8', 'export and verify every decision', async () => {
-        assert.ok(decisions.length >= 5, `expected 5 charge decisions, saw ${decisions.length}`);
-        for (const decision of decisions) {
-          const out = join(tempDir, `${decision.signature}.json`);
-          const exportedRun = await runTool([
-            'export.ts',
-            '--signature',
-            decision.signature,
-            '--rpc',
-            RPC,
-            '--out',
-            out,
-          ]);
-          if (exportedRun.code !== 0) {
-            throw new Error(
-              `export ${decision.label} failed: ${exportedRun.stderr || exportedRun.stdout}`.trim(),
-            );
-          }
-          const recordJson = JSON.parse(readFileSync(out, 'utf8')) as {
-            kind?: string;
-            amount?: number;
-            reason_code?: number;
-            signature?: string;
-            mandate?: string;
-            suggested_override?: number;
-          };
-          assert.equal(recordJson.signature, decision.signature);
-          assert.equal(recordJson.kind, decision.kind);
-          assert.equal(recordJson.amount, Number(decision.amount));
-          assert.equal(recordJson.mandate, decision.mandate);
-          if (decision.kind === 'refused') {
-            assert.equal(recordJson.reason_code, REASON_OVER_PER_TX_MAX);
-            assert.equal(recordJson.suggested_override, Number(OVER_A));
-          }
-          const verified = await runTool(['verify.ts', out, '--rpc', RPC]);
-          if (verified.code !== 0 || !verified.stdout.includes('VERDICT: CONFIRMED')) {
-            throw new Error(
-              `verify ${decision.label} failed (${verified.code}): ${verified.stdout}\n${verified.stderr}`.trim(),
-            );
-          }
-          exported.push(out);
-          record({
-            step: '8',
-            action: `verify ${decision.label}`,
-            signature: decision.signature,
-            result: 'pass',
-            detail: 'VERDICT: CONFIRMED',
-          });
-        }
-        return { signature: '', detail: `${exported.length} records CONFIRMED` };
-      });
-
-      await step('8', 'tamper one amount and verify again', async () => {
-        assert.ok(exported[0], 'no exported record to tamper');
-        const sourcePath = exported[0];
-        const tamperedPath = join(tempDir, 'tampered.json');
-        const body = JSON.parse(readFileSync(sourcePath, 'utf8')) as { amount?: number };
-        body.amount = 1;
-        writeFileSync(tamperedPath, `${JSON.stringify(body, null, 2)}\n`);
-        const verified = await runTool(['verify.ts', tamperedPath, '--rpc', RPC]);
-        if (verified.code !== 1 || !verified.stdout.includes('VERDICT: REJECTED')) {
-          throw new Error(
-            `tampered record was not rejected (${verified.code}): ${verified.stdout}\n${verified.stderr}`.trim(),
-          );
-        }
-        assert.match(verified.stdout, /amount/);
-        return { signature: decisions[0]?.signature ?? '', detail: 'VERDICT: REJECTED' };
+      await step('8', 'export and verify rule B decisions', async () => {
+        await sleep(4_000);
+        assert.ok(await info(mandateB), 'rule B is already closed');
+        const paths = await exportDecisions(openedB.mandate.address);
+        assert.equal(paths.length, 2, 'rule B should export both payments');
+        return { signature: '', detail: `${paths.length} records CONFIRMED` };
       });
 
       const remainingB = CAP_B - PAY_B - PAY_B_AFTER;
@@ -1105,9 +1355,31 @@ test(
           detail: `returned ${remainingB.toString()} tokens and ${rent.toString()} lamports, fee ${fee}`,
         };
       });
+    } catch (err) {
+      journeyError = err;
     } finally {
+      if (reclaimRun) {
+        try {
+          await reclaimRun();
+        } catch (err) {
+          const text = errorText(err);
+          record({
+            step: 'cleanup',
+            action: 'return remaining SOL and tokens to deployer',
+            signature: '',
+            result: 'fail',
+            detail: text,
+          });
+          if (journeyError) {
+            journeyError = new Error(`${errorText(journeyError)}\nreclaim failed: ${text}`);
+          } else {
+            journeyError = err;
+          }
+        }
+      }
       flush();
       rmSync(tempDir, { recursive: true, force: true });
     }
+    if (journeyError) throw journeyError;
   },
 );
