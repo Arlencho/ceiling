@@ -111,6 +111,16 @@ function pinnedCases(): FixtureCase[] {
 
 function loadFixture(text: string): FixtureCase[] {
   const parsed: unknown = JSON.parse(text);
+  const shared = parsed as { valid?: unknown; invalid?: unknown } | null;
+  if (shared && typeof shared === 'object' && Array.isArray(shared.valid) && Array.isArray(shared.invalid)) {
+    // The SDK fixture: valid entries carry the fields and the URL they print, invalid entries a URL only.
+    const valid = shared.valid.map((row) => {
+      const rec = row as { input?: Record<string, unknown>; url?: unknown };
+      return { ...(rec.input ?? {}), name: (row as { name?: unknown }).name, url: rec.url, ok: true };
+    });
+    const invalid = shared.invalid.map((row) => ({ ...(row as object), ok: false }));
+    return loadFixture(JSON.stringify([...valid, ...invalid]));
+  }
   const rows = Array.isArray(parsed)
     ? parsed
     : parsed && typeof parsed === 'object' && Array.isArray((parsed as { cases?: unknown }).cases)
@@ -124,7 +134,7 @@ function loadFixture(text: string): FixtureCase[] {
       throw new Error(`fixture case ${index} is not an object`);
     }
     const rec = row as Record<string, unknown>;
-    const input = rec.input ?? rec.url ?? rec.link;
+    const input = typeof rec.input === 'string' ? rec.input : (rec.url ?? rec.link);
     if (typeof input !== 'string') {
       throw new Error(`fixture case ${index} has no input`);
     }
