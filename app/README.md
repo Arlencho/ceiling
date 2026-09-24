@@ -22,6 +22,34 @@ scope, read states). They do not need a device. Mobile Wallet Adapter
 `authorize` and the Seed Vault signature for `open_mandate` /
 `grant_override` / `revoke_mandate` still have to be checked on a Seeker.
 
+## Devnet journey
+
+From the repo root:
+
+```bash
+make e2e-devnet
+```
+
+That runs `app/e2e/devnetJourney.test.ts` with `VETO_E2E=1`. Without that
+variable the file skips, so `npm test` does not talk to a cluster. The target
+installs `app`, `sdk`, `indexer`, and `tools`, then drives devnet.
+
+It needs `keys/deployer.json` (gitignored). That key is the mint authority for
+the demo mint in `docs/DEVNET.md`. The run generates a fresh owner and a fresh
+agent, funds the owner with SOL and that mint, and funds the agent with SOL
+for fees. The payee is the merchant already on devnet.
+
+Owner transactions go through `openMandate`, `grantOverride`, `revokeMandate`,
+`closeMandate`, `readRuleFunds`, and `probeOverride`, signed by a keypair
+stand-in for the Mobile Wallet Adapter `signAndSendTransactions` interface.
+Charges go through `veto-agent-sdk`. Each step is checked against token
+balances, delegates, account existence, ledger rows, and events. Every charge
+is then exported with `tools/export.ts` and checked with `tools/verify.ts`.
+
+The run prints a summary table and writes the same table to
+`app/e2e/last-run.md`. This does not replace the Seeker check above. Seed
+Vault is still required for a signature on a device.
+
 ## Sign-in
 
 Connect runs `transact`, then `authorize`, against the Seed Vault wallet through

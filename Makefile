@@ -13,7 +13,7 @@
 # One command per thing a judge or a contributor needs. `make test` from a
 # fresh clone is the contract.
 
-.PHONY: help build test test-scripts tools-test localnet setup fmt clean indexer indexer-test indexer-seed terminal-test require-anchor
+.PHONY: help build test test-scripts tools-test localnet setup fmt clean indexer indexer-test indexer-seed terminal-test require-anchor e2e-devnet
 
 # Two flags that are not obvious and both are required from a clean checkout.
 #
@@ -97,6 +97,22 @@ tools-test: ## Typecheck and test the decision-record tools
 	cd indexer && npm ci
 	cd tools && npm ci
 	cd tools && npm run typecheck && npm test
+
+# Real devnet. Skipped in `npm test` unless VETO_E2E=1. Needs keys/deployer.json,
+# the mint authority recorded in docs/DEVNET.md. That file is gitignored.
+e2e-devnet: ## Run the devnet journey through the app and the agent SDK
+	cd app && npm ci
+	cd sdk && npm ci
+	cd indexer && npm ci
+	cd tools && npm ci
+	cd app && VETO_E2E=1 \
+	  VETO_RPC=https://api.devnet.solana.com \
+	  EXPO_PUBLIC_VETO_RPC=https://api.devnet.solana.com \
+	  EXPO_PUBLIC_VETO_PROGRAM_ID=3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV \
+	  EXPO_PUBLIC_VETO_MINT=2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU \
+	  EXPO_PUBLIC_VETO_EXPLORER_CLUSTER=devnet \
+	  EXPO_PUBLIC_VETO_MINT_DECIMALS=6 \
+	  npx tsx --experimental-test-module-mocks --test e2e/devnetJourney.test.ts
 
 fmt: ## Format program sources
 	cargo fmt --manifest-path programs/veto/Cargo.toml
