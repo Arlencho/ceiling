@@ -10,7 +10,7 @@ export default function HelpExportScreen() {
   const router = useRouter();
   return (
     <Screen>
-      <TopBar back="Back" meta="3 of 3" />
+      <TopBar back="Back" meta="3 of 3" help={false} />
       <Text style={styles.eyebrow}>The record</Text>
       <Text style={styles.h2}>What the export proves</Text>
       <Text style={styles.body}>

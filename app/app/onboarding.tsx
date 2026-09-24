@@ -8,8 +8,8 @@ import { colors } from '../components/theme';
 import { useOnboarding } from '../lib/useOnboarding';
 import { useWallet } from '../lib/useWallet';
 
-// Help opens this route again after the first-run flag is set. It does not clear that flag.
-// No Help control here, so Help and the introduction cannot stack on each other.
+// Help opens this route in place of the help page. It does not clear the seen flag.
+// Back and Done return to /help in place. No Help control, so the two cannot stack.
 export default function OnboardingScreen() {
   const router = useRouter();
   const wallet = useWallet();
@@ -25,16 +25,16 @@ export default function OnboardingScreen() {
           connectBusy={wallet.busy}
           onSkip={async () => {
             await onboarding.markSeen();
-            router.back();
+            router.replace('/help');
           }}
           onConnect={async () => {
             await onboarding.markSeen();
             try {
               await wallet.connect();
             } catch {
-              // useWallet keeps the error. The screen under this one shows it.
+              // useWallet keeps the error.
             }
-            router.back();
+            router.replace('/help');
           }}
         />
       ) : (

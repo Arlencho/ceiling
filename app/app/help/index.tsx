@@ -11,7 +11,7 @@ export default function HelpRuleScreen() {
   const router = useRouter();
   return (
     <Screen>
-      <TopBar back="Back" meta="1 of 3" />
+      <TopBar back="Back" meta="1 of 3" help={false} />
       <Text style={styles.eyebrow}>A rule</Text>
       <Text style={styles.h2}>What a rule is</Text>
       <Text style={styles.body}>
@@ -39,9 +39,9 @@ export default function HelpRuleScreen() {
           label="Show the introduction"
           accessibilityLabel="Show the introduction"
           invert={false}
-          onPress={() => router.push('/onboarding')}
+          onPress={() => router.replace('/onboarding')}
         />
-        <Button label="Next" onPress={() => router.push('/help/refusal')} />
+        <Button label="Next" onPress={() => router.replace('/help/refusal')} />
       </View>
     </Screen>
   );
