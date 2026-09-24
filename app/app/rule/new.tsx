@@ -1,12 +1,15 @@
 import { PublicKey } from '@solana/web3.js';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { AddressActions } from '../../components/AddressActions';
+import { ApprovalScreen } from '../../components/ApprovalScreen';
 import { Button } from '../../components/Button';
 import { ConnectGate } from '../../components/ConnectGate';
 import { EmptyState } from '../../components/EmptyState';
 import { Field } from '../../components/Field';
+import { RuleScreen } from '../../components/RuleScreen';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
@@ -31,18 +34,11 @@ import {
   stampPurpose,
   type Ruleset,
 } from '../../lib/ruleset';
-import { applyTemplate, TEMPLATES, type MandateFields } from '../../lib/templates';
+import { takeAddressScan } from '../../lib/scanHandoff';
+import { applyTemplate, templateById, TEMPLATES, type MandateFields } from '../../lib/templates';
 import { useChain } from '../../lib/useChain';
 import { useRulesets } from '../../lib/useRulesets';
 import { useWallet } from '../../lib/useWallet';
-
-const BLANK: MandateFields = {
-  cap: '',
-  perTxMax: '',
-  expiryDays: '',
-  merchant: '',
-  purpose: '',
-};
 
 export default function NewRuleScreen() {
   const params = useLocalSearchParams<{
@@ -68,6 +64,13 @@ export default function NewRuleScreen() {
     );
   }, [params.ruleset, params.version, stored.rulesets]);
 
+  const rulesetMode = Boolean(params.ruleset) || Boolean(params.from);
+  if (!rulesetMode) {
+    const requested = params.template ?? '';
+    const id = templateById(requested) ? requested : 'charging-agent';
+    return <ApprovalScreen mode="template" request={null} invalidReason={null} templateId={id} />;
+  }
+
   const waitingRuleset = Boolean(params.ruleset && params.ruleset !== 'new' && !stored.ready);
   const waitingFrom = Boolean(params.from && chain.mandateStatus === 'not-read');
   if (waitingRuleset || waitingFrom) {
@@ -80,6 +83,7 @@ export default function NewRuleScreen() {
   }
 
   const template = params.template ? TEMPLATES.find((row) => row.id === params.template) : undefined;
+  const fallback = template ?? templateById('charging-agent');
   const start: MandateFields = selectedRuleset
     ? {
         cap: selectedRuleset.cap,
@@ -96,9 +100,15 @@ export default function NewRuleScreen() {
           merchant: sourceMandate.merchant,
           purpose: displayPurpose(sourceMandate.purpose),
         }
-      : template
-        ? applyTemplate(template)
-        : BLANK;
+      : fallback
+        ? applyTemplate(fallback)
+        : {
+            cap: '80',
+            perTxMax: '12',
+            expiryDays: '30',
+            merchant: '',
+            purpose: 'charging agent',
+          };
 
   const formKey = `${params.template ?? ''}:${params.ruleset ?? ''}:${params.version ?? ''}:${params.from ?? ''}`;
 
@@ -137,9 +147,22 @@ function RuleCompose({
   const [formError, setFormError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const setField = (key: keyof MandateFields, value: string) => {
+  const setField = useCallback((key: keyof MandateFields, value: string) => {
     setFields((prev) => ({ ...prev, [key]: value }));
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const agent = takeAddressScan('agent');
+      if (agent) {
+        setAgentAddress(agent);
+      }
+      const payee = takeAddressScan('payee');
+      if (payee) {
+        setField('merchant', payee);
+      }
+    }, [setField]),
+  );
 
   const openFromFields = async (purpose: string) => {
     if (!chain.config) {
@@ -222,8 +245,46 @@ function RuleCompose({
       ? 'Author a ruleset'
       : 'Write a rule';
 
+  const connected = wallet.ownerPublicKey !== null;
+  const footer = connected ? (
+    <View style={styles.actions}>
+      {formError ? <Text style={styles.msg}>{formError}</Text> : null}
+      {message ? <Text style={styles.msg}>{message}</Text> : null}
+      {applying ? (
+        <Button
+          label={wallet.busy ? 'Waiting on Seed Vault...' : 'Apply to a new agent'}
+          accessibilityLabel="Apply to a new agent"
+          busy={wallet.busy}
+          onPress={() => {
+            void onOpen();
+          }}
+        />
+      ) : (
+        <>
+          {authoring ? (
+            <Button
+              label="Save ruleset on this phone"
+              invert={false}
+              onPress={() => {
+                void onSaveRuleset();
+              }}
+            />
+          ) : null}
+          <Button
+            label={wallet.busy ? 'Waiting on Seed Vault...' : 'Open this rule'}
+            accessibilityLabel="Open this rule"
+            busy={wallet.busy}
+            onPress={() => {
+              void onOpen();
+            }}
+          />
+        </>
+      )}
+    </View>
+  ) : null;
+
   return (
-    <Screen>
+    <RuleScreen footer={footer}>
       <TopBar back="Rules" />
       <ConnectGate>
         <Text style={styles.h2}>{title}</Text>
@@ -290,6 +351,11 @@ function RuleCompose({
           }
           hint={PAYEE_GUIDANCE}
         />
+        <AddressActions
+          target="payee"
+          onAddress={(address) => setField('merchant', address)}
+          onInvalid={setFormError}
+        />
         <Field
           label="Agent address"
           value={agentAddress}
@@ -297,6 +363,7 @@ function RuleCompose({
           placeholder="optional"
           hint={AGENT_ADDRESS_HINT}
         />
+        <AddressActions target="agent" onAddress={setAgentAddress} onInvalid={setFormError} />
         <Field
           label="Purpose"
           value={applying && selectedRuleset ? applyRuleset(selectedRuleset).purpose : fields.purpose}
@@ -305,41 +372,8 @@ function RuleCompose({
           multiline
           editable={!applying}
         />
-
-        {applying ? (
-          <Button
-            label={wallet.busy ? 'Waiting on Seed Vault...' : 'Apply to a new agent'}
-            accessibilityLabel="Apply to a new agent"
-            busy={wallet.busy}
-            onPress={() => {
-              void onOpen();
-            }}
-          />
-        ) : (
-          <View style={styles.actions}>
-            {authoring ? (
-              <Button
-                label="Save ruleset on this phone"
-                invert={false}
-                onPress={() => {
-                  void onSaveRuleset();
-                }}
-              />
-            ) : null}
-            <Button
-              label={wallet.busy ? 'Waiting on Seed Vault...' : 'Open this rule'}
-              accessibilityLabel="Open this rule"
-              busy={wallet.busy}
-              onPress={() => {
-                void onOpen();
-              }}
-            />
-          </View>
-        )}
-        {formError ? <Text style={styles.msg}>{formError}</Text> : null}
-        {message ? <Text style={styles.msg}>{message}</Text> : null}
       </ConnectGate>
-    </Screen>
+    </RuleScreen>
   );
 }
 

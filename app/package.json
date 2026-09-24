@@ -19,6 +19,7 @@
     "buffer": "^6.0.3",
     "expo": "~57.0.24",
     "expo-background-task": "~57.0.19",
+    "expo-camera": "~57.0.5",
     "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.19",
     "expo-crypto": "~57.0.3",

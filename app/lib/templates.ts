@@ -21,7 +21,45 @@ export const EMPTY_FIELDS: MandateFields = {
   purpose: '',
 };
 
+export const BUILD_YOUR_OWN_IDS = ['charging-agent', 'buying-compute', 'trading-bot'] as const;
+
 export const TEMPLATES: MandateTemplate[] = [
+  {
+    id: 'charging-agent',
+    title: 'Charging agent',
+    summary: 'Starting limits for an agent that pays a charger. Choosing this does not invent a charge.',
+    fields: {
+      cap: '80',
+      perTxMax: '12',
+      expiryDays: '30',
+      merchant: '',
+      purpose: 'charging agent',
+    },
+  },
+  {
+    id: 'buying-compute',
+    title: 'Agent buying compute',
+    summary: 'Starting limits for an agent that pays for compute. Choosing this does not invent a price.',
+    fields: {
+      cap: '40',
+      perTxMax: '8',
+      expiryDays: '7',
+      merchant: '',
+      purpose: 'agent buying compute',
+    },
+  },
+  {
+    id: 'trading-bot',
+    title: 'Trading bot',
+    summary: 'Starting limits for a trading bot. Choosing this does not invent a trade.',
+    fields: {
+      cap: '25',
+      perTxMax: '2',
+      expiryDays: '7',
+      merchant: '',
+      purpose: 'trading bot',
+    },
+  },
   {
     id: 'mint-bot',
     title: 'Cap a mint bot',
