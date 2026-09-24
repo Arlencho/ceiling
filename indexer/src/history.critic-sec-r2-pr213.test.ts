@@ -114,6 +114,8 @@ const placements: {
     message: {
       staticAccountKeys: [AGENT, PROGRAM, OUTER],
       compiledInstructions: [{ programIdIndex: 2, accountKeyIndexes: [0, 1], data: Buffer.from([1]) }],
+      // No tables. Omitting addressTableLookups is the unresolved version 0 shape.
+      addressTableLookups: [],
     },
     meta: { err: null, innerInstructions: [] },
     withInner: "empty",
@@ -124,6 +126,8 @@ const placements: {
     message: {
       staticAccountKeys: [AGENT, PROGRAM, OUTER, OTHER],
       compiledInstructions: [{ programIdIndex: 2, accountKeyIndexes: [0, 1], data: Buffer.from([1]) }],
+      // No tables. Omitting addressTableLookups is the unresolved version 0 shape.
+      addressTableLookups: [],
     },
     meta: { err: null, innerInstructions: cpiTo(3) },
     withInner: "other",
@@ -167,6 +171,8 @@ const placements: {
     message: {
       staticAccountKeys: [AGENT, OUTER],
       compiledInstructions: [{ programIdIndex: 1, accountKeyIndexes: [0], data: Buffer.from([1]) }],
+      // No tables. Omitting addressTableLookups is the unresolved version 0 shape.
+      addressTableLookups: [],
     },
     meta: { err: null },
     withInner: "missing",

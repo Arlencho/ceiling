@@ -182,22 +182,39 @@ for (const loaded of loadedShapes) {
   });
 }
 
-// web3.js types addressTableLookups as optional on both the transaction and
-// the block struct. A version 0 message with the lookups stripped beside an
-// omitted loaded set and no log body is a relay the node did not resolve.
-// When the CPI list still names index 2 the index betrays the table and the
-// guard fires. When the CPI list is also missing the message reads as a
-// legacy one that never lists the program. Pre-existing on main and outside
-// this fix; asserted here as the claim, marked todo.
+// web3.js types addressTableLookups as optional on the transaction message
+// and optional or null on the block message. A version 0 message with that
+// list omitted, beside an omitted loaded set and a missing log body, is
+// unresolved on both paths. A present Paid frame on the same message is
+// still the decision. A legacy message has no lookup list; on the listed
+// path a signature returned for the program whose keys omit it is a
+// contradiction, and on the block-scan path that transaction is absent.
 for (const [name, run] of paths) {
   test(`${name}: relay with the lookups stripped, loaded set omitted, CPI list names index 2, null log body is not checked`, async () => {
     const meta = { err: null, logMessages: null, innerInstructions: [{ index: 0, instructions: [{ programIdIndex: 2, accounts: [0], data: "" }] }] };
     await check(run, { message: message(false), meta }, "gap");
   });
   for (const cpi of cpiShapes.filter((c) => c.kind === "missing")) {
-    test(`${name}: relay with the lookups stripped, loaded set omitted, ${cpi.name}, null log body is not checked`, { todo: "issue for the stripped lookup list" }, async () => {
+    test(`${name}: relay with the lookups stripped, loaded set omitted, ${cpi.name}, null log body is not checked`, async () => {
       const meta = cpi.patch({ err: null, logMessages: null });
       await check(run, { message: message(false), meta }, "gap");
     });
   }
+  test(`${name}: relay with the lookups stripped and the Paid frame is the Paid decision`, async () => {
+    const meta = { err: null, logMessages: paidLogs };
+    await check(run, { message: message(false), meta }, "paid");
+  });
 }
+
+const legacyOmitsProgram = {
+  accountKeys: [AGENT, OUTER],
+  instructions: [{ programIdIndex: 1, accounts: [0], data: "" }],
+};
+
+test("listed: legacy keys omit the program beside a null log body is not checked", async () => {
+  await check(listedHistory, { message: legacyOmitsProgram, meta: { err: null, logMessages: null } }, "gap");
+});
+
+test("block scan: legacy keys omit the program beside a null log body is absent", async () => {
+  await check(scannedHistory, { message: legacyOmitsProgram, meta: { err: null, logMessages: null } }, "absent");
+});
