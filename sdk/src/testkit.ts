@@ -180,6 +180,11 @@ export class FakeConnection {
     return this.accounts.get(key.toBase58()) ?? null;
   }
 
+  /** Devnet genesis. A test that needs another cluster overrides this. */
+  async getGenesisHash(): Promise<string> {
+    return "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
+  }
+
   async getBalance(key: PublicKey): Promise<number> {
     return this.balances.get(key.toBase58()) ?? 0;
   }
@@ -296,6 +301,14 @@ export function world(patch?: Partial<MandateFields> & { balance?: number; token
   });
   fake.accounts.set(source.publicKey.toBase58(), {
     data: tokenAccountData(mint.publicKey, owner.publicKey),
+    owner: tokenProgram ?? TOKEN_PROGRAM_ID,
+    lamports: 1,
+  });
+  const mintData = Buffer.alloc(82);
+  mintData.writeUInt8(6, 44);
+  mintData.writeUInt8(1, 45);
+  fake.accounts.set(mint.publicKey.toBase58(), {
+    data: mintData,
     owner: tokenProgram ?? TOKEN_PROGRAM_ID,
     lamports: 1,
   });

@@ -152,12 +152,14 @@ Fund that address with a little SOL for fees. `status()` warns when the balance 
 
 In the app, open a new rule and paste that public address into the field labeled "Agent address". The same screen takes Cap, Per-payment maximum, Expiry (days from now), Payee, and Purpose. The owner key signs the open.
 
-Until [issue 190](https://github.com/Arlencho/veto/issues/190) publishes `veto-agent-sdk`, install the package from this repo checkout and run the example from there. The example connects to `https://api.devnet.solana.com`, loads the agent key file, reads `last_nonce`, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
+Until [issue 190](https://github.com/Arlencho/veto/issues/190) publishes `veto-agent-sdk`, install the package from this repo checkout and run the example from there. The example loads the agent key and the JSON block the app copies (the same block a QR scan returns), checks that block against the chain, reads `last_nonce`, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
+
+The program id is the one bundled with the SDK. A block whose `programId` differs is refused. A localnet build passes a different program id as an argument in code. The example opens `rpcUrl` from the block when it does not pass a connection. A connection passed to `fromConfig` is the endpoint instead, and whichever endpoint is used must report the genesis hash of the block's cluster (`devnet`, `testnet`, or `mainnet-beta`). `mintDecimals` is checked against the mint account on that endpoint.
 
 ```bash
 cd sdk
 npm ci
-npx tsx examples/pay-once.ts ../keys/agent.json <mandate-address> <amount-in-base-units>
+npx tsx examples/pay-once.ts ../keys/agent.json <config.json> <amount-in-base-units>
 ```
 
 `watcher/` is the full reference agent. It prices a public electricity spot and submits `charge` on a schedule. This package is the client for one charge and for reading the mandate, the ledger, and the decisions.

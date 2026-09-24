@@ -76,8 +76,8 @@ jobs:
       # Regenerating under npm 10 would drift on the next local npm 11 install.
       - run: npm install -g npm@11
       - run: npm ci
-      # app/tsconfig.test.json includes e2e, which imports ../sdk/src, so the
-      # typecheck needs the sdk dependencies installed to resolve its imports.
+      # App tests and app/e2e (included by tsconfig.test.json) import ../sdk/src,
+      # so the typecheck needs the sdk dependencies installed to resolve them.
       - name: Install sdk deps for the cross-package typecheck
         run: npm ci
         working-directory: sdk

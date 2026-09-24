@@ -126,13 +126,15 @@ test("R11 the README agent section matches the private package and the example u
   assert.deepEqual(block, [
     "cd sdk",
     "npm ci",
-    "npx tsx examples/pay-once.ts ../keys/agent.json <mandate-address> <amount-in-base-units>",
+    "npx tsx examples/pay-once.ts ../keys/agent.json <config.json> <amount-in-base-units>",
   ]);
   assert.ok(existsSync(`${SDK_ROOT}examples/pay-once.ts`));
   const example = readFileSync(`${SDK_ROOT}examples/pay-once.ts`, "utf8");
-  assert.match(example, /usage: npx tsx examples\/pay-once\.ts <agent-key\.json> <mandate> <amount>/);
-  assert.match(example, /const \[keyFile, mandate, amount\] = process\.argv\.slice\(2\)/);
-  assert.match(example, /https:\/\/api\.devnet\.solana\.com/);
+  assert.match(example, /usage: npx tsx examples\/pay-once\.ts <agent-key\.json> <config\.json> <amount>/);
+  assert.match(example, /const \[keyFile, configFile, amount\] = process\.argv\.slice\(2\)/);
+  assert.match(example, /loadAgentConfig/);
+  assert.match(example, /fromConfig/);
+  assert.doesNotMatch(example, /new Connection\(/);
   assert.match(readme, /keys\/agent\.json/);
   assert.match(readFileSync(`${REPO_ROOT}.gitignore`, "utf8"), /^keys\/$/m);
 });

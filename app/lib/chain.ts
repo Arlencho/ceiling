@@ -178,6 +178,8 @@ export type RuleFunds = {
   kind: RuleAccountKind;
   closeCreatesAssociated: boolean;
   decimals: number | null;
+  /** Owner of the mint account, already read for decimals. */
+  tokenProgram: string;
   otherRule: string | null;
 };
 
@@ -327,7 +329,7 @@ export async function readRuleFunds(client: ChainClient, mandate: MandateAccount
   }
   let otherRule: string | null = null;
   if (
-    kind === 'associated' &&
+    kind !== 'dedicated' &&
     mandate.status !== STATUS_REVOKED &&
     info &&
     info.owner.equals(tokenProgram)
@@ -337,7 +339,15 @@ export async function readRuleFunds(client: ChainClient, mandate: MandateAccount
       otherRule = await delegatedRuleName(client, delegate);
     }
   }
-  return { source: source.toBase58(), balance, kind, closeCreatesAssociated, decimals, otherRule };
+  return {
+    source: source.toBase58(),
+    balance,
+    kind,
+    closeCreatesAssociated,
+    decimals,
+    tokenProgram: tokenProgram.toBase58(),
+    otherRule,
+  };
 }
 
 async function confirmSignature(

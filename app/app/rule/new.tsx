@@ -11,6 +11,12 @@ import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
 import { AGENT_ADDRESS_HINT, parseOptionalAgentAddress } from '../../lib/agentAddress';
+import {
+  EXPIRY_GUIDANCE,
+  LARGEST_PAYMENT_GUIDANCE,
+  PAYEE_GUIDANCE,
+  TOTAL_CAP_GUIDANCE,
+} from '../../lib/ruleGuidance';
 import { PURPOSE_MAX_LEN } from '../../lib/constants';
 import { formatBaseUnits, parseBaseUnits } from '../../lib/format';
 import type { MandateAccount } from '../../lib/mandate';
@@ -255,6 +261,7 @@ function RuleCompose({
           onChangeText={(text) => setField('cap', text)}
           placeholder="total, in tokens"
           editable={!applying}
+          hint={TOTAL_CAP_GUIDANCE}
         />
         <Field
           label="Per-payment maximum"
@@ -262,6 +269,7 @@ function RuleCompose({
           onChangeText={(text) => setField('perTxMax', text)}
           placeholder="largest single payment"
           editable={!applying}
+          hint={LARGEST_PAYMENT_GUIDANCE}
         />
         <Field
           label="Expiry (days from now)"
@@ -269,6 +277,7 @@ function RuleCompose({
           onChangeText={(text) => setField('expiryDays', text)}
           placeholder="7"
           editable={!applying}
+          hint={EXPIRY_GUIDANCE}
         />
         <Field
           label="Payee"
@@ -279,7 +288,7 @@ function RuleCompose({
               ? 'chosen per agent, prefills so you do not retype an address'
               : 'the only wallet that may be paid'
           }
-          hint={applying || authoring ? PAYEE_NOT_IN_RULESET : undefined}
+          hint={PAYEE_GUIDANCE}
         />
         <Field
           label="Agent address"
