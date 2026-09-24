@@ -86,6 +86,19 @@ export type DecisionsForMandateOptions = {
    * An injected wait receives the backoff ceiling. The built-in wait jitters inside that ceiling.
    */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Connection used as given for these paced reads.
+   * When this is set, connectionConfig is not applied.
+   * Build it with disableRetryOnRateLimit so web3.js does not also retry a 429.
+   */
+  readConnection?: Connection;
+  /**
+   * Config merged onto the connection opened for these reads, at the caller's
+   * endpoint and commitment, with disableRetryOnRateLimit set.
+   * web3.js does not expose headers, fetch, middleware, or the http agent on
+   * an existing Connection, so pass them here.
+   */
+  connectionConfig?: ConnectionConfig;
 };
 
 /**
@@ -156,7 +169,7 @@ export async function decisionsForMandate(
   const concurrency = clampConcurrency(options?.concurrency);
   const pause = options?.sleep ?? sleep;
   const jitter = options?.sleep === undefined;
-  const { rpc, spacingMs } = await readsConnection(connection);
+  const { rpc, spacingMs } = readsConnection(connection, options);
   let spaced = false;
   const pace = async (): Promise<void> => {
     if (spaced && spacingMs > 0) await pause(spacingMs);
@@ -204,149 +217,36 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-type CarriedConnection = Connection & {
-  _rpcWsEndpoint?: string;
-  _confirmTransactionInitialTimeout?: number;
-  _rpcClient?: {
-    callServer?: (request: string, callback: (err: Error | null, response?: string) => void) => void;
-  };
-};
-
-type RemoteValue = {
-  objectId?: string;
-  description?: string;
-};
-
-type RemoteProp = {
-  name: string;
-  value?: RemoteValue;
-};
-
-type PropsResult = {
-  result?: RemoteProp[];
-  internalProperties?: RemoteProp[];
-};
-
-type InspectorSession = {
-  connect(): void;
-  disconnect(): void;
-  post(method: string, params?: object): Promise<unknown>;
-};
-
-type TransportFields = {
-  httpHeaders?: ConnectionConfig["httpHeaders"];
-  fetch?: ConnectionConfig["fetch"];
-  fetchMiddleware?: ConnectionConfig["fetchMiddleware"];
-  httpAgent?: ConnectionConfig["httpAgent"];
-  sawAgent: boolean;
-};
-
-const carriedConfig = new WeakMap<Connection, ConnectionConfig | null>();
-const CAPTURE_KEY = "__vetoDecisionReadCapture";
-let captureTail: Promise<void> = Promise.resolve();
-
-function captureLock<T>(run: () => Promise<T>): Promise<T> {
-  const next = captureTail.then(run, run);
-  captureTail = next.then(
-    () => undefined,
-    () => undefined,
-  );
-  return next;
-}
-
 /**
- * Paced reads use their own connection so web3.js does not also retry a 429.
- * Headers, fetch, middleware, and the websocket endpoint live in the caller's
- * RPC client closure, so they are copied onto that connection.
- * If they cannot be read, the caller's own connection is used.
+ * Paced reads use a connection with disableRetryOnRateLimit so web3.js does not
+ * also retry a 429. web3.js does not expose a connection's config.
+ * readConnection is used as given. connectionConfig is merged onto a new
+ * connection at the caller's endpoint and commitment. With neither, that
+ * connection carries the endpoint and commitment only.
+ * A value that is not a web3 Connection has no endpoint to rebuild, so it is used as given.
  */
-async function readsConnection(connection: Connection): Promise<{ rpc: Connection; spacingMs: number }> {
-  if (!(connection instanceof Connection)) return { rpc: connection, spacingMs: 0 };
-  const config = await captureLock(() => connectionConfig(connection));
-  if (!config) return { rpc: connection, spacingMs: DECISION_FETCH_SPACING_MS };
+function readsConnection(
+  connection: Connection,
+  options: DecisionsForMandateOptions | undefined,
+): { rpc: Connection; spacingMs: number } {
+  if (options?.readConnection) {
+    const rpc = options.readConnection;
+    return { rpc, spacingMs: rpc instanceof Connection ? DECISION_FETCH_SPACING_MS : 0 };
+  }
+  if (!(connection instanceof Connection)) {
+    if (options?.connectionConfig !== undefined) {
+      throw new Error("decisionsForMandate: connectionConfig requires a web3 Connection");
+    }
+    return { rpc: connection, spacingMs: 0 };
+  }
   return {
-    rpc: new Connection(connection.rpcEndpoint, { ...config, disableRetryOnRateLimit: true }),
+    rpc: new Connection(connection.rpcEndpoint, {
+      ...options?.connectionConfig,
+      commitment: connection.commitment,
+      disableRetryOnRateLimit: true,
+    }),
     spacingMs: DECISION_FETCH_SPACING_MS,
   };
-}
-
-async function connectionConfig(connection: Connection): Promise<ConnectionConfig | undefined> {
-  if (carriedConfig.has(connection)) {
-    const cached = carriedConfig.get(connection);
-    return cached ?? undefined;
-  }
-  const caller = connection as CarriedConnection;
-  const config: ConnectionConfig = {};
-  if (connection.commitment !== undefined) config.commitment = connection.commitment;
-  if (caller._rpcWsEndpoint !== undefined) config.wsEndpoint = caller._rpcWsEndpoint;
-  if (caller._confirmTransactionInitialTimeout !== undefined) {
-    config.confirmTransactionInitialTimeout = caller._confirmTransactionInitialTimeout;
-  }
-  const callServer = caller._rpcClient?.callServer;
-  if (typeof callServer !== "function") {
-    carriedConfig.set(connection, null);
-    return undefined;
-  }
-  const carried = await captureTransport(callServer);
-  if (!carried) {
-    carriedConfig.set(connection, null);
-    return undefined;
-  }
-  if (carried.httpHeaders) config.httpHeaders = carried.httpHeaders;
-  if (carried.fetch) config.fetch = carried.fetch;
-  if (carried.fetchMiddleware) config.fetchMiddleware = carried.fetchMiddleware;
-  if (carried.sawAgent) config.httpAgent = carried.httpAgent;
-  carriedConfig.set(connection, config);
-  return config;
-}
-
-async function captureTransport(
-  callServer: (request: string, callback: (err: Error | null, response?: string) => void) => void,
-): Promise<TransportFields | undefined> {
-  const slot: { fn: typeof callServer; bag: Record<string, unknown> } = { fn: callServer, bag: {} };
-  (globalThis as Record<string, unknown>)[CAPTURE_KEY] = slot;
-  let session: InspectorSession | undefined;
-  let connected = false;
-  try {
-    const { Session } = await import("node:inspector/promises");
-    session = new Session() as unknown as InspectorSession;
-    session.connect();
-    connected = true;
-    await session.post("Runtime.enable");
-    const evaluated = (await session.post("Runtime.evaluate", {
-      expression: `globalThis[${JSON.stringify(CAPTURE_KEY)}].fn`,
-    })) as { result?: RemoteValue };
-    const fnId = evaluated.result?.objectId;
-    if (!fnId) return undefined;
-    const fnProps = (await session.post("Runtime.getProperties", { objectId: fnId })) as PropsResult;
-    const scopesId = fnProps.internalProperties?.find((prop) => prop.name === "[[Scopes]]")?.value?.objectId;
-    if (!scopesId) return undefined;
-    const scopeList = (await session.post("Runtime.getProperties", { objectId: scopesId })) as PropsResult;
-    const scopeId = scopeList.result?.find((prop) => prop.value?.description?.includes("createRpcClient"))?.value?.objectId;
-    if (!scopeId) return undefined;
-    const vars = (await session.post("Runtime.getProperties", { objectId: scopeId })) as PropsResult;
-    for (const name of ["httpHeaders", "fetch", "fetchMiddleware", "agent"]) {
-      const objectId = vars.result?.find((prop) => prop.name === name)?.value?.objectId;
-      if (!objectId) continue;
-      await session.post("Runtime.callFunctionOn", {
-        objectId,
-        functionDeclaration: `function() { globalThis[${JSON.stringify(CAPTURE_KEY)}].bag[${JSON.stringify(name)}] = this; }`,
-      });
-    }
-    const agent = vars.result?.find((prop) => prop.name === "agent");
-    return {
-      httpHeaders: slot.bag.httpHeaders as ConnectionConfig["httpHeaders"],
-      fetch: slot.bag.fetch as ConnectionConfig["fetch"],
-      fetchMiddleware: slot.bag.fetchMiddleware as ConnectionConfig["fetchMiddleware"],
-      httpAgent: agent?.value?.objectId ? (slot.bag.agent as ConnectionConfig["httpAgent"]) : false,
-      sawAgent: agent !== undefined,
-    };
-  } catch {
-    return undefined;
-  } finally {
-    if (connected) session?.disconnect();
-    delete (globalThis as Record<string, unknown>)[CAPTURE_KEY];
-  }
 }
 
 function rateLimited(err: unknown): boolean {
