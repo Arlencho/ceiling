@@ -154,7 +154,11 @@ function useChainState(): ChainState {
         return;
       }
       await saveSelected(secureStore, selected.address);
-      const ledger = await fetchLedgerRows(client, new PublicKey(selected.address));
+      const ledger = await fetchLedgerRows(
+        client,
+        new PublicKey(selected.address),
+        new PublicKey(selected.agent),
+      );
       let mintDecimals = loaded.config.mintDecimals;
       try {
         mintDecimals = await fetchMintDecimals(client, new PublicKey(selected.mint));
