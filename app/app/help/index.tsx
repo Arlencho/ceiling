@@ -1,14 +1,16 @@
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../../components/Button';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
+import { openHelpRefusal } from '../../lib/helpNavigation';
 import { PAYEE_NOT_IN_RULESET, PAYEE_PREFILL, RULESET_ENVELOPE } from '../../lib/ruleset';
 
 export default function HelpRuleScreen() {
   const router = useRouter();
+  const pathname = usePathname();
   return (
     <Screen>
       <TopBar back="Back" meta="1 of 3" help={false} />
@@ -41,7 +43,7 @@ export default function HelpRuleScreen() {
           invert={false}
           onPress={() => router.push('/onboarding')}
         />
-        <Button label="Next" onPress={() => router.push('/help/refusal')} />
+        <Button label="Next" onPress={() => openHelpRefusal(router, pathname)} />
       </View>
     </Screen>
   );
