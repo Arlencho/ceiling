@@ -50,6 +50,16 @@ No model is involved. The numbers are typed or taken from a template, and the wh
 
 A complete record of every payment made under this authority, a worst case fixed in advance by the rule, and every refusal the agent surfaced. The rule is the prior claim. The decisions are the evidence. Neither is worth anything alone.
 
+## Where this goes
+
+Software is starting to spend money on its own. Every control built so far answers one question: can this agent pay? The record answers the next one: should anyone let it?
+
+A payment ledger shows that an agent had money. The decisions under a rule show what it did at the edge: the limit agreed in advance, every payment made against it, and every refusal it submitted, each one checkable against the chain by someone who trusts neither the owner nor us. That is the history a merchant, an auditor or a counterparty needs before letting software spend unattended. The other designs stop the overspend and keep no such history.
+
+The purpose check is the first step past the numbers. The chain enforces amount, payee and time. The agent can already record why it declined a charge that fits the numbers but not the purpose. The direction is a mandate that governs what the money is for, with the chain keeping the evidence either way.
+
+People built trust with a payment history. Agents will build it with a history of refusals, and that history starts on chain.
+
 ## Scope through the deadline
 
 Submissions close October 8, 2026 ([Solana Mobile announcement](https://solanamobile.com/blog/clock-in-the-solana-mobile-hackathon)).
