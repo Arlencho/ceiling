@@ -22,7 +22,6 @@ import {
   buildRecord,
   connection,
   fetchLedger,
-  fetchMandate,
   flagString,
   indexedEntries,
   kindByte,
@@ -40,15 +39,8 @@ import {
   type DecisionTriple,
   type LedgerAccount,
   type LedgerEntry,
-  type MandateAccount,
-  type OpenedMandate,
 } from "./lib.js";
-import {
-  CLOSED_MANDATE_LIMITS_NOTE,
-  coveredOpeningTenures,
-  openingTenureForSignature,
-  tenureCovering,
-} from "./verify.js";
+import { CLOSED_MANDATE_LIMITS_NOTE, tenureReader } from "./verify.js";
 
 function usage(): never {
   console.error(`export a Veto decision as JSON, or a population as JSON or CSV
@@ -91,6 +83,25 @@ async function getTx(conn: Connection, signature: string) {
   return tx;
 }
 
+// An opening tenure leaves the ring unread: a readable ledger belongs to
+// another tenure. A live tenure reads it. A transport error or a missing
+// ledger fails the export.
+async function ledgerForCurrentTenure(
+  conn: Connection,
+  ledgerAddress: PublicKey,
+  fromOpening: boolean,
+): Promise<LedgerAccount | null> {
+  if (fromOpening) return null;
+  try {
+    return await fetchLedger(conn, ledgerAddress);
+  } catch (err) {
+    if (isTransportError(err)) throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.startsWith("ledger account not found")) throw err;
+    throw err;
+  }
+}
+
 export async function recordFromSignature(
   conn: Connection,
   signature: string,
@@ -127,35 +138,14 @@ export async function recordFromSignature(
       `transaction ${signature} carries ${charges.length} charges; pass mandate, nonce, and amount`,
     );
   }
-  let mandateAccount: {
-    cap: bigint;
-    perTxMax: bigint;
-    expiresAt: bigint;
-    merchant: PublicKey;
-    purpose: string;
-  };
-  let fromOpening = false;
-  try {
-    mandateAccount = await fetchMandate(conn, charge.mandate);
-  } catch (err) {
-    if (isTransportError(err)) throw err;
-    const message = err instanceof Error ? err.message : String(err);
-    if (!message.startsWith("mandate account not found")) throw err;
-    mandateAccount = await openingTenureForSignature(conn, programId, charge.mandate, signature);
-    fromOpening = true;
-  }
+  const tenure = await tenureReader(conn, programId).forSignature(charge.mandate, signature);
+  const mandateAccount = tenure;
+  const fromOpening = tenure.fromOpening;
   const ledgerAddress = ledgerPda(programId, charge.mandate);
   if (!charge.ledger.equals(ledgerAddress)) {
     throw new Error("charge ledger account does not match the PDA derived from the mandate");
   }
-  let ledger: LedgerAccount | null = null;
-  try {
-    ledger = await fetchLedger(conn, ledgerAddress);
-  } catch (err) {
-    if (isTransportError(err)) throw err;
-    const message = err instanceof Error ? err.message : String(err);
-    if (!(fromOpening && message.startsWith("ledger account not found"))) throw err;
-  }
+  const ledger = await ledgerForCurrentTenure(conn, ledgerAddress, fromOpening);
   // Same candidate set verify uses: mandate, nonce, and amount. Log kind is not
   // a filter. Two rows can share a nonce when a refusal does not advance it.
   const ringWant = {
@@ -239,61 +229,31 @@ export async function recordsFromIndexedDecisions(args: {
   genesisHash: string;
   decisions: readonly IndexedDecision[];
 }): Promise<DecisionRecord[]> {
-  const live = new Map<string, MandateAccount>();
-  const closed = new Map<string, Map<string, OpenedMandate>>();
+  const tenures = tenureReader(args.conn, args.programId);
   const ledgers = new Map<string, LedgerAccount | null>();
   const records: DecisionRecord[] = [];
   for (const decision of args.decisions) {
     const pk = new PublicKey(decision.mandate);
-    let mandateAccount: {
-      cap: bigint;
-      perTxMax: bigint;
-      expiresAt: bigint;
-      merchant: PublicKey;
-      purpose: string;
-    };
-    let fromOpening = false;
-    const cached = live.get(decision.mandate);
-    if (cached) {
-      mandateAccount = cached;
-    } else {
-      const knownClosed = closed.get(decision.mandate);
-      if (knownClosed) {
-        mandateAccount = tenureCovering(knownClosed, decision.signature);
-        fromOpening = true;
-      } else {
-        try {
-          const account = await fetchMandate(args.conn, pk);
-          live.set(decision.mandate, account);
-          mandateAccount = account;
-        } catch (err) {
-          if (isTransportError(err)) throw err;
-          const message = err instanceof Error ? err.message : String(err);
-          if (!message.startsWith("mandate account not found")) throw err;
-          const covered = await coveredOpeningTenures(args.conn, args.programId, pk);
-          closed.set(decision.mandate, covered);
-          mandateAccount = tenureCovering(covered, decision.signature);
-          fromOpening = true;
-        }
+    const tenure = await tenures.forSignature(pk, decision.signature);
+    let ringEntry: LedgerEntry | null = null;
+    if (!tenure.fromOpening) {
+      if (!ledgers.has(decision.mandate)) {
+        ledgers.set(
+          decision.mandate,
+          await ledgerForCurrentTenure(args.conn, ledgerPda(args.programId, pk), false),
+        );
       }
+      ringEntry = overlayRing(ledgers.get(decision.mandate) ?? null, decision);
     }
-    if (!ledgers.has(decision.mandate)) {
-      try {
-        ledgers.set(decision.mandate, await fetchLedger(args.conn, ledgerPda(args.programId, pk)));
-      } catch {
-        ledgers.set(decision.mandate, null);
-      }
-    }
-    if (fromOpening) console.error(`note: ${CLOSED_MANDATE_LIMITS_NOTE}`);
-    const ledger = ledgers.get(decision.mandate) ?? null;
+    if (tenure.fromOpening) console.error(`note: ${CLOSED_MANDATE_LIMITS_NOTE}`);
     records.push(
       buildRecordFromIndexed({
         cluster: args.cluster,
         genesisHash: args.genesisHash,
         programId: args.programId,
-        mandateAccount,
+        mandateAccount: tenure,
         decision,
-        ringEntry: overlayRing(ledger, decision),
+        ringEntry,
       }),
     );
   }

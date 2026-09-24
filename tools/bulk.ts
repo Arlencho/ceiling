@@ -249,7 +249,7 @@ export function parseBundle(input: unknown): DecisionBundle {
   if (schema_version !== 1) throw new Error(`unsupported schema_version: ${echoFile(String(o.schema_version))}`);
   if (o.completeness !== COMPLETENESS) {
     throw new Error(
-      `completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${JSON.stringify(o.completeness)}`,
+      `completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${echoFile(`${JSON.stringify(o.completeness)}`)}`,
     );
   }
   if (typeof o.completeness_note !== "string" || o.completeness_note.length === 0) {
@@ -417,7 +417,7 @@ export function parseCsv(text: string): DecisionBundle {
     const completeness = get("completeness") || meta.completeness || "";
     if (completeness !== COMPLETENESS) {
       throw new Error(
-        `CSV row ${r} completeness must be "${COMPLETENESS}"; file has ${JSON.stringify(completeness)}`,
+        `CSV row ${r} completeness must be "${COMPLETENESS}"; file has ${echoFile(`${JSON.stringify(completeness)}`)}`,
       );
     }
     decisions.push(
@@ -449,7 +449,7 @@ export function parseCsv(text: string): DecisionBundle {
   const completeness = meta.completeness ?? firstColumnValue(index, rows, "completeness") ?? "";
   if (completeness !== COMPLETENESS) {
     throw new Error(
-      `CSV completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${JSON.stringify(completeness)}`,
+      `CSV completeness must be "${COMPLETENESS}" (complete over payments, never over attempts); file has ${echoFile(`${JSON.stringify(completeness)}`)}`,
     );
   }
   const scopeType = (meta.scope_type || firstColumnValue(index, rows, "scope_type") || "rule") as
