@@ -10,7 +10,7 @@ import { create, type ReactTestInstance, type ReactTestRenderer } from 'react-te
 
 const owner = Keypair.generate();
 const memory = new Map<string, string>();
-const nav = { pushes: [] as string[], backs: 0 };
+const nav = { pushes: [] as string[], replaces: [] as string[], backs: 0 };
 let transactCalls = 0;
 let rejectSeenWrite = false;
 
@@ -67,6 +67,7 @@ mock.module('react-native-safe-area-context', {
 
 mock.module('expo-router', {
   namedExports: {
+    usePathname: () => '/',
     useRouter: () => ({
       push: (href: string) => {
         nav.pushes.push(href);
@@ -75,7 +76,7 @@ mock.module('expo-router', {
         nav.backs += 1;
       },
       replace: (href: string) => {
-        nav.pushes.push(href);
+        nav.replaces.push(href);
       },
     }),
     useFocusEffect: () => undefined,
@@ -261,6 +262,7 @@ test.before(async () => {
 test.beforeEach(() => {
   memory.clear();
   nav.pushes.length = 0;
+  nav.replaces.length = 0;
   nav.backs = 0;
   transactCalls = 0;
   rejectSeenWrite = false;
@@ -411,6 +413,7 @@ test('Help can open the introduction again after it was skipped', async () => {
     button(help, 'Show the introduction').props.onPress();
   });
   assert.deepEqual(nav.pushes, ['/onboarding']);
+  assert.deepEqual(nav.replaces, []);
 
   const route = await mount(
     createElement(
@@ -457,6 +460,7 @@ test('a connected owner can read the introduction again and leave on Done', asyn
     button(route, 'Done with the introduction').props.onPress();
     await new Promise((resolve) => setImmediate(resolve));
   });
+  assert.deepEqual(nav.replaces, []);
   assert.equal(nav.backs, 1);
   assert.equal(transactCalls, calls);
   assert.equal(memory.get(ui.seenKey), '1');

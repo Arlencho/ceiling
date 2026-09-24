@@ -10,7 +10,7 @@ export default function HelpRefusalScreen() {
   const router = useRouter();
   return (
     <Screen>
-      <TopBar back="Back" meta="2 of 3" />
+      <TopBar back="Back" meta="2 of 3" help={false} />
       <Text style={styles.eyebrow}>A recorded no</Text>
       <Text style={styles.h2}>Why a refusal is recorded</Text>
       <Text style={styles.body}>

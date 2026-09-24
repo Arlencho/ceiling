@@ -46,9 +46,12 @@ Charges go through `veto-agent-sdk`. Each step is checked against token
 balances, delegates, account existence, ledger rows, and events. Every charge
 is then exported with `tools/export.ts` and checked with `tools/verify.ts`.
 
-The run prints a summary table and writes the same table to
-`app/e2e/last-run.md`. This does not replace the Seeker check above. Seed
-Vault is still required for a signature on a device.
+The run prints a summary table. While the steps are in progress it writes
+that table to a temporary file, and it replaces `app/e2e/last-run.md` only
+when the run completes. A run that stops early leaves the committed file
+alone and keeps the partial table in `app/e2e/last-run.partial.md`, which is
+gitignored. This does not replace the Seeker check above. Seed Vault is
+still required for a signature on a device.
 
 ## First launch
 

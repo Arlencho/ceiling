@@ -61,6 +61,7 @@ const route = { address: '' };
 mock.module('expo-router', {
   namedExports: {
     useLocalSearchParams: () => ({ address: route.address }),
+    usePathname: () => '/rule/test',
     useRouter: () => ({
       push: () => undefined,
       back: () => undefined,
