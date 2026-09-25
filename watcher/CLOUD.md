@@ -101,6 +101,10 @@ export VETO_AGENT='AGENT'
 
 The script does not execute the job (`--execute-now` is not passed).
 
+## Switching the rule in place
+
+A rule change is applied with `gcloud run jobs update` on `veto-watcher` and `veto-watcher-stale`, not by running `scripts/deploy-watcher-cloud.sh`. The deploy script replaces the whole job environment from the identities the operator exports, and the setup still points that export at `keys/devnet-addresses.env`, which describes an older rule. The script also defaults the journal object to `decisions.jsonl` and adds a new version of the agent secret. Running it would put both jobs back on that older rule. For a switch, build and push the watcher image with Cloud Build the same way the script does (`gcloud builds submit` of `watcher/` tagged `latest`), add a tag for the short commit hash, create the new journal object only when it is absent, and update both jobs with `--image` and `--update-env-vars` for the values that changed. That leaves `VETO_RPC`, `VETO_PROGRAM_ID`, the secret mount, and every other setting as they are. Record the previous environment in `docs/GCP_SETUP.md` before the update, and do not rewrite an existing journal object.
+
 ## 3. Point both alerts at an email address
 
 The failure that costs the demo is a job that stops quietly. Google requires a
