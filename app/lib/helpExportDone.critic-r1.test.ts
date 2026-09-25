@@ -47,6 +47,17 @@ mock.module('react-native', {
   },
 });
 
+mock.module('react-native-svg', {
+  namedExports: {
+    Svg: Host('Svg'),
+    Path: Host('Path'),
+    Circle: Host('Circle'),
+    Rect: Host('Rect'),
+    G: Host('G'),
+    Text: Host('SvgText'),
+  },
+});
+
 mock.module('react-native-safe-area-context', {
   namedExports: {
     SafeAreaView: Host('SafeAreaView'),
@@ -272,7 +283,7 @@ test('critic r1: the introduction detour does not change what Done dismisses', a
   await press(await mount(createElement(TopBar, { title: 'rules' })), 'Help');
   await press(await mount(createElement(HelpIndex)), 'Show the introduction');
   assert.deepEqual(history, ['/rules', '/help', '/onboarding']);
-  await press(await mount(createElement(Onboarding)), 'Skip introduction');
+  await press(await mount(createElement(Onboarding)), 'Skip to connect wallet');
   assert.deepEqual(history, ['/rules', '/help']);
 
   await nextNextDone();

@@ -25,7 +25,7 @@ import {
 } from '../lib/approval';
 import { loadAddressBook, saveAddressBook, withSavedName } from '../lib/addressBook';
 import { parseOptionalAgentAddress } from '../lib/agentAddress';
-import { createClient } from '../lib/chain';
+import { createClient, type OpenMandateResult } from '../lib/chain';
 import { formatBaseUnits } from '../lib/format';
 import { secureStore } from '../lib/mwa';
 import { evaluatePresign, type PresignObservation } from '../lib/presign';
@@ -37,13 +37,14 @@ import { useChain } from '../lib/useChain';
 import { useWallet } from '../lib/useWallet';
 import { AddressActions } from './AddressActions';
 import { Button } from './Button';
-import { CapRing } from './CapRing';
+import { BLOCK_COUNT, BlockBar } from './backglass/BlockBar';
+import { HoldToApprove } from './backglass/HoldToApprove';
+import { ProgressStrip } from './backglass/ProgressStrip';
 import { ConnectGate } from './ConnectGate';
 import { Field } from './Field';
-import { MaxSlider } from './MaxSlider';
 import { RuleScreen } from './RuleScreen';
 import { TopBar } from './TopBar';
-import { colors, fonts } from './theme';
+import { colors, fonts, radii, space } from './theme';
 
 type DurationChoice = { kind: 'days'; days: number } | { kind: 'date'; iso: string };
 
@@ -52,11 +53,19 @@ export function ApprovalScreen({
   request,
   invalidReason,
   templateId,
+  initialAgent,
+  firstRun = false,
+  onOpened,
+  onDecline,
 }: {
   mode: 'request' | 'template';
   request: RuleRequestV1 | null;
   invalidReason: string | null;
   templateId?: string;
+  initialAgent?: string;
+  firstRun?: boolean;
+  onOpened?: (result: OpenMandateResult) => void;
+  onDecline?: () => void;
 }) {
   if (invalidReason || (mode === 'request' && !request)) {
     return (
@@ -68,24 +77,43 @@ export function ApprovalScreen({
     );
   }
 
-  return <ApprovalCard mode={mode} request={request} templateId={templateId ?? 'charging-agent'} />;
+  return (
+    <ApprovalCard
+      mode={mode}
+      request={request}
+      templateId={templateId ?? 'charging-agent'}
+      initialAgent={initialAgent}
+      firstRun={firstRun}
+      onOpened={onOpened}
+      onDecline={onDecline}
+    />
+  );
 }
 
 function ApprovalCard({
   mode,
   request,
   templateId,
+  initialAgent,
+  firstRun,
+  onOpened,
+  onDecline,
 }: {
   mode: 'request' | 'template';
   request: RuleRequestV1 | null;
   templateId: string;
+  initialAgent?: string;
+  firstRun: boolean;
+  onOpened?: (result: OpenMandateResult) => void;
+  onDecline?: () => void;
 }) {
   const chain = useChain();
   const wallet = useWallet();
   const router = useRouter();
   const initialTemplate = templateById(templateId) ?? templateById('charging-agent');
   const [template, setTemplate] = useState<MandateTemplate | null>(initialTemplate ?? null);
-  const [agentText, setAgentText] = useState(request?.agent ?? '');
+  const [agentText, setAgentText] = useState(request?.agent ?? initialAgent ?? '');
+  const [holdReset, setHoldReset] = useState(0);
   const [payeeText, setPayeeText] = useState(request?.payee ?? '');
   const [purpose, setPurpose] = useState(request?.purpose ?? initialTemplate?.fields.purpose ?? '');
   const [capTouched, setCapTouched] = useState<bigint | null>(request ? request.cap : null);
@@ -351,9 +379,14 @@ function ApprovalCard({
         ...(agent ? { agent } : {}),
       });
       setOpenedAddress(result.mandate.address);
-      router.replace(`/rule/${result.mandate.address}`);
+      if (onOpened) {
+        onOpened(result);
+      } else {
+        router.replace(`/rule/${result.mandate.address}`);
+      }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Open failed');
+      setHoldReset((current) => current + 1);
     } finally {
       openingRef.current = false;
     }
@@ -365,27 +398,160 @@ function ApprovalCard({
       {openedAddress ? (
         <Text style={styles.body}>{`Opened on chain. Rule ${openedAddress}.`}</Text>
       ) : (
-        <Button
-          label={wallet.busy ? 'Waiting on Seed Vault...' : 'Approve with Seed Vault'}
-          accessibilityLabel="Approve with Seed Vault"
-          busy={wallet.busy}
-          disabled={!ready || chain.submitHeld}
-          onPress={() => {
-            void onApprove();
-          }}
-        />
+        <View testID={`approve-hold-${holdReset}`}>
+          <HoldToApprove
+            label={wallet.busy ? 'Waiting on Seed Vault...' : 'Hold to approve rule'}
+            disabled={!ready || chain.submitHeld || wallet.busy}
+            resetKey={holdReset}
+            onConfirm={() => {
+              void onApprove();
+            }}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Decline this rule"
+            onPress={() => {
+              if (onDecline) {
+                onDecline();
+                return;
+              }
+              router.back();
+            }}
+            style={styles.decline}
+          >
+            <Text style={styles.declineLabel}>Decline this rule</Text>
+          </Pressable>
+        </View>
       )}
     </View>
   ) : null;
 
+  const dayCount = choice.kind === 'days' ? choice.days : null;
+  const maxText = maxPay != null && decimals != null ? formatBaseUnits(maxPay, decimals) : null;
+  const capText = cap != null && decimals != null ? formatBaseUnits(cap, decimals) : null;
+  const paymentCount = cap != null && maxPay != null && maxPay > 0n ? cap / maxPay : null;
+  const blockCount =
+    paymentCount != null && paymentCount > 0n && paymentCount <= 60n ? Number(paymentCount) : BLOCK_COUNT;
+  const blockLine =
+    paymentCount != null && paymentCount > 0n && paymentCount <= 60n && maxText
+      ? `1 block = one payment of ${maxText}`
+      : maxText
+        ? `${maxText} at most per payment`
+        : null;
+
+  const nudgeAmount = (which: 'max' | 'cap', direction: 1 | -1) => {
+    if (cap == null || maxPay == null || decimals == null || capCeiling == null || maxCeiling == null) {
+      return;
+    }
+    if (which === 'max') {
+      applyLimits(cap, nudge(maxPay, maxCeiling, direction, decimals));
+      return;
+    }
+    const nextCap = nudge(cap, capCeiling, direction, decimals);
+    applyLimits(nextCap, maxPay > nextCap ? nextCap : maxPay);
+  };
+
+  const nudgeDays = (direction: 1 | -1) => {
+    if (dayCount == null) {
+      return;
+    }
+    const next = dayCount + direction;
+    if (next < 1) {
+      return;
+    }
+    if (request?.days != null && next > request.days) {
+      return;
+    }
+    setChoice({ kind: 'days', days: next });
+    setCustomDate('');
+    setDateError(null);
+  };
+
   return (
     <RuleScreen footer={footer}>
-      <TopBar back="Rules" />
+      {firstRun ? (
+        <ProgressStrip current="approve" done={['learn', 'connect', 'agent']} />
+      ) : (
+        <TopBar back="Rules" />
+      )}
       <ConnectGate>
-        <Text style={styles.h2}>{request ? 'Approve this request' : 'Build a rule'}</Text>
+        <Text style={styles.kicker}>New rule to approve</Text>
+        <Text style={styles.h2}>{template?.title ?? (request ? 'Approve this request' : 'Build a rule')}</Text>
+        <Text style={styles.body}>
+          {agentParty.shortAddress
+            ? `Your agent, ${agentParty.shortAddress}, asks you for this rule`
+            : 'Your agent asks you for this rule'}
+        </Text>
         {sentence ? <Text style={styles.sentence}>{sentence}</Text> : (
           <Text style={styles.body}>Reading the mint from the chain.</Text>
         )}
+        {(request ? request.purpose : purpose).trim().length > 0 ? (
+          <View style={styles.purpose}>
+            <Text style={styles.kicker}>What it says it is for</Text>
+            <Text style={styles.purposeText}>{request ? request.purpose : purpose}</Text>
+          </View>
+        ) : null}
+        {cap != null && maxPay != null && decimals != null && capText && maxText ? (
+          <View style={styles.block}>
+            <View style={styles.limitHead}>
+              <Text style={styles.kicker}>{`Set your agent's limits`}</Text>
+              <Text style={styles.fix}>Tap + or - to change</Text>
+            </View>
+            <LimitDial
+              label="May only pay"
+              hint={payeeParty.shortAddress ?? 'Scan or paste the payee'}
+              onEdit={() => {
+                router.push('/scan?target=payee');
+              }}
+            />
+            <AmountDial
+              label="Most per payment"
+              hint="Anything above is refused"
+              value={maxText}
+              spoken={`Most per payment: ${maxText}`}
+              onLower={() => nudgeAmount('max', -1)}
+              onRaise={() => nudgeAmount('max', 1)}
+              lowerLabel="Lower the most per payment"
+              raiseLabel="Raise the most per payment"
+            />
+            <AmountDial
+              label="Most in total, ever"
+              hint="Set aside for this rule only"
+              value={capText}
+              spoken={`Most in total: ${capText}`}
+              onLower={() => nudgeAmount('cap', -1)}
+              onRaise={() => nudgeAmount('cap', 1)}
+              lowerLabel="Lower the total"
+              raiseLabel="Raise the total"
+            />
+            {dayCount != null ? (
+              <AmountDial
+                label="Rule ends in"
+                hint="After that, no more payments"
+                value={`${dayCount} days`}
+                spoken={`Rule ends in ${dayCount} days`}
+                onLower={() => nudgeDays(-1)}
+                onRaise={() => nudgeDays(1)}
+                lowerLabel="End the rule sooner"
+                raiseLabel="End the rule later"
+              />
+            ) : null}
+            {paymentCount != null && capText && maxText ? (
+              <View style={styles.block}>
+                <Text style={styles.body}>{`The ${capText} total`}</Text>
+                <Text style={styles.body}>{`${paymentCount.toString()} payments of ${maxText} at most`}</Text>
+                <BlockBar
+                  remaining={blockCount}
+                  cap={blockCount}
+                  blocks={blockCount}
+                  accessibilityLabel={`${capText} set aside for this rule`}
+                />
+                {blockLine ? <Text style={styles.fix}>{blockLine}</Text> : null}
+                {dayCount != null ? <Text style={styles.fix}>{`Rule ends in ${dayCount} days`}</Text> : null}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
         {!request && template ? (
           <View style={styles.chips}>
             {BUILD_YOUR_OWN_IDS.map((id) => {
@@ -480,21 +646,6 @@ function ApprovalCard({
           </View>
         ) : null}
 
-        {cap != null && maxPay != null && capCeiling != null && maxCeiling != null && decimals != null ? (
-          <View style={styles.block}>
-            <CapRing
-              fraction={fractionFromAmount(cap, capCeiling)}
-              label={formatBaseUnits(cap, decimals)}
-              onFraction={(fraction) => applyLimits(capFromRing({ ceiling: capCeiling, fraction }), maxPay)}
-            />
-            <MaxSlider
-              fraction={fractionFromAmount(maxPay, maxCeiling)}
-              label={formatBaseUnits(maxPay, decimals)}
-              onFraction={(fraction) => applyLimits(cap, capFromRing({ ceiling: maxCeiling, fraction }))}
-            />
-          </View>
-        ) : null}
-
         <View style={styles.chips}>
           {DURATION_DAYS.map((days) => {
             const allowed = durationChipAllowed(days, request?.days ?? null);
@@ -548,6 +699,73 @@ function ApprovalCard({
         {!mintText ? <Text style={styles.body}>This app has no token mint configured.</Text> : null}
       </ConnectGate>
     </RuleScreen>
+  );
+}
+
+function nudge(current: bigint, ceiling: bigint, direction: 1 | -1, decimals: number): bigint {
+  if (ceiling <= 0n) {
+    return 0n;
+  }
+  const unit = 10n ** BigInt(Math.max(0, decimals));
+  let stepped = current + BigInt(direction) * unit;
+  if (stepped < 0n) {
+    stepped = 0n;
+  }
+  if (stepped > ceiling) {
+    stepped = ceiling;
+  }
+  return capFromRing({ ceiling, fraction: fractionFromAmount(stepped, ceiling) });
+}
+
+function AmountDial({
+  label,
+  hint,
+  value,
+  spoken,
+  onLower,
+  onRaise,
+  lowerLabel,
+  raiseLabel,
+}: {
+  label: string;
+  hint: string;
+  value: string;
+  spoken: string;
+  onLower: () => void;
+  onRaise: () => void;
+  lowerLabel: string;
+  raiseLabel: string;
+}) {
+  return (
+    <View style={styles.dial}>
+      <View style={styles.dialCopy}>
+        <Text style={styles.eyebrow}>{label}</Text>
+        <Text style={styles.fix}>{hint}</Text>
+      </View>
+      <Text accessibilityLabel={spoken} style={styles.reel}>
+        {value}
+      </Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={lowerLabel} onPress={onLower} style={styles.step}>
+        <Text style={styles.stepText}>-</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={raiseLabel} onPress={onRaise} style={styles.stepOn}>
+        <Text style={styles.stepOnText}>+</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function LimitDial({ label, hint, onEdit }: { label: string; hint: string; onEdit: () => void }) {
+  return (
+    <View style={styles.dial}>
+      <View style={styles.dialCopy}>
+        <Text style={styles.eyebrow}>{label}</Text>
+        <Text style={styles.reelSmall}>{hint}</Text>
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Edit who your agent may pay, ${hint}`} onPress={onEdit} style={styles.edit}>
+        <Text style={styles.editText}>Edit</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -672,5 +890,112 @@ const styles = StyleSheet.create({
   },
   footer: {
     gap: 8,
+  },
+  kicker: {
+    fontFamily: fonts.sansBold,
+    fontSize: 12,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    color: colors.muted,
+  },
+  purpose: {
+    gap: 4,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.brass,
+    paddingLeft: space.lg,
+  },
+  purposeText: {
+    fontFamily: fonts.serifItalic,
+    fontSize: 16,
+    lineHeight: 22,
+    color: colors.body,
+  },
+  limitHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: space.md,
+  },
+  dial: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    minHeight: 64,
+    paddingVertical: space.md,
+    paddingLeft: space.xxl,
+    paddingRight: space.md,
+    borderRadius: radii.card,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  dialCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  reel: {
+    minWidth: 56,
+    fontFamily: fonts.serif,
+    fontSize: 28,
+    lineHeight: 32,
+    color: colors.brass,
+    textAlign: 'center',
+  },
+  reelSmall: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 17,
+    color: colors.bone,
+  },
+  step: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.control,
+    borderWidth: 1,
+    borderColor: colors.brassSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepOn: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.control,
+    backgroundColor: colors.brass,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepText: {
+    fontFamily: fonts.serif,
+    fontSize: 22,
+    color: colors.brass,
+  },
+  stepOnText: {
+    fontFamily: fonts.serif,
+    fontSize: 22,
+    color: colors.forest,
+  },
+  edit: {
+    minWidth: 64,
+    minHeight: 44,
+    paddingHorizontal: space.xl,
+    borderRadius: radii.control,
+    borderWidth: 1,
+    borderColor: colors.brassSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editText: {
+    fontFamily: fonts.sansBold,
+    fontSize: 14,
+    color: colors.brass,
+  },
+  decline: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  declineLabel: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 15,
+    color: colors.muted,
   },
 });

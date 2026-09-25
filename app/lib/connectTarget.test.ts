@@ -7,6 +7,7 @@ import { act, createElement, type ComponentType, type ReactElement, type ReactNo
 import { create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as { __DEV__?: boolean }).__DEV__ = false;
 process.env.EXPO_PUBLIC_VETO_EXPLORER_CLUSTER = 'devnet';
 
 const SEEKER_LINE = 'You will approve with your Seeker ID (Seed Vault).';
@@ -174,7 +175,7 @@ test('Connect names Seeker ID and targets the Solana Mobile wallet when it is in
   const text = await settle(root, (value) => value.includes('Connect') || value.includes(SEEKER_LINE));
   assert.ok(text.includes(SEEKER_LINE), text);
   assert.ok(text.includes(NETWORK_LINE), text);
-  const connectButton = button(root, 'Connect');
+  const connectButton = button(root, 'Open Solana Mobile wallet');
   const otherButton = button(root, 'Use another wallet');
   assert.ok(connectButton, text);
   assert.ok(otherButton, text);
@@ -204,7 +205,7 @@ test('without the Solana Mobile wallet, Connect keeps the system chooser', async
   const root = await mount();
   const text = await settle(root, (value) => value.includes(SEEKER_LINE));
   assert.equal(button(root, 'Use another wallet'), undefined);
-  const connectButton = button(root, 'Connect');
+  const connectButton = button(root, 'Open Solana Mobile wallet');
   assert.ok(connectButton, text);
   await act(async () => {
     connectButton.props.onPress();

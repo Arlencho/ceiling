@@ -1,25 +1,30 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AGENT_CONNECT_LINE } from '../lib/agentConnect';
+import { colors, fonts, type as typeScale } from './theme';
 import { Button } from './Button';
 import { QrCode } from './QrCode';
-import { SectionTitle } from './SectionTitle';
-import { colors, fonts } from './theme';
 
 export function ConnectAgentPanel({
   rows,
   configJson,
   status,
   onCopy,
+  summary,
 }: {
   rows: readonly { label: string; value: string }[];
   configJson: string | null;
   status: string | null;
   onCopy: (json: string) => void;
+  summary?: string | null;
 }) {
   return (
     <View style={styles.panel}>
-      <SectionTitle>Connect your agent</SectionTitle>
+      <Text style={styles.title}>Give your agent its setup.</Text>
+      <Text style={styles.body}>
+        Your agent needs this to use the rule. Let it scan the code, or copy the text to it.
+      </Text>
+      {summary ? <Text style={styles.summary}>{summary}</Text> : null}
       {configJson ? (
         <View style={styles.block}>
           {rows.map((row) => (
@@ -31,19 +36,22 @@ export function ConnectAgentPanel({
             </View>
           ))}
           <Button
-            label="Copy all"
-            accessibilityLabel="Copy all"
+            label="Copy setup text"
+            accessibilityLabel="Copy setup text"
             invert={false}
             onPress={() => {
               onCopy(configJson);
             }}
           />
+          <Text style={styles.body}>{`The text holds the rule's address and its limits. Never your key.`}</Text>
           <QrCode value={configJson} />
         </View>
       ) : status ? (
-        <Text style={styles.status}>{status}</Text>
-      ) : null}
-      <Text style={styles.line}>{AGENT_CONNECT_LINE}</Text>
+        <Text style={styles.body}>{status}</Text>
+      ) : (
+        <Text style={styles.body}>Waiting for the rule.</Text>
+      )}
+      <Text style={styles.body}>{AGENT_CONNECT_LINE}</Text>
     </View>
   );
 }
@@ -52,6 +60,15 @@ const styles = StyleSheet.create({
   panel: {
     gap: 12,
     alignSelf: 'stretch',
+  },
+  title: {
+    fontFamily: fonts.serifRegular,
+    fontSize: 28,
+    lineHeight: 32,
+    color: colors.bone,
+  },
+  summary: {
+    ...typeScale.body,
   },
   block: {
     gap: 10,
@@ -64,22 +81,14 @@ const styles = StyleSheet.create({
   label: {
     color: colors.muted,
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: fonts.sansMedium,
   },
   value: {
     color: colors.text,
     fontSize: 14,
-    fontWeight: '500',
     fontFamily: fonts.mono,
   },
-  status: {
-    color: colors.body,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  line: {
-    color: colors.body,
-    fontSize: 15,
-    lineHeight: 22,
+  body: {
+    ...typeScale.body,
   },
 });
