@@ -23,7 +23,7 @@ export const TRADE_LEDGER_CAPACITY = 32;
 export const TRADE_ENTRY_SIZE = 88;
 /** rule pubkey, total u32, head u16, bump u8, one pad byte. After the discriminator. */
 export const TRADE_LEDGER_HEADER_SIZE = 40;
-/** Fixed window the program uses for the daily total. */
+/** Rolling interval protected by the daily limit. */
 export const TRADE_WINDOW_SECS = 24 * 60 * 60;
 
 export type MandateAccount = {
@@ -268,8 +268,7 @@ export type TradeRuleAccount = {
   spent: bigint;
   perTradeMax: bigint;
   dailyLimit: bigint;
-  windowSpent: bigint;
-  windowStart: bigint;
+  dailyBuckets: { hour: bigint; amount: bigint }[];
   floorNum: bigint;
   floorDen: bigint;
   expiresAt: bigint;
@@ -358,8 +357,7 @@ export function decodeTradeRule(data: Buffer): TradeRuleAccount {
   let spent: bigint;
   let perTradeMax: bigint;
   let dailyLimit: bigint;
-  let windowSpent: bigint;
-  let windowStart: bigint;
+  const dailyBuckets: { hour: bigint; amount: bigint }[] = [];
   let floorNum: bigint;
   let floorDen: bigint;
   let expiresAt: bigint;
@@ -376,8 +374,12 @@ export function decodeTradeRule(data: Buffer): TradeRuleAccount {
   [spent, o] = readU64(data, o, "spent");
   [perTradeMax, o] = readU64(data, o, "per_trade_max");
   [dailyLimit, o] = readU64(data, o, "daily_limit");
-  [windowSpent, o] = readU64(data, o, "window_spent");
-  [windowStart, o] = readI64(data, o, "window_start");
+  for (let i = 0; i < 25; i++) {
+    let hour: bigint, amount: bigint;
+    [hour, o] = readI64(data, o, "bucket hour");
+    [amount, o] = readU64(data, o, "bucket amount");
+    dailyBuckets.push({ hour, amount });
+  }
   [floorNum, o] = readU64(data, o, "floor_num");
   [floorDen, o] = readU64(data, o, "floor_den");
   [expiresAt, o] = readI64(data, o, "expires_at");
@@ -409,8 +411,7 @@ export function decodeTradeRule(data: Buffer): TradeRuleAccount {
     spent,
     perTradeMax,
     dailyLimit,
-    windowSpent,
-    windowStart,
+    dailyBuckets,
     floorNum,
     floorDen,
     expiresAt,

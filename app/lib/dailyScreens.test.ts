@@ -866,7 +866,7 @@ for (const later of ['navigation', 'connect', 'sign', 'disconnect', 'partial sig
     chain.submitHeld = false;
     const root = await mount(createElement(Screen));
     await act(async () => {
-      byLabel(root, 'Hold to close this rule').props.onLongPress();
+      byLabel(root, 'Press and hold to close this rule').props.onLongPress();
       await new Promise((resolve) => setImmediate(resolve));
     });
     assert.match(textOf(root), /The wallet cancelled the request/);
@@ -913,7 +913,7 @@ for (const later of ['navigation', 'connect', 'sign', 'disconnect', 'partial sig
     }
     assert.doesNotMatch(textOf(root), /The wallet cancelled the request/);
     await act(async () => {
-      byLabel(root, 'Hold to close this rule').props.onLongPress();
+      byLabel(root, 'Press and hold to close this rule').props.onLongPress();
       await new Promise((resolve) => setImmediate(resolve));
     });
     assert.match(textOf(root), /The wallet cancelled the request/, 'a new failure still appears');

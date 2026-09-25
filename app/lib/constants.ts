@@ -28,8 +28,8 @@ export const TRADE_ENTRY_SIZE = 88;
 export const TRADE_LEDGER_HEADER_SIZE = 40;
 // 8 byte discriminator plus size_of::<TradeLedger>() (2856).
 export const TRADE_LEDGER_ACCOUNT_SIZE = 8 + 2856;
-// 8 byte discriminator plus TradeRule::INIT_SPACE (599).
-export const TRADE_RULE_ACCOUNT_SIZE = 8 + 599;
+// 8 byte discriminator plus TradeRule::INIT_SPACE (983).
+export const TRADE_RULE_ACCOUNT_SIZE = 8 + 983;
 export const TRADE_WINDOW_SECS = 24 * 60 * 60;
 export const EXCHANGE_KIND_SPL_TOKEN_SWAP = 0;
 

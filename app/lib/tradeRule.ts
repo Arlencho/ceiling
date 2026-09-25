@@ -18,7 +18,6 @@ import {
   TRADE_LEDGER_DISCRIMINATOR,
   TRADE_LEDGER_HEADER_SIZE,
   TRADE_RULE_DISCRIMINATOR,
-  TRADE_WINDOW_SECS,
   u64Le,
 } from './constants';
 import { formatTokenAmount } from './tokens';
@@ -49,8 +48,7 @@ export type TradeRuleAccount = {
   spent: bigint;
   perTradeMax: bigint;
   dailyLimit: bigint;
-  windowSpent: bigint;
-  windowStart: bigint;
+  dailyBuckets: { hour: bigint; amount: bigint }[];
   floorNum: bigint;
   floorDen: bigint;
   expiresAt: bigint;
@@ -114,10 +112,12 @@ export function decodeTradeRuleAccount(address: string, data: Uint8Array): Trade
   o += 8;
   const dailyLimit = readU64Le(data, o);
   o += 8;
-  const windowSpent = readU64Le(data, o);
-  o += 8;
-  const windowStart = readI64Le(data, o);
-  o += 8;
+  const dailyBuckets = Array.from({ length: 25 }, () => {
+    const hour = readI64Le(data, o);
+    const amount = readU64Le(data, o + 8);
+    o += 16;
+    return { hour, amount };
+  });
   const floorNum = readU64Le(data, o);
   o += 8;
   const floorDen = readU64Le(data, o);
@@ -168,8 +168,7 @@ export function decodeTradeRuleAccount(address: string, data: Uint8Array): Trade
     spent,
     perTradeMax,
     dailyLimit,
-    windowSpent,
-    windowStart,
+    dailyBuckets,
     floorNum,
     floorDen,
     expiresAt,
@@ -222,12 +221,11 @@ export function isTradeActive(rule: TradeRuleAccount, nowSec: bigint): boolean {
   return rule.status === STATUS_ACTIVE && nowSec < rule.expiresAt;
 }
 
-/** Input already inside the current window. A roll is not written until a trade settles. */
-export function inputSentToday(rule: Pick<TradeRuleAccount, 'windowSpent' | 'windowStart'>, nowSec: bigint): bigint {
-  if (nowSec >= rule.windowStart + BigInt(TRADE_WINDOW_SECS)) {
-    return 0n;
-  }
-  return rule.windowSpent;
+/** Conservatively count the current hour and the preceding 24 hours. */
+export function inputSentToday(rule: Pick<TradeRuleAccount, 'dailyBuckets'>, nowSec: bigint): bigint {
+  const hour = nowSec >= 0n ? nowSec / 3600n : (nowSec - 3599n) / 3600n;
+  return rule.dailyBuckets.reduce((sum, bucket) =>
+    bucket.hour >= hour - 24n ? sum + bucket.amount : sum, 0n);
 }
 
 export function outputReceived(rows: readonly Pick<RingEntry, 'kind' | 'amountOut'>[]): bigint {
