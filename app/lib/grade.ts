@@ -13,6 +13,10 @@ import {
   REASON_OVER_CAP,
   REASON_OVER_PER_TX_MAX,
   REASON_STALE_NONCE,
+  REASON_QUOTE_BELOW_FLOOR,
+  REASON_OUTPUT_ACCOUNT_NOT_ALLOWED,
+  REASON_OVER_DAILY_LIMIT,
+  REASON_POOL_NOT_ALLOWED,
   REASON_ZERO_AMOUNT,
 } from './constants';
 import { remainingCap } from './format';
@@ -422,6 +426,14 @@ export function recordReasonTitle(reason: number, perTxMaxLabel: string): string
       return 'A payment of nothing';
     case REASON_ACCOUNT_FROZEN:
       return 'While an account was frozen';
+    case REASON_OUTPUT_ACCOUNT_NOT_ALLOWED:
+      return 'An output account this rule does not allow';
+    case REASON_POOL_NOT_ALLOWED:
+      return 'A pool account this rule does not allow';
+    case REASON_OVER_DAILY:
+      return 'Over the daily limit';
+    case REASON_QUOTE_BELOW_FLOOR:
+      return 'Below the price floor';
     default:
       return 'A reason saved on the record';
   }
@@ -449,6 +461,14 @@ export function weekReasonTitle(reason: number, perTxMaxLabel: string): string {
       return 'Asked to pay nothing';
     case REASON_ACCOUNT_FROZEN:
       return 'Asked while an account was frozen';
+    case REASON_OUTPUT_ACCOUNT_NOT_ALLOWED:
+      return 'Asked for an output account this rule does not allow';
+    case REASON_POOL_NOT_ALLOWED:
+      return 'Asked for a pool account this rule does not allow';
+    case REASON_OVER_DAILY:
+      return 'Asked more than the daily limit';
+    case REASON_QUOTE_BELOW_FLOOR:
+      return 'Asked below the price floor';
     default:
       return 'Refused, and the reason is on the record';
   }

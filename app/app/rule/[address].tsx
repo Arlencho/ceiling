@@ -9,6 +9,7 @@ import { Button } from '../../components/Button';
 import { HoldToApprove } from '../../components/backglass/HoldToApprove';
 import { ClusterPill } from '../../components/daily/ClusterPill';
 import { DecisionRow } from '../../components/DecisionRow';
+import { TradeRuleDetail } from '../../components/TradeRuleDetail';
 import { ConnectAgentPanel } from '../../components/ConnectAgentPanel';
 import { ConnectGate } from '../../components/ConnectGate';
 import { SpendBoard } from '../../components/daily/SpendBoard';
@@ -333,6 +334,11 @@ export default function RuleDetailScreen() {
       setFormError(err instanceof Error ? redactRpc(err.message) : 'Revoke failed');
     }
   };
+
+  const trade = (chain.tradeRules ?? []).find((row) => row.address === address) ?? null;
+  if (trade) {
+    return <TradeRuleDetail rule={trade} />;
+  }
 
   return (
     <Screen refreshing={chain.loading} onRefresh={onRefresh}>

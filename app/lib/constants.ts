@@ -22,6 +22,27 @@ export const CHARGE_IX_DISC = Buffer.from([26, 55, 197, 209, 93, 77, 242, 15]);
 export const PAID_EVENT_DISC = Buffer.from([240, 193, 17, 238, 238, 210, 129, 235]);
 export const REFUSED_EVENT_DISC = Buffer.from([230, 49, 133, 208, 106, 62, 106, 169]);
 
+// Trade rule. Same kind numbers as a payment ledger. The account layouts differ.
+export const TRADE_LEDGER_CAPACITY = 32;
+export const TRADE_ENTRY_SIZE = 88;
+export const TRADE_LEDGER_HEADER_SIZE = 40;
+// 8 byte discriminator plus size_of::<TradeLedger>() (2856).
+export const TRADE_LEDGER_ACCOUNT_SIZE = 8 + 2856;
+// 8 byte discriminator plus TradeRule::INIT_SPACE (599).
+export const TRADE_RULE_ACCOUNT_SIZE = 8 + 599;
+export const TRADE_WINDOW_SECS = 24 * 60 * 60;
+export const EXCHANGE_KIND_SPL_TOKEN_SWAP = 0;
+
+export const TRADE_RULE_DISCRIMINATOR = Buffer.from([71, 199, 163, 41, 101, 116, 241, 212]);
+export const TRADE_LEDGER_DISCRIMINATOR = Buffer.from([200, 191, 201, 165, 93, 179, 79, 190]);
+export const OPEN_TRADE_RULE_DISC = Buffer.from([109, 183, 63, 166, 60, 202, 82, 15]);
+export const TRADE_IX_DISC = Buffer.from([178, 144, 26, 216, 241, 187, 206, 130]);
+export const GRANT_TRADE_OVERRIDE_DISC = Buffer.from([133, 223, 203, 45, 174, 92, 157, 151]);
+export const REVOKE_TRADE_RULE_DISC = Buffer.from([112, 252, 178, 223, 55, 115, 217, 201]);
+export const CLOSE_TRADE_RULE_DISC = Buffer.from([93, 102, 200, 106, 195, 121, 250, 120]);
+export const TRADED_EVENT_DISC = Buffer.from([225, 202, 73, 175, 147, 43, 160, 150]);
+export const TRADE_REFUSED_EVENT_DISC = Buffer.from([97, 219, 5, 169, 115, 219, 109, 235]);
+
 export const STATUS_ACTIVE = 0;
 export const STATUS_REVOKED = 1;
 export const STATUS_EXHAUSTED = 2;

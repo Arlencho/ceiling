@@ -40,13 +40,15 @@ export function refusalWhyLine(args: {
   decimals: number;
   perTxMax?: bigint;
   mint?: string | null;
+  unit?: 'payment' | 'trade';
 }): string {
   const view = renderReason(args.reason, args.suggestedOverride, args.decimals, args.mint);
   if (args.reason === REASON_OVER_PER_TX_MAX && args.perTxMax != null) {
     const amount = formatTokenAmount(args.amount, args.decimals, args.mint);
     const limit = formatTokenAmount(args.perTxMax, args.decimals, args.mint);
     const extra = view.overrideLine ? ` ${view.overrideLine}` : '';
-    return `Asked for ${amount}, over the ${limit} per-payment maximum.${extra}`;
+    const noun = args.unit === 'trade' ? 'per-trade' : 'per-payment';
+    return `Asked for ${amount}, over the ${limit} ${noun} maximum.${extra}`;
   }
   const extra = view.overrideLine ? ` ${view.overrideLine}` : '';
   return `${view.text}.${extra}`.trim();
