@@ -1,5 +1,7 @@
 # Veto
 
+Seeker owner? [Try Veto on devnet before October 8](docs/TESTERS.md).
+
 **Everyone stops the overspend. Only this one can prove it stopped.**
 
 Veto enforces a spending rule on chain: when a charge breaks it, the transfer is never executed
@@ -359,6 +361,8 @@ that token to the account we created. The counterparty is a terminal we run. Pub
 are in [docs/DEVNET.md](docs/DEVNET.md).
 
 ## A second mint
+
+The program is tested against a snapshot of the real SKR mint in [programs/veto/tests/skr_mint.rs](programs/veto/tests/skr_mint.rs).
 
 The second mandate on devnet (`7Bns2EMrzw9T8apGLRGynean4mkFMwHsEWoXbeTGnNtj`) is not an SKR
 integration. Solana Mobile's SKR mint is `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`. That

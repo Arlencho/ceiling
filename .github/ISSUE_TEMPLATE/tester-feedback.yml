@@ -1,0 +1,51 @@
+name: Tester feedback
+description: Tell us how Veto felt on your Seeker on devnet.
+title: "[Tester feedback] "
+labels: [tester-feedback]
+body:
+  - type: input
+    id: device
+    attributes:
+      label: Device model
+    validations:
+      required: true
+  - type: checkboxes
+    id: tasks
+    attributes:
+      label: Which tasks did you finish?
+      description: Leave unfinished or blocked tasks unchecked.
+      options:
+        - label: Wrote a rule for a test agent
+        - label: Saw one payment and one refusal in Decisions
+        - label: Set up Hold, held a withdrawal and stopped it
+        - label: Looked at Agents and the grade
+  - type: textarea
+    id: confusion
+    attributes:
+      label: What confused you?
+      description: Include where you got stuck, or write "Nothing".
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: What is one thing you would change?
+    validations:
+      required: true
+  - type: dropdown
+    id: real-money
+    attributes:
+      label: Would you use it with real money?
+      options:
+        - "Yes"
+        - "No"
+        - "Maybe"
+    validations:
+      required: true
+  - type: input
+    id: wallet
+    attributes:
+      label: Wallet address for the tester list (optional)
+      description: Public address only. This issue is public. Never share a recovery phrase or private key.
+    validations:
+      required: false

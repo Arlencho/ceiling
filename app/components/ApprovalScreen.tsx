@@ -1,7 +1,7 @@
 import { redactRpc } from '../lib/rpcPrivacy';
 import { PublicKey } from '@solana/web3.js';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -61,6 +61,7 @@ export function ApprovalScreen({
   firstRun = false,
   onOpened,
   onDecline,
+  leading,
 }: {
   mode: 'request' | 'template';
   request: RuleRequestV1 | null;
@@ -70,6 +71,7 @@ export function ApprovalScreen({
   firstRun?: boolean;
   onOpened?: (result: OpenMandateResult) => void;
   onDecline?: () => void;
+  leading?: ReactNode;
 }) {
   if (invalidReason || (mode === 'request' && !request)) {
     return (
@@ -90,6 +92,7 @@ export function ApprovalScreen({
       firstRun={firstRun}
       onOpened={onOpened}
       onDecline={onDecline}
+      leading={leading}
     />
   );
 }
@@ -102,6 +105,7 @@ function ApprovalCard({
   firstRun,
   onOpened,
   onDecline,
+  leading,
 }: {
   mode: 'request' | 'template';
   request: RuleRequestV1 | null;
@@ -110,6 +114,7 @@ function ApprovalCard({
   firstRun: boolean;
   onOpened?: (result: OpenMandateResult) => void;
   onDecline?: () => void;
+  leading?: ReactNode;
 }) {
   const chain = useChain();
   const wallet = useWallet();
@@ -499,6 +504,7 @@ function ApprovalCard({
         <TopBar back="Rules" />
       )}
       <ConnectGate>
+        {leading}
         <Text style={styles.kicker}>New rule to approve</Text>
         <Text style={styles.h2}>
           {selfWrite ? 'Write the rule yourself' : (template?.title ?? (request ? 'Approve this request' : 'Build a rule'))}

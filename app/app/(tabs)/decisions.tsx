@@ -125,6 +125,24 @@ export default function DecisionsScreen() {
             {`Showing the last ${LEDGER_CAPACITY} of ${chain.snapshot.total} decisions; the ring on chain keeps ${LEDGER_CAPACITY}. Export rebuilds the trail from transaction logs.`}
           </EmptyState>
         ) : null}
+        {chain.mandateStatus === 'present' && !mandate && chain.tradeRule ? (
+          <View style={styles.block}>
+            <Kicker aside="Newest first">Decisions under the rule</Kicker>
+            <Text style={styles.ruleTitle}>{displayPurpose(chain.tradeRule.purpose)}</Text>
+            {shown.map((row) => (
+              <DecisionRow
+                key={`${row.kind}-${row.nonce.toString()}-${row.ts.toString()}`}
+                row={row}
+                decimals={chain.decimals}
+                cluster={cluster}
+                rpcUrl={rpcUrl}
+                mandateAddress={chain.tradeRule?.address ?? ''}
+                perTxMax={chain.tradeRule?.perTradeMax}
+                mint={chain.tradeRule?.inMint}
+              />
+            ))}
+          </View>
+        ) : null}
         {chain.mandateStatus === 'present' && mandate ? (
           <View style={styles.block}>
             <Rise delayMs={180}>

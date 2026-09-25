@@ -7,7 +7,7 @@ export function walletChainForCluster(cluster: string): string {
       `Unknown cluster "${cluster}". The wallet chain is derived from the configured cluster and must be devnet, testnet, or mainnet-beta.`,
     );
   }
-  return `solana:${cluster}`;
+  return `solana:${cluster === 'mainnet-beta' ? 'mainnet' : cluster}`;
 }
 
 export type AppConfig = {

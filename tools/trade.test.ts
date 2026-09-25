@@ -281,3 +281,18 @@ for (const refused of [false, true]) {
     }
   });
 }
+
+
+test("trade rule decoding preserves all 25 buckets and the fields after them", async () => {
+  const { decodeTradeRule } = await import("./lib.js");
+  const f = tradeFixture();
+  const rule = decodeTradeRule(f.ruleData);
+  assert.deepEqual(rule.dailyBuckets, Array.from({ length: 25 }, (_, i) => ({
+    hour: BigInt(i), amount: i === 0 ? 100n : 0n,
+  })));
+  assert.equal(rule.floorNum, 1n);
+  assert.equal(rule.expiresAt, 2000n);
+  assert.equal(rule.lastNonce, 3n);
+  assert.equal(rule.purpose, "test");
+  assert.equal(rule.bump, 255);
+});
