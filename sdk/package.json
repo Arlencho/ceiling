@@ -25,7 +25,8 @@
   "scripts": {
     "build": "tsc",
     "test": "tsx --test src/*.test.ts",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.13",
