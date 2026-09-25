@@ -1,0 +1,79 @@
+{
+  "metadata": {
+    "machine": "Apple M5, 10 CPUs, 34359738368 bytes RAM",
+    "os": "darwin 25.6.0",
+    "node": "v26.3.1",
+    "postgres": "16.15",
+    "commit": "5476bcc5037c812946f4e35580b7738c08d09e4d",
+    "duration_seconds": 60,
+    "conditions": "Single-machine lower bound; serial shared ingestTransaction; synthetic mixed events; lazy virtual arrival queue; no drain; generation included; event timestamps rounded down to seconds; commit acknowledgment is an upper bound for agent_stats visibility; relation bytes include indexes and TOAST, exclude WAL; Compose tmpfs storage, not physical disk IO"
+  },
+  "determinism": {
+    "identical": true,
+    "rows": {
+      "decisions": 136,
+      "decision_keys": 136,
+      "deltas": 136,
+      "rule_stats": 8,
+      "agent_stats": 4
+    },
+    "excluded_columns": [
+      "decisions.source",
+      "rule_stats.updated_at",
+      "agent_stats.updated_at"
+    ]
+  },
+  "runs": [
+    {
+      "target_events_per_second": 1000,
+      "duration_seconds": 60,
+      "elapsed_seconds": 60.002976833,
+      "offered_events": 60000,
+      "committed_events": 10595,
+      "unprocessed_events": 49405,
+      "sustained_events_per_second": 176.57457278307965,
+      "decision_rows_per_second": 176.57457278307965,
+      "database_rows": 31917,
+      "database_rows_per_second": 531.9236092041107,
+      "p50_event_to_commit_ms": 27497,
+      "p99_event_to_commit_ms": 49664,
+      "relation_bytes": 20340736,
+      "bytes_per_million_decisions": 1919842944.7852762,
+      "bytes_per_million_database_rows": 637300999.4673685
+    },
+    {
+      "target_events_per_second": 10000,
+      "duration_seconds": 60,
+      "elapsed_seconds": 60.002880749999996,
+      "offered_events": 600000,
+      "committed_events": 11644,
+      "unprocessed_events": 588356,
+      "sustained_events_per_second": 194.05734948817437,
+      "decision_rows_per_second": 194.05734948817437,
+      "database_rows": 35076,
+      "database_rows_per_second": 584.5719332400554,
+      "p50_event_to_commit_ms": 28647,
+      "p99_event_to_commit_ms": 58626,
+      "relation_bytes": 22462464,
+      "bytes_per_million_decisions": 1929102026.794916,
+      "bytes_per_million_database_rows": 640394115.634622
+    },
+    {
+      "target_events_per_second": 100000,
+      "duration_seconds": 60,
+      "elapsed_seconds": 60.00126879199999,
+      "offered_events": 6000000,
+      "committed_events": 11575,
+      "unprocessed_events": 5988425,
+      "sustained_events_per_second": 192.91258723421032,
+      "decision_rows_per_second": 192.91258723421032,
+      "database_rows": 34869,
+      "database_rows_per_second": 581.1377109520242,
+      "p50_event_to_commit_ms": 30276,
+      "p99_event_to_commit_ms": 59660,
+      "relation_bytes": 22388736,
+      "bytes_per_million_decisions": 1934232051.835853,
+      "bytes_per_million_database_rows": 642081390.3467263
+    }
+  ]
+}
