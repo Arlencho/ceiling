@@ -168,7 +168,7 @@ test("R6 reason codes and texts match programs/veto/src/state.rs and lib.rs", ()
     assert.equal(REASON_TEXT[Number(code)], text, `reason ${code}`);
   }
   assert.equal(REASON_TEXT[11], "output account not allowed");
-  assert.equal(REASON_TEXT[12], "pool not allowed");
+  assert.equal(REASON_TEXT[12], "pool account not allowed");
   assert.equal(REASON_TEXT[13], "over daily limit");
   assert.equal(REASON_TEXT[14], "quote below floor");
   assert.equal(Object.keys(REASON_TEXT).length, 15);
