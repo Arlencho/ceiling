@@ -22,4 +22,4 @@ Screen map (flow order):
 | Daily use | FD3 Home, FD4 Refusal, FD13 Rules, FD12 Rule detail, FD11 New rule, FD10 Scan |
 | Records and help | FD14 Decisions, FD15 Decision detail, FD16 Share, FD17 Help, FD18 Rule stopped |
 | Staying with Veto | ST1 Widget, ST2 Week in review, ST3 Plaques, ST4 Track record card, ST5 Renewal, ST6 Quiet note |
-| Agents (to come) | FD25 Agents, FD26 Agent record, FD27 How grades work |
+| Agents and grades | FD25 Agents (new fourth tab), FD26 Agent record, FD27 How grades work |

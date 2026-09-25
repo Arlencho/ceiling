@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agents</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,400&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+button,a{font-family:inherit;}
+button:focus-visible,a:focus-visible{outline:2px solid #C9A24D;outline-offset:3px;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes liveLamp{0%,100%{box-shadow:0 0 4px rgba(156,201,168,0.5);}50%{box-shadow:0 0 10px rgba(156,201,168,0.95);}}
+@keyframes plateIn{0%{opacity:0;transform:translateY(10px) scale(0.98);}100%{opacity:1;transform:translateY(0) scale(1);}}
+@keyframes reveal{from{transform:scaleX(1);}to{transform:scaleX(0);}}
+.rise{animation:rise 0.7s cubic-bezier(0.22,1,0.36,1) both;}
+.rise-1{animation-delay:0.05s;}
+.rise-2{animation-delay:0.18s;}
+.rise-3{animation-delay:0.95s;}
+.rise-4{animation-delay:1.05s;}
+.live-lamp{animation:liveLamp 3s ease-in-out infinite;}
+.card{animation:plateIn 0.6s cubic-bezier(0.22,1,0.36,1) both;transition:box-shadow 0.25s ease,border-color 0.25s ease;}
+.card:hover{box-shadow:0 14px 34px rgba(0,0,0,0.35),0 0 24px rgba(201,162,77,0.18);border-color:rgba(201,162,77,0.5);}
+.card-1{animation-delay:0.32s;}
+.card-2{animation-delay:0.50s;}
+.card-3{animation-delay:0.68s;}
+.cover{transform-origin:right center;animation:reveal 1.0s cubic-bezier(0.65,0,0.35,1) 0.9s both;}
+.grade{display:flex;align-items:center;gap:10px;padding:5px 12px;border-radius:12px;background:linear-gradient(180deg,#1C2C25 0%,#111D18 100%);box-shadow:inset 0 1px 0 rgba(237,230,214,0.08),0 2px 0 rgba(0,0,0,0.45);border:1px solid rgba(237,230,214,0.3);box-sizing:border-box;}
+.g-in{border-color:rgba(156,201,168,0.65);}
+.g-mid{border-color:rgba(201,162,77,0.65);}
+.g-often{border-color:rgba(228,164,142,0.65);}
+.g-new{border-style:dashed;border-color:rgba(237,230,214,0.35);}
+.grade .lamp{display:block;width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.grade .t{font-family:'Fraunces',serif;font-size:16px;line-height:1.2;color:#EDE6D6;}
+.grade .r{font-size:11px;line-height:1.35;color:#D3CCBB;}
+.stat{display:flex;flex-direction:column;gap:2px;padding:5px 8px;border-radius:10px;background:rgba(15,26,22,0.55);border:1px solid rgba(237,230,214,0.10);min-width:0;}
+.stat .v{font-family:'Fraunces',serif;font-size:18px;line-height:1;font-variant-numeric:tabular-nums;color:#EDE6D6;}
+.stat .l{font-size:10px;line-height:1.25;color:#93A097;}
+.tab{transition:color 0.2s ease;}
+.tab:hover{color:#EDE6D6;}
+@media (prefers-reduced-motion: reduce){
+  .rise,.live-lamp,.card,.cover{animation:none;}
+  .cover{transform:scaleX(0);}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div aria-hidden="true" style="position: absolute; top: -140px; left: 50%; width: 460px; height: 460px; margin-left: -230px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.16) 0%, rgba(201,162,77,0.04) 45%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div class="rise rise-1" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 12px 0 24px; position: relative;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <svg width="20" height="20" viewBox="0 0 100 100" aria-hidden="true"><path d="M16 14L50 80L84 14" fill="none" stroke="#C9A24D" stroke-width="9" stroke-linecap="butt" stroke-linejoin="miter"></path><circle cx="50" cy="37.4" r="12" fill="#E3C77E" stroke="#7E5E14" stroke-width="2"></circle></svg>
+      <span style="font-family: 'Fraunces', serif; font-size: 20px; font-weight: 500; letter-spacing: 0.02em;">Veto</span>
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #C9A24D; border: 1px solid rgba(201,162,77,0.5); border-radius: 999px; padding: 3px 8px; margin-left: 2px;">Devnet</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 4px;">
+      <span style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 999px; background: rgba(156,201,168,0.10); border: 1px solid rgba(156,201,168,0.45); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #9CC9A8;">
+        <span class="live-lamp" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #9CC9A8;"></span>
+        <span>3 rules live</span>
+      </span>
+      <a href="#how-grades-work" aria-label="How grades work" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; text-decoration: none;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#D3CCBB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7"></path><circle cx="12" cy="17" r="0.6" fill="#D3CCBB"></circle></svg>
+      </a>
+    </div>
+  </div>
+
+  <div class="rise rise-2" style="display: flex; align-items: baseline; justify-content: space-between; padding: 12px 24px 0 24px; position: relative;">
+    <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: #93A097;">Your agents</span>
+    <span style="font-size: 12px; color: #93A097;">3 running, each under one rule</span>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-direction: column; gap: 7px; padding: 8px 24px 0 24px; position: relative; min-height: 0;">
+
+    <a href="#agent-record" class="card card-1" aria-label="Open the full record of Charging agent. Grade: Pushed its limit often." style="display: flex; flex-direction: column; gap: 5px; text-decoration: none; color: inherit; border-radius: 18px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); padding: 10px 14px; box-sizing: border-box;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+        <span style="font-family: 'Fraunces', serif; font-size: 18px; font-weight: 400; line-height: 1.15; color: #EDE6D6;">Charging agent</span>
+        <span style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: #93A097; font-variant-numeric: tabular-nums; flex-shrink: 0;">6YwqYU...GSV5w<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#93A097" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></span>
+      </div>
+      <span style="display: block; font-size: 12px; color: #93A097; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Under your rule <span style="font-family: 'Fraunces', serif; font-style: italic; color: #D3CCBB;">Charging top-ups at the SE3 spot rate</span></span>
+      <div class="grade g-often">
+        <span class="lamp" style="background: #E4A48E;"></span>
+        <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+          <span class="t">Pushed its limit often</span>
+          <span class="r">12 of its 18 requests outside its rule. All refused.</span>
+        </span>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px;">
+        <div class="stat"><span class="v" style="color: #9CC9A8;">6</span><span class="l">paid, inside its rule</span></div>
+        <div class="stat"><span class="v" style="color: #E4A48E;">12</span><span class="l">asked outside</span></div>
+        <div class="stat"><span class="v">0</span><span class="l">allowed once by you</span></div>
+        <div class="stat"><span class="v">6<span style="font-family: 'Manrope', sans-serif; font-size: 10px; color: #93A097; margin-left: 3px;">of 90</span></span><span class="l">days running</span></div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 12px; color: #D3CCBB; white-space: nowrap;">Can still spend <span style="font-family: 'Fraunces', serif; font-size: 15px; color: #EDE6D6;">258</span> of your 300</span>
+        <span style="flex: 1; position: relative; height: 4px; border-radius: 2px; background: rgba(201,162,77,0.18); overflow: hidden;"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 86%; background: #C9A24D;"></span><span class="cover" aria-hidden="true" style="position: absolute; inset: 0; background: #16231E;"></span></span>
+      </div>
+    </a>
+
+    <a href="#agent-record-billing" class="card card-2" aria-label="Open the full record of Billing agent. Grade: Stayed inside its rule." style="display: flex; flex-direction: column; gap: 5px; text-decoration: none; color: inherit; border-radius: 18px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); padding: 10px 14px; box-sizing: border-box;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+        <span style="font-family: 'Fraunces', serif; font-size: 18px; font-weight: 400; line-height: 1.15; color: #EDE6D6;">Billing agent</span>
+        <span style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: #93A097; font-variant-numeric: tabular-nums; flex-shrink: 0;">9hSR6S...GUWBu<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#93A097" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></span>
+      </div>
+      <span style="display: block; font-size: 12px; color: #93A097; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Under your rule <span style="font-family: 'Fraunces', serif; font-style: italic; color: #D3CCBB;">API fees</span></span>
+      <div class="grade g-in">
+        <span class="lamp" style="background: #9CC9A8;"></span>
+        <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+          <span class="t">Stayed inside its rule</span>
+          <span class="r">1 of its 39 requests outside its rule. Allowed once.</span>
+        </span>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px;">
+        <div class="stat"><span class="v" style="color: #9CC9A8;">38</span><span class="l">paid, inside its rule</span></div>
+        <div class="stat"><span class="v" style="color: #E4A48E;">1</span><span class="l">asked outside</span></div>
+        <div class="stat"><span class="v" style="color: #E3C77E;">1</span><span class="l">allowed once by you</span></div>
+        <div class="stat"><span class="v">41<span style="font-family: 'Manrope', sans-serif; font-size: 10px; color: #93A097; margin-left: 3px;">of 60</span></span><span class="l">days running</span></div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 12px; color: #D3CCBB; white-space: nowrap;">Can still spend <span style="font-family: 'Fraunces', serif; font-size: 15px; color: #EDE6D6;">612</span> of your 1000</span>
+        <span style="flex: 1; position: relative; height: 4px; border-radius: 2px; background: rgba(201,162,77,0.18); overflow: hidden;"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 61%; background: #C9A24D;"></span><span class="cover" aria-hidden="true" style="position: absolute; inset: 0; background: #16231E;"></span></span>
+      </div>
+    </a>
+
+    <a href="#agent-record-research" class="card card-3" aria-label="Open the full record of Research agent. Too new to grade." style="display: flex; flex-direction: column; gap: 5px; text-decoration: none; color: inherit; border-radius: 18px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); padding: 10px 14px; box-sizing: border-box;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+        <span style="font-family: 'Fraunces', serif; font-size: 18px; font-weight: 400; line-height: 1.15; color: #EDE6D6;">Research agent</span>
+        <span style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: #93A097; font-variant-numeric: tabular-nums; flex-shrink: 0;">AKnL4N...RSZ9<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#93A097" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></span>
+      </div>
+      <span style="display: block; font-size: 12px; color: #93A097; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Under your rule <span style="font-family: 'Fraunces', serif; font-style: italic; color: #D3CCBB;">Data purchases</span></span>
+      <div class="grade g-new">
+        <span class="lamp" style="background: transparent; border: 1px solid #D3CCBB; box-sizing: border-box;"></span>
+        <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+          <span class="t">Too new to grade</span>
+          <span class="r">3 of the 10 requests needed, day 2 of the 3 needed.</span>
+        </span>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px;">
+        <div class="stat"><span class="v" style="color: #9CC9A8;">3</span><span class="l">paid, inside its rule</span></div>
+        <div class="stat"><span class="v">0</span><span class="l">asked outside</span></div>
+        <div class="stat"><span class="v">0</span><span class="l">allowed once by you</span></div>
+        <div class="stat"><span class="v">2<span style="font-family: 'Manrope', sans-serif; font-size: 10px; color: #93A097; margin-left: 3px;">of 30</span></span><span class="l">days running</span></div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 12px; color: #D3CCBB; white-space: nowrap;">Can still spend <span style="font-family: 'Fraunces', serif; font-size: 15px; color: #EDE6D6;">170</span> of your 200</span>
+        <span style="flex: 1; position: relative; height: 4px; border-radius: 2px; background: rgba(201,162,77,0.18); overflow: hidden;"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 85%; background: #C9A24D;"></span><span class="cover" aria-hidden="true" style="position: absolute; inset: 0; background: #16231E;"></span></span>
+      </div>
+    </a>
+
+  </div>
+
+  <p class="rise rise-3" style="margin: 0; padding: 8px 24px 6px 24px; font-size: 12px; line-height: 1.5; color: #93A097; position: relative; white-space: nowrap;">A grade describes behaviour, not safety. <a href="#how-grades-work" style="color: #C9A24D; font-weight: 700; text-decoration: none;">See how grades work</a></p>
+
+  <nav class="rise rise-4" aria-label="Main" style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; padding: 8px 12px 22px 12px; border-top: 1px solid rgba(237,230,214,0.16); background: #0F1A16; position: relative;">
+    <a href="#overview" class="tab" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; height: 56px; text-decoration: none; color: #93A097; font-size: 12px; font-weight: 600;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"></path></svg>
+      <span>Home</span>
+    </a>
+    <a href="#rules" class="tab" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; height: 56px; text-decoration: none; color: #93A097; font-size: 12px; font-weight: 600;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"></path><path d="M9 12l2 2 4-4"></path></svg>
+      <span>Rules</span>
+    </a>
+    <a href="#agents" aria-current="page" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; height: 56px; text-decoration: none; color: #C9A24D; font-size: 12px; font-weight: 700;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="8" width="16" height="12" rx="3"></rect><path d="M12 4v4"></path><circle cx="12" cy="3" r="1"></circle><path d="M9 14h0.01"></path><path d="M15 14h0.01"></path></svg>
+      <span>Agents</span>
+    </a>
+    <a href="#decisions" class="tab" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; height: 56px; text-decoration: none; color: #93A097; font-size: 12px; font-weight: 600;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6h14"></path><path d="M5 12h14"></path><path d="M5 18h9"></path></svg>
+      <span>Decisions</span>
+    </a>
+  </nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How grades work</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,400&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+button,a{font-family:inherit;}
+button:focus-visible,a:focus-visible{outline:2px solid #C9A24D;outline-offset:3px;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes plateIn{0%{opacity:0;transform:translateY(10px) scale(0.98);}100%{opacity:1;transform:translateY(0) scale(1);}}
+.rise{animation:rise 0.7s cubic-bezier(0.22,1,0.36,1) both;}
+.rise-1{animation-delay:0.05s;}
+.rise-2{animation-delay:0.18s;}
+.rise-3{animation-delay:0.95s;}
+.rise-4{animation-delay:1.10s;}
+.rise-5{animation-delay:1.22s;}
+.grade{animation:plateIn 0.6s cubic-bezier(0.22,1,0.36,1) both;display:flex;flex-direction:column;gap:3px;padding:8px 14px;border-radius:14px;background:linear-gradient(180deg,#1C2C25 0%,#111D18 100%);box-shadow:inset 0 1px 0 rgba(237,230,214,0.08),0 2px 0 rgba(0,0,0,0.45);border:1px solid rgba(237,230,214,0.3);box-sizing:border-box;}
+.grade-1{animation-delay:0.34s;}
+.grade-2{animation-delay:0.48s;}
+.grade-3{animation-delay:0.62s;}
+.grade-4{animation-delay:0.76s;}
+.g-in{border-color:rgba(156,201,168,0.65);}
+.g-mid{border-color:rgba(201,162,77,0.65);}
+.g-often{border-color:rgba(228,164,142,0.65);}
+.g-new{border-style:dashed;border-color:rgba(237,230,214,0.35);}
+.grade .head{display:flex;align-items:center;gap:10px;}
+.grade .lamp{display:block;width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.grade .t{font-family:'Fraunces',serif;font-size:17px;line-height:1.2;color:#EDE6D6;}
+.grade .r{margin:0;font-size:12px;line-height:1.45;color:#D3CCBB;}
+.grade .r b{font-weight:700;color:#EDE6D6;}
+.fact{display:flex;align-items:flex-start;gap:10px;padding:7px 14px;font-size:12px;line-height:1.45;color:#D3CCBB;}
+.fact + .fact{border-top:1px solid rgba(237,230,214,0.10);}
+.fact b{font-weight:700;color:#EDE6D6;}
+.ghost{transition:border-color 0.2s ease,background-color 0.2s ease;}
+.ghost:hover{border-color:#C9A24D;background-color:rgba(201,162,77,0.08);}
+@media (prefers-reduced-motion: reduce){
+  .rise,.grade{animation:none;}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div aria-hidden="true" style="position: absolute; top: -140px; left: 50%; width: 460px; height: 460px; margin-left: -230px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.16) 0%, rgba(201,162,77,0.04) 45%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div class="rise rise-1" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 12px 0 12px; position: relative;">
+    <a href="#agents" aria-label="Back to your agents" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; text-decoration: none;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EDE6D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+    </a>
+    <span style="display: flex; align-items: center; gap: 8px;">
+      <svg width="16" height="16" viewBox="0 0 100 100" aria-hidden="true"><path d="M16 14L50 80L84 14" fill="none" stroke="#C9A24D" stroke-width="9" stroke-linecap="butt" stroke-linejoin="miter"></path><circle cx="50" cy="37.4" r="12" fill="#E3C77E" stroke="#7E5E14" stroke-width="2"></circle></svg>
+      <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">How grades work</span>
+    </span>
+    <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 44px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #C9A24D; border: 1px solid rgba(201,162,77,0.5); border-radius: 999px; padding: 3px 8px;">Devnet</span>
+    </span>
+  </div>
+
+  <div class="rise rise-2" style="display: flex; flex-direction: column; gap: 6px; padding: 6px 24px 0 24px; position: relative;">
+    <h1 style="margin: 0; font-family: 'Fraunces', serif; font-weight: 400; font-size: 26px; line-height: 1.1; letter-spacing: -0.01em; color: #EDE6D6;">Four grades, plain rules.</h1>
+    <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #D3CCBB;">A <b style="font-weight: 700; color: #EDE6D6;">request</b> is a payment your agent asked for: the rule either let it through or refused it. The grade is the share of requests that were outside the rule.</p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 5px; padding: 8px 24px 0 24px; position: relative;">
+    <div class="grade grade-1 g-in">
+      <div class="head"><span class="lamp" style="background: #9CC9A8;"></span><span class="t">Stayed inside its rule</span></div>
+      <p class="r"><b>Fewer than 1 request in 20</b> outside its rule.</p>
+    </div>
+    <div class="grade grade-2 g-mid">
+      <div class="head"><span class="lamp" style="background: #E3C77E;"></span><span class="t">Tested its limit now and then</span></div>
+      <p class="r"><b>1 to 4 requests in 20</b> outside its rule.</p>
+    </div>
+    <div class="grade grade-3 g-often">
+      <div class="head"><span class="lamp" style="background: #E4A48E;"></span><span class="t">Pushed its limit often</span></div>
+      <p class="r"><b>More than 4 requests in 20</b> outside its rule.</p>
+    </div>
+    <div class="grade grade-4 g-new">
+      <div class="head"><span class="lamp" style="background: transparent; border: 1px solid #D3CCBB; box-sizing: border-box;"></span><span class="t">Too new to grade</span></div>
+      <p class="r"><b>Fewer than 10 requests</b>, or <b>fewer than 3 days</b> running. The facts still show; the label waits.</p>
+    </div>
+  </div>
+
+  <div class="rise rise-3" style="padding: 10px 24px 0 24px; position: relative;">
+    <div style="display: flex; flex-direction: column; border-radius: 14px; background: #16231E; border: 1px solid rgba(237,230,214,0.12); overflow: hidden;">
+      <div style="display: flex; align-items: center; height: 26px; padding: 0 14px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097; border-bottom: 1px solid rgba(237,230,214,0.10);">What counts, and what does not</div>
+      <div class="fact">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 1px;"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg>
+        <span><b>Outside its rule</b> means the rule refused it: over your limit, the wrong payee, or outside its dates. Each refusal is saved with its reason.</span>
+      </div>
+      <div class="fact">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E3C77E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 1px;"><path d="M12 3v18"></path><path d="M5 12h14"></path></svg>
+        <span><b>A payment you allowed once</b> still counts as asking outside: the rule refused it first. If you had to allow <b>2 or more</b>, the grade shows one step lower.</span>
+      </div>
+      <div class="fact">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#93A097" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 1px;"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path></svg>
+        <span><b>Not counted:</b> the agent's own signed declines, and money moved outside the rule. That is always 0 because the rule makes it impossible, so it is no credit to the agent.</span>
+      </div>
+    </div>
+  </div>
+
+  <p class="rise rise-4" style="margin: 0; padding: 10px 24px 0 24px; font-size: 12px; line-height: 1.5; color: #D3CCBB; position: relative;">Every count is a fact saved on the blockchain, and anyone with the rule's address can check it. A grade describes how the agent behaved at its limits. <span style="color: #EDE6D6; font-weight: 700;">It is not a safety guarantee.</span></p>
+
+  <div class="rise rise-5" style="margin-top: auto; padding: 10px 24px 22px 24px; position: relative;">
+    <a href="#agents" class="ghost" style="height: 50px; border: 1px solid rgba(201,162,77,0.55); border-radius: 16px; background: #16231E; color: #EDE6D6; font-size: 15px; font-weight: 700; text-decoration: none; display: flex; align-items: center; justify-content: center;">Back to your agents</a>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
