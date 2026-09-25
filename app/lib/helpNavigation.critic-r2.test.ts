@@ -47,6 +47,17 @@ mock.module('react-native', {
   },
 });
 
+mock.module('react-native-svg', {
+  namedExports: {
+    Svg: Host('Svg'),
+    Path: Host('Path'),
+    Circle: Host('Circle'),
+    Rect: Host('Rect'),
+    G: Host('G'),
+    Text: Host('SvgText'),
+  },
+});
+
 mock.module('react-native-safe-area-context', {
   namedExports: {
     SafeAreaView: Host('SafeAreaView'),
@@ -212,7 +223,7 @@ for (const origin of ORIGINS) {
 
     const intro = await mount(createElement(Onboarding));
     assert.equal(labelsOf(intro).includes('Help'), false, '/onboarding renders a Help control');
-    await press(intro, 'Skip introduction');
+    await press(intro, 'Skip to connect wallet');
     assert.equal(markSeenCalls, 1);
     assert.deepEqual(history, [origin.path, '/help'], 'Skip did not pop to /help');
 
@@ -243,10 +254,7 @@ test('critic r2: Connect on the last introduction card returns to /help', async 
   await press(await mount(createElement(TopBar, { title: 'rules' })), 'Help');
   await press(await mount(createElement(HelpIndex)), 'Show the introduction');
   const intro = await mount(createElement(Onboarding));
-  for (let i = 0; i < 12 && !labelsOf(intro).includes('Connect'); i += 1) {
-    await press(intro, 'Next introduction card');
-  }
-  await press(intro, 'Connect');
+  await press(intro, 'Connect wallet');
   assert.equal(connectCalls, 1);
   assert.equal(markSeenCalls, 1);
   assert.deepEqual(history, ['/rules', '/help'], 'Connect did not pop to /help');
@@ -258,10 +266,7 @@ test('critic r2: Done on the last introduction card returns to /help for a conne
   await press(await mount(createElement(TopBar, { title: 'rules' })), 'Help');
   await press(await mount(createElement(HelpIndex)), 'Show the introduction');
   const intro = await mount(createElement(Onboarding));
-  for (let i = 0; i < 12 && !labelsOf(intro).includes('Done with the introduction'); i += 1) {
-    await press(intro, 'Next introduction card');
-  }
-  assert.equal(labelsOf(intro).includes('Connect'), false, 'a connected owner is offered Connect');
+  assert.equal(labelsOf(intro).includes('Connect wallet'), false, 'a connected owner is offered Connect');
   await press(intro, 'Done with the introduction');
   assert.equal(connectCalls, 0);
   assert.deepEqual(history, ['/rules', '/help'], 'Done did not pop to /help');

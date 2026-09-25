@@ -1,4 +1,6 @@
 // Critic round 1 fixtures for PR 193. Same harness as onboarding.test.ts.
+(globalThis as { __DEV__?: boolean }).__DEV__ = false;
+
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
 
@@ -23,6 +25,30 @@ function Host(type: string) {
   };
 }
 
+class AnimatedValue {
+  _value: number;
+  constructor(value: number) {
+    this._value = value;
+  }
+  setValue(value: number) {
+    this._value = value;
+  }
+  interpolate() {
+    return 0;
+  }
+  addListener() {
+    return 0;
+  }
+  removeListener() {}
+}
+
+const still = {
+  start(cb?: (result: { finished: boolean }) => void) {
+    cb?.({ finished: true });
+  },
+  stop() {},
+};
+
 mock.module('react-native', {
   namedExports: {
     AccessibilityInfo: {
@@ -31,8 +57,27 @@ mock.module('react-native', {
       },
       setAccessibilityFocus: () => undefined,
       isScreenReaderEnabled: async () => true,
+      isReduceMotionEnabled: async () => true,
+      addEventListener: () => ({ remove() {} }),
     },
     ActivityIndicator: Host('ActivityIndicator'),
+    Animated: {
+      Value: AnimatedValue,
+      View: Host('Animated.View'),
+      Text: Host('Animated.Text'),
+      timing: () => still,
+      delay: () => still,
+      sequence: () => still,
+      loop: () => still,
+      createAnimatedComponent: (Component: unknown) => Component,
+    },
+    Easing: {
+      linear: (amount: number) => amount,
+      cubic: (amount: number) => amount,
+      out: (easing: (amount: number) => number) => easing,
+      inOut: (easing: (amount: number) => number) => easing,
+      bezier: () => (amount: number) => amount,
+    },
     Linking: { openURL: async () => undefined },
     Pressable: Host('Pressable'),
     RefreshControl: Host('RefreshControl'),
@@ -48,6 +93,20 @@ mock.module('react-native', {
     TextInput: Host('TextInput'),
     View: Host('View'),
     findNodeHandle: () => 1,
+  },
+});
+
+mock.module('react-native-svg', {
+  namedExports: {
+    Svg: Host('Svg'),
+    Path: Host('Path'),
+    Circle: Host('Circle'),
+    Rect: Host('Rect'),
+    G: Host('G'),
+    Text: Host('SvgText'),
+    Defs: Host('Defs'),
+    LinearGradient: Host('LinearGradient'),
+    Stop: Host('Stop'),
   },
 });
 
@@ -106,10 +165,9 @@ mock.module('./mwa', {
 });
 
 // The card and the Connect line say the agent holds none of the owner's money. It still holds SOL for fees.
-const CARD_ONE = 'Your agent holds none of your money and cannot move your money on its own.';
+const CARD_ONE = 'Your agent never holds your money.';
 const CARD_TWO_TITLE = 'One rule';
-const CONNECT_THESIS =
-  'The owner key lives in Seed Vault and never leaves it. The agent key holds authority and none of your money.';
+const CONNECT_SCREEN = 'Open Solana Mobile wallet';
 
 type Loaded = {
   ConnectGate: (props: { children: ReactNode }) => ReactNode;
@@ -223,7 +281,7 @@ test('Next introduction card reaches a screen reader', async () => {
   const root = await mount(gate(createElement(ui.Text, null, 'home')));
   await settle(root, (text) => text.includes(CARD_ONE));
   await act(async () => {
-    button(root, 'Next introduction card').props.onPress();
+    button(root, 'Next: you set one rule').props.onPress();
     await new Promise((resolve) => setImmediate(resolve));
   });
   assert.ok(visibleText(root).includes(CARD_TWO_TITLE), 'card 2 did not render');
@@ -258,11 +316,11 @@ test('a returning owner who disconnects lands on Connect, not the introduction',
     button(root, 'Disconnect').props.onPress();
     await new Promise((resolve) => setImmediate(resolve));
   });
-  const after = await settle(root, (text) => text.includes(CONNECT_THESIS) || text.includes(CARD_ONE));
+  const after = await settle(root, (text) => text.includes(CONNECT_SCREEN) || text.includes(CARD_ONE));
   assert.equal(
     after.includes(CARD_ONE),
     false,
     'a returning owner was sent through the introduction after disconnecting',
   );
-  assert.ok(after.includes(CONNECT_THESIS));
+  assert.ok(after.includes(CONNECT_SCREEN));
 });

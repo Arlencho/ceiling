@@ -461,7 +461,7 @@ test('a rule page reads loading, a missing rule, a failed read, and the amounts 
   assert.match(normal, /Your agent can still spend/);
   assert.match(normal, /258/);
   assert.match(normal, /garage charger/);
-  assert.match(normal, /Connect your agent/);
+  assert.match(normal, /Give your agent its setup/);
   await act(async () => root.unmount());
 });
 

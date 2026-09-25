@@ -113,9 +113,65 @@ function refocus(): void {
   for (const run of [...listeners]) run();
 }
 
+mock.module('react-native-svg', {
+  namedExports: {
+    Svg: Host('Svg'),
+    Path: Host('Path'),
+    Circle: Host('Circle'),
+    Rect: Host('Rect'),
+    G: Host('G'),
+    Text: Host('SvgText'),
+    Defs: Host('Defs'),
+    LinearGradient: Host('LinearGradient'),
+    Stop: Host('Stop'),
+  },
+});
+
+class AnimatedValue {
+  constructor(public value: number) {}
+  setValue(value: number) {
+    this.value = value;
+  }
+  interpolate() {
+    return 0;
+  }
+  addListener() {
+    return 0;
+  }
+  removeListener() {}
+}
+
+const still = {
+  start(cb?: (result: { finished: boolean }) => void) {
+    cb?.({ finished: false });
+  },
+  stop() {},
+};
+
 mock.module('react-native', {
   namedExports: {
+    AccessibilityInfo: {
+      isReduceMotionEnabled: async () => true,
+      addEventListener: () => ({ remove() {} }),
+    },
     ActivityIndicator: Host('ActivityIndicator'),
+    Animated: {
+      Value: AnimatedValue,
+      View: Host('Animated.View'),
+      Text: Host('Animated.Text'),
+      timing: () => still,
+      delay: () => still,
+      sequence: () => still,
+      loop: () => still,
+      createAnimatedComponent: (Component: unknown) => Component,
+    },
+    Easing: {
+      linear: (amount: number) => amount,
+      cubic: (amount: number) => amount,
+      out: (easing: (amount: number) => number) => easing,
+      inOut: (easing: (amount: number) => number) => easing,
+      bezier: () => (amount: number) => amount,
+    },
     Image: Host('Image'),
     Keyboard: { addListener: () => ({ remove: () => undefined }) },
     KeyboardAvoidingView: Host('KeyboardAvoidingView'),
@@ -136,46 +192,7 @@ mock.module('react-native', {
     UIManager: { measureLayout: () => undefined },
     View: Host('View'),
     findNodeHandle: () => null,
-    AccessibilityInfo: {
-      isReduceMotionEnabled: async () => true,
-      addEventListener: () => ({ remove() {} }),
-    },
-    Animated: {
-      Value: class {
-        setValue() {}
-        interpolate() {
-          return 0;
-        }
-      },
-      View: Host('Animated.View'),
-      Text: Host('Animated.Text'),
-      timing: () => ({ start() {}, stop() {} }),
-      delay: () => ({ start() {}, stop() {} }),
-      sequence: () => ({ start() {}, stop() {} }),
-      loop: () => ({ start() {}, stop() {} }),
-      createAnimatedComponent: (Component: unknown) => Component,
-    },
-    Easing: {
-      linear: (value: number) => value,
-      cubic: (value: number) => value,
-      out: (ease: (value: number) => number) => ease,
-      inOut: (ease: (value: number) => number) => ease,
-      bezier: () => (value: number) => value,
-    },
     PanResponder: { create: () => ({ panHandlers: {} }) },
-  },
-});
-
-mock.module('react-native-svg', {
-  namedExports: {
-    Svg: Host('Svg'),
-    Path: Host('Path'),
-    Circle: Host('Circle'),
-    Rect: Host('Rect'),
-    G: Host('G'),
-    Defs: Host('Defs'),
-    LinearGradient: Host('LinearGradient'),
-    Stop: Host('Stop'),
   },
 });
 
