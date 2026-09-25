@@ -490,6 +490,31 @@ describe('backglass components', { concurrency: 1 }, () => {
     assert.equal(confirmed, 1);
   });
 
+  test('a new reset key arms the button again after a cancelled or failed signature', async () => {
+    const { HoldToApprove } = await import('./HoldToApprove');
+    motion.reduced = true;
+    let confirmed = 0;
+    const onConfirm = () => { confirmed += 1; };
+    const root = await mount(createElement(HoldToApprove, { onConfirm, resetKey: 0 }));
+    await act(async () => {
+      hostOf(root.root, 'Pressable').props.onLongPress();
+    });
+    assert.equal(confirmed, 1);
+    await act(async () => {
+      hostOf(root.root, 'Pressable').props.onLongPress();
+    });
+    assert.equal(confirmed, 1, 'a confirmed button ignores a second press');
+    await act(async () => {
+      root.update(createElement(HoldToApprove, { onConfirm, resetKey: 1 }));
+    });
+    const ring = root.root.findAll((node) => isHost(node, 'Circle') && node.props.strokeDasharray)[0];
+    assert.ok(Number(ring?.props.strokeDashoffset) > 0, 'the ring is empty again');
+    await act(async () => {
+      hostOf(root.root, 'Pressable').props.onLongPress();
+    });
+    assert.equal(confirmed, 2);
+  });
+
   test('the seal row offers a link to the record', async () => {
     const { SealRow } = await import('./SealRow');
     for (const reduced of [false, true]) {

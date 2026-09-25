@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Circle, Path, Svg } from 'react-native-svg';
 
@@ -16,6 +16,8 @@ type HoldToApproveProps = {
   hint?: string;
   onConfirm: () => void;
   disabled?: boolean;
+  /** Change this value to arm the button again, for example after a signature was cancelled or failed. */
+  resetKey?: string | number;
 };
 
 export function HoldToApprove({
@@ -23,6 +25,7 @@ export function HoldToApprove({
   hint = 'You sign on this phone. Veto never sees your key.',
   onConfirm,
   disabled = false,
+  resetKey,
 }: HoldToApproveProps) {
   const reduced = useReducedMotion();
   const motionOn = motionAllowed(reduced);
@@ -31,6 +34,16 @@ export function HoldToApprove({
   const holding = useRef(false);
   const confirmed = useRef(false);
   const [done, setDone] = useState(false);
+
+  // A cancelled or failed signature must leave the button usable again.
+  useEffect(() => {
+    running.current?.stop();
+    running.current = null;
+    holding.current = false;
+    confirmed.current = false;
+    progress.setValue(0);
+    setDone(false);
+  }, [resetKey, progress]);
 
   function confirm() {
     if (disabled || confirmed.current) {
