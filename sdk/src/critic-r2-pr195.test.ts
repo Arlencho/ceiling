@@ -110,12 +110,12 @@ test("R10 charge fails loudly when the confirmed transaction carries logMessages
 test("R11 the README agent section matches the private package and the example usage", () => {
   const readme = readFileSync(`${REPO_ROOT}README.md`, "utf8");
   const pkg = JSON.parse(readFileSync(`${SDK_ROOT}package.json`, "utf8")) as { name: string; private?: boolean };
-  assert.equal(pkg.name, "veto-agent-sdk");
+  assert.equal(pkg.name, "@veto-hq/agent-sdk");
   const lines = readme.split("\n");
-  const mention = lines.findIndex((line) => line.includes("`veto-agent-sdk`"));
+  const mention = lines.findIndex((line) => line.includes("`@veto-hq/agent-sdk`"));
   assert.notEqual(mention, -1, "README names the package");
   const sentence = lines[mention]!;
-  assert.equal(pkg.private, true, "veto-agent-sdk is not yet published");
+  assert.equal(pkg.private, true, "@veto-hq/agent-sdk is not yet published");
   assert.match(sentence, /not yet published/);
   assert.match(sentence, /issues\/190/);
   assert.doesNotMatch(sentence, /Install this repo's package/);

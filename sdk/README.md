@@ -1,4 +1,4 @@
-# veto-agent-sdk
+# @veto-hq/agent-sdk
 
 TypeScript client for one `charge` and for reading the mandate, the ledger, and the decisions. The package is not yet published ([issue 190](https://github.com/Arlencho/veto/issues/190)). Install it from this checkout. `watcher/` is the full reference agent.
 
@@ -35,7 +35,7 @@ Render the printed URL as a QR. The QR payload is that URL.
 The owner scans the QR, or opens the link. The card states the permission: who may be paid, from which mint, the cap, the largest payment, the number of days, and the purpose. The cap, the largest payment, and the duration are ceilings the owner can lower before approving with Seed Vault. A label is shown as what that address calls itself, beside the shortened address, with the full address one tap away.
 
 ```ts
-import { createRuleRequest, parseRuleRequest } from "veto-agent-sdk";
+import { createRuleRequest, parseRuleRequest } from "@veto-hq/agent-sdk";
 
 const url = createRuleRequest({
   agent,
@@ -82,7 +82,7 @@ On an active rule the app shows Connect your agent. Copy all and the QR are the 
 
 ```ts
 import { Connection } from "@solana/web3.js";
-import { loadAgentConfig, VetoAgent } from "veto-agent-sdk";
+import { loadAgentConfig, VetoAgent } from "@veto-hq/agent-sdk";
 
 const config = loadAgentConfig(jsonText);
 const veto = await VetoAgent.fromConfig(config, agentKeypair);

@@ -42,7 +42,7 @@ for fees. The payee is the merchant already on devnet.
 Owner transactions go through `openMandate`, `grantOverride`, `revokeMandate`,
 `closeMandate`, `readRuleFunds`, and `probeOverride`, signed by a keypair
 stand-in for the Mobile Wallet Adapter `signAndSendTransactions` interface.
-Charges go through `veto-agent-sdk`. Each step is checked against token
+Charges go through `@veto-hq/agent-sdk`. Each step is checked against token
 balances, delegates, account existence, ledger rows, and events. Every charge
 is then exported with `tools/export.ts` and checked with `tools/verify.ts`.
 

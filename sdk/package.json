@@ -1,5 +1,5 @@
 {
-  "name": "veto-agent-sdk",
+  "name": "@veto-hq/agent-sdk",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,10 +14,19 @@
       "import": "./dist/index.js"
     }
   },
+  "files": [
+    "dist",
+    "idl",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "test": "tsx --test src/*.test.ts",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.13",
