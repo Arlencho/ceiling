@@ -16,13 +16,12 @@ import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts, radii, space } from '../../components/theme';
 import { liveMandateCount, showRulePill, tabPillFace } from '../../lib/mandateRead';
-import { rulesHeading } from '../../lib/ruleView';
+import { displayPurpose, rulesHeading } from '../../lib/ruleView';
 import { PAYEE_NOT_IN_RULESET, PAYEE_PREFILL, RULESET_ENVELOPE } from '../../lib/ruleset';
 import { TEMPLATES } from '../../lib/templates';
 import { poolByAddress } from '../../lib/pools';
 import { formatTokenAmount, rulesTokenSummary, tokenSymbol } from '../../lib/tokens';
 import { tradePairLabel } from '../../lib/tradeRule';
-import { displayPurpose } from '../../lib/ruleView';
 import { useChain } from '../../lib/useChain';
 import { useRefreshOnFocus } from '../../lib/useRefreshOnFocus';
 import { useRulesets } from '../../lib/useRulesets';
@@ -37,7 +36,6 @@ export default function RulesScreen() {
   const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
   const tradeRules = chain.tradeRules ?? [];
   const selected = chain.mandate?.address ?? chain.tradeRule?.address ?? null;
-  const count = chain.mandates.length + tradeRules.length;
   const liveCount =
     liveMandateCount(chain.mandates, chain.nowMs) +
     tradeRules.filter((rule) => rule.status === 0 && BigInt(Math.floor(chain.nowMs / 1000)) < rule.expiresAt).length;
@@ -84,7 +82,7 @@ export default function RulesScreen() {
           <View style={styles.block}>
             <View style={styles.section}>
               <Text style={styles.kicker}>Your rules</Text>
-              <Text style={styles.meta}>{count === 1 ? '1 active' : `${liveCount} active`}</Text>
+              <Text style={styles.meta}>{`${liveCount} active`}</Text>
             </View>
             <Text style={styles.h2}>{heading}</Text>
             {tokenLine ? <Text style={styles.tokenLine}>{tokenLine}</Text> : null}

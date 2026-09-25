@@ -56,7 +56,8 @@ export function tradeDecisionTitle(args: {
     args.reason === REASON_POOL_NOT_ALLOWED
   ) {
     const tried = truncateAddress(args.counterparty);
-    return `Refused: ${reasonText(args.reason)} (tried ${tried})`;
+    const label = args.reason === REASON_POOL_NOT_ALLOWED ? 'pool account not allowed' : reasonText(args.reason);
+    return `Refused: ${label} (tried ${tried})`;
   }
   if (args.reason === REASON_OVER_PER_TX_MAX && args.perTradeMax != null) {
     const limit = formatTokenAmount(args.perTradeMax, args.inDecimals, args.inMint);

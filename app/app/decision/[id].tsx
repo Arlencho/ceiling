@@ -16,7 +16,7 @@ import {
   KIND_OVERRIDE,
   KIND_PAID,
   KIND_REFUSED,
-  REASON_DESTINATION_NOT_ALLOWED,
+  REASON_OUTPUT_ACCOUNT_NOT_ALLOWED,
   REASON_OVER_PER_TX_MAX,
   REASON_POOL_NOT_ALLOWED,
 } from '../../lib/constants';
@@ -105,7 +105,7 @@ export default function DecisionDetailScreen() {
 
   const seq = row && row.kind !== KIND_ADVISORY_DECLINE ? nonceSequence(chain.rows, row.nonce) : null;
   const seqText = seq ? sequenceLine(seq, chain.decimals, mandate?.mint) : null;
-  const overrideView = row && row.kind === KIND_OVERRIDE ? overrideRowView(row, chain.decimals) : null;
+  const overrideView = row && row.kind === KIND_OVERRIDE ? overrideRowView(row, chain.decimals, mandate?.mint) : null;
   const when = row ? decisionWhen(row.ts, chain.nowMs) : '';
   const payee = payeeLabel(mandate?.merchant);
   // A charge writes the destination token account as counterparty. The payee is the rule wallet.
@@ -334,7 +334,7 @@ function RefusedBody({
             label={row.family === 'trade' ? 'Tried account' : 'To payee'}
             value={
               row.family === 'trade' &&
-              (row.reason === REASON_DESTINATION_NOT_ALLOWED || row.reason === REASON_POOL_NOT_ALLOWED)
+              (row.reason === REASON_OUTPUT_ACCOUNT_NOT_ALLOWED || row.reason === REASON_POOL_NOT_ALLOWED)
                 ? truncateAddress(row.counterparty)
                 : payee
             }

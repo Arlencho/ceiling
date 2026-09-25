@@ -430,7 +430,7 @@ export function recordReasonTitle(reason: number, perTxMaxLabel: string): string
       return 'An output account this rule does not allow';
     case REASON_POOL_NOT_ALLOWED:
       return 'A pool account this rule does not allow';
-    case REASON_OVER_DAILY:
+    case REASON_OVER_DAILY_LIMIT:
       return 'Over the daily limit';
     case REASON_QUOTE_BELOW_FLOOR:
       return 'Below the price floor';
@@ -465,7 +465,7 @@ export function weekReasonTitle(reason: number, perTxMaxLabel: string): string {
       return 'Asked for an output account this rule does not allow';
     case REASON_POOL_NOT_ALLOWED:
       return 'Asked for a pool account this rule does not allow';
-    case REASON_OVER_DAILY:
+    case REASON_OVER_DAILY_LIMIT:
       return 'Asked more than the daily limit';
     case REASON_QUOTE_BELOW_FLOOR:
       return 'Asked below the price floor';

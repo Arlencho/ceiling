@@ -29,6 +29,9 @@ test('the devnet list is SOL for USDC and states the exchange fee', () => {
   const pools = poolsForCluster('devnet');
   assert.equal(pools.length, 1);
   assert.equal(pools[0]?.pair, SOL_FOR_USDC);
+  assert.equal(pools[0]?.pair, 'wrapped SOL for USDC');
+  assert.equal(pools[0]?.inputSymbol, 'wrapped SOL');
+  assert.equal(pools[0]?.outputSymbol, 'USDC');
   assert.equal(pools[0]?.feeLine, POOL_FEE_LINE);
   assert.equal(poolsForCluster('mainnet-beta').length, 0);
 });

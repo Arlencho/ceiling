@@ -9,7 +9,7 @@ export const SPL_TOKEN_SWAP_PROGRAM_ID = new PublicKey(
 );
 
 export const POOL_FEE_LINE = 'The exchange takes 0.30 percent of each trade.';
-export const SOL_FOR_USDC = 'SOL for USDC';
+export const SOL_FOR_USDC = 'wrapped SOL for USDC';
 
 /**
  * Public devnet pool accounts. These are the TOKEN_SWAP_POOL,
@@ -22,7 +22,7 @@ const DEVNET_SOL_USDC = {
   feeLine: POOL_FEE_LINE,
   inputMint: NATIVE_MINT,
   outputMint: new PublicKey(DEVNET_USDC_MINT),
-  inputSymbol: 'SOL',
+  inputSymbol: 'wrapped SOL',
   outputSymbol: 'USDC',
   inputDecimals: 9,
   outputDecimals: 6,

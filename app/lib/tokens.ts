@@ -10,7 +10,7 @@ function shortenMint(mint: string): string {
 /** Devnet demo mint. Name and symbol are the on-chain metadata for this mint. */
 export const VTEST_MINT = '2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU';
 
-/** Wrapped SOL. Amounts of this mint are named SOL. */
+/** Wrapped SOL, distinct from the native SOL used for fees. */
 export const WSOL_MINT = 'So11111111111111111111111111111111111111112';
 
 /**
@@ -33,7 +33,7 @@ export type KnownToken = {
 };
 
 export const KNOWN_TOKENS: readonly KnownToken[] = [
-  { mint: WSOL_MINT, symbol: 'SOL', name: 'Solana' },
+  { mint: WSOL_MINT, symbol: 'wrapped SOL', name: 'Wrapped SOL' },
   { mint: VTEST_MINT, symbol: 'VTEST', name: 'Veto test token' },
   { mint: DEVNET_USDC_MINT, symbol: 'USDC', name: 'USDC' },
   { mint: MAINNET_USDC_MINT, symbol: 'USDC', name: 'USDC' },

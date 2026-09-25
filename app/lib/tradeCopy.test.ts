@@ -23,7 +23,7 @@ test('a trade row names both tokens', () => {
     reason: 0,
     counterparty: Keypair.generate().publicKey.toBase58(),
   });
-  assert.equal(title, 'Traded 0.002 SOL for 0.39 USDC');
+  assert.equal(title, 'Traded 0.002 wrapped SOL for 0.39 USDC');
   assert.equal(
     tradeDecisionDetail({
       amountIn: 2_000_000n,
@@ -34,7 +34,7 @@ test('a trade row names both tokens', () => {
       outMint: DEVNET_USDC_MINT,
       perTradeMax: 10_000_000n,
     }),
-    'Traded 0.002 SOL for 0.39 USDC, under 0.01 SOL per trade.',
+    'Traded 0.002 wrapped SOL for 0.39 USDC, under 0.01 wrapped SOL per trade.',
   );
 });
 

@@ -19,7 +19,6 @@ import { displayPurpose } from '../lib/ruleView';
 import { useChain } from '../lib/useChain';
 import { truncateAddress } from '../lib/wallet';
 import { HoldToApprove } from './backglass/HoldToApprove';
-import { Button } from './Button';
 import { ConnectGate } from './ConnectGate';
 import { DecisionRow } from './DecisionRow';
 import { EmptyState } from './EmptyState';
@@ -32,6 +31,8 @@ export function TradeRuleDetail({ rule }: { rule: TradeRuleAccount }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [stopping, setStopping] = useState(false);
+  const [stopReset, setStopReset] = useState(0);
   const [closing, setClosing] = useState(false);
   const [closeReset, setCloseReset] = useState(0);
   const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
@@ -56,6 +57,10 @@ export function TradeRuleDetail({ rule }: { rule: TradeRuleAccount }) {
   }, [chain, rule.address]);
 
   const onStop = async () => {
+    if (stopping || closing || chain.submitHeld) {
+      return;
+    }
+    setStopping(true);
     setFormError(null);
     setMessage(null);
     try {
@@ -63,6 +68,9 @@ export function TradeRuleDetail({ rule }: { rule: TradeRuleAccount }) {
       setMessage('Stopped. The agent can no longer trade on this rule.');
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Stop failed');
+      setStopReset((value) => value + 1);
+    } finally {
+      setStopping(false);
     }
   };
 
@@ -143,13 +151,18 @@ export function TradeRuleDetail({ rule }: { rule: TradeRuleAccount }) {
           {rule.status === STATUS_REVOKED ? (
             <EmptyState>This rule is already stopped.</EmptyState>
           ) : (
-            <Button label="Stop" accessibilityLabel="Stop this trade rule" quiet invert={false} onPress={() => void onStop()} />
+            <HoldToApprove
+              label="Hold to stop this trade rule"
+              disabled={stopping || closing || chain.loading || chain.submitHeld}
+              resetKey={stopReset}
+              onConfirm={() => void onStop()}
+            />
           )}
           {!active ? (
             <View style={styles.block}>
               <HoldToApprove
                 label="Close and return the remaining input"
-                disabled={closing || chain.loading || chain.submitHeld}
+                disabled={stopping || closing || chain.loading || chain.submitHeld}
                 resetKey={closeReset}
                 onConfirm={() => {
                   void onClose();
