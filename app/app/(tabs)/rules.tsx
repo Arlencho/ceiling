@@ -16,6 +16,7 @@ import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts, radii, space } from '../../components/theme';
 import { liveMandateCount, showRulePill, tabPillFace } from '../../lib/mandateRead';
+import { rulesHeading } from '../../lib/ruleView';
 import { PAYEE_NOT_IN_RULESET, PAYEE_PREFILL, RULESET_ENVELOPE } from '../../lib/ruleset';
 import { TEMPLATES } from '../../lib/templates';
 import { rulesTokenSummary, tokenSymbol } from '../../lib/tokens';
@@ -39,12 +40,7 @@ export default function RulesScreen() {
     void chain.refresh();
   }, [chain]);
 
-  const heading =
-    count === 0
-      ? 'No rules yet.'
-      : count === 1
-        ? 'One rule, one agent.'
-        : `${count} rules, ${count} agents.`;
+  const heading = rulesHeading(chain.mandates);
   const tokenLine = rulesTokenSummary(chain.mandates.map((row) => row.mint));
   const rulesetUnit = chain.config?.mint ? ` ${tokenSymbol(chain.config.mint)}` : '';
 
@@ -96,7 +92,6 @@ export default function RulesScreen() {
                   decimals={chain.decimals}
                   nowSec={nowSec}
                   current={row.address === selected}
-                  rows={row.address === chain.mandate?.address ? chain.rows : []}
                   onPress={() => {
                     void chain.selectMandate(row.address);
                     router.push(`/rule/${row.address}`);

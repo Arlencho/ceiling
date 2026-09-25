@@ -55,7 +55,7 @@ import { displayPurpose } from './ruleView';
 import { isRateLimitError } from './rpcError';
 import { signatureNotYetVisibleMessage, signatureSeenUnconfirmedMessage } from './wallet';
 import { assessOverride, type OverrideAssessment } from './override';
-import { decodeMandateAccount, type MandateAccount } from './mandate';
+import { decodeMandateAccount, isActive, type MandateAccount } from './mandate';
 import { mergeDecisionRows, readAdvisoryDeclines } from './advisory';
 import {
   attachSignatures,
@@ -257,9 +257,16 @@ export async function fetchOwnerMandates(
   return mandates;
 }
 
+/**
+ * The rule Overview and Decisions show. A rule the user chose wins while it still exists.
+ * Otherwise it is the most recently opened rule that is still live, then the most recently
+ * opened rule not stopped, then the most recently opened rule. The mandate id is the open time
+ * in milliseconds, so a larger id is a newer rule.
+ */
 export function pickMandate(
   mandates: MandateAccount[],
   preferredAddress: string | null,
+  nowSec: bigint = BigInt(Math.floor(Date.now() / 1000)),
 ): MandateAccount | null {
   if (mandates.length === 0) {
     return null;
@@ -270,8 +277,13 @@ export function pickMandate(
       return preferred;
     }
   }
-  const active = mandates.find((m) => m.status === 0);
-  return active ?? mandates[0] ?? null;
+  const newest = [...mandates].sort((a, b) => (a.mandateId < b.mandateId ? 1 : a.mandateId > b.mandateId ? -1 : 0));
+  return (
+    newest.find((m) => isActive(m, nowSec)) ??
+    newest.find((m) => m.status === STATUS_ACTIVE) ??
+    newest[0] ??
+    null
+  );
 }
 
 export async function fetchMintDecimals(client: ChainClient, mint: PublicKey): Promise<number> {

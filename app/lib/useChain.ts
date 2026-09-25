@@ -46,7 +46,13 @@ import { secureStore } from './mwa';
 import { useWallet } from './useWallet';
 import { signatureNotYetVisibleMessage, type WalletStore } from './wallet';
 
+/** The rule on screen now. The widget and the decision scan read it. */
 export const SELECTED_MANDATE_KEY = 'veto.mandate.selected';
+/**
+ * The rule the user picked, or the rule they just opened. Kept apart from the rule on screen so
+ * an automatic default is never mistaken for a choice and a newer rule can take over.
+ */
+export const CHOSEN_MANDATE_KEY = 'veto.mandate.chosen';
 
 export type ChainState = {
   ready: boolean;
@@ -74,8 +80,12 @@ export type ChainState = {
   grantOverride: (mandateAddress: string, row: LedgerRow) => Promise<GrantOverrideResult>;
 };
 
-async function loadSelected(store: WalletStore): Promise<string | null> {
-  return store.getItem(SELECTED_MANDATE_KEY);
+async function loadChosen(store: WalletStore): Promise<string | null> {
+  return store.getItem(CHOSEN_MANDATE_KEY);
+}
+
+async function saveChosen(store: WalletStore, address: string): Promise<void> {
+  await store.setItem(CHOSEN_MANDATE_KEY, address);
 }
 
 async function saveSelected(store: WalletStore, address: string): Promise<void> {
@@ -169,7 +179,7 @@ function useChainState(): ChainState {
     const run = async () => {
       const client = createClient(loaded.config);
       const owner = new PublicKey(ownerKey);
-      const preferred = await loadSelected(secureStore);
+      const preferred = await loadChosen(secureStore);
       const found = await fetchOwnerMandates(client, owner);
       setMandates(found);
       releaseIfCurrent();
@@ -254,7 +264,7 @@ function useChainState(): ChainState {
 
   const selectMandate = useCallback(
     async (address: string) => {
-      await saveSelected(secureStore, address);
+      await saveChosen(secureStore, address);
       await refresh();
     },
     [refresh],
@@ -285,7 +295,7 @@ function useChainState(): ChainState {
           purpose: input.purpose,
           mint: input.mint,
         });
-        await saveSelected(secureStore, result.mandate.address);
+        await saveChosen(secureStore, result.mandate.address);
         await refresh();
         return result;
       } catch (err) {
