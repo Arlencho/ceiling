@@ -676,6 +676,8 @@ fn close_rule(w: &mut World) -> Result<litesvm::types::TransactionMetadata, Stri
             owner: owner.pubkey(),
             rule: w.rule,
             ledger: w.ledger,
+            source: w.source,
+            token_program: spl_token::ID,
         }
         .to_account_metas(None),
     );
@@ -1113,6 +1115,132 @@ fn an_extra_account_on_trade_is_an_error_and_moves_nothing() {
     let before = snap(&w);
     assert_err(submit(&mut w, ix), "UnexpectedTradeAccount");
     assert_unmoved(&before, &snap(&w));
+}
+
+/// Empty the owner's token account into a fresh one and close it.
+fn close_owner_account(w: &mut World, account: Pubkey, mint: Pubkey) {
+    let owner = w.owner.insecure_clone();
+    let balance = token_amount(&w.svm, &account);
+    let mut ixs = Vec::new();
+    if balance > 0 {
+        let sink = create_token_account(&mut w.svm, &owner, &mint, &owner.pubkey());
+        ixs.push(
+            spl_token::instruction::transfer(
+                &spl_token::ID,
+                &account,
+                &sink,
+                &owner.pubkey(),
+                &[],
+                balance,
+            )
+            .unwrap(),
+        );
+    }
+    ixs.push(
+        spl_token::instruction::close_account(
+            &spl_token::ID,
+            &account,
+            &owner.pubkey(),
+            &owner.pubkey(),
+            &[],
+        )
+        .unwrap(),
+    );
+    send(&mut w.svm, &owner, &[&owner], &ixs).expect("owner closes the token account");
+    assert!(w
+        .svm
+        .get_account(&account)
+        .map_or(true, |a| a.lamports == 0));
+}
+
+#[test]
+fn close_after_expiry_reclaims_rent_when_the_owner_closed_the_source() {
+    let expires_at = 1_800_000_000;
+    let mut w = open_world(Rules {
+        expires_at,
+        ..Rules::default()
+    });
+    assert!(now(&w.svm) < expires_at);
+    let source = w.source;
+    let in_mint = w.in_mint;
+    close_owner_account(&mut w, source, in_mint);
+
+    // The source is gone, so revoke cannot run and the rule stays active.
+    assert_err(revoke(&mut w), "AccountNotInitialized");
+    assert_eq!(read_rule(&w.svm, &w.rule).status, STATUS_ACTIVE);
+    assert_err(close_rule(&mut w), "TradeRuleStillActive");
+
+    warp(&mut w.svm, expires_at);
+    let owner = w.owner.pubkey();
+    let rule_rent = lamports(&w.svm, &w.rule);
+    let ledger_rent = lamports(&w.svm, &w.ledger);
+    let before = lamports(&w.svm, &owner);
+    let meta = close_rule(&mut w).expect("close at expiry with the source closed");
+    assert_eq!(
+        lamports(&w.svm, &owner) + meta.fee,
+        before + rule_rent + ledger_rent
+    );
+    assert_eq!(lamports(&w.svm, &w.rule), 0);
+    assert_eq!(lamports(&w.svm, &w.ledger), 0);
+}
+
+#[test]
+fn close_after_expiry_revokes_the_delegation_the_rule_still_holds() {
+    let expires_at = 1_800_000_000;
+    let mut w = open_world(Rules {
+        expires_at,
+        ..Rules::default()
+    });
+    trade(&mut w, 10 * IN_ONE, 1, 1).expect("paid trade");
+    let open = token_account(&w.svm, &w.source);
+    assert_eq!(open.delegate, COption::Some(w.rule));
+    assert!(open.delegated_amount > 0);
+
+    // Expired by a refused trade, then closed without a revoke.
+    warp(&mut w.svm, expires_at);
+    trade(&mut w, 10 * IN_ONE, 1, 2).expect("refusal confirms");
+    assert_eq!(read_rule(&w.svm, &w.rule).status, STATUS_EXPIRED);
+    assert_eq!(
+        token_account(&w.svm, &w.source).delegate,
+        COption::Some(w.rule)
+    );
+    let balance = token_amount(&w.svm, &w.source);
+
+    let meta = close_rule(&mut w).expect("close after expiry");
+    assert!(meta
+        .logs
+        .iter()
+        .any(|l| l.contains("VETO TRADE CLOSED revoked=true")));
+    let after = token_account(&w.svm, &w.source);
+    assert_eq!(after.delegate, COption::None);
+    assert_eq!(after.delegated_amount, 0);
+    assert_eq!(after.amount, balance);
+    assert_eq!(lamports(&w.svm, &w.rule), 0);
+
+    // A second world: close at expiry while the status is still active.
+    let mut w = open_world(Rules {
+        expires_at,
+        ..Rules::default()
+    });
+    warp(&mut w.svm, expires_at);
+    assert_eq!(read_rule(&w.svm, &w.rule).status, STATUS_ACTIVE);
+    close_rule(&mut w).expect("close at expiry while still marked active");
+    assert_eq!(token_account(&w.svm, &w.source).delegate, COption::None);
+}
+
+#[test]
+fn a_trade_into_a_destination_the_owner_closed_is_not_a_token_account() {
+    let mut w = open_world(Rules::default());
+    let destination = w.destination;
+    let out_mint = w.out_mint;
+    close_owner_account(&mut w, destination, out_mint);
+    let delegated = token_account(&w.svm, &w.source).delegated_amount;
+    let source = token_amount(&w.svm, &w.source);
+    let total = read_ledger(&w.svm, &w.ledger).total;
+    assert_err(trade(&mut w, 10 * IN_ONE, 1, 1), "NotATokenAccount");
+    assert_eq!(token_amount(&w.svm, &w.source), source);
+    assert_eq!(token_account(&w.svm, &w.source).delegated_amount, delegated);
+    assert_eq!(read_ledger(&w.svm, &w.ledger).total, total);
 }
 
 #[test]

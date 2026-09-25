@@ -28,10 +28,15 @@ use crate::{
 pub fn open_trade_rule(ctx: Context<OpenTradeRule>, args: OpenTradeRuleArgs) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     require!(args.cap > 0, VetoError::CapMustBePositive);
+    require!(args.daily_limit > 0, VetoError::DailyLimitRequired);
     require!(
         args.per_trade_max <= args.daily_limit && args.daily_limit <= args.cap,
         VetoError::TradeLimitsOutOfOrder
     );
+    // The floor is the only bound on value extraction. The agent composes the
+    // transaction and can move the pool around the owner's trade, so a zero
+    // floor would let it take nearly all of the trade's value.
+    require!(args.floor_num > 0, VetoError::FloorRequired);
     require!(args.floor_den > 0, VetoError::FloorDenominatorRequired);
     require!(args.expires_at > now, VetoError::ExpiryInThePast);
     require!(
@@ -78,6 +83,11 @@ pub fn open_trade_rule(ctx: Context<OpenTradeRule>, args: OpenTradeRuleArgs) -> 
     require_pool_shape(&ctx)?;
 
     let rule_key = ctx.accounts.rule.key();
+    // Approving a new delegate replaces the old one. Opening over another
+    // delegation would silently disable whatever set it.
+    if let COption::Some(existing) = ctx.accounts.source.delegate {
+        require_keys_eq!(existing, rule_key, VetoError::SourceAlreadyDelegated);
+    }
     let pool = ctx.accounts.pool.key();
     let bump = ctx.bumps.rule;
     let ledger_bump = ctx.bumps.ledger;
@@ -293,12 +303,34 @@ pub fn revoke_trade_rule(ctx: Context<RevokeTradeRule>) -> Result<()> {
     Ok(())
 }
 
+/// Closable once the rule is not active or is past expiry. The second case
+/// covers a source the owner already closed, which makes revoke impossible.
+/// A source that still delegates to the rule is revoked here, so a closed
+/// rule never leaves authority behind.
 pub fn close_trade_rule(ctx: Context<CloseTradeRule>) -> Result<()> {
+    let now = Clock::get()?.unix_timestamp;
     require!(
-        ctx.accounts.rule.status != STATUS_ACTIVE,
+        ctx.accounts.rule.status != STATUS_ACTIVE || now >= ctx.accounts.rule.expires_at,
         VetoError::TradeRuleStillActive
     );
-    msg!("VETO TRADE CLOSED");
+
+    let rule_key = ctx.accounts.rule.key();
+    let source = ctx.accounts.source.to_account_info();
+    let still_delegated = *source.owner == spl_token::ID
+        && spl_token::state::Account::unpack(&source.try_borrow_data()?)
+            .map(|account| account.delegate == COption::Some(rule_key))
+            .unwrap_or(false);
+    if still_delegated {
+        token::revoke(CpiContext::new(
+            ctx.accounts.token_program.key(),
+            token::Revoke {
+                source,
+                authority: ctx.accounts.owner.to_account_info(),
+            },
+        ))?;
+    }
+
+    msg!("VETO TRADE CLOSED revoked={}", still_delegated);
     Ok(())
 }
 
@@ -435,10 +467,32 @@ fn commit_window(rule: &mut TradeRule, amount_in: u64, now: i64) -> Result<()> {
     Ok(())
 }
 
-/// `amount_in * out_reserve / (in_reserve + amount_in)`, fee ignored.
+/// Trade fee the pinned exchange takes out of the input, per `FEE_DEN`.
+pub const TRADE_FEE_NUM: u64 = 25;
+/// Owner trade fee the pinned exchange takes out of the input, per `FEE_DEN`.
+pub const OWNER_TRADE_FEE_NUM: u64 = 5;
+pub const FEE_DEN: u64 = 10_000;
+
+/// Input left after the pinned exchange's fees. SPL token-swap v2 on devnet
+/// accepts exactly one schedule: trade 25/10000 plus owner trade 5/10000, each
+/// rounded down on the input. The exchange rounds a nonzero fee that floors to
+/// zero up to one unit, so the real remainder is never larger than this.
+pub fn input_after_fees(amount_in: u64) -> u64 {
+    let amount = u128::from(amount_in);
+    let den = u128::from(FEE_DEN);
+    let trade_fee = amount * u128::from(TRADE_FEE_NUM) / den;
+    let owner_fee = amount * u128::from(OWNER_TRADE_FEE_NUM) / den;
+    // Both fees are under a tenth of the input, so this cannot underflow and
+    // the result fits a u64.
+    (amount - trade_fee - owner_fee) as u64
+}
+
+/// `net * out_reserve / (in_reserve + net)`, where `net` is the input after
+/// the exchange fees.
 ///
-/// The real swap takes a trade fee and an owner fee out of the input first, so
-/// this quote is an optimistic bound. A floor failure here is certain.
+/// The curve rounds the output down further, so this quote is an optimistic
+/// bound. A floor failure here is certain. The floor itself is compared with
+/// the gross `amount_in`, since that is what the owner gives up.
 pub fn spot_below_floor(
     amount_in: u64,
     in_reserve: u64,
@@ -446,12 +500,13 @@ pub fn spot_below_floor(
     floor_num: u64,
     floor_den: u64,
 ) -> bool {
-    let amount = u128::from(amount_in);
-    let denom = u128::from(in_reserve).saturating_add(amount);
+    let net = u128::from(input_after_fees(amount_in));
+    let denom = u128::from(in_reserve).saturating_add(net);
     if denom == 0 || floor_den == 0 {
         return true;
     }
-    let quote = amount.saturating_mul(u128::from(out_reserve)) / denom;
+    let quote = net.saturating_mul(u128::from(out_reserve)) / denom;
+    let amount = u128::from(amount_in);
     quote.saturating_mul(u128::from(floor_den)) < amount.saturating_mul(u128::from(floor_num))
 }
 
@@ -713,10 +768,12 @@ fn require_pool_shape(ctx: &Context<OpenTradeRule>) -> Result<()> {
     Ok(())
 }
 
+/// A closed account, or one that is not an SPL token account, is
+/// `NotATokenAccount`. That covers a destination the owner closed after open.
 fn unpack_token(info: &AccountInfo) -> Result<spl_token::state::Account> {
-    require_keys_eq!(*info.owner, spl_token::ID, VetoError::PoolAccountMismatch);
+    require_keys_eq!(*info.owner, spl_token::ID, VetoError::NotATokenAccount);
     let data = info.try_borrow_data()?;
-    spl_token::state::Account::unpack(&data).map_err(|_| error!(VetoError::PoolAccountMismatch))
+    spl_token::state::Account::unpack(&data).map_err(|_| error!(VetoError::NotATokenAccount))
 }
 
 fn unpack_mint(info: &AccountInfo) -> Result<()> {
@@ -823,7 +880,7 @@ pub struct TradeRefused {
 
 #[cfg(test)]
 mod quote_tests {
-    use super::spot_below_floor;
+    use super::{input_after_fees, spot_below_floor};
 
     #[test]
     fn the_optimistic_quote_refuses_a_floor_the_curve_cannot_clear() {
@@ -838,5 +895,36 @@ mod quote_tests {
             1
         ));
         assert!(!spot_below_floor(amount_in, in_reserve, out_reserve, 1, 1));
+    }
+
+    #[test]
+    fn the_quote_takes_the_thirty_basis_point_fee_out_of_the_input() {
+        assert_eq!(input_after_fees(10_000), 9_970);
+        assert_eq!(input_after_fees(0), 0);
+        assert_eq!(
+            input_after_fees(u64::MAX),
+            u64::MAX - u64::MAX / 400 - u64::MAX / 2000
+        );
+        // A floor at the fee-free quote is refused, one at the net quote is not.
+        let amount_in = 10_000_000u64;
+        let (in_reserve, out_reserve) = (1_000_000_000_000u64, 1_000_000_000_000_000u64);
+        let gross = u128::from(amount_in) * u128::from(out_reserve)
+            / (u128::from(in_reserve) + u128::from(amount_in));
+        let net_in = u128::from(input_after_fees(amount_in));
+        let net = net_in * u128::from(out_reserve) / (u128::from(in_reserve) + net_in);
+        assert!(spot_below_floor(
+            amount_in,
+            in_reserve,
+            out_reserve,
+            gross as u64,
+            amount_in
+        ));
+        assert!(!spot_below_floor(
+            amount_in,
+            in_reserve,
+            out_reserve,
+            net as u64,
+            amount_in
+        ));
     }
 }
