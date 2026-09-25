@@ -5,7 +5,7 @@ import type { MandateAccount } from '../lib/mandate';
 import { mandateRemaining } from '../lib/mandate';
 import { displayPurpose, stampedRulesetLine } from '../lib/ruleView';
 import { truncateAddress } from '../lib/wallet';
-import { colors, fonts } from './theme';
+import { colors, fonts, radii, space } from './theme';
 
 export function MandateSummary({
   mandate,
@@ -54,33 +54,38 @@ const styles = StyleSheet.create({
   wrap: {
     gap: 0,
     alignSelf: 'stretch',
+    borderRadius: radii.card,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    paddingHorizontal: space.xxl,
+    paddingBottom: space.sm,
   },
   heading: {
-    color: colors.text,
+    color: colors.bone,
     fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 8,
-    fontFamily: fonts.sans,
+    fontFamily: fonts.serif,
+    marginTop: space.xl,
+    marginBottom: space.md,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
-    paddingVertical: 9,
-    borderTopWidth: 1,
+    gap: space.xl,
+    paddingVertical: space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.line,
   },
   label: {
     color: colors.muted,
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: fonts.sansMedium,
   },
   value: {
-    color: colors.text,
+    color: colors.bone,
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: fonts.sansSemibold,
     flexShrink: 1,
     textAlign: 'right',
-    fontFamily: fonts.mono,
   },
 });

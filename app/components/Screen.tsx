@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors } from './theme';
+import { colors, space } from './theme';
 
 export function Screen({
   children,
@@ -26,7 +26,7 @@ export function Screen({
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                tintColor={colors.text}
+                tintColor={colors.bone}
               />
             ) : undefined
           }
@@ -46,10 +46,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 24,
-    gap: 12,
+    paddingHorizontal: space.screen,
+    paddingTop: space.xxxl,
+    paddingBottom: space.bottom,
+    gap: space.xl,
     flexGrow: 1,
   },
 });
