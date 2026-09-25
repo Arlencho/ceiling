@@ -7,13 +7,13 @@ import { dueHoldAlerts, futureHoldAlerts, holdAlertPlan, type HoldAlert } from '
 import { formatHoldAmount, shortKey } from './hold';
 import { tokenSymbol } from './tokens';
 import { holdClient, listHoldVaults, readChainClock, readHoldVault } from './holdChain';
-import { guardPath, raiseGuardAlerts, type GuardAlert } from './holdGuard';
+import { guardPath, raiseGuardAlerts, HOLD_SCHEDULED_KEY, type GuardAlert } from './holdGuard';
 import { holdCreatedAt } from './holdRead';
 import { loadSession } from './wallet';
 
 export const HOLD_CHANNEL_ID = 'hold';
 const SEEN_KEY = 'veto.hold.alerts.seen';
-const SCHEDULED_KEY = 'veto.hold.alerts.scheduled';
+const SCHEDULED_KEY = HOLD_SCHEDULED_KEY;
 
 export type HoldScheduler = {
   ensureChannel(): Promise<void>;
@@ -97,7 +97,7 @@ function noticeContent(alert: HoldAlert, vault: string, withdrawalId: string) {
   return {
     title: alert.title,
     body: alert.body,
-    data: { holdVault: vault, holdWithdrawal: withdrawalId, holdAlert: alert.name },
+    data: { holdVault: vault, holdWithdrawal: withdrawalId, holdAlert: alert.name, holdGuard: alert.key.startsWith('guard:') },
   };
 }
 
@@ -161,7 +161,7 @@ export async function raiseHoldAlertsForOwner(args: {
     }
   }
   for (const key of scheduled) {
-    if (!liveKeys.has(key)) {
+    if (!key.startsWith('guard:') && !liveKeys.has(key)) {
       await args.scheduler.cancel(key);
       scheduled.delete(key);
     }
@@ -190,7 +190,11 @@ export async function raiseHoldAlertsOnScan(): Promise<void> {
   } catch (err) {
     ownerError = err;
   }
-  await raiseHoldAlertsForGuardian({ guardian: owner, scheduler });
+  try {
+    await raiseHoldAlertsForGuardian({ guardian: owner, scheduler });
+  } catch (err) {
+    if (!ownerError) throw err;
+  }
   if (ownerError) throw ownerError;
 }
 
@@ -205,6 +209,7 @@ export async function raiseHoldAlertsForGuardian(args: {
     client: holdClient(loaded.config),
     store: secureStore,
     guardian: args.guardian,
+    scheduler: args.scheduler,
     ensureChannel: () => args.scheduler.ensureChannel(),
     present: presentGuardAlert,
   });

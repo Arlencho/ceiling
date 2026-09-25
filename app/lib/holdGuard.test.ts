@@ -202,9 +202,9 @@ test('a busy node is retried, and a failed search falls back to the remembered v
     remembered.map((vault) => vault.address.toBase58()),
     [guarded.toBase58()],
   );
-  await assert.rejects(
-    discoverGuardedVaults({ client: down.client, store: memoryStore(), guardian: GUARDIAN }),
-    /disabled/,
+  assert.deepEqual(
+    await discoverGuardedVaults({ client: down.client, store: memoryStore(), guardian: GUARDIAN }),
+    [],
   );
   sleep.mock.restore();
 });

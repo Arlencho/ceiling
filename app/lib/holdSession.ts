@@ -73,6 +73,7 @@ export function useHoldBundle(address: string) {
       setNowSec(clock);
       setError(null);
       setStatus('ready');
+      return next;
     } catch (err) {
       setStatus('error');
       setError(err instanceof Error ? err.message : 'The vault could not be read.');

@@ -5,7 +5,7 @@ import { ConnectGate } from '../../components/ConnectGate';
 import { Screen } from '../../components/Screen';
 import { holdAlertPlan, nextAlertIndex } from '../../lib/holdAlerts';
 import { stopHoldWithdrawal } from '../../lib/holdActions';
-import { formatChainInstant, formatHoldAmount, routeParam, shortKey, waitLabel, daysFromDelay } from '../../lib/hold';
+import { formatChainInstant, formatHoldAmount, routeParam, shortKey, waitLabel, daysFromDelay, isDefaultKey } from '../../lib/hold';
 import { holdCreatedAt } from '../../lib/holdRead';
 import { useHoldBundle } from '../../lib/holdSession';
 
@@ -53,12 +53,12 @@ export default function HoldAlerts() {
           error={loaded.error}
           headline={
             row
-              ? `Both your phones get each of these while ${amountLabel} to ${destinationLabel} waits. Miss them all and the wait still runs its full ${days ? waitLabel(days) : 'length'}.`
+              ? `This phone schedules the remaining reminders when it checks, if notifications are allowed.${bundle && !isDefaultKey(bundle.account.guardian.toBase58()) ? ' Your guardian’s phone does the same when it next checks.' : ''} These are the planned times while ${amountLabel} to ${destinationLabel} waits. Miss them all and the wait still runs its full ${days ? waitLabel(days) : 'length'}.`
               : ''
           }
           noticeTitle={created?.title ?? 'Held'}
           noticeBody={created?.body ?? ''}
-          noticeWhen={created ? `${formatChainInstant(created.at)}, both phones` : ''}
+          noticeWhen={created ? `${formatChainInstant(created.at)}, planned` : ''}
           rows={rows}
           onBack={() => router.back()}
           signingDisabled={loaded.wallet.busy || !row}

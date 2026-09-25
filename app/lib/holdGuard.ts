@@ -10,12 +10,15 @@ import {
   waitLabel,
 } from './hold';
 import { freezeHoldVault, recoverHoldVault, stopHoldWithdrawal } from './holdActions';
-import { listGuardedVaults, readHoldVaults, type HoldVaultBundle } from './holdChain';
-import type { HoldAccount } from './holdRead';
+import { listGuardedVaults, readHoldVaults, readHoldVault, readChainClock, type HoldVaultBundle } from './holdChain';
+import { holdCreatedAt, type HoldAccount } from './holdRead';
+import { futureHoldAlerts, holdAlertPlan } from './holdAlerts';
+import type { HoldScheduler } from './holdNotify';
 import { tokenSymbol } from './tokens';
 import type { WalletStore } from './wallet';
 
 export const GUARDED_KEY = 'veto.hold.guarded';
+export const HOLD_SCHEDULED_KEY = 'veto.hold.alerts.scheduled';
 export const GUARD_SEEN_KEY = 'veto.hold.guard.seen';
 const SEEN_CAP = 500;
 
@@ -202,9 +205,9 @@ export async function discoverGuardedVaults(args: {
       found.map((vault) => vault.address.toBase58()),
     );
     return found;
-  } catch (err) {
+  } catch {
     const remembered = await rememberedGuardedVaults(args.store, args.guardian);
-    if (remembered.length === 0) throw err;
+    if (remembered.length === 0) return [];
     const keys: PublicKey[] = [];
     for (const text of remembered) {
       try {
@@ -220,32 +223,60 @@ export async function discoverGuardedVaults(args: {
 
 /**
  * The background read for a guardian phone: find guarded vaults, then announce each
- * held withdrawal and each proposed change once. Returns the keys that were announced.
+ * held withdrawal and each proposed change once, and schedule remaining reminders.
+ * Returns the keys that were announced.
  */
 export async function raiseGuardAlerts(args: {
   client: ChainClient;
   store: WalletStore;
   guardian: PublicKey;
   present: (alert: GuardAlert) => Promise<void>;
+  scheduler?: HoldScheduler;
+  nowSec?: bigint;
   ensureChannel?: () => Promise<void>;
   decimalsOf?: (mint: PublicKey) => Promise<number>;
   timeZone?: string;
 }): Promise<string[]> {
   const vaults = await discoverGuardedVaults(args);
-  if (vaults.length === 0) return [];
+  const scheduled = new Set(strings(await readList(args.store, HOLD_SCHEDULED_KEY)));
+  const liveKeys = new Set<string>();
+  const nowSec = args.scheduler && vaults.length > 0 ? args.nowSec ?? await readChainClock(args.client.connection) : 0n;
   const decimalsOf = args.decimalsOf ?? ((mint: PublicKey) => fetchMintDecimals(args.client, mint));
   const seenList = strings(await readList(args.store, GUARD_SEEN_KEY));
   const seen = new Set(seenList);
   const decimalsByMint = new Map<string, number>();
   const raised: string[] = [];
   let channelReady = false;
-  for (const account of vaults) {
+  for (let account of vaults) {
     if (account.pending.length === 0 && !account.change.active) continue;
+    const bundle = args.scheduler ? await readHoldVault(args.client, account.address) : null;
+    if (bundle) account = bundle.account;
     const mintKey = account.mint.toBase58();
     let decimals = decimalsByMint.get(mintKey);
     if (decimals == null) {
-      decimals = await decimalsOf(account.mint);
+      decimals = bundle?.decimals ?? await decimalsOf(account.mint);
       decimalsByMint.set(mintKey, decimals);
+    }
+    if (bundle && args.scheduler) {
+      await args.scheduler.ensureChannel();
+      channelReady = true;
+      for (const row of account.pending) {
+        const plan = holdAlertPlan({
+          vault: account.address.toBase58(),
+          withdrawalId: row.id.toString(),
+          amountLabel: `${formatHoldAmount(row.amount, decimals)} ${tokenSymbol(mintKey)}`,
+          destinationLabel: shortKey(row.destination.toBase58()),
+          createdAt: holdCreatedAt(account, row, bundle.ledger.entries),
+          unlockAt: row.unlockAt,
+          newAddress: !account.known.some(key => key.equals(row.destination)),
+          timeZone: args.timeZone,
+        }).map(alert => ({ ...alert, key: `guard:${alert.key}` }));
+        for (const alert of plan) liveKeys.add(alert.key);
+        for (const alert of futureHoldAlerts(plan, nowSec)) {
+          await args.scheduler.schedule(alert, account.address.toBase58(), row.id.toString());
+          scheduled.add(alert.key);
+        }
+      }
     }
     const alerts = guardAlertsFor({
       account,
@@ -264,6 +295,15 @@ export async function raiseGuardAlerts(args: {
       seenList.push(alert.key);
       raised.push(alert.key);
     }
+  }
+  if (args.scheduler) {
+    for (const key of scheduled) {
+      if (key.startsWith('guard:') && !liveKeys.has(key)) {
+        await args.scheduler.cancel(key);
+        scheduled.delete(key);
+      }
+    }
+    await args.store.setItem(HOLD_SCHEDULED_KEY, JSON.stringify([...scheduled]));
   }
   if (raised.length > 0) {
     await args.store.setItem(GUARD_SEEN_KEY, JSON.stringify(seenList.slice(-SEEN_CAP)));

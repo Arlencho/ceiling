@@ -22,9 +22,11 @@ export function GuardScreen({
   error,
   ownerLabel,
   amountLabel,
+  hasMoney,
   tokenName,
   frozen,
   waiting,
+  missingWithdrawal = false,
   moreWaiting = 0,
   changeLines,
   changeAtLabel,
@@ -43,6 +45,8 @@ export function GuardScreen({
   error?: string | null;
   ownerLabel: string;
   amountLabel: string;
+  hasMoney: boolean;
+  missingWithdrawal?: boolean;
   tokenName: string;
   frozen: boolean;
   waiting: GuardWaiting | null;
@@ -60,8 +64,7 @@ export function GuardScreen({
   signingDisabled?: boolean;
 }) {
   const [confirmRecover, setConfirmRecover] = useState(false);
-  const nothingWaiting = !waiting && changeLines.length === 0;
-  const hasMoney = amountLabel !== '0';
+  const nothingWaiting = !waiting && moreWaiting === 0 && changeLines.length === 0;
 
   return (
     <View style={styles.wrap}>
@@ -93,6 +96,8 @@ export function GuardScreen({
           This vault belongs to {ownerLabel}. It holds {amountLabel} {tokenName}. Your key is its guardian, so
           you can brake it with one signature.
         </Text>
+        {missingWithdrawal ? <Text style={styles.body}>The withdrawal you were told about is no longer waiting.</Text> : null}
+        <Text style={styles.body}>You can also move everything to the safe address at any time. It can only go there.</Text>
         {waiting ? (
           <View style={styles.card}>
             <Text style={styles.kicker}>Waiting to leave</Text>
@@ -118,19 +123,19 @@ export function GuardScreen({
             ))}
             {changeAtLabel ? <Text style={styles.hint}>It applies {changeAtLabel}.</Text> : null}
             <Text style={styles.hint}>
-              Freezing does not stop the change, but nothing can leave while the vault is frozen.
+              Freezing does not stop the change, but withdrawals cannot leave while the vault is frozen.
             </Text>
           </View>
         ) : null}
-        {nothingWaiting && !frozen ? (
+        {nothingWaiting && !frozen && !missingWithdrawal ? (
           <Text style={styles.body}>Nothing is waiting right now. This phone tells you when something is.</Text>
         ) : null}
-        {frozen ? <Text style={styles.body}>The vault is frozen. Nothing can leave.</Text> : null}
-        {waiting && !frozen ? (
+        {frozen ? <Text style={styles.body}>The vault is frozen. Withdrawals cannot leave.</Text> : null}
+        {waiting ? (
           <HoldSign
             name="guard-stop"
             label="Stop this withdrawal"
-            hint={`${waiting.amountLabel} ${tokenName} stays in the vault. One signature with your guardian key.`}
+            hint={frozen ? 'Removes it for good. The vault stays frozen.' : `${waiting.amountLabel} ${tokenName} stays in the vault. One signature with your guardian key.`}
             disabled={signingDisabled}
             onSign={onStop}
           />
@@ -139,7 +144,7 @@ export function GuardScreen({
           <HoldSign
             name="guard-freeze"
             label="Freeze the vault"
-            hint="Nothing leaves until the owner and you unfreeze it. One signature with your guardian key."
+            hint="Withdrawals wait until the owner and you unfreeze it. One signature with your guardian key."
             disabled={signingDisabled}
             onSign={onFreeze}
           />
@@ -161,6 +166,7 @@ export function GuardScreen({
                 accessibilityRole="button"
                 accessibilityLabel="Keep the money in the vault"
                 onPress={() => setConfirmRecover(false)}
+                style={styles.keep}
               >
                 <Text style={styles.center}>Keep the money in the vault</Text>
               </Pressable>
@@ -245,6 +251,7 @@ const styles = StyleSheet.create({
     padding: space.md,
   },
   ghostTitle: { color: colors.bone, fontFamily: fonts.sansBold, fontSize: 15 },
+  keep: { minHeight: 48, justifyContent: 'center' },
   center: {
     color: colors.muted,
     fontFamily: fonts.sans,

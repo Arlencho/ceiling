@@ -698,6 +698,7 @@ const guardBase = {
   network: 'Devnet, a test network',
   ownerLabel: '6Ywq...GSV5',
   amountLabel: '1,000',
+  hasMoney: true,
   tokenName: 'USDC',
   frozen: false,
   waiting: {
@@ -785,9 +786,10 @@ test('the guardian screen explains a proposed change and a frozen vault', async 
   const frozen = textOf(
     await mount(createElement(GuardScreen, { ...guardBase, status: 'ready', error: null, frozen: true })),
   );
-  assert.match(frozen, /The vault is frozen\. Nothing can leave\./);
+  assert.match(frozen, /The vault is frozen\. Withdrawals cannot leave\./);
   assert.doesNotMatch(frozen, /Freeze the vault/);
-  assert.doesNotMatch(frozen, /Stop this withdrawal/);
+  assert.match(frozen, /Stop this withdrawal/);
+  assert.match(frozen, /Removes it for good\. The vault stays frozen\./);
 });
 
 test('after a brake the guardian screen shows the confirmed result and the transaction link', async () => {
@@ -830,7 +832,7 @@ test('the guardian screen says so when the connected key is not the guardian', a
   assert.doesNotMatch(text, /Stop this withdrawal/);
 });
 
-test('the owner held screen says the guardian was alerted only when a guardian is set', async () => {
+test('the owner held screen explains when the guardian phone checks only when a guardian is set', async () => {
   const { HeldScreen } = await import('../components/hold/HeldScreen');
   const props = {
     network: 'Test tokens',
@@ -852,12 +854,12 @@ test('the owner held screen says the guardian was alerted only when a guardian i
     onFreeze: async () => undefined,
   };
   assert.match(
-    textOf(await mount(createElement(HeldScreen, { ...props, guardianLine: 'Your guardian was alerted' }))),
-    /Your guardian was alerted/,
+    textOf(await mount(createElement(HeldScreen, { ...props, guardianLine: "Your guardian's phone is told when it next checks, and it can stop this." }))),
+    /Your guardian's phone is told when it next checks, and it can stop this./,
   );
   assert.doesNotMatch(
     textOf(await mount(createElement(HeldScreen, { ...props, guardianLine: null }))),
-    /Your guardian was alerted/,
+    /Your guardian's phone is told when it next checks, and it can stop this./,
   );
 });
 
@@ -914,4 +916,37 @@ test('the Hold home lists the vaults you guard with their state', async () => {
     pressable(root, 'Vault of 9Abc...Q1xz').props.onPress();
   });
   assert.deepEqual(guarded, ['B']);
+});
+
+
+test('an empty vault does not offer recovery even when zero has decimal places', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const root = await mount(createElement(GuardScreen, { ...guardBase, status: 'ready', amountLabel: '0.00', hasMoney: false }));
+  assert.doesNotMatch(textOf(root), /Move everything to the safe address/);
+});
+
+test('a funded vault offers recovery even when its displayed amount rounds to zero', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const root = await mount(createElement(GuardScreen, { ...guardBase, status: 'ready', amountLabel: '0', hasMoney: true }));
+  assert.match(textOf(root), /Move everything to the safe address/);
+});
+
+test('the guardian can recover at any time', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const root = await mount(createElement(GuardScreen, { ...guardBase, status: 'ready' }));
+  assert.match(textOf(root), /You can also move everything to the safe address at any time. It can only go there./);
+});
+
+test('keeping the money in the vault has a 48dp touch target', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const root = await mount(createElement(GuardScreen, { ...guardBase, status: 'ready' }));
+  await act(async () => { pressable(root, 'Move everything to the safe address').props.onPress(); });
+  assert.ok(pressable(root, 'Keep the money in the vault').props.style.minHeight >= 48);
+});
+
+test('a stale notification explains the missing withdrawal without offering Stop', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const root = await mount(createElement(GuardScreen, { ...guardBase, status: 'ready', waiting: null, missingWithdrawal: true }));
+  assert.match(textOf(root), /The withdrawal you were told about is no longer waiting./);
+  assert.doesNotMatch(textOf(root), /Stop this withdrawal|Nothing is waiting right now/);
 });

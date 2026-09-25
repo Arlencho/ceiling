@@ -58,10 +58,7 @@ export default function HoldHeld() {
   const created =
     bundle && row ? holdCreatedAt(bundle.account, row, bundle.ledger.entries) : null;
   const hasGuardian = bundle ? !isDefaultKey(bundle.account.guardian.toBase58()) : false;
-  const phones = hasGuardian ? 'Both phones were' : 'This phone was';
-  const toldLine = created
-    ? `${phones} told at ${formatChainClockSafe(created)}. Reminders follow at 1 hour, at 12 hours, every 12 hours, then 6 hours and 1 hour before it goes.`
-    : `${hasGuardian ? 'Both phones are' : 'This phone is'} told when a withdrawal is held. Reminders follow at 1 hour, at 12 hours, every 12 hours, then 6 hours and 1 hour before it goes.`;
+  const toldLine = `${created ? `Held at ${formatChainInstant(created)}. ` : ''}This phone checks for held withdrawals and schedules the remaining reminders: at 1 hour, at 12 hours, every 12 hours, then 6 hours and 1 hour before it goes. Notifications need to be allowed.`;
   const empty = bundle && !row ? 'This withdrawal is no longer waiting. Nothing moves unless another request is held.' : undefined;
   const status = loaded.status === 'ready' && !row ? 'empty' : loaded.status;
 
@@ -93,7 +90,7 @@ export default function HoldHeld() {
           }
           reasons={reasons.length > 0 ? reasons : ['The vault is holding it']}
           toldLine={toldLine}
-          guardianLine={hasGuardian ? 'Your guardian was alerted' : null}
+          guardianLine={hasGuardian ? "Your guardian's phone is told when it next checks, and it can stop this." : null}
           dailyLabel={dailyLabel}
           onClose={() => router.back()}
           onAlerts={() => router.push(`/hold/alerts?vault=${address}&id=${row?.id.toString() ?? ''}`)}
@@ -129,8 +126,4 @@ export default function HoldHeld() {
       </ConnectGate>
     </Screen>
   );
-}
-
-function formatChainClockSafe(unix: bigint): string {
-  return formatChainInstant(unix);
 }

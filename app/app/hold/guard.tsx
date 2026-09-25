@@ -7,6 +7,7 @@ import { ConnectGate } from '../../components/ConnectGate';
 import { Screen } from '../../components/Screen';
 import { explorerTxUrl } from '../../lib/format';
 import {
+  HOLD_KIND_RECOVERED,
   formatChainInstant,
   formatHoldAmount,
   routeParam,
@@ -25,10 +26,9 @@ export default function HoldGuard() {
   const bundle = loaded.bundle;
   const account = bundle?.account ?? null;
   const decimals = bundle?.decimals ?? 0;
-  const row =
-    account?.pending.find((item) => (idText ? item.id.toString() === idText : false)) ??
-    account?.pending[0] ??
-    null;
+  const row = (idText
+    ? account?.pending.find((item) => item.id.toString() === idText)
+    : account?.pending[0]) ?? null;
   const notGuardian = Boolean(account && loaded.owner && !account.guardian.equals(loaded.owner));
   const status = notGuardian ? 'error' : loaded.status;
   const error = notGuardian
@@ -41,13 +41,9 @@ export default function HoldGuard() {
     if (!loaded.client || !loaded.owner || !bundle) {
       throw new Error('The vault is not ready to sign.');
     }
-    const line = guardResultLine({
-      kind,
-      amountLabel: kind === 'stop' && row ? formatHoldAmount(row.amount, decimals) : amountLabel,
-      tokenName: loaded.tokenName,
-      destinationLabel: row ? shortKey(row.destination.toBase58()) : '',
-      safeLabel: shortKey(safeAddress),
-    });
+    if (kind === 'stop' && !row) {
+      throw new Error('The withdrawal you were told about is no longer waiting.');
+    }
     const signature = await guardBrake({
       kind,
       client: loaded.client,
@@ -56,9 +52,24 @@ export default function HoldGuard() {
       bundle,
       withdrawalId: row?.id ?? null,
     });
+    const refreshed = await loaded.reload();
+    const newEntries = refreshed && refreshed.ledger.total > bundle.ledger.total
+      ? refreshed.ledger.entries.slice(-Math.min(refreshed.ledger.total - bundle.ledger.total, refreshed.ledger.entries.length))
+      : [];
+    const recovered = [...newEntries].reverse().find(entry => entry.kind === HOLD_KIND_RECOVERED);
+    const line = kind === 'recover' && !recovered
+      ? `Moved to the safe address ${shortKey(safeAddress)}. The recovered amount could not be read yet. Check the transaction.`
+      : guardResultLine({
+          kind,
+          amountLabel: kind === 'recover' && recovered
+            ? formatHoldAmount(recovered.amount, refreshed?.decimals ?? decimals)
+            : row ? formatHoldAmount(row.amount, decimals) : amountLabel,
+          tokenName: loaded.tokenName,
+          destinationLabel: row ? shortKey(row.destination.toBase58()) : '',
+          safeLabel: shortKey(safeAddress),
+        });
     const config = loaded.client.config;
     setResult({ line, link: explorerTxUrl(signature, config.explorerCluster, config.rpcUrl) });
-    await loaded.reload();
   }
 
   return (
@@ -70,6 +81,8 @@ export default function HoldGuard() {
           error={error}
           ownerLabel={account ? shortKey(account.owner.toBase58()) : ''}
           amountLabel={amountLabel}
+          hasMoney={(bundle?.balance ?? 0n) > 0n}
+          missingWithdrawal={Boolean(idText && !row)}
           tokenName={loaded.tokenName}
           frozen={account?.frozen ?? false}
           waiting={
@@ -81,7 +94,7 @@ export default function HoldGuard() {
                 }
               : null
           }
-          moreWaiting={account ? Math.max(0, account.pending.length - 1) : 0}
+          moreWaiting={account ? Math.max(0, account.pending.length - (row ? 1 : 0)) : 0}
           changeLines={
             account
               ? changeLoosenLines({ account, decimals, tokenName: loaded.tokenName, viewer: loaded.owner })
