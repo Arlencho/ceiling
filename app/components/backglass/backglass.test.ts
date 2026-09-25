@@ -34,7 +34,10 @@ function timing(value: { setValue: (next: number) => void }, config: { toValue: 
     toValue: config.toValue,
     duration: config.duration ?? 0,
     start(cb) {
-      anim._cb = cb;
+      anim._cb = (result) => {
+        if (result.finished) value.setValue(config.toValue);
+        cb?.(result);
+      };
     },
     stop() {
       const cb = anim._cb;
@@ -483,6 +486,76 @@ describe('backglass components', { concurrency: 1 }, () => {
     assert.equal(typeof movingShift?.translateX, 'object');
   });
 
+  test('the resting control has an opaque brass fill, raised edge and readable label', async () => {
+    const { HoldToApprove } = await import('./HoldToApprove');
+    const { colors } = await import('../theme');
+    motion.reduced = true;
+    const root = await mount(createElement(HoldToApprove, { onConfirm: () => undefined }));
+    const fill = flatStyle(root.root.findByProps({ testID: 'hold-fill' }).props.style).backgroundColor;
+    assert.equal(fill, colors.edgeMid);
+    assert.notEqual(fill, colors.surface);
+    const button = flatStyle(hostOf(root.root, 'Pressable').props.style);
+    assert.ok(Number(button.borderBottomWidth) > Number(button.borderWidth));
+    const label = root.root.findAll((node) => isHost(node, 'Text') && node.props.children === 'Press and hold to approve rule')[0];
+    assert.ok(label);
+    const luminance = (hex: string) => [1, 3, 5].map((offset) => {
+      const channel = parseInt(hex.slice(offset, offset + 2), 16) / 255;
+      return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+    }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index]!, 0);
+    const foreground = luminance(flatStyle(label.props.style).color as string);
+    const background = luminance(fill as string);
+    assert.ok((background + 0.05) / (foreground + 0.05) >= 4.5);
+  });
+
+  test('the press target pulses once and stays still after rerender and reset', async () => {
+    const { HoldToApprove } = await import('./HoldToApprove');
+    motion.reduced = false;
+    const props = { onConfirm: () => undefined, resetKey: 0 };
+    const root = await mount(createElement(HoldToApprove, props));
+    const target = root.root.findByProps({ testID: 'hold-target' });
+    const scale = (flatStyle(target.props.style).transform as { scale: AnimatedValue }[])[0]!.scale;
+    const up = timings.find((anim) => anim.toValue === 1.08);
+    assert.ok(up);
+    up._cb?.({ finished: true });
+    assert.equal(scale._value, 1.08);
+    const down = timings.find((anim) => anim.toValue === 1 && anim.duration === 360);
+    assert.ok(down);
+    down._cb?.({ finished: true });
+    assert.equal(scale._value, 1);
+    await act(async () => { root.update(createElement(HoldToApprove, { ...props, label: 'Press and hold to sign' })); });
+    await act(async () => { root.update(createElement(HoldToApprove, { ...props, resetKey: 1 })); });
+    assert.equal(timings.filter((anim) => anim.toValue === 1.08).length, 1);
+  });
+
+  test('pressing or unmounting cancels the introductory pulse and restores the target size', async () => {
+    const { HoldToApprove } = await import('./HoldToApprove');
+    motion.reduced = false;
+    for (const action of ['press', 'unmount']) {
+      const root = await mount(createElement(HoldToApprove, { onConfirm: () => undefined }));
+      const target = root.root.findByProps({ testID: 'hold-target' });
+      const scale = (flatStyle(target.props.style).transform as { scale: AnimatedValue }[])[0]!.scale;
+      const up = [...timings].reverse().find((anim) => anim.toValue === 1.08)!;
+      up._cb?.({ finished: true });
+      assert.equal(scale._value, 1.08);
+      await act(async () => {
+        if (action === 'press') hostOf(root.root, 'Pressable').props.onPressIn();
+        else root.unmount();
+      });
+      assert.equal(scale._value, 1);
+      assert.equal(up._cb, undefined);
+      if (action === 'press') await act(async () => { root.unmount(); });
+    }
+  });
+
+  test('reduced motion skips the introductory press target pulse', async () => {
+    const { HoldToApprove } = await import('./HoldToApprove');
+    motion.reduced = true;
+    const root = await mount(createElement(HoldToApprove, { onConfirm: () => undefined }));
+    const target = root.root.findByProps({ testID: 'hold-target' });
+    assert.equal((flatStyle(target.props.style).transform as { scale: AnimatedValue }[])[0]!.scale._value, 1);
+    assert.equal(timings.length, 0);
+  });
+
   test('the small hold hint keeps at least 3:1 contrast whenever visible during the fill', async () => {
     const { HoldToApprove } = await import('./HoldToApprove');
     motion.reduced = false;
@@ -492,6 +565,8 @@ describe('backglass components', { concurrency: 1 }, () => {
     const style = flatStyle(hint.props.style);
     type Interpolation = { config: { inputRange: number[]; outputRange: (string | number)[] } };
     const sample = (value: unknown, progress: number): number[] => {
+      if (typeof value === 'number') return [value];
+      if (typeof value === 'string') return [1, 3, 5].map((start) => parseInt(value.slice(start, start + 2), 16));
       const { inputRange, outputRange } = (value as Interpolation).config;
       const channels = (entry: string | number): number[] => typeof entry === 'number'
         ? [entry]
@@ -559,7 +634,7 @@ describe('backglass components', { concurrency: 1 }, () => {
       fill?._cb?.({ finished: true });
     });
     assert.equal(confirmed, 1);
-    assert.match(visibleText(root), /Hold to approve rule/);
+    assert.match(visibleText(root), /Press and hold to approve rule/);
     assert.match(visibleText(root), /You sign on this phone/);
   });
 
@@ -665,7 +740,7 @@ describe('backglass components', { concurrency: 1 }, () => {
     const root = await mount(createElement(HoldToApprove, { onConfirm: () => undefined }));
     const idleFill = flatStyle(root.root.findByProps({ testID: 'hold-fill' }).props.style);
     const idleRange = (idleFill.backgroundColor as { config: { outputRange: string[] } }).config.outputRange;
-    assert.deepEqual(idleRange, [colors.surface, colors.brass], 'the fill runs from the dark surface to brass');
+    assert.deepEqual(idleRange, [colors.edgeMid, colors.brass], 'the fill runs from a solid brass tint to brass');
     await act(async () => {
       hostOf(root.root, 'Pressable').props.onPressIn();
     });
@@ -758,7 +833,7 @@ describe('backglass components', { concurrency: 1 }, () => {
     let confirmed = 0;
     const root = await mount(createElement(HoldToApprove, { onConfirm: () => { confirmed += 1; } }));
     const fillColor = () => flatStyle(root.root.findByProps({ testID: 'hold-fill' }).props.style).backgroundColor;
-    assert.equal(fillColor(), colors.surface);
+    assert.equal(fillColor(), colors.edgeMid);
     await act(async () => {
       hostOf(root.root, 'Pressable').props.onPressIn();
     });
@@ -769,7 +844,7 @@ describe('backglass components', { concurrency: 1 }, () => {
     await act(async () => {
       hostOf(root.root, 'Pressable').props.onPressOut();
     });
-    assert.equal(fillColor(), colors.surface);
+    assert.equal(fillColor(), colors.edgeMid);
     assert.match(visibleText(root), new RegExp(RELEASE_HINT));
     await act(async () => {
       hostOf(root.root, 'Pressable').props.onPressIn();
@@ -995,7 +1070,7 @@ describe('backglass components', { concurrency: 1 }, () => {
       /You, Your agent/,
     );
     assert.match(text, /Tilt/);
-    assert.match(text, /Hold to approve rule/);
+    assert.match(text, /Press and hold to approve rule/);
     assert.match(text, /See it/);
     assert.match(text, /First payment inside the rule/);
     assert.equal(hasLabel('Share this plaque'), true);

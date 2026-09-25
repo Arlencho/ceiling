@@ -617,7 +617,7 @@ function labelsOf(root: ReactTestRenderer): string[] {
 function holdButton(root: ReactTestRenderer): ReactTestInstance {
   const node = root.root
     .findAll((candidate) => isHost(candidate, 'Pressable'))
-    .find((candidate) => String(candidate.props.accessibilityLabel ?? '').startsWith('Hold to approve rule'));
+    .find((candidate) => String(candidate.props.accessibilityLabel ?? '').startsWith('Press and hold to approve rule'));
   assert.ok(node, `no hold button. Labels: ${labelsOf(root).join(' | ')}`);
   return node;
 }
@@ -666,7 +666,7 @@ test.describe('landed open', { concurrency: 1 }, () => {
     };
     const root = await show('new');
     try {
-      await settle(root, () => labelsOf(root).some((label) => label.startsWith('Hold to approve rule')) && api?.config != null);
+      await settle(root, () => labelsOf(root).some((label) => label.startsWith('Press and hold to approve rule')) && api?.config != null);
       const payee = root.root
         .findAll((node) => isHost(node, 'TextInput'))
         .find((node) => node.props.accessibilityLabel === 'Payee');
@@ -677,8 +677,8 @@ test.describe('landed open', { concurrency: 1 }, () => {
       await act(async () => {
         pressHold(holdButton(root));
       });
-      await settle(root, () => !labelsOf(root).some((label) => label.startsWith('Hold to approve rule')));
-      assert.equal(labelsOf(root).some((label) => label.startsWith('Hold to approve rule')), false);
+      await settle(root, () => !labelsOf(root).some((label) => label.startsWith('Press and hold to approve rule')));
+      assert.equal(labelsOf(root).some((label) => label.startsWith('Press and hold to approve rule')), false);
       assert.equal(nav.replaces.at(-1), `/rule/${held[0]?.mandate.address}`);
     } finally {
       root.unmount();
@@ -693,7 +693,7 @@ test.describe('landed open', { concurrency: 1 }, () => {
     };
     const root = await show('new');
     try {
-      await settle(root, () => labelsOf(root).some((label) => label.startsWith('Hold to approve rule')) && api?.config != null);
+      await settle(root, () => labelsOf(root).some((label) => label.startsWith('Press and hold to approve rule')) && api?.config != null);
       const payee = root.root
         .findAll((node) => isHost(node, 'TextInput'))
         .find((node) => node.props.accessibilityLabel === 'Payee');
@@ -922,7 +922,7 @@ test.describe('landed open', { concurrency: 1 }, () => {
     }
     const root = await show('new');
     try {
-      await settle(root, () => labelsOf(root).some((label) => label.startsWith('Hold to approve rule')) && api?.config != null);
+      await settle(root, () => labelsOf(root).some((label) => label.startsWith('Press and hold to approve rule')) && api?.config != null);
       const payee = root.root
         .findAll((node) => isHost(node, 'TextInput'))
         .find((node) => node.props.accessibilityLabel === 'Payee');

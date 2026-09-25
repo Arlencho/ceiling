@@ -75,7 +75,7 @@ export function FrozenScreen({
         </View>
         <HoldSign
           name="recover"
-          label={`Hold to recover: move all ${amountLabel} to your safe address`}
+          label={`Press and hold to recover: move all ${amountLabel} to your safe address`}
           hint={`${safeLabel}. One key, at once.`}
           disabled={signingDisabled}
           onSign={onRecover}

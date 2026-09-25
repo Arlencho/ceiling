@@ -258,7 +258,7 @@ test('the renewal screen reads loading, an absent rule, a failed read, and the c
   assert.match(shown, /Let this one end/);
   assert.match(shown, /Nothing else happens/);
   assert.match(shown, /The next rule starts only after you sign it on this phone/);
-  assert.doesNotMatch(shown, /Hold to approve/);
+  assert.doesNotMatch(shown, /Press and hold to approve/);
   assert.doesNotMatch(shown, /258 of 300|261|57 paid/);
   await act(async () => {
     press(root, 'Let this one end').props.onPress();

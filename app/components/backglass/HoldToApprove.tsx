@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Circle, Path, Svg } from 'react-native-svg';
 
@@ -19,7 +19,6 @@ const DRAIN_MS = 220;
 const GLOW_MS = 120;
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedText = Animated.createAnimatedComponent(Text);
 
 type HoldToApproveProps = {
@@ -32,20 +31,24 @@ type HoldToApproveProps = {
 };
 
 export function HoldToApprove(props: HoldToApproveProps) {
-  return <HoldToApproveGesture key={props.resetKey} {...props} />;
+  const pulseSeenRef = useRef(false);
+  return <HoldToApproveGesture key={props.resetKey} {...props} pulseSeenRef={pulseSeenRef} />;
 }
 
 function HoldToApproveGesture({
-  label = 'Hold to approve rule',
+  label = 'Press and hold to approve rule',
   hint = 'You sign on this phone. Veto never sees your key.',
   onConfirm,
   disabled = false,
-}: HoldToApproveProps) {
+  pulseSeenRef,
+}: HoldToApproveProps & { pulseSeenRef: RefObject<boolean> }) {
   const reduced = useReducedMotion();
   const motionOn = motionAllowed(reduced);
   const [progress] = useState(() => new Animated.Value(0));
   const [glow] = useState(() => new Animated.Value(0));
   const [flash] = useState(() => new Animated.Value(0));
+  const [targetScale] = useState(() => new Animated.Value(1));
+  const intro = useRef<Animated.CompositeAnimation | null>(null);
   const running = useRef<Animated.CompositeAnimation | null>(null);
   const holding = useRef(false);
   const confirmed = useRef(false);
@@ -57,6 +60,23 @@ function HoldToApproveGesture({
   useEffect(() => {
     preloadHaptics();
   }, []);
+
+  useEffect(() => {
+    if (reduced === null || disabled || pulseSeenRef.current) return;
+    pulseSeenRef.current = true;
+    if (reduced) return;
+    const pulse = Animated.sequence([
+      Animated.timing(targetScale, { toValue: 1.08, duration: 360, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(targetScale, { toValue: 1, duration: 360, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+    ]);
+    intro.current = pulse;
+    pulse.start();
+    return () => {
+      pulse.stop();
+      intro.current = null;
+      targetScale.setValue(1);
+    };
+  }, [disabled, pulseSeenRef, reduced, targetScale]);
 
   // A light tick at each quarter tells the owner the hold is counting. The
   // ring runs linearly, so the ticks are timed against the same clock.
@@ -135,6 +155,8 @@ function HoldToApproveGesture({
     if (disabled || confirmed.current) {
       return;
     }
+    intro.current?.stop();
+    targetScale.setValue(1);
     holding.current = true;
     clearHintTimer();
     setShowHint(false);
@@ -195,29 +217,13 @@ function HoldToApproveGesture({
   // it the colour still changes, in one step, and nothing pulses or flashes.
   const lit = pressed || done;
   const fillColor = motionOn
-    ? progress.interpolate({ inputRange: [0, 1], outputRange: [colors.surface, colors.brass] })
+    ? progress.interpolate({ inputRange: [0, 1], outputRange: [colors.edgeMid, colors.brass] })
     : lit
       ? colors.brass
-      : colors.surface;
-  const labelColor = motionOn
-    ? progress.interpolate({ inputRange: [0, 0.55, 0.6, 1], outputRange: [colors.bone, colors.bone, colors.forest, colors.forest] })
-    : lit
-      ? colors.forest
-      : colors.bone;
-  const hintColor = motionOn
-    ? progress.interpolate({ inputRange: [0, 0.55, 0.6, 1], outputRange: [colors.muted, colors.muted, colors.forest, colors.forest] })
-    : lit
-      ? colors.forest
-      : colors.muted;
-  // Hide the small copy while foreground and fill colours cross in luminance.
-  const hintOpacity = motionOn
-    ? progress.interpolate({ inputRange: [0, 0.3499, 0.35, 0.7, 0.7001, 1], outputRange: [1, 1, 0, 0, 1, 1] })
-    : 1;
-  const markColor = motionOn
-    ? progress.interpolate({ inputRange: [0, 1], outputRange: [colors.brass, colors.forest] })
-    : lit
-      ? colors.forest
-      : colors.brass;
+      : colors.edgeMid;
+  const labelColor = colors.forest;
+  const hintColor = colors.forest;
+  const markColor = colors.forest;
   const ringColor = motionOn
     ? progress.interpolate({ inputRange: [0, 1], outputRange: [colors.amber, colors.forest] })
     : done
@@ -266,9 +272,9 @@ function HoldToApproveGesture({
             <Animated.View testID="hold-flash" pointerEvents="none" style={[styles.flash, { opacity: flash }]} />
           ) : null}
         </Animated.View>
-        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <Animated.View testID="hold-target" style={{ transform: [{ scale: targetScale }] }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <Svg width={44} height={44} viewBox="0 0 52 52">
-            <Circle cx={26} cy={26} r={RING_RADIUS} fill="none" stroke={colors.track} strokeWidth={4} />
+            <Circle cx={26} cy={26} r={RING_RADIUS} fill="none" stroke={colors.forest} strokeWidth={4} />
             <AnimatedCircle
               cx={26}
               cy={26}
@@ -282,7 +288,7 @@ function HoldToApproveGesture({
               rotation={-90}
               origin="26, 26"
             />
-            <AnimatedPath d="M26 15l8 3v6c0 6-3.5 10-8 12-4.5-2-8-6-8-12v-6z" fill={markColor} />
+            <Path d="M26 15l8 3v6c0 6-3.5 10-8 12-4.5-2-8-6-8-12v-6z" fill={markColor} />
             <Path
               d="M22 26l3 3 5-6"
               fill="none"
@@ -292,10 +298,10 @@ function HoldToApproveGesture({
               strokeLinejoin="round"
             />
           </Svg>
-        </View>
+        </Animated.View>
         <View style={styles.copy}>
           <AnimatedText style={[styles.label, { color: labelColor }]}>{label}</AnimatedText>
-          <AnimatedText style={[styles.hint, { color: hintColor, opacity: hintOpacity }]}>{hint}</AnimatedText>
+          <AnimatedText style={[styles.hint, { color: hintColor, opacity: 1 }]}>{hint}</AnimatedText>
         </View>
       </Pressable>
       {showHint ? (
@@ -315,7 +321,10 @@ const styles = StyleSheet.create({
     minHeight: 64,
     borderRadius: radii.hold,
     borderWidth: 1,
-    borderColor: colors.brassLine,
+    backgroundColor: colors.edgeMid,
+    borderColor: colors.brass,
+    borderBottomWidth: 3,
+    borderBottomColor: colors.deepBrass,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xxl,

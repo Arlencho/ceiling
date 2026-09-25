@@ -98,7 +98,7 @@ export function AllowOnce({
         ))}
       </View>
       <HoldToApprove
-        label={`Hold to allow this one payment of ${amount}`}
+        label={`Press and hold to allow this one payment of ${amount}`}
         hint="Allowing signs in Seed Vault. Veto never sees your key."
         disabled={signing || submitHeld}
         resetKey={resetKey}

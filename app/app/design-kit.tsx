@@ -100,7 +100,7 @@ export default function DesignKitScreen() {
       <TiltStamp />
       <TiltStamp reason="Refused: rule not active" />
 
-      <Text style={styles.section}>Hold to approve</Text>
+      <Text style={styles.section}>Press and hold to approve</Text>
       <HoldToApprove onConfirm={() => setApproved((count) => count + 1)} />
       <Text style={styles.caption}>Approved {approved} times</Text>
 

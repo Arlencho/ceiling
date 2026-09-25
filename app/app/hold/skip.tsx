@@ -129,7 +129,7 @@ export default function HoldSkip() {
           onPayload={setPayload}
           onBack={() => router.back()}
           onCancel={() => router.back()}
-          signLabel="Hold to sign with your key on this phone"
+          signLabel="Press and hold to sign with your key on this phone"
           signHint="Each signature uses Seed Vault. Veto never sees the key."
           signingDisabled={loaded.wallet.busy}
           onSign={onSign}

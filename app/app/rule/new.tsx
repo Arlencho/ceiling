@@ -368,7 +368,7 @@ function RuleCompose({
       {message ? <Text style={styles.msg}>{message}</Text> : null}
       {openedAddress ? null : applying ? (
         <HoldToApprove
-          label="Hold to apply to a new agent"
+          label="Press and hold to apply to a new agent"
           hint="Signed inside Seed Vault. Veto never sees your key."
           disabled={chain.submitHeld || wallet.busy}
           resetKey={holdReset}
@@ -388,7 +388,7 @@ function RuleCompose({
             />
           ) : null}
           <HoldToApprove
-            label="Hold to approve rule"
+            label="Press and hold to approve rule"
             hint="Signed inside Seed Vault. Veto never sees your key."
             disabled={chain.submitHeld || wallet.busy}
             resetKey={holdReset}

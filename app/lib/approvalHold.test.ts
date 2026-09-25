@@ -256,12 +256,12 @@ async function mount(node: ReactElement): Promise<ReactTestRenderer> {
 function hold(root: ReactTestRenderer): ReactTestInstance {
   const node = root.root
     .findAll((candidate) => (candidate.type as unknown) === 'Pressable')
-    .find((candidate) => String(candidate.props.accessibilityLabel).startsWith('Hold to approve rule'));
+    .find((candidate) => String(candidate.props.accessibilityLabel).startsWith('Press and hold to approve rule'));
   assert.ok(node, 'hold button missing');
   return node;
 }
 
-test('a cancelled signature arms Hold to approve again', async () => {
+test('a cancelled signature arms Press and hold to approve again', async () => {
   openCalls.length = 0;
   const { ApprovalScreen } = await import('../components/ApprovalScreen');
   const root = await mount(
@@ -283,12 +283,12 @@ test('a cancelled signature arms Hold to approve again', async () => {
       },
     }),
   );
-  for (let i = 0; i < 20 && !visibleText(root).includes('Hold to approve rule'); i += 1) {
+  for (let i = 0; i < 20 && !visibleText(root).includes('Press and hold to approve rule'); i += 1) {
     await act(async () => {
       await new Promise((resolve) => setImmediate(resolve));
     });
   }
-  assert.match(visibleText(root), /Hold to approve rule/);
+  assert.match(visibleText(root), /Press and hold to approve rule/);
   assert.ok(root.root.findAll((node) => node.props.testID === 'approve-hold-0').length >= 1);
 
   await act(async () => {
@@ -303,7 +303,7 @@ test('a cancelled signature arms Hold to approve again', async () => {
     hold(root).props.onLongPress();
     await new Promise((resolve) => setImmediate(resolve));
   });
-  assert.equal(openCalls.length, 2, 'a failed signature left Hold to approve disarmed');
+  assert.equal(openCalls.length, 2, 'a failed signature left Press and hold to approve disarmed');
 });
 
 test('the rule form offers devnet USDC when the wallet is short of the cap', async () => {

@@ -95,14 +95,14 @@ export function HeldScreen({
         </View>
         <HoldSign
           name="stop"
-          label="Hold to stop this withdrawal"
+          label="Press and hold to stop this withdrawal"
           hint="One fingerprint on this phone. Saved on the blockchain."
           disabled={signingDisabled}
           onSign={onStop}
         />
         <HoldSign
           name="freeze"
-          label="Hold to freeze the whole vault"
+          label="Press and hold to freeze the whole vault"
           hint={`Nothing leaves, not even the everyday ${dailyLabel} a day`}
           disabled={signingDisabled}
           onSign={onFreeze}
