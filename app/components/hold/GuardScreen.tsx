@@ -11,6 +11,10 @@ export type GuardWaiting = {
   untilLabel: string;
 };
 
+export type GuardPick = GuardWaiting & {
+  id: string;
+};
+
 export type GuardResult = {
   line: string;
   link: string;
@@ -26,6 +30,7 @@ export function GuardScreen({
   tokenName,
   frozen,
   waiting,
+  waitingOthers = [],
   missingWithdrawal = false,
   moreWaiting = 0,
   changeLines,
@@ -38,6 +43,7 @@ export function GuardScreen({
   onFreeze,
   onRecover,
   onOpenLink,
+  onPick,
   signingDisabled = false,
 }: {
   network: string;
@@ -50,6 +56,7 @@ export function GuardScreen({
   tokenName: string;
   frozen: boolean;
   waiting: GuardWaiting | null;
+  waitingOthers?: GuardPick[];
   moreWaiting?: number;
   changeLines: readonly string[];
   changeAtLabel: string | null;
@@ -61,6 +68,7 @@ export function GuardScreen({
   onFreeze: () => Promise<void>;
   onRecover: () => Promise<void>;
   onOpenLink: (link: string) => void;
+  onPick?: (id: string) => void;
   signingDisabled?: boolean;
 }) {
   const [confirmRecover, setConfirmRecover] = useState(false);
@@ -78,6 +86,7 @@ export function GuardScreen({
               accessibilityRole="link"
               accessibilityLabel="See the transaction"
               onPress={() => onOpenLink(result.link)}
+              style={styles.txLink}
             >
               <Text style={styles.link}>See the transaction</Text>
             </Pressable>
@@ -111,6 +120,29 @@ export function GuardScreen({
                 Freezing stops all of them.
               </Text>
             ) : null}
+          </View>
+        ) : null}
+        {!waiting && waitingOthers.length > 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.kicker}>Waiting to leave</Text>
+            <Text style={styles.body}>
+              {waitingOthers.length === 1 ? '1 withdrawal is waiting.' : `${waitingOthers.length} withdrawals are waiting.`}
+            </Text>
+            {waitingOthers.map((item) => (
+              <Pressable
+                key={item.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Review the withdrawal of ${item.amountLabel} ${tokenName} to ${item.destinationLabel}`}
+                onPress={() => onPick?.(item.id)}
+                style={styles.pick}
+              >
+                <Text style={styles.body}>
+                  {item.amountLabel} {tokenName} to {item.destinationLabel}. {item.untilLabel}
+                </Text>
+                <Text style={styles.link}>Review this withdrawal</Text>
+              </Pressable>
+            ))}
+            <Text style={styles.hint}>Freezing stops all of them.</Text>
           </View>
         ) : null}
         {changeLines.length > 0 ? (
@@ -240,6 +272,16 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   link: { color: colors.brass, fontFamily: fonts.sansBold, fontSize: 14 },
+  txLink: { minHeight: 48, justifyContent: 'center' },
+  pick: {
+    minHeight: 48,
+    justifyContent: 'center',
+    gap: space.sm,
+    borderRadius: radii.row,
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: space.md,
+  },
   ghost: {
     minHeight: 52,
     borderRadius: radii.cta,

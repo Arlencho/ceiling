@@ -13,7 +13,7 @@ import {
   routeParam,
   shortKey,
 } from '../../lib/hold';
-import { changeLoosenLines, guardBrake, guardResultLine, type GuardBrake } from '../../lib/holdGuard';
+import { changeLoosenLines, guardBrake, guardPath, guardResultLine, type GuardBrake } from '../../lib/holdGuard';
 import { useHoldBundle } from '../../lib/holdSession';
 
 export default function HoldGuard() {
@@ -95,6 +95,19 @@ export default function HoldGuard() {
               : null
           }
           moreWaiting={account ? Math.max(0, account.pending.length - (row ? 1 : 0)) : 0}
+          waitingOthers={
+            account
+              ? account.pending
+                  .filter((item) => !row || item.id !== row.id)
+                  .map((item) => ({
+                    id: item.id.toString(),
+                    amountLabel: formatHoldAmount(item.amount, decimals),
+                    destinationLabel: shortKey(item.destination.toBase58()),
+                    untilLabel: `Waits until ${formatChainInstant(item.unlockAt)}, unless stopped.`,
+                  }))
+              : []
+          }
+          onPick={(id) => router.push(guardPath(address, id))}
           changeLines={
             account
               ? changeLoosenLines({ account, decimals, tokenName: loaded.tokenName, viewer: loaded.owner })
