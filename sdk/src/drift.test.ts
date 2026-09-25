@@ -28,7 +28,7 @@ test("reason texts match app/lib/constants.ts", () => {
     .sort((a, b) => a - b);
   assert.deepEqual(refusalCodes, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
   assert.equal(fromSdk[11], "output account not allowed");
-  assert.equal(fromSdk[12], "pool not allowed");
+  assert.equal(fromSdk[12], "pool account not allowed");
   assert.equal(fromSdk[13], "over daily limit");
   assert.equal(fromSdk[14], "quote below floor");
   assert.match(source, /return REASON_TEXT\[reason\] \?\? 'unknown'/);

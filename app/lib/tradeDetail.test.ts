@@ -22,11 +22,16 @@ let chain = {
   refresh: async () => { refreshes += 1; },
 };
 mock.module('./useChain', { namedExports: { useChain: () => chain } });
-const rule = {
+const rule: TradeRuleAccount = {
   address: 'rule-a', agent: 'agent', pool: 'unknown', inMint: 'input', outMint: 'output',
+  owner: 'owner', source: 'source', destination: 'destination', exchangeProgram: 'exchange',
+  exchangeKind: 0, poolAuthority: 'authority', poolInVault: 'in-vault', poolOutVault: 'out-vault',
+  poolMint: 'pool-mint', poolFeeAccount: 'fee-account', ruleId: 0n,
   purpose: 'Trading', cap: 100n, spent: 0n, dailyLimit: 10n, perTradeMax: 5n,
-  windowStart: 0n, windowSpent: 0n, floorNum: 1n, floorDen: 1n, expiresAt: 1800000000n, status: 1,
-} as TradeRuleAccount;
+  dailyBuckets: Array.from({ length: 25 }, () => ({ hour: 0n, amount: 0n })),
+  floorNum: 1n, floorDen: 1n, expiresAt: 1800000000n, status: 1,
+  overrideAmount: 0n, overrideNonce: 0n, lastNonce: 0n, tradeCount: 0, refusalCount: 0, bump: 0,
+};
 
 test('a persistent RPC error does not reselect the same trade rule, while refresh and another address remain available', async () => {
   const { TradeRuleDetail } = await import('../components/TradeRuleDetail');
