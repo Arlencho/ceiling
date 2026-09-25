@@ -275,3 +275,75 @@ veto://rule-request?v=2&kind=trade&agent=<base58>&inMint=<base58>&outMint=<base5
 The vault PDA is `["hold", owner, vault_id]` with `vault_id` as a little-endian u64. The known-destination list holds 16 addresses. The hold ledger is a 32-entry ring. The instructions and the account fields are in `programs/veto/src/hold.rs`.
 
 Hold is merged and tested, and live on devnet. These methods target the program recorded in [docs/DEVNET.md](../docs/DEVNET.md). The app screens exist, and a device check with a real vault follows. The package that exports `HoldVault` is published from this checkout by the maintainer.
+
+## Trade demo
+
+The refusals are real attempts by a script we wrote against our own pool on devnet.
+
+`trade-once.ts` loads the agent signer and a copied trade config block, reads
+`tradeStatus()`, computes the next nonce and submits one trade with `min_out` zero.
+The program applies the owner's floor. The output includes kind, input and output
+amounts, reason code and text, suggested override, signature and slot. All amounts
+are integer input base units, not decimal token amounts.
+
+```sh
+cd sdk
+npx tsx examples/trade-once.ts ../keys/agent.json ../keys/trade-config.json 1000000
+# A rule address instead of a config block requires VETO_RPC:
+npx tsx examples/trade-once.ts ../keys/agent.json --rule <rule-address> 1000000
+```
+
+`hacked-agent.ts` identifies itself as a deliberately hostile agent in its header
+and first output line. It submits, in order: an agent-owned output account (11),
+a freshly initialized bad-rate pool of the same mints (12), an amount over the
+per-trade maximum (5, with its override figure), trades until a daily-limit refusal
+(13), a trade after a separate signer pushes the pinned pool below the floor (14),
+and an honest trade after that signer reverses its swaps (traded). Every attempt
+prints its signature and recorded reason. An unexpected kind, reason or override
+exits non-zero immediately. It does not load or use the owner key or print secrets.
+
+```sh
+# From the repository root, export the addresses written by the pool setup script:
+set -a
+. ./keys/devnet-addresses.env
+set +a
+cd sdk
+npx tsx examples/hacked-agent.ts ../keys/agent.json ../keys/trade-config.json 1000000 ../keys/trade-trader.json
+# The same --rule <rule-address> form is supported before the amount and second key.
+```
+
+Prepare an active trade rule for the WSOL to USDC pool recorded by
+`scripts/devnet-token-swap-pool.ts`. Keep its source funded and delegated, with no
+pending override, enough lifetime cap to cover the remaining daily allowance,
+and enough time before expiry. After `trade-once`, the remaining daily allowance
+must exceed the per-trade maximum; that maximum must be at least twice the demo
+amount. The pool must have enough liquidity and floor headroom for the daily
+trades. The script leaves the demo amount unspent when it provokes reason 13,
+so the smaller floor attempt and final honest trade fit the same daily window.
+No clock manipulation, owner override or 24 hour wait is involved.
+
+Both demo signers need SOL for fees and account rent. The agent also needs input
+funds and at least one output base unit in its own associated token accounts to
+seed the hostile pool. `keys/trade-trader.json` must be a separate funded signer,
+not the agent or owner. It needs enough input funds to move the pinned pool's
+price, potentially several times its input reserve. The scripts wrap SOL as
+needed; other tokens must already be funded. The second signer reverses only the
+output received from its price-moving swaps. Fees remain spent, and the hostile
+pool and its rent remain on devnet. Any surprise stops the demo at that point,
+so a failed run may leave the pool's rate changed. Do not share this fixture with
+concurrent traders or reuse it without checking remaining limits and balances.
+
+From the repository root, `make trade-demo-devnet` runs `trade-once` followed by
+`hacked-agent`. It requires `keys/agent.json`, `keys/trade-trader.json`,
+`keys/trade-config.json`, `keys/devnet-addresses.env`, installed SDK dependencies,
+explicit `VETO_RPC`, `TRADE_DEMO_AMOUNT`, and all six `TOKEN_SWAP_*` addresses in
+that env file. It refuses missing inputs before invoking either script. The
+hostile script verifies the devnet genesis hash and matches the addresses to the
+live rule.
+
+```sh
+VETO_RPC=https://api.devnet.solana.com TRADE_DEMO_AMOUNT=1000000 make trade-demo-devnet
+```
+
+Offline coverage uses the SDK testkit fakes: `cd sdk && npm run typecheck && npm test`.
+Running these demos on devnet belongs to the upgrade plan, not the offline checks.

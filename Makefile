@@ -146,3 +146,24 @@ indexer-seed: ## Open a mandate and submit paid plus refused charges
 	cd indexer && VETO_RPC=$(VETO_RPC) VETO_PROGRAM_ID=$(VETO_PROGRAM_ID) npm run seed
 
 indexer: indexer-test ## Alias for indexer-test
+
+.PHONY: trade-demo-devnet
+trade-demo-devnet: ## Run the trade demos against our devnet pool with agent and second-trader keys
+	@set -eu; \
+	  test -f keys/devnet-addresses.env || { echo 'missing keys/devnet-addresses.env'; exit 1; }; \
+	  for file in keys/agent.json keys/trade-trader.json keys/trade-config.json; do \
+	    test -f "$$file" || { echo "missing $$file"; exit 1; }; \
+	  done; \
+	  set -a; . ./keys/devnet-addresses.env; set +a; \
+	  : "$${VETO_RPC:?set VETO_RPC explicitly or in keys/devnet-addresses.env}"; \
+	  : "$${TOKEN_SWAP_POOL:?missing TOKEN_SWAP_POOL}"; \
+	  : "$${TOKEN_SWAP_AUTHORITY:?missing TOKEN_SWAP_AUTHORITY}"; \
+	  : "$${TOKEN_SWAP_WSOL_VAULT:?missing TOKEN_SWAP_WSOL_VAULT}"; \
+	  : "$${TOKEN_SWAP_USDC_VAULT:?missing TOKEN_SWAP_USDC_VAULT}"; \
+	  : "$${TOKEN_SWAP_POOL_MINT:?missing TOKEN_SWAP_POOL_MINT}"; \
+	  : "$${TOKEN_SWAP_FEE_ACCOUNT:?missing TOKEN_SWAP_FEE_ACCOUNT}"; \
+	  : "$${TRADE_DEMO_AMOUNT:?set TRADE_DEMO_AMOUNT in input base units}"; \
+	  export VETO_RPC; \
+	  cd sdk; \
+	  VETO_TRADE_DEMO_DEVNET=1 ./node_modules/.bin/tsx examples/trade-once.ts ../keys/agent.json ../keys/trade-config.json "$$TRADE_DEMO_AMOUNT"; \
+	  ./node_modules/.bin/tsx examples/hacked-agent.ts ../keys/agent.json ../keys/trade-config.json "$$TRADE_DEMO_AMOUNT" ../keys/trade-trader.json
