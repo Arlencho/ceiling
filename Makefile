@@ -13,7 +13,7 @@
 # One command per thing a judge or a contributor needs. `make test` from a
 # fresh clone is the contract.
 
-.PHONY: help build test test-scripts tools-test localnet setup fmt clean indexer indexer-test indexer-seed terminal-test require-anchor e2e-devnet
+.PHONY: help build test test-scripts tools-test localnet setup fmt clean indexer indexer-test indexer-seed terminal-test require-anchor e2e-devnet hold-e2e-local hold-e2e-devnet
 
 # Two flags that are not obvious and both are required from a clean checkout.
 #
@@ -115,6 +115,15 @@ e2e-devnet: ## Run the devnet journey through the app and the agent SDK
 	  EXPO_PUBLIC_VETO_EXPLORER_CLUSTER=devnet \
 	  EXPO_PUBLIC_VETO_MINT_DECIMALS=6 \
 	  npx tsx --experimental-test-module-mocks --test e2e/devnetJourney.test.ts
+
+# Hold journey. Local builds the deploy arch (not the LiteSVM v0 ELF), loads
+# that program into solana-test-validator, and runs sdk/e2e/holdJourney.test.ts.
+# Devnet points the same test at the public cluster and does not warp the clock.
+hold-e2e-local: ## Build the program, start a local validator, and run the Hold journey
+	./scripts/hold-e2e.sh local
+
+hold-e2e-devnet: ## Run the Hold journey against devnet (the clock is not warped)
+	./scripts/hold-e2e.sh devnet
 
 fmt: ## Format program sources
 	cargo fmt --manifest-path programs/veto/Cargo.toml
