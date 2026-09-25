@@ -16,7 +16,13 @@ The command then asks for anything it does not already have: who is paid, the mo
 
 It prints a `veto://rule-request` link and a QR of that link. Scan the QR with the Veto app and hold to approve.
 
-The terminal waits until the rule for this key is on chain, then prints the terms in the token's name. Half a USDC, which is 500000 base units, reads as 0.50 USDC. It also prints one MCP config line. Your agent can pay with `veto pay <amount>`, or you paste that line into the agent's MCP config.
+The terminal waits until the rule for this key is on chain, then prints the terms in the token's name. Half a USDC, which is 500000 base units, reads as 0.50 USDC. It also prints one MCP config line. Your agent can pay with `veto pay <amount>`, or you paste that line into the agent's MCP config. The veto server in that line is:
+
+```json
+"veto": { "command": "npx", "args": ["-y", "@veto-hq/veto", "mcp"] }
+```
+
+The owner should remove any other tool that holds a funded key, because the companion cannot stop a second key. The server does not take a key. It refuses to start when `~/.veto/agent.json` is more open than mode 0600.
 
 The rule and the RPC are saved in `~/.veto/config.json`. If the RPC refuses `getProgramAccounts` filters, pass `--rule` with the rule address. That checks the rule you name and skips the request.
 
@@ -41,4 +47,4 @@ veto decisions --limit 20
 
 `veto decisions` lists the newest decisions from the rule. Each row names the token and the signature.
 
-veto trade arrives with the trade rule.
+the trade rule is not on this program yet

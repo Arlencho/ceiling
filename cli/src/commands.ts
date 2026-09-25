@@ -10,6 +10,7 @@ import type { Decision } from "@veto-hq/agent-sdk";
 import { USAGE, parseArgs, rejectPositionals, rejectUnused, type Args } from "./args.js";
 import { DEFAULT_RPC, assertGenesis, explorerTx, parseCluster, type Cluster } from "./cluster.js";
 import { CliError, FILTERS_REFUSED, isForeignAgent, rpcRefusesFilters } from "./errors.js";
+import { TRADE_RULE_DISABLED, tradeRuleEnabled } from "./features.js";
 import { loadOrCreateKey, readConfig, readKeyFile, writeConfig } from "./files.js";
 import {
   DEVNET_USDC_MINT,
@@ -41,6 +42,66 @@ type RuleFields = {
   mint: string;
 };
 
+export type CommandSpec = {
+  name: string;
+  cli: boolean;
+  tool?: string;
+  enabled: boolean;
+  disabledMessage?: string;
+};
+
+/** CLI commands and MCP tools. A disabled row is not exposed as a tool. */
+export const COMMANDS: readonly CommandSpec[] = [
+  { name: "connect", cli: true, enabled: true },
+  { name: "pay", cli: true, tool: "veto_pay", enabled: true },
+  { name: "status", cli: true, tool: "veto_status", enabled: true },
+  { name: "decisions", cli: true, tool: "veto_decisions", enabled: true },
+  { name: "request-rule", cli: false, tool: "veto_request_rule", enabled: true },
+  {
+    name: "trade",
+    cli: true,
+    tool: "veto_trade",
+    enabled: tradeRuleEnabled,
+    disabledMessage: TRADE_RULE_DISABLED,
+  },
+  { name: "mcp", cli: true, enabled: true },
+];
+
+export type PayOutcome = {
+  kind: "paid" | "refused";
+  reasonCode: number;
+  reasonText: string;
+  override: string;
+  signature: string;
+  explorer: string;
+};
+
+export type StatusOutcome = {
+  remaining: string;
+  cap: string;
+  largest: string;
+  expiry: string;
+  /** SOL amount without the token name, so the command line can say "Fee SOL". */
+  feeAmount: string;
+  feeWarning: string | null;
+};
+
+export type DecisionOutcome = {
+  kind: string;
+  amount: string;
+  reasonText: string;
+  signature: string;
+};
+
+export type RuleRequestInput = {
+  payee: string;
+  max: string;
+  cap: string;
+  days: string;
+  purpose: string;
+  mint?: string;
+};
+
 export async function run(argv: readonly string[], runtime: Runtime): Promise<number> {
   try {
     const args = parseArgs(argv);
@@ -48,13 +109,16 @@ export async function run(argv: readonly string[], runtime: Runtime): Promise<nu
       runtime.stdout(USAGE);
       return 0;
     }
-    if (args.command === "trade") {
-      throw new CliError("veto trade arrives with the trade rule.");
+    const entry = COMMANDS.find((command) => command.cli && command.name === args.command);
+    if (!entry) throw new CliError(`Unknown command ${args.command}.`);
+    if (!entry.enabled) {
+      throw new CliError(entry.disabledMessage ?? `Unknown command ${args.command}.`);
     }
-    if (args.command === "connect") await connect(args, runtime);
-    else if (args.command === "pay") await pay(args, runtime);
-    else if (args.command === "status") await status(args, runtime);
-    else if (args.command === "decisions") await decisions(args, runtime);
+    if (entry.name === "connect") await connect(args, runtime);
+    else if (entry.name === "pay") await pay(args, runtime);
+    else if (entry.name === "status") await status(args, runtime);
+    else if (entry.name === "decisions") await decisions(args, runtime);
+    else if (entry.name === "mcp") await mcp(args, runtime);
     else throw new CliError(`Unknown command ${args.command}.`);
     return 0;
   } catch (err) {
@@ -91,11 +155,26 @@ async function pay(args: Args, runtime: Runtime): Promise<void> {
   if (amountText === undefined) {
     throw new CliError("Usage: veto pay <amount in base units> [--rule <address>].");
   }
+  const outcome = await executePay(runtime, amountText, args.rule);
+  for (const line of payLines(outcome)) runtime.stdout(line);
+}
+
+export function payLines(outcome: PayOutcome): string[] {
+  return [
+    `kind ${outcome.kind}`,
+    `reason ${outcome.reasonCode} ${outcome.reasonText}`,
+    `override ${outcome.override}`,
+    `signature ${outcome.signature}`,
+    outcome.explorer,
+  ];
+}
+
+export async function executePay(runtime: Runtime, amountText: string, rule?: string): Promise<PayOutcome> {
   const amount = parseBaseUnits(amountText, "Amount");
   const stored = await readConfig(runtime.home);
   const keypair = await readKeyFile(stored.key);
   const connection = runtime.connect(stored.rpc);
-  const address = await selectRule(connection, keypair, runtime, args.rule);
+  const address = await selectRule(connection, keypair, runtime, rule);
   const veto = await openMandate(connection, address, keypair);
   const view = await veto.status();
   if (!isActive(view.status, view.expiresAt, unixSeconds(runtime.now()))) {
@@ -105,16 +184,36 @@ async function pay(args: Args, runtime: Runtime): Promise<void> {
   const symbol = tokenSymbol(view.mint);
   const nonce = await veto.nextNonce();
   const outcome = await veto.charge({ amount, nonce, guardPendingOverride: true });
-  runtime.stdout(`kind ${outcome.kind}`);
-  runtime.stdout(`reason ${outcome.reasonCode} ${outcome.reasonText}`);
-  runtime.stdout(`override ${formatTokenUnits(outcome.suggestedOverride, decimals)} ${symbol}`);
-  runtime.stdout(`signature ${outcome.signature}`);
-  runtime.stdout(explorerTx(outcome.signature, stored.cluster));
+  return {
+    kind: outcome.kind,
+    reasonCode: outcome.reasonCode,
+    reasonText: outcome.reasonText,
+    override: `${formatTokenUnits(outcome.suggestedOverride, decimals)} ${symbol}`,
+    signature: outcome.signature,
+    explorer: explorerTx(outcome.signature, stored.cluster),
+  };
 }
 
 async function status(args: Args, runtime: Runtime): Promise<void> {
   rejectUnused(args, []);
   rejectPositionals(args);
+  const outcome = await executeStatus(runtime);
+  for (const line of statusLines(outcome)) runtime.stdout(line);
+}
+
+export function statusLines(outcome: StatusOutcome): string[] {
+  const lines = [
+    `Can still pay ${outcome.remaining} today`,
+    `Cap ${outcome.cap}`,
+    `Largest payment ${outcome.largest}`,
+    `Ends ${outcome.expiry}`,
+    `Fee SOL ${outcome.feeAmount}`,
+  ];
+  if (outcome.feeWarning) lines.push(outcome.feeWarning);
+  return lines;
+}
+
+export async function executeStatus(runtime: Runtime): Promise<StatusOutcome> {
   const { connection, veto } = await openSaved(runtime);
   const view = await veto.status();
   if (!isActive(view.status, view.expiresAt, unixSeconds(runtime.now()))) {
@@ -122,18 +221,31 @@ async function status(args: Args, runtime: Runtime): Promise<void> {
   }
   const decimals = await readDecimals(connection, new PublicKey(view.mint));
   const symbol = tokenSymbol(view.mint);
-  runtime.stdout(`Can still pay ${formatTokenUnits(view.remaining, decimals)} ${symbol} today`);
-  runtime.stdout(`Cap ${formatTokenUnits(view.cap, decimals)} ${symbol}`);
-  runtime.stdout(`Largest payment ${formatTokenUnits(view.perTxMax, decimals)} ${symbol}`);
-  runtime.stdout(`Ends ${formatUtcDay(view.expiresAt)}`);
-  runtime.stdout(`Fee SOL ${formatUnits(view.agentLamports, 9)}`);
-  if (view.feeWarning) runtime.stdout(view.feeWarning);
+  const named = (amount: bigint) => `${formatTokenUnits(amount, decimals)} ${symbol}`;
+  return {
+    remaining: named(view.remaining),
+    cap: named(view.cap),
+    largest: named(view.perTxMax),
+    expiry: formatUtcDay(view.expiresAt),
+    feeAmount: formatUnits(view.agentLamports, 9),
+    feeWarning: view.feeWarning,
+  };
 }
 
 async function decisions(args: Args, runtime: Runtime): Promise<void> {
   rejectUnused(args, ["limit"]);
   rejectPositionals(args);
-  const limit = parseLimit(args.limit);
+  const rows = await executeDecisions(runtime, args.limit);
+  for (const line of decisionLines(rows)) runtime.stdout(line);
+}
+
+export function decisionLines(rows: readonly DecisionOutcome[]): string[] {
+  if (rows.length === 0) return ["No decisions."];
+  return rows.map((row) => `${row.kind} ${row.amount} ${row.reasonText} ${row.signature}`);
+}
+
+export async function executeDecisions(runtime: Runtime, limit?: string | number): Promise<DecisionOutcome[]> {
+  const checked = parseLimit(limit);
   const { connection, veto } = await openSaved(runtime);
   const view = await veto.status();
   const decimals = await readDecimals(connection, new PublicKey(view.mint));
@@ -141,14 +253,52 @@ async function decisions(args: Args, runtime: Runtime): Promise<void> {
   const page = await decisionsForMandate(
     connection,
     veto.mandate,
-    limit === undefined ? undefined : { limit },
+    checked === undefined ? undefined : { limit: checked },
   );
-  const rows = [...page].reverse();
-  if (rows.length === 0) {
-    runtime.stdout("No decisions.");
-    return;
+  return [...page].reverse().map((row) => decisionOutcome(row, decimals, symbol));
+}
+
+export async function executeRequestRule(runtime: Runtime, fields: RuleRequestInput): Promise<string> {
+  const cluster = await savedCluster(runtime.home);
+  const mint = fields.mint !== undefined ? fields.mint : cluster === "devnet" ? DEVNET_USDC_MINT : undefined;
+  if (mint === undefined || mint.trim() === "") {
+    throw new CliError("Mint address is required.");
   }
-  for (const row of rows) runtime.stdout(decisionLine(row, decimals, symbol));
+  const loaded = await loadOrCreateKey(runtime.home, undefined);
+  return ruleRequestUrl(loaded.keypair.publicKey.toBase58(), {
+    payee: fields.payee,
+    max: fields.max,
+    cap: fields.cap,
+    days: fields.days,
+    purpose: fields.purpose,
+    mint,
+  });
+}
+
+export function ruleRequestUrl(agent: string, fields: RuleFields): string {
+  try {
+    return createRuleRequest({
+      agent,
+      payee: fields.payee.trim(),
+      mint: fields.mint.trim(),
+      cap: parseBaseUnits(fields.cap, "Total"),
+      max: parseBaseUnits(fields.max, "Most per payment"),
+      days: parseDays(fields.days),
+      purpose: fields.purpose.trim(),
+    });
+  } catch (err) {
+    if (err instanceof RuleRequestRejected || err instanceof CliError) {
+      throw new CliError(err.message);
+    }
+    throw err;
+  }
+}
+
+async function mcp(args: Args, runtime: Runtime): Promise<void> {
+  rejectUnused(args, []);
+  rejectPositionals(args);
+  const { serveMcp } = await import("./mcp.js");
+  await serveMcp(runtime);
 }
 
 async function maybeAirdrop(
@@ -192,23 +342,7 @@ async function requestAndWait(
   runtime: Runtime,
 ): Promise<string> {
   const fields = await askRule(args, cluster, runtime);
-  let url: string;
-  try {
-    url = createRuleRequest({
-      agent: keypair.publicKey.toBase58(),
-      payee: fields.payee.trim(),
-      mint: fields.mint.trim(),
-      cap: parseBaseUnits(fields.cap, "Total"),
-      max: parseBaseUnits(fields.max, "Most per payment"),
-      days: parseDays(fields.days),
-      purpose: fields.purpose.trim(),
-    });
-  } catch (err) {
-    if (err instanceof RuleRequestRejected || err instanceof CliError) {
-      throw new CliError(err.message);
-    }
-    throw err;
-  }
+  const url = ruleRequestUrl(keypair.publicKey.toBase58(), fields);
   runtime.stdout(url);
   runtime.stdout(runtime.qr(url));
   runtime.stdout("Waiting for you to approve on the phone.");
@@ -311,8 +445,23 @@ async function openMandate(connection: Connection, address: string, keypair: Age
   }
 }
 
-function parseLimit(value: string | undefined): number | undefined {
+async function savedCluster(home: string): Promise<Cluster> {
+  try {
+    return (await readConfig(home)).cluster;
+  } catch (err) {
+    if (err instanceof CliError && err.code === "config-missing") return "devnet";
+    throw err;
+  }
+}
+
+function parseLimit(value: string | number | undefined): number | undefined {
   if (value === undefined) return undefined;
+  if (typeof value === "number") {
+    if (!Number.isInteger(value) || value < 1 || value > 1000) {
+      throw new CliError("Limit must be a whole number from 1 to 1000.");
+    }
+    return value;
+  }
   const trimmed = value.trim();
   if (!/^[0-9]+$/.test(trimmed)) {
     throw new CliError("Limit must be a whole number from 1 to 1000.");
@@ -324,6 +473,11 @@ function parseLimit(value: string | undefined): number | undefined {
   return limit;
 }
 
-function decisionLine(row: Decision, decimals: number, symbol: string): string {
-  return `${row.kind} ${formatTokenUnits(row.amount, decimals)} ${symbol} ${row.reasonText} ${row.signature}`;
+function decisionOutcome(row: Decision, decimals: number, symbol: string): DecisionOutcome {
+  return {
+    kind: row.kind,
+    amount: `${formatTokenUnits(row.amount, decimals)} ${symbol}`,
+    reasonText: row.reasonText,
+    signature: row.signature,
+  };
 }

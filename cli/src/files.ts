@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { Cluster } from "./cluster.js";
 import { CliError } from "./errors.js";
@@ -21,6 +21,27 @@ export function agentFile(home: string): string {
 
 export function configFile(home: string): string {
   return join(vetoDir(home), "config.json");
+}
+
+/** Refuse to start when the agent key mode is wider than 0600. Does not read the file. */
+export async function assertAgentKeyMode(home: string): Promise<void> {
+  const file = agentFile(home);
+  let info;
+  try {
+    info = await stat(file);
+  } catch (err) {
+    const code = err && typeof err === "object" && "code" in err ? err.code : "";
+    if (code === "ENOENT") return;
+    throw new CliError("The agent key file could not be checked.");
+  }
+  if (!info.isFile()) {
+    throw new CliError("The agent key file must be a regular file.");
+  }
+  const bits = info.mode & 0o7777;
+  if ((bits & ~0o600) !== 0) {
+    const shown = bits.toString(8).padStart(4, "0");
+    throw new CliError(`The agent key file mode is ${shown}, which is wider than 0600.`);
+  }
 }
 
 export async function writeKeyFile(file: string, secret: Uint8Array): Promise<void> {
@@ -95,7 +116,7 @@ export async function readConfig(home: string): Promise<VetoConfig> {
     text = await readFile(configFile(home), "utf8");
   } catch (err) {
     const code = err && typeof err === "object" && "code" in err ? err.code : "";
-    if (code === "ENOENT") throw new CliError("Run veto connect first.");
+    if (code === "ENOENT") throw new CliError("Run veto connect first.", "config-missing");
     throw new CliError("The veto config could not be read.");
   }
   let parsed: unknown;
