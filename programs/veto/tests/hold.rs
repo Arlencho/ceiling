@@ -597,7 +597,7 @@ fn new_dest(w: &mut World) -> Pubkey {
 }
 
 /// Pay 1 base unit to `dest` after the delay so the address is known, then
-/// move the clock to the next 24 hour window.
+/// move the clock beyond the last retained hourly bucket.
 fn arm_known(w: &mut World, dest: &Pubkey) {
     withdraw(w, 1, dest).expect("first payment to a new address is held");
     let row = newest_pending(&read_vault(&w.svm, &w.vault));
@@ -607,7 +607,7 @@ fn arm_known(w: &mut World, dest: &Pubkey) {
     warp(&mut w.svm, row.unlock_at);
     execute(w, row.id, dest, &owner).expect("execute the first payment");
     assert_eq!(token_balance(&w.svm, dest), 1);
-    warp(&mut w.svm, row.unlock_at + HOLD_WINDOW_SECS);
+    warp(&mut w.svm, row.unlock_at + HOLD_WINDOW_SECS + 3600);
 }
 
 fn known_world(rules: Rules) -> (World, Pubkey) {
@@ -671,7 +671,7 @@ fn a_withdrawal_to_a_new_address_is_held_until_it_has_been_paid_once() {
     let logs = execute(&mut w, row.id, &fresh, &owner).expect("execute");
     assert_recorded(&logs, "HOLD EXECUTED", HoldExecuted::DISCRIMINATOR);
     assert_eq!(token_balance(&w.svm, &fresh), 10 * ONE);
-    warp(&mut w.svm, row.unlock_at + HOLD_WINDOW_SECS);
+    warp(&mut w.svm, row.unlock_at + HOLD_WINDOW_SECS + 3600);
     let logs = withdraw(&mut w, 10 * ONE, &fresh).expect("second payment is instant");
     assert_recorded(&logs, "HOLD PAID", HoldPaid::DISCRIMINATOR);
     assert_eq!(token_balance(&w.svm, &fresh), 20 * ONE);
@@ -1194,7 +1194,7 @@ fn the_wait_and_the_daily_window_follow_the_chain_clock_only() {
     execute(&mut w, row.id, &held, &owner).unwrap();
     assert_eq!(token_balance(&w.svm, &held), 25 * ONE);
 
-    let rolled = now(&w.svm) + HOLD_WINDOW_SECS;
+    let rolled = now(&w.svm) + HOLD_WINDOW_SECS + 3600;
     warp(&mut w.svm, rolled);
     withdraw(&mut w, 100 * ONE, &dest).unwrap();
     let spent_at = now(&w.svm);
@@ -1205,7 +1205,7 @@ fn the_wait_and_the_daily_window_follow_the_chain_clock_only() {
     let logs = withdraw(&mut w, 1, &dest).expect("still inside the window");
     assert_recorded(&logs, "HOLD HELD", HoldHeld::DISCRIMINATOR);
     assert_eq!(token_balance(&w.svm, &w.vault_token), before);
-    warp(&mut w.svm, window_start + HOLD_WINDOW_SECS);
+    warp(&mut w.svm, (window_start.div_euclid(3600) + 25) * 3600);
     let logs = withdraw(&mut w, 1 * ONE, &dest).expect("window rolled");
     assert_recorded(&logs, "HOLD PAID", HoldPaid::DISCRIMINATOR);
     assert_eq!(token_balance(&w.svm, &w.vault_token), before - 1 * ONE);
@@ -1386,10 +1386,78 @@ fn a_full_known_list_still_pays_and_does_not_grow() {
         read_vault(&w.svm, &w.vault).known_len as usize,
         HOLD_KNOWN_CAPACITY
     );
-    warp(&mut w.svm, row.unlock_at + HOLD_WINDOW_SECS);
+    warp(&mut w.svm, row.unlock_at + HOLD_WINDOW_SECS + 3600);
     let before = token_balance(&w.svm, &w.vault_token);
     let logs = withdraw(&mut w, 1, &extra).unwrap();
     assert_recorded(&logs, "HOLD HELD", HoldHeld::DISCRIMINATOR);
     assert_eq!(token_balance(&w.svm, &w.vault_token), before);
     assert_eq!(token_balance(&w.svm, &extra), 1);
+}
+
+#[test]
+fn everyday_door_refuses_a_second_burst_across_the_old_window_edge() {
+    let (mut w, dest) = known_world(Rules::default());
+    withdraw(&mut w, 1, &dest).unwrap();
+    let start = now(&w.svm);
+    warp(&mut w.svm, start + HOLD_WINDOW_SECS - 1);
+    withdraw(&mut w, 100 * ONE - 1, &dest).unwrap();
+    let before = token_balance(&w.svm, &dest);
+    warp(&mut w.svm, start + HOLD_WINDOW_SECS);
+    let logs = withdraw(&mut w, 100 * ONE, &dest).unwrap();
+    assert_recorded(&logs, "HOLD HELD", HoldHeld::DISCRIMINATOR);
+    assert_eq!(token_balance(&w.svm, &dest), before);
+}
+
+#[test]
+fn everyday_releases_never_exceed_the_limit_in_any_randomized_24_hours() {
+    for seed in 1..=4u64 {
+        let (mut w, dest) = known_world(Rules {
+            deposit: 100_000 * ONE,
+            big_share_bps: 10_000,
+            ..Rules::default()
+        });
+        let mut random = seed;
+        let mut clock = now(&w.svm);
+        let mut paid = Vec::<(i64, u64)>::new();
+        for _ in 0..400 {
+            random = random.wrapping_mul(6364136223846793005).wrapping_add(1);
+            clock += ((random >> 32) % 3600 + 1) as i64;
+            warp(&mut w.svm, clock);
+            let amount = (random % 100 + 1) * ONE;
+            let before = token_balance(&w.svm, &dest);
+            withdraw(&mut w, amount, &dest).unwrap();
+            let released = token_balance(&w.svm, &dest) - before;
+            if released != 0 {
+                paid.push((clock, released));
+            }
+            let total: u64 = paid
+                .iter()
+                .filter(|(ts, _)| *ts > clock - HOLD_WINDOW_SECS)
+                .map(|(_, amount)| amount)
+                .sum();
+            assert!(
+                total <= 100 * ONE,
+                "seed {seed}, time {clock}, released {total}"
+            );
+            let owner = w.owner.insecure_clone();
+            for row in pending_rows(&read_vault(&w.svm, &w.vault)) {
+                stop(&mut w, row.id, &owner).unwrap();
+            }
+        }
+        assert!(paid.len() > 10);
+    }
+}
+
+#[test]
+fn legacy_vault_recovery_requires_the_saved_pre_upgrade_binary() {
+    let (mut w, _) = known_world(Rules::default());
+    let mut legacy = w.svm.get_account(&w.vault).unwrap();
+    legacy.data.truncate(1291);
+    w.svm.set_account(w.vault, legacy).unwrap();
+    let balance = token_balance(&w.svm, &w.vault_token);
+    let owner = w.owner.insecure_clone();
+    let safe = w.safe_token;
+    assert_err(recover(&mut w, &owner, &safe), "AccountDidNotDeserialize");
+    assert_eq!(token_balance(&w.svm, &w.vault_token), balance);
+    assert_eq!(token_balance(&w.svm, &safe), 0);
 }

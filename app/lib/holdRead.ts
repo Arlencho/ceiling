@@ -4,7 +4,7 @@ import { PublicKey } from '@solana/web3.js';
 import { HOLD_LEDGER_DISC, HOLD_VAULT_DISC } from './holdIdl';
 
 /** Account size the vault client decodes. A shorter account is not a Hold vault. */
-export const HOLD_VAULT_LEN = 1291;
+export const HOLD_VAULT_LEN = 1691;
 export const HOLD_LEDGER_LEN = 2096;
 export const HOLD_OWNER_OFFSET = 8;
 export const HOLD_GUARDIAN_OFFSET = 40;
@@ -12,6 +12,8 @@ export const HOLD_KNOWN_CAPACITY = 16;
 export const HOLD_PENDING_CAPACITY = 8;
 export const HOLD_LEDGER_CAPACITY = 32;
 export const HOLD_WINDOW_SECS = 86_400n;
+export const HOLD_BUCKET_SECS = 3_600n;
+export const HOLD_BUCKET_COUNT = 25;
 export const HOLD_BPS_DENOMINATOR = 10_000n;
 
 const WITHDRAWAL_PENDING = 1;
@@ -37,6 +39,8 @@ const OFF_LEDGER_BUMP = 230;
 const OFF_KNOWN = 231;
 const OFF_PENDING = 743;
 const OFF_CHANGE = 1199;
+const OFF_DAILY_BUCKETS = 1291;
+const BUCKET_SIZE = 16;
 const I64_MIN = -9223372036854775808n;
 const I64_MAX = 9223372036854775807n;
 const U64_MAX = 0xffff_ffff_ffff_ffffn;
@@ -69,6 +73,8 @@ export type HoldAccount = {
   vaultToken: PublicKey;
   vaultId: bigint;
   dailyLimit: bigint;
+  dailyBuckets: { hour: bigint; amount: bigint }[];
+  /** Fixed window retained only for the big-door share calculation. */
   windowSpent: bigint;
   windowStart: bigint;
   delaySecs: bigint;
@@ -213,6 +219,10 @@ export function decodeHoldVault(data: Buffer, address: PublicKey): HoldAccount {
     vaultToken: new PublicKey(data.subarray(OFF_VAULT_TOKEN, OFF_VAULT_TOKEN + 32)),
     vaultId: readU64(data, OFF_VAULT_ID),
     dailyLimit: readU64(data, OFF_DAILY),
+    dailyBuckets: Array.from({ length: HOLD_BUCKET_COUNT }, (_, i) => ({
+      hour: readI64(data, OFF_DAILY_BUCKETS + i * BUCKET_SIZE),
+      amount: readU64(data, OFF_DAILY_BUCKETS + i * BUCKET_SIZE + 8),
+    })),
     windowSpent: readU64(data, OFF_WINDOW_SPENT),
     windowStart: readI64(data, OFF_WINDOW_START),
     delaySecs: readI64(data, OFF_DELAY),
@@ -308,7 +318,11 @@ export function holdWithdrawalOutlook(
   const base = now >= windowEnd ? 0n : vault.windowSpent;
   const next = base + amount;
   const overflow = next > U64_MAX;
-  if (overflow || next > vault.dailyLimit) reasons.push('over_daily_limit');
+  // BigInt division truncates toward zero; chain hours use floor division.
+  const hour = now >= 0n ? now / HOLD_BUCKET_SECS : (now - HOLD_BUCKET_SECS + 1n) / HOLD_BUCKET_SECS;
+  const dailyNext = vault.dailyBuckets.filter((bucket) => bucket.hour >= hour - 24n)
+    .reduce((total, bucket) => total + bucket.amount, amount);
+  if (overflow || dailyNext > U64_MAX || dailyNext > vault.dailyLimit) reasons.push('over_daily_limit');
   if (!overflow && next > shareCap(balance, vault.bigShareBps)) reasons.push('over_share');
   if (reasons.length === 0) return { outcome: 'at_once' };
   if (vault.pending.length >= HOLD_PENDING_CAPACITY) {

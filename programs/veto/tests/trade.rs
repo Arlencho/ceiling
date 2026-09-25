@@ -1297,7 +1297,7 @@ fn a_trade_into_a_destination_the_owner_closed_is_not_a_token_account() {
 fn existing_mandate_and_hold_layouts_match_the_values_shipped_today() {
     assert_eq!(Mandate::INIT_SPACE, 302);
     assert_eq!(std::mem::size_of::<Ledger>(), 2344);
-    assert_eq!(HoldVault::INIT_SPACE, 1283);
+    assert_eq!(HoldVault::INIT_SPACE, 1683);
     assert_eq!(std::mem::size_of::<HoldLedger>(), 2088);
     assert_eq!(Mandate::DISCRIMINATOR, [113, 216, 98, 159, 185, 63, 55, 18]);
     assert_eq!(Ledger::DISCRIMINATOR, [43, 41, 21, 213, 180, 176, 95, 32]);

@@ -107,6 +107,7 @@ pub struct HoldVault {
     pub vault_token: Pubkey,
     pub vault_id: u64,
     pub daily_limit: u64,
+    /// Fixed window used only for the unchanged big-door share calculation.
     pub window_spent: u64,
     pub window_start: i64,
     pub delay_secs: i64,
@@ -123,6 +124,9 @@ pub struct HoldVault {
     pub known: [Pubkey; HOLD_KNOWN_CAPACITY],
     pub pending: [PendingWithdrawal; HOLD_PENDING_CAPACITY],
     pub change: PendingChange,
+    /// Rolling daily accounting, retaining the current and preceding 24 hours.
+    /// Appended so all existing field offsets remain stable.
+    pub daily_buckets: [crate::rolling_window::TradeBucket; crate::rolling_window::BUCKET_COUNT],
 }
 
 #[zero_copy]

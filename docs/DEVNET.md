@@ -257,3 +257,50 @@ Export and verify of one refused and one traded row (`tools/export.ts --signatur
 - This script never deploys to mainnet and never prints private keys.
 - `declare_id!` in `programs/veto/src/lib.rs` is left as committed. The live program address is the Program row above. A later program-side change can sync `declare_id!` in its own PR.
 - The agent must keep holding zero tokens apart from the trade-demo amount recorded under Trade rule on devnet. The setup does not mint to it and does not create an agent token account.
+## Hold rolling daily limit upgrade (issue 322)
+
+The next upgrade changes HoldVault from 1291 to 1691 bytes. It appends 25
+hourly buckets, shared with the trade rule's rolling counter. Every release
+in the last 24 hours counts, including the whole oldest hour. Daily allowance
+can therefore take up to 25 hours to return. The original fixed counter now
+serves only the unchanged big-door share calculation. Execute and Skip still
+count releases without imposing the everyday limit on those doors.
+
+The decision for demo vault `8n9EcgXwSWVbQgnunw6oin8hYcpRDr1CkkvozhpiAyVj`
+is to retire it and reopen after the next upgrade, with no realloc migration.
+There is **no Hold close instruction** in the existing program. Neither the
+old nor the new binary can reclaim its account rent. Here, retiring means
+recovering all tokens to the configured safe address, leaving the old empty
+accounts, and opening a new vault with a different vault ID. Do not try to
+initialize the existing PDA again.
+
+Recovery procedure for the release operator:
+
+1. Before upgrading, retain the actual currently deployed program binary and
+   its matching IDL/client. Read the demo vault with that client and record its
+   owner, vault ID, mint, safe address, guardian, daily limit, delay and share.
+   Derive a token account for the same mint owned by that safe address and
+   create it if absent. Verify its mint and owner on chain.
+2. While the old binary is still deployed, call the SDK's
+   `HoldVault.recover({ authority, owner, vaultId, destination, mint })`, signed
+   by the vault owner or guardian, with that safe token account as destination.
+   Recover works while frozen and clears pending withdrawals. Confirm the
+   transaction and verify the vault token balance is zero and the destination
+   received the full previous balance. Keep the old vault empty thereafter.
+3. Upgrade the program. The new binary rejects old 1291-byte vaults during
+   account deserialization, including Recover. If step 2 was missed, the
+   upgrade authority must temporarily restore the saved pre-upgrade binary,
+   perform step 2 using its matching client, then deploy the new binary again.
+   Do not send funds to the old PDA or attempt a direct owner token transfer;
+   its token authority is the program PDA.
+4. With the new client, call `initVault` with the recorded rules and a fresh
+   vault ID, then deposit from a token account controlled by the funding signer.
+   If the safe address differs from the owner, its signer must first return the
+   recovered tokens to the owner's funding account. Verify the new vault is
+   1691 bytes, its buckets are empty, and its owner, guardian, safe address and
+   rules match. Replace the demo address in app/watch configuration and these
+   docs with the confirmed new address. Known destinations must be learned
+   again through the normal delayed withdrawal flow.
+
+These are release steps, not actions performed by this code change. No devnet
+upgrade, token movement or account retirement is part of its test run.

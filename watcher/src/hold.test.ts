@@ -342,7 +342,7 @@ test("readHoldVault reads the pending withdrawal and the held ledger row", async
   const programId = Keypair.generate().publicKey;
   const vault = Keypair.generate().publicKey;
   const destination = Keypair.generate().publicKey;
-  const vaultData = Buffer.alloc(1291);
+  const vaultData = Buffer.alloc(1691);
   vaultData.set(disc("HoldVault"), 0);
   vaultData.writeBigInt64LE(DAY, 200);
   vaultData.writeBigUInt64LE(4n, 743);
@@ -378,4 +378,6 @@ test("readHoldVault reads the pending withdrawal and the held ledger row", async
   assert.equal(snap.entries.length, 1);
   assert.equal(snap.entries[0]?.kind, 3);
   assert.equal(snap.entries[0]?.withdrawalId, 4n);
+  accounts.set(vault.toBase58(), { data: vaultData.subarray(0, 1291), owner: programId });
+  await assert.rejects(readHoldVault(connection, programId, vault), /need 1691/);
 });
