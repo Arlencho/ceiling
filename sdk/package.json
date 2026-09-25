@@ -33,6 +33,7 @@
   "scripts": {
     "build": "tsc",
     "test": "tsx --test src/*.test.ts",
+    "typecheck:examples": "tsc --noEmit -p tsconfig.test.json",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "prepublishOnly": "npm run build && npm test"
   },

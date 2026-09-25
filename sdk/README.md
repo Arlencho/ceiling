@@ -20,6 +20,22 @@ npx tsx examples/pay-once.ts <agent-key.json> <config.json> <amount-in-base-unit
 
 The example prints kind, reason code, reason text, suggested override, signature, and slot.
 
+## SKR charges
+
+`examples/skr-once.ts` targets the contained mainnet rule described in `docs/MAINNET.md` at the repository root. That guide is not present in this checkout; use the owner-provided rule address and agent key.
+
+From `sdk/`, with `VETO_RPC` already set in your environment:
+
+```bash
+VETO_RULE=<rule-address> VETO_AGENT_KEY=<agent-key.json> npx tsx examples/skr-once.ts
+```
+
+`VETO_RPC` is required and is never printed, including on failure. `VETO_RULE` is the mandate address and `VETO_AGENT_KEY` is the path to its agent's JSON secret key array. `VETO_MINT` defaults to `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`. The configured mint must match the rule and have 6 decimals; a mismatch stops execution before any charge.
+
+The example submits 8 SKR (8,000,000 base units), expects a paid decision, then submits 25 SKR (25,000,000 base units) and expects a refusal. Each result prints the amount, decision, reason code, reason text, signature, and slot. An unexpected decision exits nonzero. Use an active, funded rule with at least 8 SKR remaining, a per-payment maximum of at least 8 and below 25 SKR, no pending override, and enough agent SOL for transaction fees. Each run can spend another 8 SKR and incurs fees for both transactions.
+
+`npm run typecheck:examples` checks this example and the existing examples using `tsconfig.test.json`, without executing them or accessing the network.
+
 ## Asking the owner for a rule
 
 The operator builds a rule request and renders it as a QR. The owner scans that QR and approves. The same URL is what `createRuleRequest` returns and what `parseRuleRequest` reads.
