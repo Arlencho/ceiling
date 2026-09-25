@@ -782,6 +782,7 @@ pub struct InitVault<'info> {
     pub vault_token: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = anchor_spl::token::ID)]
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
 }
@@ -822,6 +823,7 @@ pub struct Deposit<'info> {
     pub vault_token: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = anchor_spl::token::ID)]
     pub token_program: Interface<'info, TokenInterface>,
 }
 
@@ -863,6 +865,7 @@ pub struct Withdraw<'info> {
     pub destination: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = anchor_spl::token::ID)]
     pub token_program: Interface<'info, TokenInterface>,
 }
 
@@ -900,6 +903,7 @@ pub struct Execute<'info> {
     pub destination: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = anchor_spl::token::ID)]
     pub token_program: Interface<'info, TokenInterface>,
 }
 
@@ -1002,6 +1006,7 @@ pub struct Skip<'info> {
     pub destination: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = anchor_spl::token::ID)]
     pub token_program: Interface<'info, TokenInterface>,
 }
 
@@ -1043,6 +1048,7 @@ pub struct Recover<'info> {
     pub destination: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = anchor_spl::token::ID)]
     pub token_program: Interface<'info, TokenInterface>,
 }
 
