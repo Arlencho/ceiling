@@ -226,3 +226,34 @@ jobs:
       - name: Prove the sdk tests ran
         run: |
           bash "$GITHUB_WORKSPACE/scripts/ci-assert-test-count.sh" sdk "$RUNNER_TEMP/ci-sdk-tests.txt"
+
+  cli:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            cli/package-lock.json
+            sdk/package-lock.json
+      # The lockfile was written by npm 11. Node 22 on the runner ships npm 10.
+      - run: npm install -g npm@11
+      - name: Install and build the SDK
+        run: |
+          npm ci
+          npm run build
+        working-directory: sdk
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/ci-cli-tests.txt"
+      - name: Prove the cli tests ran
+        run: |
+          bash "$GITHUB_WORKSPACE/scripts/ci-assert-test-count.sh" cli "$RUNNER_TEMP/ci-cli-tests.txt"

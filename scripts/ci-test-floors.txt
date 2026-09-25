@@ -16,5 +16,6 @@ watcher node 207
 tools node 113
 indexer node 31
 sdk node 36
+cli node 33
 program cargo 26
 scripts shell 288
