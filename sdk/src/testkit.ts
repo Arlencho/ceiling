@@ -3,8 +3,22 @@ import { fileURLToPath } from "node:url";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Keypair, PublicKey, type ConfirmedSignatureInfo, type Connection } from "@solana/web3.js";
 import type { RpcTransaction } from "./events.js";
-import { CHARGE_DISCRIMINATOR, LEDGER_DISCRIMINATOR, MANDATE_DISCRIMINATOR, PROGRAM_ID } from "./idl.js";
-import { ENTRY_SIZE, LEDGER_CAPACITY, mandatePda } from "./layout.js";
+import {
+  CHARGE_DISCRIMINATOR,
+  LEDGER_DISCRIMINATOR,
+  MANDATE_DISCRIMINATOR,
+  PROGRAM_ID,
+  TRADE_LEDGER_DISCRIMINATOR,
+  TRADE_RULE_DISCRIMINATOR,
+} from "./idl.js";
+import {
+  ENTRY_SIZE,
+  LEDGER_CAPACITY,
+  TRADE_ENTRY_SIZE,
+  TRADE_LEDGER_CAPACITY,
+  mandatePda,
+  tradeRulePda,
+} from "./layout.js";
 
 export const TOKEN_PROGRAM = TOKEN_PROGRAM_ID;
 
@@ -451,4 +465,307 @@ export function decodeBase58(text: string): Buffer {
 
 export function framed(program: string, lines: string[]): string[] {
   return [`Program ${program} invoke [1]`, ...lines, `Program ${program} success`];
+}
+
+export type TradeRuleFields = {
+  owner: PublicKey;
+  agent: PublicKey;
+  source: PublicKey;
+  destination: PublicKey;
+  inMint: PublicKey;
+  outMint: PublicKey;
+  exchangeProgram: PublicKey;
+  exchangeKind: number;
+  pool: PublicKey;
+  poolAuthority: PublicKey;
+  poolInVault: PublicKey;
+  poolOutVault: PublicKey;
+  poolMint: PublicKey;
+  poolFeeAccount: PublicKey;
+  ruleId: bigint;
+  cap: bigint;
+  spent: bigint;
+  perTradeMax: bigint;
+  dailyLimit: bigint;
+  windowSpent: bigint;
+  windowStart: bigint;
+  floorNum: bigint;
+  floorDen: bigint;
+  expiresAt: bigint;
+  overrideAmount: bigint;
+  overrideNonce: bigint;
+  lastNonce: bigint;
+  purpose: string;
+  status: number;
+  tradeCount: number;
+  refusalCount: number;
+  bump: number;
+};
+
+/** Writes a trade rule at the on-chain offsets. Tests treat this as the spec. */
+export function tradeRuleBytes(fields: TradeRuleFields): Buffer {
+  const purpose = Buffer.from(fields.purpose, "utf8");
+  const data = Buffer.alloc(8 + 224 + 1 + 192 + 13 * 8 + 4 + purpose.length + 1 + 4 + 4 + 1);
+  data.set(TRADE_RULE_DISCRIMINATOR, 0);
+  let o = 8;
+  const putKey = (key: PublicKey): void => {
+    data.set(key.toBuffer(), o);
+    o += 32;
+  };
+  const putU64 = (value: bigint): void => {
+    data.writeBigUInt64LE(value, o);
+    o += 8;
+  };
+  putKey(fields.owner);
+  putKey(fields.agent);
+  putKey(fields.source);
+  putKey(fields.destination);
+  putKey(fields.inMint);
+  putKey(fields.outMint);
+  putKey(fields.exchangeProgram);
+  data.writeUInt8(fields.exchangeKind, o);
+  o += 1;
+  putKey(fields.pool);
+  putKey(fields.poolAuthority);
+  putKey(fields.poolInVault);
+  putKey(fields.poolOutVault);
+  putKey(fields.poolMint);
+  putKey(fields.poolFeeAccount);
+  putU64(fields.ruleId);
+  putU64(fields.cap);
+  putU64(fields.spent);
+  putU64(fields.perTradeMax);
+  putU64(fields.dailyLimit);
+  putU64(fields.windowSpent);
+  data.writeBigInt64LE(fields.windowStart, o);
+  o += 8;
+  putU64(fields.floorNum);
+  putU64(fields.floorDen);
+  data.writeBigInt64LE(fields.expiresAt, o);
+  o += 8;
+  putU64(fields.overrideAmount);
+  putU64(fields.overrideNonce);
+  putU64(fields.lastNonce);
+  data.writeUInt32LE(purpose.length, o);
+  o += 4;
+  data.set(purpose, o);
+  o += purpose.length;
+  data.writeUInt8(fields.status, o);
+  o += 1;
+  data.writeUInt32LE(fields.tradeCount, o);
+  o += 4;
+  data.writeUInt32LE(fields.refusalCount, o);
+  o += 4;
+  data.writeUInt8(fields.bump, o);
+  o += 1;
+  return data.subarray(0, o);
+}
+
+export type TradeEntryFields = {
+  index: number;
+  ts: bigint;
+  amountIn: bigint;
+  amountOut: bigint;
+  minOut: bigint;
+  counterparty: PublicKey;
+  nonce: bigint;
+  suggestedOverride: bigint;
+  kind: number;
+  reason: number;
+};
+
+export function tradeLedgerBytes(args: {
+  rule: PublicKey;
+  total: number;
+  head: number;
+  bump: number;
+  entries?: TradeEntryFields[];
+}): Buffer {
+  const data = Buffer.alloc(8 + 40 + TRADE_LEDGER_CAPACITY * TRADE_ENTRY_SIZE);
+  data.set(TRADE_LEDGER_DISCRIMINATOR, 0);
+  data.set(args.rule.toBuffer(), 8);
+  data.writeUInt32LE(args.total, 40);
+  data.writeUInt16LE(args.head, 44);
+  data.writeUInt8(args.bump, 46);
+  for (const entry of args.entries ?? []) {
+    const off = 48 + entry.index * TRADE_ENTRY_SIZE;
+    data.writeBigInt64LE(entry.ts, off);
+    data.writeBigUInt64LE(entry.amountIn, off + 8);
+    data.writeBigUInt64LE(entry.amountOut, off + 16);
+    data.writeBigUInt64LE(entry.minOut, off + 24);
+    data.set(entry.counterparty.toBuffer(), off + 32);
+    data.writeBigUInt64LE(entry.nonce, off + 64);
+    data.writeBigUInt64LE(entry.suggestedOverride, off + 72);
+    data.writeUInt8(entry.kind, off + 80);
+    data.writeUInt8(entry.reason, off + 81);
+  }
+  return data;
+}
+
+export function tradedLog(
+  rule: PublicKey,
+  amountIn: bigint,
+  amountOut: bigint,
+  nonce: bigint,
+  spent: bigint,
+): string {
+  const raw = Buffer.concat([
+    readDisc("Traded"),
+    rule.toBuffer(),
+    u64(amountIn),
+    u64(amountOut),
+    u64(nonce),
+    u64(spent),
+  ]);
+  return `Program data: ${raw.toString("base64")}`;
+}
+
+export function tradeRefusedLog(
+  rule: PublicKey,
+  amountIn: bigint,
+  minOut: bigint,
+  nonce: bigint,
+  reason: number,
+  suggestedOverride: bigint,
+): string {
+  const raw = Buffer.concat([
+    readDisc("TradeRefused"),
+    rule.toBuffer(),
+    u64(amountIn),
+    u64(minOut),
+    u64(nonce),
+    Buffer.from([reason]),
+    u64(suggestedOverride),
+  ]);
+  return `Program data: ${raw.toString("base64")}`;
+}
+
+export type TradeWorld = {
+  fake: FakeConnection;
+  connection: Connection;
+  agent: Keypair;
+  owner: Keypair;
+  inMint: Keypair;
+  outMint: Keypair;
+  source: Keypair;
+  destination: Keypair;
+  exchangeProgram: Keypair;
+  pool: Keypair;
+  poolAuthority: Keypair;
+  poolInVault: Keypair;
+  poolOutVault: Keypair;
+  poolMint: Keypair;
+  poolFee: Keypair;
+  rule: PublicKey;
+  ruleId: bigint;
+  fields: TradeRuleFields;
+};
+
+function mintAccountData(decimals: number): Buffer {
+  const data = Buffer.alloc(82);
+  data.writeUInt8(decimals, 44);
+  data.writeUInt8(1, 45);
+  return data;
+}
+
+export function tradeWorld(
+  patch?: Partial<TradeRuleFields> & { inDecimals?: number; outDecimals?: number; balance?: number },
+): TradeWorld {
+  const agent = Keypair.generate();
+  const owner = Keypair.generate();
+  const inMint = Keypair.generate();
+  const outMint = Keypair.generate();
+  const source = Keypair.generate();
+  const destination = Keypair.generate();
+  const exchangeProgram = Keypair.generate();
+  const pool = Keypair.generate();
+  const poolAuthority = Keypair.generate();
+  const poolInVault = Keypair.generate();
+  const poolOutVault = Keypair.generate();
+  const poolMint = Keypair.generate();
+  const poolFee = Keypair.generate();
+  const { inDecimals, outDecimals, balance, ...rulePatch } = patch ?? {};
+  const fields: TradeRuleFields = {
+    owner: owner.publicKey,
+    agent: agent.publicKey,
+    source: source.publicKey,
+    destination: destination.publicKey,
+    inMint: inMint.publicKey,
+    outMint: outMint.publicKey,
+    exchangeProgram: exchangeProgram.publicKey,
+    exchangeKind: 0,
+    pool: pool.publicKey,
+    poolAuthority: poolAuthority.publicKey,
+    poolInVault: poolInVault.publicKey,
+    poolOutVault: poolOutVault.publicKey,
+    poolMint: poolMint.publicKey,
+    poolFeeAccount: poolFee.publicKey,
+    ruleId: 7n,
+    cap: 1_000_000_000n,
+    spent: 0n,
+    perTradeMax: 10_000_000n,
+    dailyLimit: 100_000_000n,
+    windowSpent: 0n,
+    windowStart: BigInt(Math.floor(Date.now() / 1000)),
+    floorNum: 9_500n,
+    floorDen: 10_000n,
+    expiresAt: 1_900_000_000n,
+    overrideAmount: 0n,
+    overrideNonce: 0n,
+    lastNonce: 0n,
+    purpose: "Swap at the pinned pool",
+    status: 0,
+    tradeCount: 0,
+    refusalCount: 0,
+    bump: 1,
+    ...rulePatch,
+  };
+  const rule = tradeRulePda(PROGRAM_ID, fields.owner, fields.ruleId);
+  const fake = new FakeConnection();
+  fake.accounts.set(rule.toBase58(), {
+    data: tradeRuleBytes(fields),
+    owner: PROGRAM_ID,
+    lamports: 1,
+  });
+  fake.accounts.set(fields.source.toBase58(), {
+    data: tokenAccountData(fields.inMint, fields.owner),
+    owner: TOKEN_PROGRAM_ID,
+    lamports: 1,
+  });
+  fake.accounts.set(fields.destination.toBase58(), {
+    data: tokenAccountData(fields.outMint, fields.owner),
+    owner: TOKEN_PROGRAM_ID,
+    lamports: 1,
+  });
+  fake.accounts.set(fields.inMint.toBase58(), {
+    data: mintAccountData(inDecimals ?? 9),
+    owner: TOKEN_PROGRAM_ID,
+    lamports: 1,
+  });
+  fake.accounts.set(fields.outMint.toBase58(), {
+    data: mintAccountData(outDecimals ?? 6),
+    owner: TOKEN_PROGRAM_ID,
+    lamports: 1,
+  });
+  fake.balances.set(fields.agent.toBase58(), balance ?? 1_000_000);
+  return {
+    fake,
+    connection: asConnection(fake),
+    agent,
+    owner,
+    inMint,
+    outMint,
+    source,
+    destination,
+    exchangeProgram,
+    pool,
+    poolAuthority,
+    poolInVault,
+    poolOutVault,
+    poolMint,
+    poolFee,
+    rule,
+    ruleId: fields.ruleId,
+    fields,
+  };
 }

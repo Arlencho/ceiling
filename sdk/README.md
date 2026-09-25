@@ -1,6 +1,6 @@
 # @veto-hq/agent-sdk
 
-TypeScript client for one `charge`, for reading the mandate, the ledger, and the decisions, and for a Hold vault. The package name is `@veto-hq/agent-sdk`.
+TypeScript client for one `charge`, for one `trade`, for reading the mandate, the ledger, and the decisions, and for a Hold vault. The package name is `@veto-hq/agent-sdk`.
 
 ```bash
 npm install @veto-hq/agent-sdk
@@ -211,6 +211,62 @@ for (;;) {
 ```
 
 Do not pass `limit` on this walk. `limit` can stop before the end of the listing, and `oldestSignature` is still the oldest signature listed, so the next page would skip signatures `limit` left unread. After a limited page, continue from the signature of the oldest decision in that result.
+
+## Trading against one pinned pool
+
+A trade rule is a permission to swap. The owner pins one input token account, one output token account, and one pool. `VetoAgent.trade({ amountIn, minOut, nonce })` loads that rule and submits the thirteen-account `trade` instruction. The accounts are the agent, the rule, the trade ledger, the source, the destination, the exchange program, the pool, the pool authority, the input vault, the output vault, the pool mint, the fee account, and the token program. The mints are not accounts on the instruction. Every account except the token program is taken from the keys stored on the rule. The caller cannot pass a pool, a vault, or a destination.
+
+The call returns `kind: "traded"` or `kind: "refused"`, with `amountIn`, `amountOut`, `reasonCode`, `reasonText`, `suggestedOverride`, `signature`, and `slot`. It reads the one Veto trade decision in that transaction, the same way `charge` reads the one payment decision. On a refusal, `amountOut` is zero.
+
+`tradeStatus()` reports the cap, what has been spent, what remains, the per-trade maximum, the daily limit, what remains today, the floor as `{ num, den }`, expiry, status, any override, the last nonce, and the pinned destination. A 24 hour window that has already ended counts as unused, so `remainingToday` is the full daily limit until the next trade opens a new window. `nextTradeNonce()` is `last_nonce` plus one, or `overrideNonce` when an override is pending above `last_nonce`. A refusal does not advance `last_nonce`.
+
+`tradeRulesForAgent(connection, agent)` reads the trade rules whose agent field is that key. It is `getProgramAccounts` with the TradeRule discriminator and a memcmp at `TRADE_RULE_AGENT_OFFSET`. Newest `ruleId` comes first.
+
+`VetoAgent.fromTradeConfig` checks the copied block against the chain: the program id, the agent, the in and out mints and their decimals, the source, the pinned destination, and the cluster. A payment block with no `kind` still loads through `loadAgentConfig`. A trade block sets `kind` to `trade` and names the rule address.
+
+```json
+{
+  "kind": "trade",
+  "rule": "<rule address>",
+  "programId": "<program id>",
+  "agent": "<agent address>",
+  "inMint": "<input mint>",
+  "inMintDecimals": 9,
+  "outMint": "<output mint>",
+  "outMintDecimals": 6,
+  "sourceTokenAccount": "<input token account>",
+  "destinationTokenAccount": "<pinned output token account>",
+  "cluster": "devnet",
+  "rpcUrl": "<rpc url>"
+}
+```
+
+### What the rule enforces
+
+The program refuses the trade, and moves nothing, when:
+
+- The output account is not the pinned destination. Reason 11, output account not allowed.
+- A pool account (the pool, its authority, either vault, the pool mint, the fee account, or the exchange program) is not the one stored on the rule. Reason 12, pool not allowed.
+- The trade would push the current 24 hour window over the daily limit. Reason 13, over daily limit.
+- The optimistic spot quote is already under the price floor `floor.num / floor.den`. Reason 14, quote below floor. The program then requires the tokens that come back to clear that same floor.
+
+It also enforces the lifetime cap, the per-trade maximum, expiry, the nonce, that the rule is active, that the delegation is still in place, that the source can cover the input, and that neither token account is frozen. An override raises the per-trade maximum for one nonce. It does not raise the daily limit or the cap.
+
+### What it cannot do
+
+Veto does not know whether a trade was smart. It knows whether the money came back to you.
+
+It does not pick a pool, a route, or a better price. The pool is the one the owner pinned, and the output can only land in the pinned destination. A swap that clears the floor can still be a poor price. The floor is a number, not a judgment.
+
+### Asking for a trade rule
+
+`createTradeRuleRequest` prints a v2 URL. `parseTradeRuleRequest` reads it. `parseRuleRequest` is the v1 reader: it rejects this URL at version, which is the first problem, and it does not apply any trade field.
+
+```text
+veto://rule-request?v=2&kind=trade&agent=<base58>&inMint=<base58>&outMint=<base58>&pool=<base58>&perTrade=<u64>&daily=<u64>&cap=<u64>&floorBps=<u64>&days=<1..3650>&purpose=<percent-encoded>&agentLabel=<optional>&poolLabel=<optional>
+```
+
+`perTrade`, `daily`, and `cap` are integer base units greater than 0, with `perTrade` at most `daily` and `daily` at most `cap`. `floorBps` is an integer greater than 0. 10000 is one output base unit per input base unit. A larger value is allowed, because the two mints do not share a scale. `days` and `purpose` use the same limits as a payment request. `agentLabel` and `poolLabel` are optional. The shared cases are `sdk/src/fixtures/rule-request-v2.json`.
 
 ## Hold vault
 

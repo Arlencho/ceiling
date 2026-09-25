@@ -1,17 +1,20 @@
 import { Connection, PublicKey, type ConnectionConfig } from "@solana/web3.js";
 import { advisoryDecisionsFromTx, MEMO_PROGRAM_ID } from "./advisory.js";
 import { compareDecisions, decisionsFromTx, viewFromRpc, type Decision, type RpcTransaction, type TxView } from "./events.js";
-import { MANDATE_DISCRIMINATOR, PROGRAM_ID } from "./idl.js";
+import { MANDATE_DISCRIMINATOR, PROGRAM_ID, TRADE_RULE_DISCRIMINATOR } from "./idl.js";
 import {
   MANDATE_AGENT_OFFSET,
+  TRADE_RULE_AGENT_OFFSET,
   decodeLedger,
   decodeMandate,
+  decodeTradeRule,
   toPublicKey,
   type LedgerAccount,
   type MandateAccount,
+  type TradeRuleAccount,
 } from "./layout.js";
 
-export type { Decision, LedgerAccount, MandateAccount };
+export type { Decision, LedgerAccount, MandateAccount, TradeRuleAccount };
 
 const PAGE_MAX = 1000;
 
@@ -42,6 +45,22 @@ export async function fetchMandate(
     if (err instanceof Error && err.message.startsWith("fetchMandate:")) throw err;
     const message = err instanceof Error ? err.message : String(err);
     throw new Error(`fetchMandate: ${message}`, { cause: err });
+  }
+}
+
+export async function fetchTradeRule(
+  connection: Connection,
+  address: PublicKey | string,
+  programId: PublicKey | string = PROGRAM_ID,
+): Promise<TradeRuleAccount> {
+  const key = toPublicKey(address, "fetchTradeRule");
+  const owner = toPublicKey(programId, "fetchTradeRule programId");
+  try {
+    return decodeTradeRule(await accountData(connection, key, "fetchTradeRule", owner));
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("fetchTradeRule:")) throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`fetchTradeRule: ${message}`, { cause: err });
   }
 }
 
@@ -435,6 +454,54 @@ export async function mandatesForAgent(
   found.sort((a, b) => {
     if (a.mandateId === b.mandateId) return 0;
     return a.mandateId > b.mandateId ? -1 : 1;
+  });
+  return found;
+}
+
+/** A decoded trade rule plus the account address it was read from. */
+export type AgentTradeRule = TradeRuleAccount & {
+  address: PublicKey;
+};
+
+/**
+ * Trade rules whose agent field equals `agent`, newest rule id first.
+ * The chain filters are the TradeRule discriminator and a memcmp at TRADE_RULE_AGENT_OFFSET.
+ */
+export async function tradeRulesForAgent(
+  connection: Connection,
+  agent: PublicKey | string,
+): Promise<AgentTradeRule[]> {
+  const agentKey = toPublicKey(agent, "tradeRulesForAgent agent");
+  const rows = await connection.getProgramAccounts(PROGRAM_ID, {
+    commitment: "confirmed",
+    filters: [
+      {
+        memcmp: {
+          offset: 0,
+          bytes: TRADE_RULE_DISCRIMINATOR.toString("base64"),
+          encoding: "base64",
+        },
+      },
+      {
+        memcmp: {
+          offset: TRADE_RULE_AGENT_OFFSET,
+          bytes: agentKey.toBase58(),
+        },
+      },
+    ],
+  });
+  const found: AgentTradeRule[] = [];
+  for (const row of rows) {
+    const data = row.account.data;
+    if (!(data instanceof Uint8Array)) {
+      throw new Error(`tradeRulesForAgent: account ${row.pubkey.toBase58()} data was not bytes`);
+    }
+    const rule = decodeTradeRule(Buffer.from(data));
+    found.push({ ...rule, address: row.pubkey });
+  }
+  found.sort((a, b) => {
+    if (a.ruleId === b.ruleId) return 0;
+    return a.ruleId > b.ruleId ? -1 : 1;
   });
   return found;
 }

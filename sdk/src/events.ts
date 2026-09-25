@@ -3,6 +3,8 @@ import {
   CHARGE_DISCRIMINATOR,
   PAID_EVENT_DISCRIMINATOR,
   REFUSED_EVENT_DISCRIMINATOR,
+  TRADED_EVENT_DISCRIMINATOR,
+  TRADE_REFUSED_EVENT_DISCRIMINATOR,
 } from "./idl.js";
 import { reasonText } from "./reasons.js";
 
@@ -195,6 +197,72 @@ export function decodeEventBytes(raw: Uint8Array): DecodedEvent | null {
     };
   }
   return null;
+}
+
+export type TradeEvent = {
+  kind: "traded" | "refused";
+  rule: string;
+  amountIn: bigint;
+  amountOut: bigint;
+  minOut: bigint;
+  nonce: bigint;
+  reason: number;
+  reasonText: string;
+  suggestedOverride: bigint;
+};
+
+export function decodeTradeEventBytes(raw: Uint8Array): TradeEvent | null {
+  if (raw.length < 8) return null;
+  const disc = raw.subarray(0, 8);
+  if (buffersEqual(disc, TRADED_EVENT_DISCRIMINATOR)) {
+    if (raw.length < 72) return null;
+    return {
+      kind: "traded",
+      rule: new PublicKey(raw.subarray(8, 40)).toBase58(),
+      amountIn: readU64Le(raw, 40),
+      amountOut: readU64Le(raw, 48),
+      minOut: 0n,
+      nonce: readU64Le(raw, 56),
+      reason: 0,
+      reasonText: reasonText(0),
+      suggestedOverride: 0n,
+    };
+  }
+  if (buffersEqual(disc, TRADE_REFUSED_EVENT_DISCRIMINATOR)) {
+    if (raw.length < 73) return null;
+    const reason = raw[64] ?? 0;
+    return {
+      kind: "refused",
+      rule: new PublicKey(raw.subarray(8, 40)).toBase58(),
+      amountIn: readU64Le(raw, 40),
+      amountOut: 0n,
+      minOut: readU64Le(raw, 48),
+      nonce: readU64Le(raw, 56),
+      reason,
+      reasonText: reasonText(reason),
+      suggestedOverride: readU64Le(raw, 65),
+    };
+  }
+  return null;
+}
+
+export function tradeEventsFromLogs(logs: readonly string[], programId?: string): TradeEvent[] {
+  const source = programId === undefined ? logs : linesForProgram(logs, programId);
+  const out: TradeEvent[] = [];
+  for (const line of source) {
+    const match = PROGRAM_DATA.exec(line);
+    if (!match?.[1]) continue;
+    const event = decodeTradeEventBytes(Buffer.from(match[1], "base64"));
+    if (event) out.push(event);
+  }
+  return out;
+}
+
+export function tradeDecisionsFromTx(tx: TxView, programId: string, ruleFilter?: string): TradeEvent[] {
+  if (tx.err) return [];
+  const events = tradeEventsFromLogs(tx.logs, programId);
+  if (!ruleFilter) return events;
+  return events.filter((event) => event.rule === ruleFilter);
 }
 
 export function decodeEventsFromLogs(logs: readonly string[], programId?: string): DecodedEvent[] {
