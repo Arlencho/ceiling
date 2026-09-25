@@ -6,9 +6,10 @@ The grade function accepts bigint counters and Unix-second timestamps.
 
 ## Development and tests
 
-Run from `service/`, with Docker available:
+Run from `service/`, with Node 22, npm 11 and Docker available:
 
 ```sh
+npm install -g npm@11
 npm ci
 npm ci --ignore-scripts --prefix ../app
 export POSTGRES_PASSWORD="$(openssl rand -hex 24)"

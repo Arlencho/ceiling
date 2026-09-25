@@ -222,6 +222,8 @@ jobs:
       - name: Install the shared event parser dependencies
         run: npm ci
         working-directory: indexer
+      # Match the app lockfile generator; npm 10 reports Missing: typescript@5.9.3.
+      - run: npm install -g npm@11
       - name: Install app dependencies for grade parity
         run: npm ci --ignore-scripts --prefix ../app
       - run: npm run typecheck
@@ -244,7 +246,10 @@ jobs:
           bash "$GITHUB_WORKSPACE/scripts/ci-assert-test-count.sh" service "$RUNNER_TEMP/ci-service-tests.txt"
       - name: Stop Postgres
         if: always()
-        run: docker compose down -v
+        run: |
+          if [ -n "${POSTGRES_PASSWORD:-}" ]; then
+            docker compose down -v
+          fi
 
   sdk:
     runs-on: ubuntu-latest
