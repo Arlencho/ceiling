@@ -23,3 +23,19 @@ loadtest-cu: ## Measure per-decision compute units at scale (LiteSVM, single-thr
 .PHONY: validator
 validator: ## Run the local validator benchmark (ARGS=--smoke for ten rules and ten seconds)
 	cd onchain/validator && npm ci && npm run start -- $(ARGS)
+
+.PHONY: loadtest loadtest-replay loadtest-scale
+loadtest: ## Run CU and replay measurements, then generate SCALE.md
+	node offchain/run/cu.mjs
+	$(MAKE) loadtest-replay
+	$(MAKE) loadtest-scale
+
+loadtest-replay: ## Replay synthetic events into the local Postgres service
+	npm ci --prefix ../service --no-audit --no-fund
+	npm ci --prefix ../indexer --no-audit --no-fund
+	docker compose -f ../service/docker-compose.yml up -d --wait postgres
+	PGHOST=127.0.0.1 PGPORT=$${POSTGRES_PORT:-55432} PGUSER=veto PGDATABASE=veto_index PGPASSWORD="$${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}" ../service/node_modules/.bin/tsx offchain/run/replay.ts
+
+loadtest-scale: ## Assemble measured reports into docs/SCALE.md
+	node offchain/run/scale.mjs
+>>>>>>> b977188 (feat: add shared-ingest replay and scale report generator)

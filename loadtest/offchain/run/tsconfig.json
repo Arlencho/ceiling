@@ -1,0 +1,10 @@
+{
+  "extends": "../../../service/tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../../..",
+    "noEmit": true,
+    "typeRoots": ["../../../service/node_modules/@types"]
+  },
+  "include": ["*.ts"],
+  "exclude": []
+}

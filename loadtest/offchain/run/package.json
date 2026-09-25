@@ -1,0 +1,9 @@
+{
+  "name": "veto-loadtest-replay",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "../../../service/node_modules/.bin/tsc --noEmit -p tsconfig.json",
+    "test": "../../../service/node_modules/.bin/tsx --test replay.test.ts"
+  }
+}
