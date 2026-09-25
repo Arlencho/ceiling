@@ -22,7 +22,7 @@ export function rpcTransaction(tx: TxViewOut): RpcTransaction {
     meta: { err: tx.err, logMessages: tx.logs } };
 }
 const noRpc: Rpc = async () => { throw new Error('Unexpected network lookup'); };
-const tables = ['decisions', 'rule_stats', 'agent_stats'] as const;
+const tables = ['decisions', 'decision_keys', 'deltas', 'rule_stats', 'agent_stats'] as const;
 async function truncate() {
   await pool.query('TRUNCATE decisions, decision_keys, deltas, rule_stats, agent_stats, rules, cursors');
 }

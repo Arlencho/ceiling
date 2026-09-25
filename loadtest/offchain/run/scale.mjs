@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
 const reports = new URL('../../reports/', import.meta.url);
-const lines = ['# Scale measurements', '', 'Laptop results are a single-machine lower bound. Target arrival rates are not achieved throughput.', '', 'Not measured: production RPC delivery, webhook HTTP overhead, network latency, validator throughput unless separately reported, physical disk IO on Compose tmpfs, multi-node scaling, or long-duration stability. One million events per second through one Postgres is not claimed.', '', 'Determinism compares all business columns; source provenance and wall-clock updated_at are excluded explicitly.', ''];
+const lines = ['# Scale measurements', '', 'Laptop results are a single-machine lower bound. Target arrival rates are not achieved throughput.', '', 'Not measured: production RPC delivery, webhook HTTP overhead, network latency, validator throughput unless separately reported, physical disk IO on Compose tmpfs, multi-node scaling, or long-duration stability. One million events per second through one Postgres is not claimed.', '', 'Determinism compares decisions, decision_keys, deltas, rule_stats and agent_stats across all business columns; decisions.source provenance and rule_stats/agent_stats wall-clock updated_at are excluded explicitly.', ''];
 function flatten(value, prefix = '') {
   return Object.entries(value).flatMap(([key, item]) => {
     const path = prefix ? `${prefix}.${key}` : key;

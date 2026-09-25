@@ -27,7 +27,8 @@ not a physical-disk durability or IO measurement.
 
 The determinism phase runs generated transactions through webhook's shared adapter,
 truncates its private schema, invokes the real backfill scanner against an in-memory
-RPC history, and deep-compares sorted business rows. Only source and updated_at are
+RPC history, and deep-compares sorted business rows in decisions, decision_keys,
+deltas, rule_stats and agent_stats. Only source and updated_at are
 excluded because they describe the ingestion run. It prints each table's row count
 and fails on any other difference. A private per-process schema is dropped on exit.
 No application tables are truncated. Do not pass PGOPTIONS with a custom search_path.
