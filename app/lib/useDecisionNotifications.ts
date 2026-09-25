@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 
 import { scanDecisionsIfAllowed } from './decisionNotifyTask';
+import { holdPathFromNoticeData } from './holdNotify';
 import { decisionPathFromNoticeData } from './notify';
 
 export function useDecisionNotifications(): void {
@@ -19,7 +20,8 @@ export function useDecisionNotifications(): void {
     if (handled.current === key) {
       return;
     }
-    const path = decisionPathFromNoticeData(last.notification.request.content.data);
+    const data = last.notification.request.content.data;
+    const path = decisionPathFromNoticeData(data) ?? holdPathFromNoticeData(data);
     if (!path) {
       return;
     }

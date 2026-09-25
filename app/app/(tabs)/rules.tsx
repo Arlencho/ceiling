@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Path, Svg } from 'react-native-svg';
 
 import { CatchMark } from '../../components/backglass/CatchMark';
+import { HoldEntry } from '../../components/hold/HoldEntry';
 import { Button } from '../../components/Button';
 import { ClusterPill } from '../../components/daily/ClusterPill';
 import { LivePill } from '../../components/daily/LivePill';
@@ -58,6 +59,7 @@ export default function RulesScreen() {
         }
       />
       <ConnectGate>
+        <HoldEntry />
         {chain.configError ? <EmptyState>{chain.configError}</EmptyState> : null}
         {chain.error && chain.mandateStatus !== 'rate-limited' ? (
           <EmptyState>{chain.error}</EmptyState>

@@ -200,6 +200,12 @@ async function scanOnce(): Promise<void> {
   } catch {
     // Decision notices already landed. The next check can write the quiet note.
   }
+  try {
+    const { raiseHoldAlertsOnScan } = await import('./holdNotify');
+    await raiseHoldAlertsOnScan();
+  } catch {
+    // Decision notices already landed. The next check can raise hold alerts.
+  }
   if (unread > 0) {
     throw new Error('A mandate ledger could not be read');
   }
