@@ -2,9 +2,10 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 
 // Callers may pass a partial env. This package merges a required NODE_ENV into
-// ProcessEnv, and these checks only read VETO_KEYS_DIR.
+// ProcessEnv; key resolution only reads the two optional paths below.
 type KeysEnv = {
   VETO_KEYS_DIR?: string;
+  VETO_E2E_FUNDER?: string;
 };
 
 // VETO_KEYS_DIR when it is set, otherwise <repo>/keys. Same rule as tools/lib.ts keysDir.
@@ -34,4 +35,17 @@ export function readDeployerKey(repoRoot: string, env?: KeysEnv): string {
 
 function isMissing(err: unknown): boolean {
   return typeof err === 'object' && err !== null && 'code' in err && (err as { code?: unknown }).code === 'ENOENT';
+}
+
+// An explicit funder path is absolute or relative to the repository root.
+export function readFunderKey(repoRoot: string, env?: KeysEnv): string {
+  const configured = (env ?? process.env).VETO_E2E_FUNDER?.trim();
+  if (!configured) return readDeployerKey(repoRoot, env);
+  const path = resolve(repoRoot, configured);
+  try {
+    return readFileSync(path, 'utf8');
+  } catch (err) {
+    if (isMissing(err)) throw new Error(`devnet journey: funder key not found at ${path}`);
+    throw err;
+  }
 }

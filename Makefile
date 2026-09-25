@@ -105,17 +105,18 @@ tools-test: ## Typecheck and test the decision-record tools
 	cd tools && npm run typecheck && npm test
 
 # Real devnet. Skipped in `npm test` unless VETO_E2E=1. Needs keys/deployer.json,
-# the mint authority recorded in docs/DEVNET.md. That file is gitignored.
+# VETO_E2E_FUNDER defaults to that key and must hold USDC from faucet.circle.com.
+EXPO_PUBLIC_VETO_MINT ?= 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
 e2e-devnet: ## Run the devnet journey through the app and the agent SDK
 	cd app && npm ci
 	cd sdk && npm ci
 	cd indexer && npm ci
 	cd tools && npm ci
 	cd app && VETO_E2E=1 \
-	  VETO_RPC=https://api.devnet.solana.com \
-	  EXPO_PUBLIC_VETO_RPC=https://api.devnet.solana.com \
+	  VETO_RPC="$(VETO_RPC)" \
+	  EXPO_PUBLIC_VETO_RPC="$(VETO_RPC)" \
 	  EXPO_PUBLIC_VETO_PROGRAM_ID=3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV \
-	  EXPO_PUBLIC_VETO_MINT=2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU \
+	  EXPO_PUBLIC_VETO_MINT="$(EXPO_PUBLIC_VETO_MINT)" \
 	  EXPO_PUBLIC_VETO_EXPLORER_CLUSTER=devnet \
 	  EXPO_PUBLIC_VETO_MINT_DECIMALS=6 \
 	  npx tsx --experimental-test-module-mocks --test e2e/devnetJourney.test.ts
