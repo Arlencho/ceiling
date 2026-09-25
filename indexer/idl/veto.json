@@ -284,6 +284,63 @@
       "args": []
     },
     {
+      "name": "close_trade_rule",
+      "discriminator": [
+        93,
+        102,
+        200,
+        106,
+        195,
+        121,
+        250,
+        120
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "rule",
+          "writable": true
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rule"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "deposit",
       "discriminator": [
         242,
@@ -398,7 +455,8 @@
           ]
         },
         {
-          "name": "token_program"
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": [
@@ -517,7 +575,8 @@
           ]
         },
         {
-          "name": "token_program"
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": [
@@ -672,6 +731,71 @@
       ]
     },
     {
+      "name": "grant_trade_override",
+      "discriminator": [
+        133,
+        223,
+        203,
+        45,
+        174,
+        92,
+        157,
+        151
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "rule",
+          "writable": true
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rule"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "amount_in",
+          "type": "u64"
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "init_vault",
       "discriminator": [
         77,
@@ -773,7 +897,8 @@
           "name": "mint"
         },
         {
-          "name": "token_program"
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
           "name": "system_program",
@@ -881,6 +1006,133 @@
           "type": {
             "defined": {
               "name": "OpenMandateArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "open_trade_rule",
+      "discriminator": [
+        109,
+        183,
+        63,
+        166,
+        60,
+        202,
+        82,
+        15
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rule",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "args.rule_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "in_mint"
+        },
+        {
+          "name": "out_mint"
+        },
+        {
+          "name": "exchange_program"
+        },
+        {
+          "name": "pool"
+        },
+        {
+          "name": "pool_authority"
+        },
+        {
+          "name": "pool_in_vault"
+        },
+        {
+          "name": "pool_out_vault"
+        },
+        {
+          "name": "pool_mint"
+        },
+        {
+          "name": "pool_fee_account"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "OpenTradeRuleArgs"
             }
           }
         }
@@ -1085,7 +1337,8 @@
           ]
         },
         {
-          "name": "token_program"
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
@@ -1146,6 +1399,73 @@
         },
         {
           "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "revoke_trade_rule",
+      "discriminator": [
+        112,
+        252,
+        178,
+        223,
+        55,
+        115,
+        217,
+        201
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "rule",
+          "writable": true
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "writable": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
@@ -1269,7 +1589,8 @@
           ]
         },
         {
-          "name": "token_program"
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": [
@@ -1355,6 +1676,115 @@
       "args": [
         {
           "name": "id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "trade",
+      "discriminator": [
+        178,
+        144,
+        26,
+        216,
+        241,
+        187,
+        206,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "agent",
+          "signer": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "rule",
+          "writable": true
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "writable": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "exchange_program"
+        },
+        {
+          "name": "pool"
+        },
+        {
+          "name": "pool_authority"
+        },
+        {
+          "name": "pool_in_vault",
+          "writable": true
+        },
+        {
+          "name": "pool_out_vault",
+          "writable": true
+        },
+        {
+          "name": "pool_mint",
+          "writable": true
+        },
+        {
+          "name": "pool_fee_account",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount_in",
+          "type": "u64"
+        },
+        {
+          "name": "min_out",
+          "type": "u64"
+        },
+        {
+          "name": "nonce",
           "type": "u64"
         }
       ]
@@ -1556,7 +1986,8 @@
           ]
         },
         {
-          "name": "token_program"
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": [
@@ -1618,6 +2049,32 @@
         63,
         55,
         18
+      ]
+    },
+    {
+      "name": "TradeLedger",
+      "discriminator": [
+        200,
+        191,
+        201,
+        165,
+        93,
+        179,
+        79,
+        190
+      ]
+    },
+    {
+      "name": "TradeRule",
+      "discriminator": [
+        71,
+        199,
+        163,
+        41,
+        101,
+        116,
+        241,
+        212
       ]
     }
   ],
@@ -1841,6 +2298,32 @@
         62,
         106,
         169
+      ]
+    },
+    {
+      "name": "TradeRefused",
+      "discriminator": [
+        97,
+        219,
+        5,
+        169,
+        115,
+        219,
+        109,
+        235
+      ]
+    },
+    {
+      "name": "Traded",
+      "discriminator": [
+        225,
+        202,
+        73,
+        175,
+        147,
+        43,
+        160,
+        150
       ]
     }
   ],
@@ -2094,6 +2577,56 @@
       "code": 6049,
       "name": "BadVaultAuthority",
       "msg": "token account authority is not the vault"
+    },
+    {
+      "code": 6050,
+      "name": "InvalidTradeRulePda",
+      "msg": "trade rule address does not match its stored fields"
+    },
+    {
+      "code": 6051,
+      "name": "TradeDeltaMismatch",
+      "msg": "the swap moved a different amount than the rule allowed"
+    },
+    {
+      "code": 6052,
+      "name": "PoolAccountMismatch",
+      "msg": "pool accounts do not match the trade rule"
+    },
+    {
+      "code": 6053,
+      "name": "TradeLimitsOutOfOrder",
+      "msg": "per-trade maximum, daily limit, and cap are out of order"
+    },
+    {
+      "code": 6054,
+      "name": "FloorDenominatorRequired",
+      "msg": "floor denominator must be greater than zero"
+    },
+    {
+      "code": 6055,
+      "name": "ExchangeNotSupported",
+      "msg": "this exchange is not supported"
+    },
+    {
+      "code": 6056,
+      "name": "DestinationNotOwnedByOwner",
+      "msg": "destination token account is not owned by the rule owner"
+    },
+    {
+      "code": 6057,
+      "name": "UnexpectedTradeAccount",
+      "msg": "an extra account was passed to trade"
+    },
+    {
+      "code": 6058,
+      "name": "TradeRuleNotActive",
+      "msg": "trade rule is not active"
+    },
+    {
+      "code": 6059,
+      "name": "TradeRuleStillActive",
+      "msg": "trade rule is still active"
     }
   ],
   "types": [
@@ -2882,6 +3415,54 @@
       }
     },
     {
+      "name": "OpenTradeRuleArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rule_id",
+            "type": "u64"
+          },
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "exchange_kind",
+            "type": "u8"
+          },
+          {
+            "name": "cap",
+            "type": "u64"
+          },
+          {
+            "name": "per_trade_max",
+            "type": "u64"
+          },
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          },
+          {
+            "name": "floor_num",
+            "type": "u64"
+          },
+          {
+            "name": "floor_den",
+            "type": "u64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "purpose",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
       "name": "Paid",
       "type": {
         "kind": "struct",
@@ -2996,6 +3577,309 @@
           },
           {
             "name": "suggested_override",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeEntry",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ts",
+            "type": "i64"
+          },
+          {
+            "name": "amount_in",
+            "type": "u64"
+          },
+          {
+            "name": "amount_out",
+            "type": "u64"
+          },
+          {
+            "name": "min_out",
+            "type": "u64"
+          },
+          {
+            "name": "counterparty",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "suggested_override",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "reason",
+            "type": "u8"
+          },
+          {
+            "name": "_pad",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeLedger",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rule",
+            "type": "pubkey"
+          },
+          {
+            "name": "total",
+            "type": "u32"
+          },
+          {
+            "name": "head",
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_pad",
+            "type": {
+              "array": [
+                "u8",
+                1
+              ]
+            }
+          },
+          {
+            "name": "entries",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "TradeEntry"
+                  }
+                },
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeRefused",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rule",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_in",
+            "type": "u64"
+          },
+          {
+            "name": "min_out",
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "reason",
+            "type": "u8"
+          },
+          {
+            "name": "suggested_override",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeRule",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "source",
+            "type": "pubkey"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          },
+          {
+            "name": "in_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "out_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "exchange_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "exchange_kind",
+            "type": "u8"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_in_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_out_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_fee_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "rule_id",
+            "type": "u64"
+          },
+          {
+            "name": "cap",
+            "type": "u64"
+          },
+          {
+            "name": "spent",
+            "type": "u64"
+          },
+          {
+            "name": "per_trade_max",
+            "type": "u64"
+          },
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          },
+          {
+            "name": "window_spent",
+            "type": "u64"
+          },
+          {
+            "name": "window_start",
+            "type": "i64"
+          },
+          {
+            "name": "floor_num",
+            "type": "u64"
+          },
+          {
+            "name": "floor_den",
+            "type": "u64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "override_amount",
+            "type": "u64"
+          },
+          {
+            "name": "override_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "last_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "purpose",
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "trade_count",
+            "type": "u32"
+          },
+          {
+            "name": "refusal_count",
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Traded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rule",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_in",
+            "type": "u64"
+          },
+          {
+            "name": "amount_out",
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "spent",
             "type": "u64"
           }
         ]
