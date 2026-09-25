@@ -10,10 +10,14 @@ const pending = new Set<Promise<void>>();
 
 function loadHaptics(): Promise<HapticsModule | null> {
   if (!loading) {
-    loading = import('expo-haptics').then(
-      (mod) => mod,
-      () => null,
-    );
+    // Keep native module resolution on the same path as other Expo modules.
+    // A dynamic import of Expo's TypeScript entry bypasses module mocks on
+    // Node 22 and can cache a failed native load for the whole session.
+    loading = Promise.resolve()
+      // Native resolution must stay lazy so missing modules remain harmless.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      .then(() => require('expo-haptics') as HapticsModule)
+      .catch(() => null);
   }
   return loading;
 }

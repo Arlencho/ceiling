@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { describe, test, mock } from 'node:test';
+import { afterEach, describe, test, mock } from 'node:test';
 
 import { act, createElement, type ReactElement, type ReactNode } from 'react';
 import { create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
@@ -178,6 +178,12 @@ mock.module('expo-haptics', {
   },
 });
 
+// Await the actual lazy loader, not an arbitrary number of microtasks.
+async function settleHapticsMock() {
+  const { hapticsSettled } = await import('./haptics');
+  await hapticsSettled();
+}
+
 function flatStyle(style: unknown): Record<string, unknown> {
   if (Array.isArray(style)) {
     return Object.assign({}, ...style.map((item) => flatStyle(item)));
@@ -237,7 +243,19 @@ function byLabel(root: ReactTestRenderer, label: string): ReactTestInstance {
   return found[0];
 }
 
+const mounted: ReactTestRenderer[] = [];
+
+afterEach(async () => {
+  await act(async () => {
+    for (const root of mounted.splice(0)) {
+      root.unmount();
+    }
+  });
+  await settleHapticsMock();
+});
+
 async function mount(node: ReactElement): Promise<ReactTestRenderer> {
+  await settleHapticsMock();
   timings.length = 0;
   let root: ReactTestRenderer | null = null;
   await act(async () => {
@@ -247,6 +265,7 @@ async function mount(node: ReactElement): Promise<ReactTestRenderer> {
     await Promise.resolve();
   });
   assert.ok(root);
+  mounted.push(root);
   return root;
 }
 
@@ -585,6 +604,48 @@ describe('backglass components', { concurrency: 1 }, () => {
       hostOf(root.root, 'Pressable').props.onLongPress();
     });
     assert.equal(confirmed, 2);
+  });
+
+  test('resetting during a hold cancels old ticks and completion and starts a fresh gesture', async () => {
+    const { HoldToApprove, HOLD_MS } = await import('./HoldToApprove');
+    motion.reduced = false;
+    haptics.length = 0;
+    let confirmed = 0;
+    const onConfirm = () => { confirmed += 1; };
+    const root = await mount(createElement(HoldToApprove, { onConfirm, resetKey: 0 }));
+    mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+      await act(async () => { hostOf(root.root, 'Pressable').props.onPressIn(); });
+      await settleHapticsMock();
+      const fill = timings.find((anim) => anim.duration === HOLD_MS);
+      assert.ok(fill?._cb);
+      const queuedCompletion = fill._cb;
+      await act(async () => {
+        root.update(createElement(HoldToApprove, { onConfirm, resetKey: 1 }));
+      });
+      await settleHapticsMock();
+      haptics.length = 0;
+      await act(async () => {
+        mock.timers.tick(HOLD_MS);
+        queuedCompletion({ finished: true });
+      });
+      await settleHapticsMock();
+      assert.equal(confirmed, 0, 'the old hold cannot open the wallet');
+      assert.deepEqual(haptics, [], 'the old hold cannot tick or report success');
+      const fillStyle = flatStyle(root.root.findByProps({ testID: 'hold-fill' }).props.style);
+      assert.equal((fillStyle.backgroundColor as { value: AnimatedValue }).value._value, 0);
+      await act(async () => { hostOf(root.root, 'Pressable').props.onPressIn(); });
+      const freshFill = [...timings].reverse().find((anim) => anim.duration === HOLD_MS);
+      assert.ok(freshFill?._cb);
+      mock.timers.tick(HOLD_MS * 0.75);
+      await act(async () => { freshFill._cb?.({ finished: true }); });
+      await settleHapticsMock();
+      assert.equal(confirmed, 1);
+      assert.deepEqual(haptics, ['impact:light', 'selection', 'selection', 'selection', 'notification:success']);
+    } finally {
+      await act(async () => { root.unmount(); });
+      mock.timers.reset();
+    }
   });
 
   test('pressing in starts the ring at once with a light haptic, a glow, and the fill colour', async () => {

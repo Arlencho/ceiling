@@ -87,6 +87,8 @@ function HoldToApproveGesture({
     }
   }
 
+  // Changing resetKey remounts the gesture. Cancel its animation and timers
+  // before the next gesture can start, including any queued completion.
   useEffect(
     () => () => {
       holding.current = false;
@@ -97,12 +99,6 @@ function HoldToApproveGesture({
     },
     [],
   );
-
-  // Changing resetKey remounts the gesture and clears its confirmation state.
-  useEffect(() => () => {
-    holding.current = false;
-    running.current?.stop();
-  }, []);
 
   function setGlow(to: number) {
     if (motionOn) {
