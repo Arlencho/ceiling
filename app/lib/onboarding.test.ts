@@ -1,3 +1,5 @@
+(globalThis as { __DEV__?: boolean }).__DEV__ = false;
+
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
 
@@ -38,9 +40,55 @@ function Host(type: string) {
   };
 }
 
+class AnimatedValue {
+  _value: number;
+  constructor(value: number) {
+    this._value = value;
+  }
+  setValue(value: number) {
+    this._value = value;
+  }
+  interpolate() {
+    return 0;
+  }
+  addListener() {
+    return 0;
+  }
+  removeListener() {}
+}
+
+const still = {
+  start(cb?: (result: { finished: boolean }) => void) {
+    cb?.({ finished: true });
+  },
+  stop() {},
+};
+
 mock.module('react-native', {
   namedExports: {
+    AccessibilityInfo: {
+      announceForAccessibility: () => undefined,
+      isReduceMotionEnabled: async () => true,
+      addEventListener: () => ({ remove() {} }),
+    },
     ActivityIndicator: Host('ActivityIndicator'),
+    Animated: {
+      Value: AnimatedValue,
+      View: Host('Animated.View'),
+      Text: Host('Animated.Text'),
+      timing: () => still,
+      delay: () => still,
+      sequence: () => still,
+      loop: () => still,
+      createAnimatedComponent: (Component: unknown) => Component,
+    },
+    Easing: {
+      linear: (amount: number) => amount,
+      cubic: (amount: number) => amount,
+      out: (easing: (amount: number) => number) => easing,
+      inOut: (easing: (amount: number) => number) => easing,
+      bezier: () => (amount: number) => amount,
+    },
     Linking: { openURL: async () => undefined },
     Pressable: Host('Pressable'),
     RefreshControl: Host('RefreshControl'),
@@ -55,6 +103,20 @@ mock.module('react-native', {
     Text: Host('Text'),
     TextInput: Host('TextInput'),
     View: Host('View'),
+  },
+});
+
+mock.module('react-native-svg', {
+  namedExports: {
+    Svg: Host('Svg'),
+    Path: Host('Path'),
+    Circle: Host('Circle'),
+    Rect: Host('Rect'),
+    G: Host('G'),
+    Text: Host('SvgText'),
+    Defs: Host('Defs'),
+    LinearGradient: Host('LinearGradient'),
+    Stop: Host('Stop'),
   },
 });
 
@@ -136,14 +198,19 @@ mock.module('./useChain', {
 });
 
 const CARD_BODIES = [
-  'Your agent holds none of your money and cannot move your money on its own. It can only ask the program to pay inside the rule.',
-  'You write one rule: who may be paid, the largest single payment, a total cap, and an expiry. The program enforces those limits.',
-  'When it asks for more than the largest single payment, the program does not pay. The chain records why: a transaction that moved nothing, with the reason.',
-  'Your phone can tell you, and you decide: allow that one payment, used once, never above the remaining cap, or revoke the rule. Anyone can check the record against the chain.',
+  'Your agent never holds your money. You approve one rule on this phone. Veto checks every payment it asks for, and anything outside the rule is refused before money moves.',
+  'You choose who your agent may pay, the most per payment, the total it may ever spend, and when the rule ends. The Veto program on Solana enforces it; your agent cannot change it.',
+  'If your agent asks for more than your rule allows, the Veto program refuses. Nothing moves, and the reason is saved on the blockchain.',
+  'Your phone tells you. You can let that one payment through or stop the rule, and anyone can check the record on the blockchain.',
 ] as const;
 
-const CONNECT_THESIS =
-  'The owner key lives in Seed Vault and never leaves it. The agent key holds authority and none of your money.';
+const NEXT_LABELS = [
+  'Next: you set one rule',
+  'Next: a refusal is saved',
+  'Next: you decide',
+] as const;
+
+const CONNECT_SCREEN = 'Open Solana Mobile wallet';
 
 const SEED_VAULT_LINE = 'The owner key stays in Seed Vault. This app never sees it.';
 
@@ -276,15 +343,16 @@ test('leaving the introduction before Skip or Connect shows it again', async () 
   const first = await mount(gate());
   const opening = await settle(first, (text) => text.includes(CARD_BODIES[0]));
   assert.equal(opening.includes(CARD_BODIES[0]), true);
+  assert.equal(opening.includes(SEED_VAULT_LINE), true);
   assert.equal(opening.includes('no funds'), false);
-  assert.equal(opening.includes(CONNECT_THESIS), false);
+  assert.equal(opening.includes(CONNECT_SCREEN), false);
   assert.equal(memory.get(ui.seenKey), undefined);
   await unmount(first);
 
   const second = await mount(gate());
   const again = await settle(second, (text) => text.includes(CARD_BODIES[0]));
-  assert.match(again, /It can only ask/);
-  assert.equal(again.includes(CONNECT_THESIS), false);
+  assert.match(again, /Your agent can only ask/);
+  assert.equal(again.includes(CONNECT_SCREEN), false);
   assert.equal(memory.get(ui.seenKey), undefined);
 });
 
@@ -299,7 +367,7 @@ test('Skip on every card stores the flag and the next launch shows Connect', asy
       labelsOf(root).some((label) => label.startsWith(`Introduction, ${i + 1} of 4.`)),
       `card ${i + 1} is not labelled`,
     );
-    assert.ok(button(root, 'Skip introduction'));
+    assert.ok(button(root, 'Skip to connect wallet'));
     const texts = root.root.findAll((node) => isHost(node, 'Text'));
     for (const node of texts) {
       assert.notEqual(node.props.allowFontScaling, false);
@@ -307,17 +375,17 @@ test('Skip on every card stores the flag and the next launch shows Connect', asy
     }
     if (i < CARD_BODIES.length - 1) {
       await act(async () => {
-        button(root, 'Next introduction card').props.onPress();
+        button(root, NEXT_LABELS[i] ?? NEXT_LABELS[0]).props.onPress();
       });
     }
   }
 
-  assert.ok(visibleText(root).includes(SEED_VAULT_LINE));
+  assert.ok(visibleText(root).includes('You decide.'));
   await act(async () => {
-    button(root, 'Skip introduction').props.onPress();
+    button(root, 'Skip to connect wallet').props.onPress();
     await new Promise((resolve) => setImmediate(resolve));
   });
-  const after = await settle(root, (text) => text.includes(CONNECT_THESIS));
+  const after = await settle(root, (text) => text.includes(CONNECT_SCREEN));
   assert.equal(after.includes(CARD_BODIES[0]), false);
   assert.equal(after.includes('no funds'), false);
   assert.equal(memory.get(ui.seenKey), '1');
@@ -325,9 +393,9 @@ test('Skip on every card stores the flag and the next launch shows Connect', asy
   await unmount(root);
 
   const next = await mount(gate());
-  const relaunch = await settle(next, (text) => text.includes(CONNECT_THESIS));
-  assert.equal(relaunch.includes('It can only ask'), false);
-  assert.ok(button(next, 'Connect'));
+  const relaunch = await settle(next, (text) => text.includes(CONNECT_SCREEN));
+  assert.equal(relaunch.includes('Your agent can only ask'), false);
+  assert.ok(button(next, 'Open Solana Mobile wallet'));
 });
 
 test('a failed seen-flag write still shows Connect and the next launch asks again', async () => {
@@ -336,10 +404,10 @@ test('a failed seen-flag write still shows Connect and the next launch asks agai
   await settle(root, (text) => text.includes(CARD_BODIES[0]));
   assert.equal(memory.get(ui.seenKey), undefined);
   await act(async () => {
-    button(root, 'Skip introduction').props.onPress();
+    button(root, 'Skip to connect wallet').props.onPress();
     await new Promise((resolve) => setImmediate(resolve));
   });
-  const after = await settle(root, (text) => text.includes(CONNECT_THESIS));
+  const after = await settle(root, (text) => text.includes(CONNECT_SCREEN));
   assert.equal(after.includes(CARD_BODIES[0]), false);
   assert.equal(memory.get(ui.seenKey), undefined);
   assert.equal(transactCalls, 0);
@@ -347,7 +415,7 @@ test('a failed seen-flag write still shows Connect and the next launch asks agai
 
   const next = await mount(gate());
   const again = await settle(next, (text) => text.includes(CARD_BODIES[0]));
-  assert.equal(again.includes(CONNECT_THESIS), false);
+  assert.equal(again.includes(CONNECT_SCREEN), false);
 });
 
 test('Connect on the last card finishes the introduction and connects', async () => {
@@ -355,29 +423,30 @@ test('Connect on the last card finishes the introduction and connects', async ()
   await settle(root, (text) => text.includes(CARD_BODIES[0]));
   for (let i = 0; i < CARD_BODIES.length - 1; i += 1) {
     await act(async () => {
-      button(root, 'Next introduction card').props.onPress();
+      button(root, NEXT_LABELS[i] ?? NEXT_LABELS[0]).props.onPress();
     });
   }
   const last = visibleText(root);
   assert.ok(last.includes(CARD_BODIES[3]));
-  assert.ok(last.includes(SEED_VAULT_LINE));
-  assert.ok(button(root, 'Skip introduction'));
-  assert.equal(last.includes(CONNECT_THESIS), false);
+  assert.ok(last.includes('You decide.'));
+  assert.ok(button(root, 'Skip to connect wallet'));
+  assert.equal(last.includes(CONNECT_SCREEN), false);
 
   await act(async () => {
-    button(root, 'Connect').props.onPress();
+    button(root, 'Connect wallet').props.onPress();
     await new Promise((resolve) => setImmediate(resolve));
   });
-  const home = await settle(root, (text) => text.includes('home'));
-  assert.equal(home.includes(CARD_BODIES[3]), false);
+  const connected = await settle(root, (text) => text.includes('Your Seeker ID, on this phone'));
+  assert.equal(connected.includes(CARD_BODIES[3]), false);
+  assert.equal(connected.includes('home'), false);
   assert.equal(memory.get(ui.seenKey), '1');
   assert.ok(transactCalls >= 1);
   await unmount(root);
 
   memory.delete(ui.sessionKey);
   const next = await mount(gate('home'));
-  const relaunch = await settle(next, (text) => text.includes(CONNECT_THESIS));
-  assert.equal(relaunch.includes('It can only ask'), false);
+  const relaunch = await settle(next, (text) => text.includes(CONNECT_SCREEN));
+  assert.equal(relaunch.includes('Your agent can only ask'), false);
   assert.equal(relaunch.includes('home'), false);
 });
 
@@ -422,8 +491,8 @@ test('Help can open the introduction again after it was skipped', async () => {
       createElement(ui.OnboardingProvider, null, createElement(ui.OnboardingRoute)),
     ),
   );
-  const text = await settle(route, (value) => value.includes(CARD_BODIES[0]));
-  assert.ok(text.includes(CARD_BODIES[0]));
+  const text = await settle(route, (value) => value.includes('Your agent asks. The rule decides. You get told.'));
+  assert.ok(text.includes('Your agent asks. The rule decides. You get told.'));
   assert.equal(labelsOf(route).includes('Help'), false);
   assert.equal(memory.get(ui.seenKey), '1');
 });
@@ -438,23 +507,13 @@ test('a connected owner can read the introduction again and leave on Done', asyn
       createElement(ui.OnboardingProvider, null, createElement(ui.OnboardingRoute)),
     ),
   );
-  await settle(route, (value) => value.includes(CARD_BODIES[0]));
-  for (let i = 0; i < CARD_BODIES.length - 1; i += 1) {
-    await act(async () => {
-      button(route, 'Next introduction card').props.onPress();
-    });
-  }
-  for (let i = 0; i < 40 && !labelsOf(route).includes('Done with the introduction'); i += 1) {
-    await act(async () => {
-      await new Promise((resolve) => setImmediate(resolve));
-    });
-  }
+  await settle(route, (value) => value.includes('Your agent asks. The rule decides. You get told.'));
   const last = visibleText(route);
-  assert.ok(last.includes(SEED_VAULT_LINE));
+  assert.ok(last.includes('You can read this again any time under Help.'));
   assert.ok(button(route, 'Done with the introduction'));
-  assert.equal(labelsOf(route).includes('Skip introduction'), false);
+  assert.equal(labelsOf(route).includes('Skip to connect wallet'), false);
   assert.equal(labelsOf(route).includes('Help'), false);
-  assert.equal(labelsOf(route).includes('Connect'), false);
+  assert.equal(labelsOf(route).includes('Connect wallet'), false);
   const calls = transactCalls;
   await act(async () => {
     button(route, 'Done with the introduction').props.onPress();

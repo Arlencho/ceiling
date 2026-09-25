@@ -1,30 +1,79 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { showsIntroduction } from '../lib/onboarding';
 import { useOnboarding } from '../lib/useOnboarding';
 import { useWallet } from '../lib/useWallet';
-import { SEEKER_APPROVAL_LINE, clusterNotice } from '../lib/wallet';
-import { Button } from './Button';
-import { OnboardingCards } from './OnboardingCards';
+import { clusterNotice } from '../lib/wallet';
+import { ConnectWalletScreen } from './firstrun/ConnectWalletScreen';
 import { colors, fonts } from './theme';
 
-const THESIS =
-  'The owner key lives in Seed Vault and never leaves it. The agent key holds authority and none of your money.';
+type IntroProps = {
+  showConnect: boolean;
+  connectBusy: boolean;
+  onSkip: () => Promise<void> | void;
+  showOtherWallet: boolean;
+  onConnect: () => Promise<void> | void;
+  onConnectOther: () => Promise<void> | void;
+};
+
+function IntroCards(props: IntroProps) {
+  const [View, setView] = useState<ComponentType<IntroProps> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void import('./OnboardingCards').then((mod) => {
+      if (alive) {
+        setView(() => mod.OnboardingCards);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (!View) {
+    return <ActivityIndicator color={colors.text} accessibilityLabel="Loading" />;
+  }
+  return <View {...props} />;
+}
+
+function Guide({ onFinish }: { onFinish: () => void }) {
+  const [View, setView] = useState<ComponentType<{ onFinish: () => void }> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void import('./firstrun/Guide').then((mod) => {
+      if (alive) {
+        setView(() => mod.FirstRunGuide);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (!View) {
+    return <ActivityIndicator color={colors.text} accessibilityLabel="Loading" />;
+  }
+  return <View onFinish={onFinish} />;
+}
 
 export function ConnectGate({ children }: { children: ReactNode }) {
   const wallet = useWallet();
   const onboarding = useOnboarding();
   const connected = wallet.ownerPublicKey !== null;
   const networkLine = wallet.cluster ? clusterNotice(wallet.cluster) : null;
+  const [freshRun, setFreshRun] = useState(false);
+  const [guideDone, setGuideDone] = useState(false);
+  const intro = showsIntroduction({ connected, seen: onboarding.seen });
+  if (wallet.ready && onboarding.ready && intro && !freshRun) {
+    setFreshRun(true);
+  }
 
   if (!wallet.ready || !onboarding.ready) {
     return <ActivityIndicator color={colors.text} accessibilityLabel="Loading" />;
   }
 
-  if (showsIntroduction({ connected, seen: onboarding.seen })) {
+  if (intro) {
     return (
-      <OnboardingCards
+      <IntroCards
         showConnect
         connectBusy={wallet.busy}
         onSkip={() => onboarding.markSeen()}
@@ -49,33 +98,24 @@ export function ConnectGate({ children }: { children: ReactNode }) {
     );
   }
 
+  if (freshRun && connected && wallet.ownerPublicKey && !guideDone) {
+    return <Guide onFinish={() => setGuideDone(true)} />;
+  }
+
   if (!connected || !wallet.ownerPublicKey) {
     return (
-      <View style={styles.block}>
-        <Text style={styles.thesis}>{THESIS}</Text>
-        {networkLine ? <Text style={styles.thesis}>{networkLine}</Text> : null}
-        <Text style={styles.thesis}>{SEEKER_APPROVAL_LINE}</Text>
-        <Button
-          label={wallet.busy ? 'Connecting...' : 'Connect'}
-          accessibilityLabel="Connect"
-          busy={wallet.busy}
-          onPress={() => {
-            void wallet.connect();
-          }}
-        />
-        {wallet.solanaMobileInstalled ? (
-          <Button
-            label="Use another wallet"
-            accessibilityLabel="Use another wallet"
-            invert={false}
-            busy={wallet.busy}
-            onPress={() => {
-              void wallet.connect({ chooser: true });
-            }}
-          />
-        ) : null}
-        {wallet.error ? <Text style={styles.error}>{wallet.error}</Text> : null}
-      </View>
+      <ConnectWalletScreen
+        cluster={wallet.cluster}
+        busy={wallet.busy}
+        error={wallet.error}
+        showOtherWallet={wallet.solanaMobileInstalled}
+        onConnect={() => {
+          void wallet.connect();
+        }}
+        onConnectOther={() => {
+          void wallet.connect({ chooser: true });
+        }}
+      />
     );
   }
 

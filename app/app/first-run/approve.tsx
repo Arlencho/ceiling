@@ -1,0 +1,25 @@
+import { useLocalSearchParams } from 'expo-router';
+import { useMemo } from 'react';
+
+import { ApprovalScreen } from '../../components/ApprovalScreen';
+import { parseRuleRequest } from '../../lib/ruleRequest';
+
+export default function ApproveRoute() {
+  const params = useLocalSearchParams();
+  const parsed = useMemo(() => {
+    const raw = params.url;
+    const url = Array.isArray(raw) ? raw[0] : raw;
+    if (typeof url === 'string' && url.length > 0) {
+      return parseRuleRequest(url);
+    }
+    return null;
+  }, [params.url]);
+
+  if (parsed && !parsed.ok) {
+    return <ApprovalScreen mode="request" request={null} invalidReason={parsed.reason} firstRun />;
+  }
+  if (parsed?.ok) {
+    return <ApprovalScreen mode="request" request={parsed.request} invalidReason={null} firstRun />;
+  }
+  return <ApprovalScreen mode="template" request={null} invalidReason={null} firstRun />;
+}

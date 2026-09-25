@@ -145,8 +145,8 @@ test('the rule screen offers one agent config block to copy and as a QR code', (
     'The agent signs charges with its own key and pays its own small SOL fees; it can never move funds outside this rule.',
   );
   const panel = read('../components/ConnectAgentPanel.tsx');
-  assert.match(panel, /Connect your agent/);
-  assert.match(panel, /label="Copy all"/);
+  assert.match(panel, /Give your agent its setup/);
+  assert.match(panel, /label="Copy setup text"/);
   assert.match(panel, /<QrCode value=\{configJson\} \/>/);
   assert.match(panel, /\{AGENT_CONNECT_LINE\}/);
 });
@@ -349,10 +349,10 @@ test('the QR code is the same JSON Copy all hands to the clipboard', async () =>
   assert.ok(root);
   const shown = root as ReactTestRenderer;
   const text = visibleText(shown);
-  assert.match(text, /Connect your agent/);
+  assert.match(text, /Give your agent its setup/);
   assert.match(text, new RegExp(config.mandate));
   assert.match(text, new RegExp(config.payeeTokenAccount));
-  assert.match(text, /Copy all/);
+  assert.match(text, /Copy setup text/);
   assert.ok(text.includes(AGENT_CONNECT_LINE));
   const image = shown.root.findAll((node) => isHost(node, 'Image'));
   assert.equal(image.length, 1);
@@ -361,7 +361,7 @@ test('the QR code is the same JSON Copy all hands to the clipboard', async () =>
   assert.equal(decodePng(Buffer.from(encoded, 'base64')), json);
   const button = shown.root
     .findAll((node) => isHost(node, 'Pressable'))
-    .find((node) => node.props.accessibilityLabel === 'Copy all');
+    .find((node) => node.props.accessibilityLabel === 'Copy setup text');
   assert.ok(button);
   button.props.onPress();
   assert.equal(copied, json);

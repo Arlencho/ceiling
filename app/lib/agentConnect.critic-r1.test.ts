@@ -16,6 +16,7 @@ import { STATUS_ACTIVE, STATUS_REVOKED } from './constants';
 import type { MandateAccount } from './mandate';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as { __DEV__?: boolean }).__DEV__ = false;
 
 function Host(type: string) {
   return function MockHost(props: { children?: ReactNode; style?: unknown } & Record<string, unknown>) {
@@ -26,6 +27,20 @@ function Host(type: string) {
     return createElement(type, { ...props, style }, props.children);
   };
 }
+
+mock.module('react-native-svg', {
+  namedExports: {
+    Svg: Host('Svg'),
+    Path: Host('Path'),
+    Circle: Host('Circle'),
+    Rect: Host('Rect'),
+    G: Host('G'),
+    Text: Host('SvgText'),
+    Defs: Host('Defs'),
+    LinearGradient: Host('LinearGradient'),
+    Stop: Host('Stop'),
+  },
+});
 
 mock.module('react-native', {
   namedExports: {
@@ -281,7 +296,7 @@ async function unmount(root: ReactTestRenderer): Promise<void> {
 test('critic r1 control: an active rule offers Copy all and a QR of the same block', async () => {
   const m = mandate();
   const root = await mountRule(m);
-  const text = await settle(root, (t) => t.includes('Copy all'));
+  const text = await settle(root, (t) => t.includes('Copy setup text'));
   const expected = agentChargeConfigJson({
     mandate: m.address,
     programId: CONFIG.programId,
@@ -298,12 +313,12 @@ test('critic r1 control: an active rule offers Copy all and a QR of the same blo
     cluster: 'devnet',
     rpcUrl: CONFIG.rpcUrl,
   });
-  assert.match(text, /Connect your agent/);
-  assert.match(text, /Copy all/);
+  assert.match(text, /Give your agent its setup/);
+  assert.match(text, /Copy setup text/);
   assert.equal(decodeQr(root), expected);
   const button = root.root
     .findAll((node) => isHost(node, 'Pressable'))
-    .find((node) => node.props.accessibilityLabel === 'Copy all');
+    .find((node) => node.props.accessibilityLabel === 'Copy setup text');
   assert.ok(button);
   await act(async () => {
     button.props.onPress();
@@ -318,7 +333,7 @@ test('critic r1: a revoked rule does not hand out an agent block', async () => {
   const root = await mountRule(m);
   const text = await settle(root, (t) => t.includes('already revoked on chain') && !t.includes('Reading the mint decimals'));
   assert.match(text, /already revoked on chain/, 'the screen rendered the revoked rule');
-  assert.doesNotMatch(text, /Copy all/, 'Copy all is offered on a revoked rule');
+  assert.doesNotMatch(text, /Copy setup text/, 'Copy setup text is offered on a revoked rule');
   assert.equal(decodeQr(root), null, 'a QR of the block is drawn for a revoked rule');
   await unmount(root);
 });
@@ -326,9 +341,9 @@ test('critic r1: a revoked rule does not hand out an agent block', async () => {
 test('critic r1: an expired rule does not hand out an agent block', async () => {
   const m = mandate({ expiresAt: BigInt(Math.floor(Date.now() / 1000) - 60) });
   const root = await mountRule(m);
-  const text = await settle(root, (t) => t.includes('Connect your agent') && !t.includes('Reading the mint decimals'));
-  assert.match(text, /Connect your agent/);
-  assert.doesNotMatch(text, /Copy all/, 'Copy all is offered on an expired rule');
+  const text = await settle(root, (t) => t.includes('Give your agent its setup') && !t.includes('Reading the mint decimals'));
+  assert.match(text, /Give your agent its setup/);
+  assert.doesNotMatch(text, /Copy setup text/, 'Copy setup text is offered on an expired rule');
   assert.equal(decodeQr(root), null, 'a QR of the block is drawn for an expired rule');
   await unmount(root);
 });
