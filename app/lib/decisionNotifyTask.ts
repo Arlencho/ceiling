@@ -8,6 +8,7 @@ import { tryLoadConfig } from './config';
 import type { MandateAccount } from './mandate';
 import { RATE_LIMIT_RETRY_MS } from './mandateRead';
 import { secureStore } from './mwa';
+import { expoQuietScheduler, QUIET_NOTE_RULE_KEY, refreshQuietNote, type QuietLedger } from './quietNote';
 import { isRateLimitError } from './rpcError';
 import {
   DECISION_NOTIFY_INTERVAL_MINUTES,
@@ -129,6 +130,7 @@ async function scanOnce(): Promise<void> {
 
   const decimalsCache = new Map<string, number>();
   const ledgers: NotifyMandateLedger[] = [];
+  const quietLedgers: QuietLedger[] = [];
   let unread = 0;
   for (const mandate of mandates) {
     try {
@@ -145,6 +147,12 @@ async function scanOnce(): Promise<void> {
         perTxMax: mandate.perTxMax,
         decimals,
         rows: snapshot.entries,
+      });
+      quietLedgers.push({
+        mandate: mandate.address,
+        rows: snapshot.entries,
+        total: snapshot.total,
+        decimals,
       });
     } catch {
       unread += 1;
@@ -174,6 +182,19 @@ async function scanOnce(): Promise<void> {
       await secureStore.setItem(seenStorageKey(mandate), serializeSeenIds(mandate, ids));
     },
   });
+  try {
+    await refreshQuietNote({
+      mandates,
+      ledgers: quietLedgers,
+      now: new Date(),
+      selectedAddress: await secureStore.getItem(QUIET_NOTE_RULE_KEY),
+      store: secureStore,
+      scheduler: await expoQuietScheduler(),
+      permissionGranted: true,
+    });
+  } catch {
+    // Decision notices already landed. The next check can write the quiet note.
+  }
   if (unread > 0) {
     throw new Error('A mandate ledger could not be read');
   }

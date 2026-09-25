@@ -14,6 +14,7 @@ import { LatestDecision } from '../../components/daily/LatestDecision';
 import { SpendBoard } from '../../components/daily/SpendBoard';
 import { StreakCall } from '../../components/daily/StreakCall';
 import { barUnits, openedAtSec, refusalStreak, ruleDay } from '../../components/daily/facts';
+import { HomeStay } from '../../components/renewal/RenewalBanner';
 import { EmptyState } from '../../components/EmptyState';
 import { OpenFirstRule } from '../../components/OpenFirstRule';
 import { ReadState } from '../../components/ReadState';
@@ -98,6 +99,15 @@ export default function OverviewScreen() {
               subtitle={`rule ${index + 1} of ${chain.mandates.length} · agent ${truncateAddress(mandate.agent)}`}
               onSwitch={() => router.push('/(tabs)/rules')}
             />
+            {live ? (
+              <HomeStay
+                mandate={mandate}
+                decimals={chain.decimals}
+                nowSec={nowSec}
+                onRenew={() => router.push(`/renew/${mandate.address}`)}
+                onQuietNote={() => router.push('/settings/quiet-note')}
+              />
+            ) : null}
             <SpendBoard
               kicker="Your agent can still spend"
               aside={`Pays only ${truncateAddress(mandate.merchant)}`}

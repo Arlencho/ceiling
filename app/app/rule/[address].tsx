@@ -13,6 +13,7 @@ import { ConnectGate } from '../../components/ConnectGate';
 import { SpendBoard } from '../../components/daily/SpendBoard';
 import { barUnits, openedAtSec, ruleDay } from '../../components/daily/facts';
 import { LivePill } from '../../components/daily/LivePill';
+import { RenewalBanner } from '../../components/renewal/RenewalBanner';
 import { EmptyState } from '../../components/EmptyState';
 import { ReadState } from '../../components/ReadState';
 import { Screen } from '../../components/Screen';
@@ -365,6 +366,12 @@ export default function RuleDetailScreen() {
             ) : notify.statusLine ? (
               <Text style={styles.explainCopy}>{notify.statusLine}</Text>
             ) : null}
+            <RenewalBanner
+              mandate={mandate}
+              decimals={amountDecimals}
+              nowSec={nowSec}
+              onOpen={() => router.push(`/renew/${mandate.address}`)}
+            />
             <View style={styles.identity}>
               <View style={styles.identityText}>
                 <Text style={styles.agentName}>{truncateAddress(mandate.agent)}</Text>

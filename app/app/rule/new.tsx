@@ -52,6 +52,13 @@ export default function NewRuleScreen() {
     ruleset?: string;
     version?: string;
     from?: string;
+    renew?: string;
+    days?: string;
+    cap?: string;
+    per?: string;
+    payee?: string;
+    purpose?: string;
+    agent?: string;
   }>();
   const chain = useChain();
   const stored = useRulesets();
@@ -96,6 +103,7 @@ export default function NewRuleScreen() {
 
   const template = params.template ? TEMPLATES.find((row) => row.id === params.template) : undefined;
   const fallback = template ?? templateById('charging-agent');
+  const renewing = params.renew === '1' && sourceMandate != null;
   const start: MandateFields = selectedRuleset
     ? {
         cap: selectedRuleset.cap,
@@ -106,11 +114,18 @@ export default function NewRuleScreen() {
       }
     : sourceMandate
       ? {
-          cap: formatBaseUnits(sourceMandate.cap, chain.decimals),
-          perTxMax: formatBaseUnits(sourceMandate.perTxMax, chain.decimals),
-          expiryDays: '7',
-          merchant: sourceMandate.merchant,
-          purpose: displayPurpose(sourceMandate.purpose),
+          cap: renewing && params.cap?.trim() ? params.cap.trim() : formatBaseUnits(sourceMandate.cap, chain.decimals),
+          perTxMax:
+            renewing && params.per?.trim()
+              ? params.per.trim()
+              : formatBaseUnits(sourceMandate.perTxMax, chain.decimals),
+          expiryDays: renewing && params.days?.trim() ? params.days.trim() : '7',
+          merchant:
+            renewing && params.payee?.trim() ? params.payee.trim() : sourceMandate.merchant,
+          purpose:
+            renewing && params.purpose != null && params.purpose.length > 0
+              ? params.purpose
+              : displayPurpose(sourceMandate.purpose),
         }
       : fallback
         ? applyTemplate(fallback)
@@ -122,7 +137,19 @@ export default function NewRuleScreen() {
             purpose: 'charging agent',
           };
 
-  const formKey = `${params.template ?? ''}:${params.ruleset ?? ''}:${params.version ?? ''}:${params.from ?? ''}`;
+  const formKey = [
+    params.template ?? '',
+    params.ruleset ?? '',
+    params.version ?? '',
+    params.from ?? '',
+    params.renew ?? '',
+    renewing ? (params.days ?? '') : '',
+    renewing ? (params.cap ?? '') : '',
+    renewing ? (params.per ?? '') : '',
+    renewing ? (params.payee ?? '') : '',
+    renewing ? (params.purpose ?? '') : '',
+    renewing ? (params.agent ?? '') : '',
+  ].join(':');
 
   return (
     <RuleCompose
@@ -130,8 +157,10 @@ export default function NewRuleScreen() {
       initial={start}
       selectedRuleset={selectedRuleset}
       sourceMandate={sourceMandate ?? null}
-      authoring={params.ruleset === 'new' || Boolean(sourceMandate)}
+      authoring={(params.ruleset === 'new' || Boolean(sourceMandate)) && !renewing}
       applying={selectedRuleset != null}
+      renewing={renewing}
+      initialAgent={renewing ? params.agent?.trim() || sourceMandate.agent : ''}
     />
   );
 }
@@ -142,19 +171,23 @@ function RuleCompose({
   sourceMandate,
   authoring,
   applying,
+  renewing,
+  initialAgent,
 }: {
   initial: MandateFields;
   selectedRuleset: Ruleset | null;
   sourceMandate: MandateAccount | null;
   authoring: boolean;
   applying: boolean;
+  renewing: boolean;
+  initialAgent: string;
 }) {
   const chain = useChain();
   const wallet = useWallet();
   const stored = useRulesets();
   const router = useRouter();
   const [fields, setFields] = useState<MandateFields>(initial);
-  const [agentAddress, setAgentAddress] = useState('');
+  const [agentAddress, setAgentAddress] = useState(initialAgent);
   const [rulesetName, setRulesetName] = useState(selectedRuleset?.name ?? '');
   const [formError, setFormError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -298,11 +331,13 @@ function RuleCompose({
     }
   };
 
-  const title = applying && selectedRuleset
-    ? `Apply ${selectedRuleset.name} v${selectedRuleset.version}`
-    : authoring
-      ? 'Author a ruleset'
-      : 'Write a rule';
+  const title = renewing
+    ? 'The next rule'
+    : applying && selectedRuleset
+      ? `Apply ${selectedRuleset.name} v${selectedRuleset.version}`
+      : authoring
+        ? 'Author a ruleset'
+        : 'Write a rule';
 
   const connected = wallet.ownerPublicKey !== null;
   const footer = connected ? (
@@ -352,17 +387,22 @@ function RuleCompose({
         accessory={chain.config ? <ClusterPill cluster={chain.config.explorerCluster} /> : null}
       />
       <ConnectGate>
-        {!authoring && !applying ? (
+        {!authoring && !applying && !renewing ? (
           <ProgressStrip current="approve" done={['learn', 'connect', 'agent']} />
         ) : null}
-        {!authoring && !applying ? (
+        {!authoring && !applying && !renewing ? (
           <View style={styles.kickerRow}>
             <Text style={styles.kicker}>Write the rule yourself</Text>
             <Text style={styles.meta}>No agent request yet</Text>
           </View>
         ) : null}
         <Text style={styles.h2}>{title}</Text>
-        {sourceMandate ? (
+        {renewing ? (
+          <EmptyState>
+            One Seed Vault signature opens this next rule. The rule that is ending stays as it is
+            until it ends. Nothing is signed until you hold to approve.
+          </EmptyState>
+        ) : sourceMandate ? (
           <EmptyState>
             {`This rule is already on chain and cannot change. Saving writes a new ruleset version on this phone. Apply it to a new agent. The existing agent keeps these numbers. ${RULESET_ENVELOPE} ${PAYEE_NOT_IN_RULESET} ${PAYEE_PREFILL}`}
           </EmptyState>
