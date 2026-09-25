@@ -36,7 +36,7 @@ function found<T>(value: T | undefined): T {
   return value;
 }
 
-async function rpc(method: string, params: unknown[]): Promise<number | null> {
+async function rpc(method: 'getSlot' | 'getBlockTime', params: unknown[]): Promise<number | null> {
   try {
     const endpoint = process.env.VETO_RPC;
     if (!endpoint) throw new Error();
@@ -50,6 +50,8 @@ async function rpc(method: string, params: unknown[]): Promise<number | null> {
     if (method === 'getSlot' && body.result === null) throw new Error();
     return body.result as number | null;
   } catch {
+    // Block timestamps are optional; retain index health when they are unavailable.
+    if (method === 'getBlockTime') return null;
     // Never propagate transport errors: they can contain the credentialed URL.
     throw new HttpError(503, 'RPC unavailable');
   }

@@ -20,10 +20,17 @@ const opens = new Map<string, OpenMandate>(records.filter((r): r is OpenMandate 
 const selected = [...opens.values()].find(o => records.filter(r => r.mandate === o.mandate).length > 5)!;
 let url: string;
 let rpcMode = 'ok';
+let rpcFailure: { method: string; slot?: number; code?: number } | null = null;
 const rpc = createServer(async (req, res) => {
   let text = ''; for await (const part of req) text += part;
   const call = JSON.parse(text);
   assert.equal(req.url, '/?api-key=private-test-key');
+  if (rpcFailure?.method === call.method && (rpcFailure.slot === undefined || rpcFailure.slot === call.params[0])) {
+    if (rpcFailure.code === undefined) { req.socket.destroy(); return; }
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ jsonrpc: '2.0', id: call.id, error: { code: rpcFailure.code, message: 'private-test-key' } }));
+    return;
+  }
   const result = rpcMode === 'missing-time' && call.method === 'getBlockTime' ? null : call.method === 'getSlot' ? 999999999 : call.params[0] === 999999999 ? 1800000000 : 1799999990;
   res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify(rpcMode !== 'error' ? { jsonrpc: '2.0', id: call.id, result } : { error: { message: 'private-test-key' } }));
@@ -136,7 +143,33 @@ test('health reports RPC tip, cursor progress, exact lag, watermark and counts f
   assert.deepEqual(body.rows_per_source, { grpc: '0', webhook: '0', backfill: count, logs: '0' });
 });
 
-test('RPC failures return sanitized service unavailable errors', async () => {
+for (const slot of [999999999, 999999900]) {
+  for (const code of [-32001, -32004, -32014, -32007, -32009, undefined]) {
+    test(`health retains index progress when block time for slot ${slot} fails with ${code ?? 'a transport failure'}`, async () => {
+      const count = (await pool.query('SELECT count(*)::text AS count FROM decisions')).rows[0].count;
+      rpcFailure = { method: 'getBlockTime', slot, code };
+      try {
+        const { response, body } = await get('/v1/health');
+        assert.equal(response.status, 200);
+        assert.deepEqual(body, {
+          chain_tip_slot: '999999999', last_indexed_slot: '999999900', lag_slots: '99', lag_ms: null,
+          finalized_watermark: '999999890',
+          rows_per_source: { grpc: '0', webhook: '0', backfill: count, logs: '0' },
+        });
+      } finally { rpcFailure = null; }
+    });
+  }
+}
+
+test('getSlot transport failures return sanitized service unavailable errors', async () => {
+  rpcFailure = { method: 'getSlot' };
+  try {
+    const { response, body } = await get('/v1/health');
+    assert.equal(response.status, 503); assert.deepEqual(body, { error: 'RPC unavailable' });
+  } finally { rpcFailure = null; }
+});
+
+test('getSlot JSON-RPC failures return sanitized service unavailable errors', async () => {
   rpcMode = 'error';
   try {
     const { response, body } = await get('/v1/health');
