@@ -113,7 +113,7 @@ export function TradeRuleForm({
         <View>
           {formError ? <Text style={styles.error}>{formError}</Text> : null}
           <HoldToApprove
-            label={wallet.busy || opening ? 'Waiting on Seed Vault...' : 'Hold to approve rule'}
+            label="Press and hold to approve rule"
             disabled={!ready || wallet.busy}
             resetKey={holdReset}
             onConfirm={() => {
@@ -162,7 +162,7 @@ export function TradeRuleForm({
           label="Floor, percent of today's rate"
           value={floorPercent}
           onChangeText={setFloorPercent}
-          hint={percent != null && percent >= 1 && percent <= 100 ? floorPhrase(percent) : floorPhrase(DEFAULT_FLOOR_PERCENT)}
+          hint={percent != null && percent >= 1 && percent <= 99 ? floorPhrase(percent) : floorPhrase(DEFAULT_FLOOR_PERCENT)}
         />
         <Field label="How long, in days" value={days} onChangeText={setDays} />
         <Field label="Purpose" value={purpose} onChangeText={setPurpose} multiline />

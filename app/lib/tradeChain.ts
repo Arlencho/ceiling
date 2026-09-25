@@ -13,7 +13,6 @@ import {
   KIND_OVERRIDE,
   OPEN_FEE_MARGIN_LAMPORTS,
   PURPOSE_MAX_LEN,
-  STATUS_ACTIVE,
   STATUS_REVOKED,
   TRADE_LEDGER_ACCOUNT_SIZE,
   TRADE_RULE_ACCOUNT_SIZE,
@@ -28,6 +27,7 @@ import {
   decodeTradeLedgerAccount,
   decodeTradeRuleAccount,
   deriveTradeTokenAccount,
+  isTradeActive,
   tradeLedgerPda,
   tradeRuleAsMandate,
   tradeRulePda,
@@ -355,7 +355,7 @@ export async function closeTradeRule(
   }
   const tokenProgram = mintInfo.owner;
   const sourceInfo = await client.connection.getAccountInfo(source, 'confirmed');
-  if (live.status === STATUS_ACTIVE && !sourceInfo) {
+  if (isTradeActive(live, BigInt(Math.floor(Date.now() / 1000))) && !sourceInfo) {
     throw new Error('The input account is not on chain, so this active rule cannot be closed.');
   }
   const amount = sourceInfo ? readTokenAmount(sourceInfo.data) : 0n;

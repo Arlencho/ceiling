@@ -21,7 +21,7 @@ import { PAYEE_NOT_IN_RULESET, PAYEE_PREFILL, RULESET_ENVELOPE } from '../../lib
 import { TEMPLATES } from '../../lib/templates';
 import { poolByAddress } from '../../lib/pools';
 import { formatTokenAmount, rulesTokenSummary, tokenSymbol } from '../../lib/tokens';
-import { tradePairLabel } from '../../lib/tradeRule';
+import { isTradeActive, tradePairLabel } from '../../lib/tradeRule';
 import { useChain } from '../../lib/useChain';
 import { useRefreshOnFocus } from '../../lib/useRefreshOnFocus';
 import { useRulesets } from '../../lib/useRulesets';
@@ -38,7 +38,7 @@ export default function RulesScreen() {
   const selected = chain.mandate?.address ?? chain.tradeRule?.address ?? null;
   const liveCount =
     liveMandateCount(chain.mandates, chain.nowMs) +
-    tradeRules.filter((rule) => rule.status === 0 && BigInt(Math.floor(chain.nowMs / 1000)) < rule.expiresAt).length;
+    tradeRules.filter((rule) => isTradeActive(rule, nowSec)).length;
 
   const onRefresh = useCallback(() => {
     void chain.refresh();

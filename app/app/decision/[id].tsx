@@ -331,7 +331,10 @@ function RefusedBody({
         {split ? <LimitTrack allowedPct={split.allowedPct} overPct={split.overPct} /> : null}
         <View style={styles.grid}>
           <Fact
-            label={row.family === 'trade' ? 'Tried account' : 'To payee'}
+            label={row.family === 'trade'
+              ? (row.reason === REASON_OUTPUT_ACCOUNT_NOT_ALLOWED || row.reason === REASON_POOL_NOT_ALLOWED
+                ? 'Tried account' : 'Output account')
+              : 'To payee'}
             value={
               row.family === 'trade' &&
               (row.reason === REASON_OUTPUT_ACCOUNT_NOT_ALLOWED || row.reason === REASON_POOL_NOT_ALLOWED)

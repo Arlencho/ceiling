@@ -4,7 +4,7 @@ import test from 'node:test';
 import { Keypair } from '@solana/web3.js';
 
 import { POOL_FEE_LINE, SOL_FOR_USDC, poolsForCluster } from './pools';
-import { validateTradeForm } from './tradeForm';
+import { floorPhrase, validateTradeForm } from './tradeForm';
 
 const POOLS = ['devnet-sol-usdc'];
 
@@ -89,4 +89,15 @@ test('a complete trade form keeps the floor at 90 and the amounts in base units'
     assert.equal(result.value.poolId, 'devnet-sol-usdc');
     assert.equal(result.value.agent, null);
   }
+});
+
+test('a 100 percent floor is rejected and 99 percent is accepted', () => {
+  assert.deepEqual(validateTradeForm(input({ floorPercent: '100' })), {
+    ok: false, message: 'Floor percent must be a whole number from 1 to 99.',
+  });
+  assert.equal(validateTradeForm(input({ floorPercent: '99' })).ok, true);
+});
+
+test('the floor hint explains that the exchange fee comes off first', () => {
+  assert.equal(floorPhrase(99), "at least 99 percent of today's rate. The exchange fee (0.30 percent) comes off first.");
 });

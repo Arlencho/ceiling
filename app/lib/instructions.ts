@@ -287,6 +287,8 @@ export function closeTradeRuleInstruction(args: {
   programId: PublicKey;
   owner: PublicKey;
   rule: PublicKey;
+  source: PublicKey;
+  tokenProgram: PublicKey;
 }): TransactionInstruction {
   const ledger = tradeLedgerPda(args.programId, args.rule);
   return new TransactionInstruction({
@@ -296,6 +298,8 @@ export function closeTradeRuleInstruction(args: {
       { pubkey: args.owner, isSigner: true, isWritable: true },
       { pubkey: args.rule, isSigner: false, isWritable: true },
       { pubkey: ledger, isSigner: false, isWritable: true },
+      { pubkey: args.source, isSigner: false, isWritable: true },
+      { pubkey: args.tokenProgram, isSigner: false, isWritable: false },
     ],
   });
 }

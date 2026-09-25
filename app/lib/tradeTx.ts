@@ -207,6 +207,8 @@ export function buildCloseTradeInstructions(args: {
       programId: args.programId,
       owner: args.owner,
       rule: args.rule,
+      source: args.source,
+      tokenProgram: args.tokenProgram,
     }),
   );
   return instructions;

@@ -40,7 +40,7 @@ function purposeLength(purpose: string): number {
 }
 
 export function floorPhrase(percent: number): string {
-  return `at least ${percent} percent of today's rate`;
+  return `at least ${percent} percent of today's rate. The exchange fee (0.30 percent) comes off first.`;
 }
 
 export function validateTradeForm(input: TradeFormInput): TradeFormResult {
@@ -93,11 +93,11 @@ export function validateTradeForm(input: TradeFormInput): TradeFormResult {
 
   const percentText = input.floorPercent.trim();
   if (!/^\d+$/.test(percentText)) {
-    return { ok: false, message: 'Floor percent must be a whole number from 1 to 100.' };
+    return { ok: false, message: 'Floor percent must be a whole number from 1 to 99.' };
   }
   const floorPercent = Number.parseInt(percentText, 10);
-  if (floorPercent < 1 || floorPercent > 100) {
-    return { ok: false, message: 'Floor percent must be a whole number from 1 to 100.' };
+  if (floorPercent < 1 || floorPercent > 99) {
+    return { ok: false, message: 'Floor percent must be a whole number from 1 to 99.' };
   }
 
   const daysText = input.days.trim();

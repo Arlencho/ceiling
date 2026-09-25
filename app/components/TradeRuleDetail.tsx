@@ -152,7 +152,7 @@ export function TradeRuleDetail({ rule }: { rule: TradeRuleAccount }) {
             <EmptyState>This rule is already stopped.</EmptyState>
           ) : (
             <HoldToApprove
-              label="Hold to stop this trade rule"
+              label="Press and hold to stop this trade rule"
               disabled={stopping || closing || chain.loading || chain.submitHeld}
               resetKey={stopReset}
               onConfirm={() => void onStop()}
@@ -161,7 +161,7 @@ export function TradeRuleDetail({ rule }: { rule: TradeRuleAccount }) {
           {!active ? (
             <View style={styles.block}>
               <HoldToApprove
-                label="Close and return the remaining input"
+                label="Press and hold to close and return the remaining input"
                 disabled={stopping || closing || chain.loading || chain.submitHeld}
                 resetKey={closeReset}
                 onConfirm={() => {
