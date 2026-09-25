@@ -51,8 +51,9 @@ export function tradeFixture(refused = false) {
       amountIn,
       200n,
       500n,
-      amountIn,
-      1000n,
+    ].map(u64),
+    ...Array.from({ length: 25 }, (_, i) => Buffer.concat([u64(BigInt(i)), u64(i === 0 ? amountIn : 0n)])),
+    ...[
       1n,
       1n,
       2000n,

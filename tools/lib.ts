@@ -1255,8 +1255,7 @@ export type TradeRuleAccount = {
   spent: bigint;
   perTradeMax: bigint;
   dailyLimit: bigint;
-  windowSpent: bigint;
-  windowStart: bigint;
+  dailyBuckets: { hour: bigint; amount: bigint }[];
   floorNum: bigint;
   floorDen: bigint;
   expiresAt: bigint;
@@ -1345,8 +1344,7 @@ export function decodeTradeRule(data: Buffer): TradeRuleAccount {
   let spent: bigint;
   let perTradeMax: bigint;
   let dailyLimit: bigint;
-  let windowSpent: bigint;
-  let windowStart: bigint;
+  const dailyBuckets: { hour: bigint; amount: bigint }[] = [];
   let floorNum: bigint;
   let floorDen: bigint;
   let expiresAt: bigint;
@@ -1363,8 +1361,12 @@ export function decodeTradeRule(data: Buffer): TradeRuleAccount {
   [spent, o] = readU64(data, o);
   [perTradeMax, o] = readU64(data, o);
   [dailyLimit, o] = readU64(data, o);
-  [windowSpent, o] = readU64(data, o);
-  [windowStart, o] = readI64(data, o);
+  for (let i = 0; i < 25; i++) {
+    let hour: bigint, amount: bigint;
+    [hour, o] = readI64(data, o);
+    [amount, o] = readU64(data, o);
+    dailyBuckets.push({ hour, amount });
+  }
   [floorNum, o] = readU64(data, o);
   [floorDen, o] = readU64(data, o);
   [expiresAt, o] = readI64(data, o);
@@ -1396,8 +1398,7 @@ export function decodeTradeRule(data: Buffer): TradeRuleAccount {
     spent,
     perTradeMax,
     dailyLimit,
-    windowSpent,
-    windowStart,
+    dailyBuckets,
     floorNum,
     floorDen,
     expiresAt,

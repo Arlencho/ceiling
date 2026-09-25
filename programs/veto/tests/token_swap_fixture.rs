@@ -71,8 +71,8 @@ const REQUESTED_FEES: PoolFees = PoolFees {
     host_denominator: 0,
 };
 
-/// The only schedule this ELF accepts. Anything else, including REQUESTED_FEES,
-/// logs "The provided fee does not match the program owner's constraints".
+/// The schedule Veto supports. The ELF enforces owner constraints but also
+/// accepts higher trade fees; Veto must validate the complete schedule itself.
 const ENFORCED_FEES: PoolFees = PoolFees {
     trade_numerator: 25,
     trade_denominator: 10_000,

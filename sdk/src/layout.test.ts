@@ -175,7 +175,9 @@ test("a trade ledger address is the PDA of trade-ledger and the rule", () => {
 });
 
 test("tradeRuleBytes is the on-chain layout, including the packed pool pubkey", () => {
-  const fields = tradeWorld().fields;
+  const fields = tradeWorld({ dailyBuckets: Array.from({ length: 25 }, (_, i) => ({
+    hour: BigInt(500_000 + i), amount: BigInt(i + 1),
+  })) }).fields;
   const raw = tradeRuleBytes(fields);
   const agent = raw.subarray(TRADE_RULE_AGENT_OFFSET, TRADE_RULE_AGENT_OFFSET + 32);
   assert.equal(new PublicKey(agent).toBase58(), fields.agent.toBase58());
@@ -192,7 +194,7 @@ test("tradeRuleBytes is the on-chain layout, including the packed pool pubkey", 
   assert.equal(decoded.dailyLimit, fields.dailyLimit);
   assert.equal(decoded.floorNum, fields.floorNum);
   assert.equal(decoded.floorDen, fields.floorDen);
-  assert.equal(decoded.windowStart, fields.windowStart);
+  assert.deepEqual(decoded.dailyBuckets, fields.dailyBuckets);
   assert.equal(decoded.expiresAt, fields.expiresAt);
   assert.equal(decoded.purpose, fields.purpose);
   assert.equal(decoded.lastNonce, fields.lastNonce);

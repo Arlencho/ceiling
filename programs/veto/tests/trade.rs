@@ -66,7 +66,7 @@ struct PoolFees {
     host_denominator: u64,
 }
 
-/// The only schedule this ELF accepts. See `token_swap_fixture.rs`.
+/// The schedule Veto supports. The exchange also accepts higher fees.
 const ENFORCED_FEES: PoolFees = PoolFees {
     trade_numerator: 25,
     trade_denominator: 10_000,
@@ -831,8 +831,8 @@ fn a_trade_over_the_remaining_cap_is_refused_with_reason_6() {
         ..Rules::default()
     });
     trade(&mut w, 40 * IN_ONE, 1, 1).expect("first trade pays");
-    let window_start = read_rule(&w.svm, &w.rule).window_start;
-    warp(&mut w.svm, window_start + TRADE_WINDOW_SECS);
+    let window_start = now(&w.svm);
+    warp(&mut w.svm, window_start + TRADE_WINDOW_SECS + 3600);
     let before = snap(&w);
     let meta = trade(&mut w, 40 * IN_ONE, 1, 2).expect("refusal confirms");
     assert_refused(&w, &meta.logs, &before, REASON_OVER_CAP, w.pool);
@@ -1004,8 +1004,8 @@ fn an_override_lets_one_nonce_past_the_per_trade_maximum_and_does_not_lift_the_d
     trade(&mut w, 10 * IN_ONE, 1, 3).expect("pays");
     assert_eq!(read_rule(&w.svm, &w.rule).spent, 30 * IN_ONE);
 
-    let window_start = read_rule(&w.svm, &w.rule).window_start;
-    warp(&mut w.svm, window_start + TRADE_WINDOW_SECS);
+    let window_start = now(&w.svm);
+    warp(&mut w.svm, window_start + TRADE_WINDOW_SECS + 3600);
 
     let before = snap(&w);
     let over_cap = trade(&mut w, 45 * IN_ONE, 1, 10).expect("cap refusal confirms");
@@ -1309,6 +1309,7 @@ fn existing_mandate_and_hold_layouts_match_the_values_shipped_today() {
         HoldLedger::DISCRIMINATOR,
         [195, 103, 143, 50, 70, 255, 84, 161]
     );
+    assert_eq!(TradeRule::INIT_SPACE, 983);
     assert_eq!(std::mem::size_of::<TradeEntry>(), 88);
     assert_eq!(std::mem::size_of::<TradeLedger>(), 2856);
 }
@@ -1395,7 +1396,10 @@ fn unequal_reserves_settle_and_charge_observed_input_to_ledger_caps_window_and_e
     assert!(entry.amount_out >= amount / 2000);
     let rule = read_rule(&w.svm, &w.rule);
     assert_eq!(rule.spent, observed);
-    assert_eq!(rule.window_spent, observed);
+    assert_eq!(
+        veto::trade::current_window_spent(&rule, now(&w.svm)).unwrap(),
+        observed
+    );
     assert_eq!(rule.remaining(), amount - observed);
     assert_eq!(rule.status, STATUS_ACTIVE);
     let line = format!("Program log: VETO TRADED amount_in={observed} amount_out={} spent={observed} of cap={amount} remaining_today={}", entry.amount_out, amount - observed);
