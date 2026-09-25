@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rule</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,400&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+button,a{font-family:inherit;}
+button:focus-visible,a:focus-visible{outline:2px solid #C9A24D;outline-offset:3px;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes reveal{from{transform:scaleX(1);}to{transform:scaleX(0);}}
+@keyframes liveLamp{0%,100%{box-shadow:0 0 4px rgba(156,201,168,0.5);}50%{box-shadow:0 0 10px rgba(156,201,168,0.95);}}
+@keyframes rowIn{from{opacity:0;transform:translateX(-8px);}to{opacity:1;transform:translateX(0);}}
+.rise{animation:rise 0.7s cubic-bezier(0.22,1,0.36,1) both;}
+.rise-1{animation-delay:0.05s;}
+.rise-2{animation-delay:0.15s;}
+.rise-3{animation-delay:0.28s;}
+.rise-4{animation-delay:0.42s;}
+.rise-5{animation-delay:0.56s;}
+.rise-6{animation-delay:0.70s;}
+.rise-7{animation-delay:0.84s;}
+.cover{transform-origin:right center;animation:reveal 1.3s cubic-bezier(0.65,0,0.35,1) 0.6s both;}
+.live-lamp{animation:liveLamp 3s ease-in-out infinite;}
+.row{animation:rowIn 0.5s cubic-bezier(0.22,1,0.36,1) both;}
+.row-1{animation-delay:0.50s;}
+.row-2{animation-delay:0.58s;}
+.row-3{animation-delay:0.66s;}
+.row-4{animation-delay:0.74s;}
+.ghost{transition:border-color 0.2s ease,background-color 0.2s ease;}
+.ghost:hover{border-color:#C9A24D;background-color:rgba(201,162,77,0.08);}
+.danger{transition:border-color 0.2s ease,background-color 0.2s ease;}
+.danger:hover{border-color:#E4A48E;background-color:rgba(228,164,142,0.10);}
+.tab{transition:color 0.2s ease;}
+.tab:hover{color:#EDE6D6;}
+@media (prefers-reduced-motion: reduce){
+  .rise,.cover,.live-lamp,.row{animation:none;}
+  .cover{transform:scaleX(0);}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div style="position: absolute; top: -140px; left: 50%; width: 460px; height: 460px; margin-left: -230px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.14) 0%, rgba(201,162,77,0.04) 45%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div class="rise rise-1" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 12px 0 12px; position: relative;">
+    <a href="#rules" aria-label="Back to rules" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; text-decoration: none;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EDE6D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">Your rule</span>
+    <span style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #C9A24D; border: 1px solid rgba(201,162,77,0.5); border-radius: 999px; padding: 3px 8px;">Devnet</span>
+    </span>
+  </div>
+
+  <div class="rise rise-2" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 24px 0 24px; position: relative;">
+    <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+      <span style="font-family: 'Fraunces', serif; font-size: 24px; font-weight: 500; line-height: 1.1; color: #EDE6D6;">Charging agent</span>
+      <span style="font-family: 'Fraunces', serif; font-style: italic; font-size: 14px; line-height: 1.3; color: #D3CCBB; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Charging top-ups at the SE3 spot rate</span>
+    </div>
+    <span style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 999px; background: rgba(156,201,168,0.10); border: 1px solid rgba(156,201,168,0.45); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #9CC9A8; flex-shrink: 0;">
+      <span class="live-lamp" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #9CC9A8;"></span>
+      <span>Active</span>
+    </span>
+  </div>
+
+  <div class="rise rise-3" style="padding: 10px 24px 0 24px; position: relative;">
+    <div style="border-radius: 22px; padding: 2px; background: linear-gradient(160deg, #E3C77E 0%, #C9A24D 35%, #7E5E14 100%); box-shadow: 0 14px 34px rgba(0,0,0,0.35);">
+      <div style="border-radius: 20px; background: linear-gradient(180deg, #1C2C25 0%, #16231E 100%); padding: 12px 16px 12px 16px; display: flex; flex-direction: column; gap: 8px;">
+        <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: #93A097;">Your agent can still spend</span>
+        <div style="display: flex; align-items: baseline; gap: 10px;">
+          <span style="font-family: 'Fraunces', serif; font-size: 52px; font-weight: 300; line-height: 1; color: #EDE6D6; font-variant-numeric: tabular-nums; letter-spacing: -0.02em;">258</span>
+          <span style="font-family: 'Fraunces', serif; font-size: 20px; font-weight: 300; color: #93A097;">of 300</span>
+          <span style="margin-left: auto; font-size: 13px; color: #D3CCBB;"><span style="font-family: 'Fraunces', serif; font-size: 18px; color: #EDE6D6;">42</span> spent so far</span>
+        </div>
+        <div style="position: relative; display: flex; gap: 3px; height: 12px;">
+          <span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: linear-gradient(90deg, #C9A24D 0%, #C9A24D 80%, rgba(201,162,77,0.18) 80%, rgba(201,162,77,0.18) 100%);"></span><span style="flex: 1; border-radius: 2px; background: rgba(201,162,77,0.18);"></span><span style="flex: 1; border-radius: 2px; background: rgba(201,162,77,0.18);"></span><span style="flex: 1; border-radius: 2px; background: rgba(201,162,77,0.18);"></span><span style="flex: 1; border-radius: 2px; background: rgba(201,162,77,0.18);"></span>
+          <span class="cover" aria-hidden="true" style="position: absolute; inset: 0; background: #16231E;"></span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #93A097;">
+          <span>1 block = one payment of 10</span>
+          <span>Kept in its own account</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rise rise-4" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 24px 0 24px; position: relative;">
+    <div class="row row-1" style="display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 14px; background: #16231E; border: 1px solid rgba(237,230,214,0.16);">
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #93A097;">Most per payment</span>
+      <span style="font-size: 15px; font-weight: 600; color: #EDE6D6;"><span style="font-family: 'Fraunces', serif; font-size: 20px; color: #C9A24D;">10</span> at a time</span>
+    </div>
+    <div class="row row-2" style="display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 14px; background: #16231E; border: 1px solid rgba(237,230,214,0.16);">
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #93A097;">The rule ends</span>
+      <span style="font-size: 15px; font-weight: 600; color: #EDE6D6;">in 84 days</span>
+      <span style="font-size: 12px; color: #93A097;">day 6 of 90</span>
+    </div>
+    <div class="row row-3" style="display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 14px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); min-width: 0;">
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #93A097;">Only payee</span>
+      <span style="font-size: 15px; font-weight: 600; color: #EDE6D6; font-variant-numeric: tabular-nums;">6i99...PdCG</span>
+    </div>
+    <div class="row row-4" style="display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 14px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); min-width: 0;">
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #93A097;">Your agent</span>
+      <span style="font-size: 15px; font-weight: 600; color: #EDE6D6; font-variant-numeric: tabular-nums;">6YwqYU...GSV5w</span>
+    </div>
+  </div>
+
+  <div class="rise rise-5" style="padding: 10px 24px 0 24px; position: relative;">
+    <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 12px; border-radius: 16px; background: #16231E; border: 1px solid rgba(237,230,214,0.16);">
+      <span aria-label="QR code with this rule's setup text" role="img" style="display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 8px; background: #EDE6D6; flex-shrink: 0;">
+        <svg width="56" height="56" viewBox="0 0 21 21" shape-rendering="crispEdges" aria-hidden="true"><path fill="#0F1A16" d="M0 0h7v1h-7zM11 0h2v1h-2zM14 0h7v1h-7zM0 1h1v1h-1zM6 1h1v1h-1zM9 1h1v1h-1zM11 1h1v1h-1zM14 1h1v1h-1zM20 1h1v1h-1zM0 2h1v1h-1zM2 2h3v1h-3zM6 2h1v1h-1zM10 2h1v1h-1zM14 2h1v1h-1zM16 2h3v1h-3zM20 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM10 3h1v1h-1zM14 3h1v1h-1zM16 3h3v1h-3zM20 3h1v1h-1zM0 4h1v1h-1zM2 4h3v1h-3zM6 4h1v1h-1zM10 4h1v1h-1zM14 4h1v1h-1zM16 4h3v1h-3zM20 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM11 5h2v1h-2zM14 5h1v1h-1zM20 5h1v1h-1zM0 6h7v1h-7zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h7v1h-7zM12 7h1v1h-1zM6 8h1v1h-1zM0 9h2v1h-2zM4 9h1v1h-1zM9 9h2v1h-2zM12 9h1v1h-1zM17 9h2v1h-2zM20 9h1v1h-1zM0 10h2v1h-2zM3 10h2v1h-2zM6 10h2v1h-2zM10 10h1v1h-1zM12 10h1v1h-1zM14 10h4v1h-4zM19 10h1v1h-1zM2 11h1v1h-1zM4 11h2v1h-2zM7 11h1v1h-1zM9 11h1v1h-1zM14 11h1v1h-1zM17 11h2v1h-2zM20 11h1v1h-1zM1 12h1v1h-1zM3 12h2v1h-2zM6 12h1v1h-1zM8 12h1v1h-1zM11 12h1v1h-1zM13 12h1v1h-1zM15 12h1v1h-1zM17 12h2v1h-2zM20 12h1v1h-1zM9 13h1v1h-1zM12 13h1v1h-1zM14 13h6v1h-6zM0 14h7v1h-7zM10 14h1v1h-1zM14 14h2v1h-2zM17 14h1v1h-1zM19 14h1v1h-1zM0 15h1v1h-1zM6 15h1v1h-1zM9 15h2v1h-2zM13 15h1v1h-1zM18 15h1v1h-1zM20 15h1v1h-1zM0 16h1v1h-1zM2 16h3v1h-3zM6 16h1v1h-1zM9 16h1v1h-1zM12 16h3v1h-3zM16 16h3v1h-3zM0 17h1v1h-1zM2 17h3v1h-3zM6 17h1v1h-1zM11 17h2v1h-2zM17 17h3v1h-3zM0 18h1v1h-1zM2 18h3v1h-3zM6 18h1v1h-1zM9 18h4v1h-4zM17 18h1v1h-1zM0 19h1v1h-1zM6 19h1v1h-1zM9 19h2v1h-2zM13 19h3v1h-3zM19 19h1v1h-1zM0 20h7v1h-7zM9 20h2v1h-2zM12 20h1v1h-1zM14 20h2v1h-2zM19 20h1v1h-1z"></path></svg>
+      </span>
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">Connect your agent</span>
+        <span style="font-size: 12px; line-height: 1.4; color: #D3CCBB;">Give your agent this setup text so it can ask under this rule. It can still only ask.</span>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="ghost" style="display: flex; align-items: center; justify-content: center; gap: 6px; height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid rgba(201,162,77,0.55); background: transparent; color: #C9A24D; font-size: 13px; font-weight: 700; cursor: pointer;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h9"></path></svg>
+            <span>Copy setup text</span>
+          </button>
+          <button type="button" class="ghost" style="display: flex; align-items: center; justify-content: center; height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid rgba(237,230,214,0.16); background: transparent; color: #EDE6D6; font-size: 13px; font-weight: 600; cursor: pointer;">Show QR</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rise rise-6" style="display: flex; flex-direction: column; gap: 8px; padding: 10px 24px 0 24px; position: relative;">
+    <button type="button" class="danger" style="min-height: 60px; padding: 8px 16px; border: 1px solid rgba(228,164,142,0.55); border-radius: 16px; background: rgba(228,164,142,0.06); color: #EDE6D6; cursor: pointer; display: flex; align-items: center; gap: 12px; text-align: left;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><rect x="5" y="5" width="14" height="14" rx="2"></rect></svg>
+      <span style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 16px; font-weight: 700; color: #E4A48E;">Stop the rule</span>
+        <span style="font-size: 12px; color: #D3CCBB;">Your agent's next request is refused. The 258 left stays in the rule's account until you close it.</span>
+      </span>
+    </button>
+    <button type="button" aria-disabled="true" style="min-height: 60px; padding: 8px 16px; border: 1px dashed rgba(237,230,214,0.22); border-radius: 16px; background: transparent; color: #93A097; cursor: not-allowed; display: flex; align-items: center; gap: 12px; text-align: left;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#93A097" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><rect x="3" y="6" width="18" height="13" rx="3"></rect><path d="M3 10h18"></path><path d="M12 14v4"></path><path d="M9 16l3-3 3 3"></path></svg>
+      <span style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 16px; font-weight: 700; color: #93A097;">Close the rule and get 258 back</span>
+        <span style="font-size: 12px; color: #93A097;">Not yet: available after you stop it or it ends. The rest goes back to your wallet.</span>
+      </span>
+    </button>
+  </div>
+
+  <div style="flex: 1;"></div>
+
+  <nav class="rise rise-7" aria-label="Main" style="display: grid; grid-template-columns: 1fr 1fr 1fr; padding: 8px 12px 22px 12px; border-top: 1px solid rgba(237,230,214,0.16); background: #0F1A16; position: relative;">
+    <a href="#overview" class="tab" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; height: 56px; text-decoration: none; color: #93A097; font-size: 12px; font-weight: 600;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"></path></svg>
+      <span>Home</span>
+    </a>
+    <a href="#rules" aria-current="page" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; height: 56px; text-decoration: none; color: #C9A24D; font-size: 12px; font-weight: 700;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"></path><path d="M9 12l2 2 4-4"></path></svg>
+      <span>Rules</span>
+    </a>
+    <a href="#decisions" class="tab" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; height: 56px; text-decoration: none; color: #93A097; font-size: 12px; font-weight: 600;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6h14"></path><path d="M5 12h14"></path><path d="M5 18h9"></path></svg>
+      <span>Decisions</span>
+    </a>
+  </nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

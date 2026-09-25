@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How Veto works</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+button,a{font-family:inherit;}
+button:focus-visible,a:focus-visible{outline:2px solid #C9A24D;outline-offset:3px;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes stripLamp{0%,100%{box-shadow:0 0 0 4px rgba(227,199,126,0.14),0 0 6px rgba(227,199,126,0.5);}50%{box-shadow:0 0 0 4px rgba(227,199,126,0.22),0 0 14px rgba(227,199,126,0.95);}}
+@keyframes ballDrop{0%{transform:translateY(0);opacity:0;}3%{opacity:1;}66%{transform:translateY(260px);opacity:1;}78%{transform:translateY(260px);opacity:0;}86%{transform:translateY(0);opacity:0;}100%{transform:translateY(0);opacity:0;}}
+@keyframes station{0%,100%{background:rgba(201,162,77,0.18);box-shadow:none;}3%{background:#E3C77E;box-shadow:0 0 10px rgba(227,199,126,0.9);}14%{background:rgba(201,162,77,0.18);box-shadow:none;}}
+@keyframes stationGreen{0%,100%{background:rgba(156,201,168,0.18);box-shadow:none;}3%{background:#9CC9A8;box-shadow:0 0 10px rgba(156,201,168,0.9);}14%{background:rgba(156,201,168,0.18);box-shadow:none;}}
+@keyframes sheen{0%{background-position:0% 50%;}100%{background-position:200% 50%;}}
+.rise{animation:rise 0.7s cubic-bezier(0.22,1,0.36,1) both;}
+.rise-1{animation-delay:0.05s;}
+.rise-2{animation-delay:0.18s;}
+.rise-3{animation-delay:0.30s;}
+.rise-4{animation-delay:0.44s;}
+.rise-5{animation-delay:0.58s;}
+.rise-6{animation-delay:0.72s;}
+.strip-lamp{animation:stripLamp 3s ease-in-out infinite;}
+.ball{animation:ballDrop 7.5s cubic-bezier(0.45,0,0.55,1) 1s infinite;}
+.st{animation:station 7.5s linear 1s infinite;}
+.st-green{animation:stationGreen 7.5s linear 1s infinite;}
+.st-1{animation-delay:1.0s;}.st-2{animation-delay:2.0s;}.st-3{animation-delay:3.0s;}.st-4{animation-delay:4.0s;}.st-5{animation-delay:5.0s;}.st-6{animation-delay:6.0s;}
+.cta-sheen{background-image:linear-gradient(110deg,#C9A24D 0%,#C9A24D 40%,#E3C77E 50%,#C9A24D 60%,#C9A24D 100%);background-size:200% 100%;animation:sheen 3.2s ease-in-out 1.6s infinite;}
+@media (prefers-reduced-motion: reduce){
+  .rise,.strip-lamp,.ball,.st,.st-green,.cta-sheen{animation:none;}
+  .ball{opacity:0;}
+  .st{background:#E3C77E;}
+  .st-green{background:#9CC9A8;}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div style="position: absolute; top: -200px; right: -160px; width: 420px; height: 420px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.14) 0%, rgba(15,26,22,0) 65%); pointer-events: none;"></div>
+
+  <div class="rise rise-1" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 12px 0 12px; position: relative;">
+    <a href="#back" aria-label="Back" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; color: #EDE6D6; text-decoration: none;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EDE6D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">How Veto works</span>
+    <span style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #C9A24D; border: 1px solid rgba(201,162,77,0.5); border-radius: 999px; padding: 3px 8px;">Devnet</span>
+    </span>
+  </div>
+
+  <ol class="rise rise-2" aria-label="First run, step 1 of 5: Learn" style="list-style: none; margin: 12px 24px 0 24px; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); position: relative;">
+    <span aria-hidden="true" style="position: absolute; top: 7px; left: 10%; right: 10%; height: 2px; background: rgba(201,162,77,0.22);"></span>
+    <li aria-current="step" style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; position: relative;">
+      <span class="strip-lamp" style="display: block; width: 16px; height: 16px; border-radius: 50%; background: #E3C77E; box-sizing: border-box;"></span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; color: #E3C77E;">Learn</span>
+    </li>
+    <li style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; position: relative;">
+      <span style="display: block; width: 16px; height: 16px; border-radius: 50%; background: #16231E; border: 1.5px solid rgba(201,162,77,0.45); box-sizing: border-box;"></span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; color: #93A097;">Connect wallet</span>
+    </li>
+    <li style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; position: relative;">
+      <span style="display: block; width: 16px; height: 16px; border-radius: 50%; background: #16231E; border: 1.5px solid rgba(201,162,77,0.45); box-sizing: border-box;"></span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; color: #93A097;">Add your agent</span>
+    </li>
+    <li style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; position: relative;">
+      <span style="display: block; width: 16px; height: 16px; border-radius: 50%; background: #16231E; border: 1.5px solid rgba(201,162,77,0.45); box-sizing: border-box;"></span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; color: #93A097;">Approve the rule</span>
+    </li>
+    <li style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; position: relative;">
+      <span style="display: block; width: 16px; height: 16px; border-radius: 50%; background: #16231E; border: 1.5px solid rgba(201,162,77,0.45); box-sizing: border-box;"></span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; color: #93A097;">Live</span>
+    </li>
+  </ol>
+
+  <div class="rise rise-3" style="padding: 16px 24px 0 24px; position: relative;">
+    <h1 style="margin: 0; font-family: 'Fraunces', serif; font-weight: 400; font-size: 26px; line-height: 1.15; letter-spacing: -0.01em; color: #EDE6D6;">Your agent asks. The rule decides. You get told.</h1>
+  </div>
+
+  <div class="rise rise-4" style="padding: 14px 24px 0 24px; position: relative;">
+    <div style="border-radius: 22px; padding: 2px; background: linear-gradient(160deg, #E3C77E 0%, #C9A24D 35%, #7E5E14 100%); box-shadow: 0 18px 40px rgba(0,0,0,0.35);">
+      <div style="border-radius: 20px; background: linear-gradient(180deg, #1C2C25 0%, #16231E 100%); padding: 12px 14px 12px 12px; position: relative;">
+
+        <span aria-hidden="true" style="position: absolute; top: 38px; bottom: 38px; left: 25px; width: 2px; background: rgba(201,162,77,0.30);"></span>
+        <span class="ball" aria-hidden="true" style="position: absolute; top: 33px; left: 20px; width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #E3C77E 0%, #C9A24D 55%, #7E5E14 100%); box-shadow: 0 0 8px rgba(227,199,126,0.7); opacity: 0;"></span>
+
+        <ol aria-label="The six parts of the machine, in order" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; position: relative;">
+          <li style="display: flex; align-items: center; gap: 12px; height: 52px;">
+            <span class="st st-1" aria-hidden="true" style="display: block; width: 12px; height: 12px; margin: 0 8px; border-radius: 50%; background: rgba(201,162,77,0.18); border: 1px solid rgba(201,162,77,0.55); box-sizing: border-box; flex-shrink: 0;"></span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font-size: 14px; font-weight: 700; color: #EDE6D6; line-height: 1.2;">You set the rule</span>
+              <span style="font-size: 12px; color: #93A097; line-height: 1.3;">Who your agent may pay, how much, and until when.</span>
+            </span>
+          </li>
+          <li style="display: flex; align-items: center; gap: 12px; height: 52px;">
+            <span class="st st-2" aria-hidden="true" style="display: block; width: 12px; height: 12px; margin: 0 8px; border-radius: 50%; background: rgba(201,162,77,0.18); border: 1px solid rgba(201,162,77,0.55); box-sizing: border-box; flex-shrink: 0;"></span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font-size: 14px; font-weight: 700; color: #EDE6D6; line-height: 1.2;">Your agent asks</span>
+              <span style="font-size: 12px; color: #93A097; line-height: 1.3;">It sends a payment request. It cannot take.</span>
+            </span>
+          </li>
+          <li style="display: flex; align-items: center; gap: 12px; height: 52px;">
+            <span class="st st-3" aria-hidden="true" style="display: block; width: 12px; height: 12px; margin: 0 8px; border-radius: 50%; background: rgba(201,162,77,0.18); border: 1px solid rgba(201,162,77,0.55); box-sizing: border-box; flex-shrink: 0;"></span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font-size: 14px; font-weight: 700; color: #EDE6D6; line-height: 1.2;">The program checks the rule</span>
+              <span style="font-size: 12px; color: #93A097; line-height: 1.3;">Every request, every time, against your limits.</span>
+            </span>
+          </li>
+          <li style="display: flex; align-items: center; gap: 12px; height: 52px;">
+            <span class="st-green st-4" aria-hidden="true" style="display: block; width: 12px; height: 12px; margin: 0 8px; border-radius: 50%; background: rgba(156,201,168,0.18); border: 1px solid rgba(156,201,168,0.6); box-sizing: border-box; flex-shrink: 0;"></span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font-size: 14px; font-weight: 700; color: #EDE6D6; line-height: 1.2;">Pays or refuses</span>
+              <span style="font-size: 12px; color: #93A097; line-height: 1.3;">Inside the rule it pays. Outside it refuses, and no money moves.</span>
+            </span>
+          </li>
+          <li style="display: flex; align-items: center; gap: 12px; height: 52px;">
+            <span class="st st-5" aria-hidden="true" style="display: block; width: 12px; height: 12px; margin: 0 8px; border-radius: 50%; background: rgba(201,162,77,0.18); border: 1px solid rgba(201,162,77,0.55); box-sizing: border-box; flex-shrink: 0;"></span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font-size: 14px; font-weight: 700; color: #EDE6D6; line-height: 1.2;">Saved on the blockchain</span>
+              <span style="font-size: 12px; color: #93A097; line-height: 1.3;">Each payment and each refusal, with the reason.</span>
+            </span>
+          </li>
+          <li style="display: flex; align-items: center; gap: 12px; height: 52px;">
+            <span class="st st-6" aria-hidden="true" style="display: block; width: 12px; height: 12px; margin: 0 8px; border-radius: 50%; background: rgba(201,162,77,0.18); border: 1px solid rgba(201,162,77,0.55); box-sizing: border-box; flex-shrink: 0;"></span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font-size: 14px; font-weight: 700; color: #EDE6D6; line-height: 1.2;">Your phone tells you</span>
+              <span style="font-size: 12px; color: #93A097; line-height: 1.3;">A notice for every payment or refusal, if alerts are on.</span>
+            </span>
+          </li>
+        </ol>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="rise rise-5" style="padding: 14px 24px 0 24px; position: relative;">
+    <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: #93A097;">What your agent can never do</p>
+    <ul style="list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+      <li style="display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 6px 10px; border-radius: 12px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); font-size: 13px; font-weight: 600; color: #D3CCBB;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg>
+        <span>Move money without asking</span>
+      </li>
+      <li style="display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 6px 10px; border-radius: 12px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); font-size: 13px; font-weight: 600; color: #D3CCBB;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg>
+        <span>Pay anyone else</span>
+      </li>
+      <li style="display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 6px 10px; border-radius: 12px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); font-size: 13px; font-weight: 600; color: #D3CCBB;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg>
+        <span>Go over the limits</span>
+      </li>
+      <li style="display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 6px 10px; border-radius: 12px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); font-size: 13px; font-weight: 600; color: #D3CCBB;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg>
+        <span>Change the rule</span>
+      </li>
+    </ul>
+  </div>
+
+  <div class="rise rise-6" style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; padding: 12px 24px 30px 24px; position: relative;">
+    <button type="button" class="cta-sheen" style="height: 56px; border: 0; border-radius: 16px; background-color: #C9A24D; color: #0F1A16; font-size: 17px; font-weight: 700; letter-spacing: 0.01em; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 10px 30px rgba(201,162,77,0.22);">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="3"></rect><path d="M3 10h18"></path><circle cx="16.5" cy="14.5" r="1.5" fill="#0F1A16"></circle></svg>
+      <span>Connect wallet</span>
+    </button>
+    <p style="margin: 0; display: flex; align-items: center; justify-content: center; height: 32px; text-align: center; font-size: 12px; color: #93A097;">You can read this again any time under Help.</p>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

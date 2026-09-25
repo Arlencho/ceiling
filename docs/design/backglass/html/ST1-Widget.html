@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home widget</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+button,a{font-family:inherit;}
+button:focus-visible,a:focus-visible{outline:2px solid #C9A24D;outline-offset:3px;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes liveLamp{0%,100%{box-shadow:0 0 4px rgba(156,201,168,0.5);}50%{box-shadow:0 0 10px rgba(156,201,168,0.95);}}
+@keyframes reveal{from{transform:scaleX(1);}to{transform:scaleX(0);}}
+.rise{animation:rise 0.7s cubic-bezier(0.22,1,0.36,1) both;}
+.rise-1{animation-delay:0.05s;}
+.rise-2{animation-delay:0.20s;}
+.rise-3{animation-delay:0.35s;}
+.rise-4{animation-delay:0.50s;}
+.live-lamp{animation:liveLamp 3s ease-in-out infinite;}
+.cover{transform-origin:right center;animation:reveal 1.2s cubic-bezier(0.65,0,0.35,1) 0.5s both;}
+.blk{flex:1;border-radius:2px;background:#C9A24D;}
+.blk-off{flex:1;border-radius:2px;background:rgba(201,162,77,0.18);}
+.app{display:flex;flex-direction:column;align-items:center;gap:6px;text-decoration:none;color:#D3CCBB;font-size:11px;font-weight:600;}
+.app span.ic{display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:18px;background:rgba(237,230,214,0.08);border:1px solid rgba(237,230,214,0.10);}
+@media (prefers-reduced-motion: reduce){
+  .rise,.live-lamp,.cover{animation:none;}
+  .cover{transform:scaleX(0);}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: linear-gradient(180deg, #0C1512 0%, #0F1A16 40%, #132119 100%); color: #EDE6D6; font-family: 'Manrope', sans-serif; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div aria-hidden="true" style="position: absolute; top: -220px; left: 50%; width: 560px; height: 560px; margin-left: -280px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.12) 0%, rgba(201,162,77,0.03) 45%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 26px 0 26px; font-size: 14px; font-weight: 700; color: #EDE6D6; position: relative;">
+    <span>08:12</span>
+    <span style="display: flex; align-items: center; gap: 6px;" aria-label="Signal full, battery 84 percent">
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="#EDE6D6" aria-hidden="true"><rect x="0" y="8" width="3" height="4" rx="0.5"></rect><rect x="4.3" y="5.5" width="3" height="6.5" rx="0.5"></rect><rect x="8.6" y="3" width="3" height="9" rx="0.5"></rect><rect x="13" y="0" width="3" height="12" rx="0.5"></rect></svg>
+      <svg width="24" height="12" viewBox="0 0 24 12" fill="none" aria-hidden="true"><rect x="0.5" y="0.5" width="20" height="11" rx="2.5" stroke="#EDE6D6"></rect><rect x="2" y="2" width="14.5" height="8" rx="1.5" fill="#9CC9A8"></rect><rect x="21.5" y="3.5" width="2" height="5" rx="1" fill="#EDE6D6"></rect></svg>
+    </span>
+  </div>
+
+  <div class="rise rise-1" style="padding: 26px 24px 0 24px; position: relative;">
+    <div role="img" aria-label="Veto widget. Charging agent can still spend 258 of 300. Last paid 8, yesterday 18:02. 84 days left." style="border-radius: 22px; padding: 2px; background: linear-gradient(160deg, #E3C77E 0%, #C9A24D 35%, #7E5E14 100%); box-shadow: 0 14px 34px rgba(0,0,0,0.45);">
+      <div style="border-radius: 20px; background: linear-gradient(180deg, #1C2C25 0%, #16231E 100%); padding: 12px 14px 12px 14px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="display: flex; align-items: center; gap: 8px;">
+            <svg width="16" height="16" viewBox="0 0 100 100" aria-hidden="true"><path d="M16 14L50 80L84 14" fill="none" stroke="#C9A24D" stroke-width="9" stroke-linecap="butt" stroke-linejoin="miter"></path><circle cx="50" cy="37.4" r="12" fill="#E3C77E" stroke="#7E5E14" stroke-width="2"></circle></svg>
+            <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">Charging agent can still spend</span>
+          </span>
+          <span style="display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #9CC9A8;">
+            <span class="live-lamp" style="display: block; width: 7px; height: 7px; border-radius: 50%; background: #9CC9A8;"></span>
+            <span>Rule live</span>
+          </span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Fraunces', serif; font-size: 48px; font-weight: 300; line-height: 1; color: #EDE6D6; font-variant-numeric: tabular-nums; letter-spacing: -0.02em;">258</span>
+          <span style="font-family: 'Fraunces', serif; font-size: 18px; font-weight: 300; color: #93A097;">of 300</span>
+          <span style="margin-left: auto; font-size: 12px; color: #D3CCBB; text-align: right; line-height: 1.3;">84 days left<br><span style="color: #93A097;">ends 18 Dec</span></span>
+        </div>
+        <div style="position: relative; display: flex; gap: 2px; height: 10px;">
+          <span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span class="blk"></span><span style="flex: 1; border-radius: 2px; background: linear-gradient(90deg, #C9A24D 0%, #C9A24D 80%, rgba(201,162,77,0.18) 80%, rgba(201,162,77,0.18) 100%);"></span><span class="blk-off"></span><span class="blk-off"></span><span class="blk-off"></span><span class="blk-off"></span>
+          <span class="cover" aria-hidden="true" style="position: absolute; inset: 0; background: #16231E;"></span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 2px; border-top: 1px solid rgba(237,230,214,0.10); margin-top: 2px;">
+          <span style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #D3CCBB; padding-top: 6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CC9A8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.6 2.5L16 9.5"></path></svg>
+            <span>Last paid 8, yesterday 18:02</span>
+          </span>
+          <span style="font-size: 12px; color: #93A097; padding-top: 6px;">6 paid, 11 refused</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rise rise-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 24px 0 24px; position: relative;">
+    <div role="img" aria-label="Veto widget. Research agent can still spend 71 of 100. Last: paid 2, yesterday." style="border-radius: 18px; padding: 1.5px; background: linear-gradient(160deg, rgba(227,199,126,0.7) 0%, rgba(201,162,77,0.7) 35%, rgba(126,94,20,0.7) 100%); box-shadow: 0 10px 24px rgba(0,0,0,0.4);">
+      <div style="border-radius: 17px; background: linear-gradient(180deg, #1C2C25 0%, #16231E 100%); padding: 10px 12px 10px 12px; display: flex; flex-direction: column; gap: 4px; height: 100%; box-sizing: border-box;">
+        <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #93A097;">Research agent can still spend</span>
+        <span style="display: flex; align-items: baseline; gap: 6px;">
+          <span style="font-family: 'Fraunces', serif; font-size: 32px; font-weight: 300; line-height: 1; color: #EDE6D6; font-variant-numeric: tabular-nums;">71</span>
+          <span style="font-family: 'Fraunces', serif; font-size: 14px; font-weight: 300; color: #93A097;">of 100</span>
+        </span>
+        <span style="font-size: 11px; color: #D3CCBB;">Last: paid 2, yesterday</span>
+      </div>
+    </div>
+    <div role="img" aria-label="Veto widget. All rules: 2 live. Last refusal 2 days ago. Nothing moved." style="border-radius: 18px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); padding: 10px 12px 10px 12px; display: flex; flex-direction: column; gap: 4px; box-sizing: border-box;">
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #93A097;">All your rules</span>
+      <span style="display: flex; align-items: baseline; gap: 6px;">
+        <span style="font-family: 'Fraunces', serif; font-size: 32px; font-weight: 300; line-height: 1; color: #EDE6D6; font-variant-numeric: tabular-nums;">2</span>
+        <span style="font-family: 'Fraunces', serif; font-size: 14px; font-weight: 300; color: #93A097;">live</span>
+      </span>
+      <span style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #D3CCBB;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg>
+        <span>Last refusal 2 days ago</span>
+      </span>
+    </div>
+  </div>
+
+  <div class="rise rise-3" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px 8px; padding: 34px 24px 0 24px; position: relative;">
+    <a href="#camera" class="app"><span class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D3CCBB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle></svg></span><span>Camera</span></a>
+    <a href="#messages" class="app"><span class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D3CCBB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg></span><span>Messages</span></a>
+    <a href="#wallet" class="app"><span class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D3CCBB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="3"></rect><path d="M3 10h18"></path><circle cx="16.5" cy="14.5" r="1.5" fill="#D3CCBB"></circle></svg></span><span>Wallet</span></a>
+    <a href="#maps" class="app"><span class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D3CCBB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s6-6 6-11a6 6 0 0 0-12 0c0 5 6 11 6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><span>Maps</span></a>
+    <a href="#veto" class="app" style="color: #EDE6D6;"><span class="ic" style="background: linear-gradient(160deg, #E3C77E 0%, #C9A24D 45%, #7E5E14 100%); border-color: rgba(227,199,126,0.6);"><svg width="26" height="26" viewBox="0 0 100 100" aria-hidden="true"><path d="M16 14L50 80L84 14" fill="none" stroke="#0F1A16" stroke-width="9" stroke-linecap="butt" stroke-linejoin="miter"></path><circle cx="50" cy="37.4" r="12" fill="none" stroke="#0F1A16" stroke-width="4.5"></circle></svg></span><span>Veto</span></a>
+    <a href="#music" class="app"><span class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D3CCBB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V6l10-2v12"></path><circle cx="6.5" cy="18" r="2.5"></circle><circle cx="16.5" cy="16" r="2.5"></circle></svg></span><span>Music</span></a>
+    <a href="#photos" class="app"><span class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D3CCBB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="M4 16l5-5 4 4 3-3 4 4"></path><circle cx="15.5" cy="9.5" r="1.5"></circle></svg></span><span>Photos</span></a>
+    <a href="#settings" class="app"><span class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D3CCBB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"></path></svg></span><span>Settings</span></a>
+  </div>
+
+  <div style="flex: 1;"></div>
+
+  <div class="rise rise-4" style="margin: 0 16px 18px 16px; padding: 12px 10px; border-radius: 26px; background: rgba(237,230,214,0.06); border: 1px solid rgba(237,230,214,0.10); display: grid; grid-template-columns: repeat(4, 1fr); position: relative;">
+    <a href="#phone" class="app" aria-label="Phone"><span class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D3CCBB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"></path></svg></span></a>
+    <a href="#browser" class="app" aria-label="Browser"><span class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D3CCBB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg></span></a>
+    <a href="#mail" class="app" aria-label="Mail"><span class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D3CCBB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"></rect><path d="M3 8l9 6 9-6"></path></svg></span></a>
+    <a href="#calendar" class="app" aria-label="Calendar"><span class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D3CCBB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg></span></a>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

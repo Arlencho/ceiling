@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Strategy board</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+@keyframes lampBreathe{0%,100%{box-shadow:0 0 4px rgba(227,199,126,0.4);}50%{box-shadow:0 0 12px rgba(227,199,126,0.95);}}
+@keyframes glow{0%,100%{opacity:0.35;}50%{opacity:0.7;}}
+.lamp{animation:lampBreathe 3s ease-in-out infinite;}
+.lamp-2{animation-delay:1s;}
+.lamp-3{animation-delay:2s;}
+.glow{animation:glow 6s ease-in-out infinite;}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#93A097;}
+.card{box-sizing:border-box;border-radius:16px;background:#16231E;border:1px solid rgba(237,230,214,0.14);padding:12px 14px 12px 14px;display:flex;flex-direction:column;gap:6px;}
+.card h4{margin:0;font-family:'Fraunces',serif;font-weight:500;font-size:17px;line-height:1.2;color:#EDE6D6;}
+.card p{margin:0;font-size:12.5px;line-height:1.45;color:#D3CCBB;}
+.card .fact{font-size:11.5px;line-height:1.4;color:#93A097;}
+.card .fact b{color:#C9A24D;font-weight:700;}
+.tag{display:inline-flex;align-items:center;align-self:flex-start;height:20px;padding:0 8px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;}
+.tag-now{color:#0F1A16;background:#C9A24D;}
+.tag-after{color:#D3CCBB;border:1px solid rgba(237,230,214,0.35);}
+.tag-built{color:#9CC9A8;border:1px solid rgba(156,201,168,0.55);}
+.group{display:flex;flex-direction:column;gap:10px;min-width:0;}
+.group-title{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#C9A24D;padding:0 2px 2px 2px;}
+.loop{box-sizing:border-box;border-radius:20px;padding:2px;background:linear-gradient(160deg,#E3C77E 0%,#C9A24D 35%,#7E5E14 100%);}
+.loop-in{border-radius:18px;background:linear-gradient(180deg,#1C2C25 0%,#16231E 100%);padding:16px 18px 14px 18px;display:flex;flex-direction:column;gap:8px;height:100%;box-sizing:border-box;}
+.loop h3{margin:0;font-family:'Fraunces',serif;font-weight:400;font-size:24px;line-height:1.1;color:#EDE6D6;}
+.loop p{margin:0;font-size:13px;line-height:1.5;color:#D3CCBB;}
+.loop .brings{margin:4px 0 0 0;padding:8px 0 0 0;border-top:1px solid rgba(237,230,214,0.12);font-size:12px;line-height:1.5;color:#93A097;}
+.loop .brings b{color:#EDE6D6;font-weight:600;}
+.no li{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;line-height:1.45;color:#D3CCBB;}
+.no li svg{flex-shrink:0;margin-top:2px;}
+@media (prefers-reduced-motion: reduce){.lamp,.glow{animation:none;}}
+</style>
+</helmet>
+<div style="width: 1600px; height: 1200px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; box-sizing: border-box;">
+
+  <div class="glow" aria-hidden="true" style="position: absolute; top: -420px; left: 50%; width: 1100px; height: 800px; margin-left: -550px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.14) 0%, rgba(201,162,77,0.03) 45%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div style="position: absolute; left: 48px; top: 36px; right: 48px; display: flex; justify-content: space-between; align-items: flex-start; gap: 40px;">
+    <div style="display: flex; flex-direction: column; gap: 8px; max-width: 900px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <svg width="20" height="20" viewBox="0 0 100 100" aria-hidden="true"><path d="M16 14L50 80L84 14" fill="none" stroke="#C9A24D" stroke-width="9" stroke-linecap="butt" stroke-linejoin="miter"></path><circle cx="50" cy="37.4" r="12" fill="#E3C77E" stroke="#7E5E14" stroke-width="2"></circle></svg>
+        <span class="eyebrow" style="color: #C9A24D;">Veto, strategy board: how we make it sticky</span>
+      </div>
+      <h1 style="margin: 0; font-family: 'Fraunces', serif; font-weight: 400; font-size: 40px; line-height: 1.08; letter-spacing: -0.01em; color: #EDE6D6;">Sticky the way a bank statement is sticky, not the way a game is.</h1>
+      <p style="margin: 2px 0 0 0; font-size: 14px; line-height: 1.5; color: #D3CCBB; max-width: 860px;">A well-behaved agent makes a quiet week. We do not fight that. We make the glance worth five seconds, the week worth one minute, and the record worth keeping. The rule has an end date, and that clock is our retention schedule: every rule ends in a decision, and every decision starts a new record.</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end; text-align: right; flex-shrink: 0; padding-top: 6px;">
+      <span class="eyebrow">Legend</span>
+      <div style="display: flex; gap: 8px;">
+        <span class="tag tag-now">For Oct 8</span>
+        <span class="tag tag-after">After</span>
+        <span class="tag tag-built">Built</span>
+      </div>
+      <span style="font-size: 12px; color: #93A097; line-height: 1.5; max-width: 320px;">Every number in every idea comes from what the blockchain holds for the rule: payments, refusals with reasons, allowances, stop, close, counts, spent and left, days elapsed and left.</span>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 48px; top: 206px; width: 1504px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; height: 236px;">
+    <div class="loop">
+      <div class="loop-in">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span class="eyebrow">Today, a glance</span>
+          <span style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #E3C77E;"><span class="lamp" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #E3C77E;"></span>5 seconds</span>
+        </div>
+        <h3>Is it still inside the rule?</h3>
+        <p>The widget or a quiet evening line answers it without opening the app. Usually there is nothing to do, and that is the product working. The only interrupt is a refusal: TILT, nothing moved, one decision.</p>
+        <p class="brings"><b>What brings you back:</b> home screen widget, the opt-in quiet note, the TILT moment with allow once.</p>
+      </div>
+    </div>
+    <div class="loop">
+      <div class="loop-in">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span class="eyebrow">This week, a read</span>
+          <span style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #E3C77E;"><span class="lamp lamp-2" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #E3C77E;"></span>1 minute</span>
+        </div>
+        <h3>What did my agent do?</h3>
+        <p>Monday's week in review: what was paid, what was refused and why, what is left, day of the rule. A seven-day strip you can read at arm's length. Keep it as a file or share it as a card.</p>
+        <p class="brings"><b>What brings you back:</b> the week in review, one notice a week at a time you choose.</p>
+      </div>
+    </div>
+    <div class="loop">
+      <div class="loop-in">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span class="eyebrow">This month and at the end, a decision</span>
+          <span style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #E3C77E;"><span class="lamp lamp-3" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #E3C77E;"></span>5 minutes</span>
+        </div>
+        <h3>Renew, adjust, or close and get the rest back.</h3>
+        <p>Plaques mark the record as it grows. Seven days before the end, the next rule arrives prefilled from what really happened. The agent's track record card is the thing worth showing, and it only exists because the owner kept the rule running.</p>
+        <p class="brings"><b>What brings you back:</b> plaques, rule renewal, the track record card.</p>
+      </div>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 48px; top: 466px; width: 1504px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px;">
+
+    <div class="group">
+      <div class="group-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path></svg>Daily moments</div>
+      <div class="card">
+        <span class="tag tag-now">For Oct 8</span>
+        <h4>Home screen widget</h4>
+        <p>What can my agent still spend? Answered from the launcher, no app open, no tap.</p>
+        <span class="fact"><b>Facts:</b> left and total, last payment or refusal with its time, days left.</span>
+      </div>
+      <div class="card">
+        <span class="tag tag-now">For Oct 8</span>
+        <h4>Quiet note, opt-in</h4>
+        <p>One line at a time you choose: all good today, here is what moved. Off until you turn it on. Never more than one a day.</p>
+        <span class="fact"><b>Facts:</b> today's payments (count and sum), today's refusals, amount left.</span>
+      </div>
+      <div class="card">
+        <span class="tag tag-built">Built</span>
+        <h4>TILT with allow once</h4>
+        <p>The only interrupt we allow ourselves. Nothing moved, one decision, and the exact number needed to allow it.</p>
+        <span class="fact"><b>Facts:</b> amount asked, reason, amount needed to allow, amount left now and after.</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>Weekly rituals</div>
+      <div class="card">
+        <span class="tag tag-now">For Oct 8</span>
+        <h4>Week in review</h4>
+        <p>Seven days on one screen, with a lamp per day. Refusals grouped by reason. Read in a minute, keep as a file, share as a card.</p>
+        <span class="fact"><b>Facts:</b> payments and refusals in the range, spent, left, day of rule, reasons.</span>
+      </div>
+      <div class="card">
+        <span class="tag tag-after">After</span>
+        <h4>Pace line</h4>
+        <p>"Spent 42 in 6 days. At this pace the 300 lasts the whole rule." Plain arithmetic, always labelled as an estimate, never a warning.</p>
+        <span class="fact"><b>Facts:</b> spent, days elapsed, left, days left. Nothing else.</span>
+      </div>
+      <div class="card" style="border-style: dashed; background: transparent;">
+        <span class="eyebrow">Why weekly</span>
+        <p>Most weeks hold mostly quiet payments. A weekly read is the honest cadence: often enough to feel in control, rare enough to stay welcome.</p>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"></path><path d="M9 12l2 2 4-4"></path></svg>Milestones, a record worth keeping</div>
+      <div class="card">
+        <span class="tag tag-now">For Oct 8, three plates</span>
+        <h4>Plaques on the cabinet</h4>
+        <p>A fact written as a sentence and engraved for good: "First refusal saved, day 2." "Ten refusals, none allowed." "30 days inside the rule." Nothing expires if you stay away.</p>
+        <span class="fact"><b>Facts:</b> first payment, first refusal, refusal count with zero allowances, days elapsed, close with rest returned.</span>
+      </div>
+      <div class="card">
+        <span class="tag tag-now">For Oct 8</span>
+        <h4>Rule renewal, prefilled</h4>
+        <p>Seven days before the end: here is what happened, here is the next rule with every number filled from it, change what you like. If you do nothing, it ends and the rest comes back.</p>
+        <span class="fact"><b>Facts:</b> days left, spent, left, highest amount asked, highest amount paid, refusal count.</span>
+      </div>
+      <div class="card">
+        <span class="tag tag-after">After</span>
+        <h4>Finished rule as a closed file</h4>
+        <p>When a rule closes, the whole record is exported in one tap and kept on the phone, so the owner's history outlives the app.</p>
+        <span class="fact"><b>Facts:</b> every payment and refusal, allowances, stop and close, rest returned.</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"></path></svg>Social and sharing</div>
+      <div class="card">
+        <span class="tag tag-now">For Oct 8</span>
+        <h4>Agent track record card</h4>
+        <p>"Asked outside its rule 11 times in 90 days. Refused every time." One image, one link, anyone can check every line. This is the bigger vision in miniature.</p>
+        <span class="fact"><b>Facts:</b> period, payments, refusals, allowances, spent of total, returned, rule address.</span>
+      </div>
+      <div class="card">
+        <span class="tag tag-built">Built, add the image</span>
+        <h4>Share one refusal</h4>
+        <p>"Nothing moved" as an image with the blockchain link, for the group chat or the builder's support thread.</p>
+        <span class="fact"><b>Facts:</b> one refusal: time, amount asked, reason, amount needed to allow.</span>
+      </div>
+      <div class="card" style="border-style: dashed; background: transparent;">
+        <span class="eyebrow">Why people share</span>
+        <p>Not to boast. To prove. A refused payment is the best argument for letting an agent pay at all, and the owner is the one who gets to make it.</p>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"></path></svg>Agent builders</div>
+      <div class="card">
+        <span class="tag tag-after">After</span>
+        <h4>Agent history on the approve screen</h4>
+        <p>Before you approve a rule request, see how this agent behaved under other owners' rules. New owners arrive already reassured; builders earn it by behaving.</p>
+        <span class="fact"><b>Facts:</b> counts across all rules for that agent's key: rules, payments, refusals, allowances.</span>
+      </div>
+      <div class="card">
+        <span class="tag tag-after">After</span>
+        <h4>Live "Limited by Veto" badge</h4>
+        <p>A builder embeds the agent's live counts on their own site. Every visitor who taps it lands on a rule request, so the builder's trust page is our front door.</p>
+        <span class="fact"><b>Facts:</b> payments, refusals, allowances, number of rules, all read from the blockchain.</span>
+      </div>
+      <div class="card">
+        <span class="tag tag-now">For Oct 8</span>
+        <h4>Rule request with a purpose line</h4>
+        <p>The builder's request already carries the purpose and the limits. The owner reads one sentence and signs. Less to type is more rules approved.</p>
+        <span class="fact"><b>Facts:</b> proposed payee, most per payment, total, end date, purpose.</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="position: absolute; left: 48px; top: 1016px; width: 1504px; display: grid; grid-template-columns: 2fr 1fr; gap: 18px;">
+    <div style="box-sizing: border-box; border-radius: 18px; background: #16231E; border: 1px solid rgba(228,164,142,0.35); padding: 14px 18px 14px 18px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg>
+        <span class="eyebrow" style="color: #E4A48E;">What we will not do</span>
+      </div>
+      <ul class="no" style="list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px;">
+        <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg><span>No streak that breaks because you did not open the app. The refusal streak counts the agent's behaviour, never your attendance.</span></li>
+        <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg><span>No number we invented. No trust score, no rating, no stars. Only counts and amounts that are on the blockchain.</span></li>
+        <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg><span>No daily push by default. The quiet note is off until you turn it on, at a time you pick, and refusals are the only alert that interrupts.</span></li>
+        <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg><span>No copy that nudges spending. Never "you still have 258 to use". Left is a fact, not an invitation.</span></li>
+        <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg><span>No points, levels, random rewards or leaderboards between owners. A plaque is a fact, not a prize.</span></li>
+        <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg><span>No urgency at renewal and no icon badge for routine payments. If you do nothing, the rule ends and the rest returns.</span></li>
+      </ul>
+    </div>
+    <div style="box-sizing: border-box; border-radius: 18px; background: #16231E; border: 1px solid rgba(156,201,168,0.35); padding: 14px 18px 14px 18px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9CC9A8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.6 2.5L16 9.5"></path></svg>
+        <span class="eyebrow" style="color: #9CC9A8;">How we will know it worked</span>
+      </div>
+      <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; line-height: 1.45; color: #D3CCBB;">
+        <li>Week in review opened within 48 hours of arriving.</li>
+        <li>Rules renewed within 7 days of ending, not just created.</li>
+        <li>Refusals seen within 15 minutes; track record cards and files shared.</li>
+        <li style="color: #93A097;">Not measured: sessions per day. A quiet week that is trusted is a win.</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1600,"height":1200}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

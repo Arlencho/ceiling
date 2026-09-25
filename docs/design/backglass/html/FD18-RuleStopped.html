@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rule stopped</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,400&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+button,a{font-family:inherit;}
+button:focus-visible,a:focus-visible{outline:2px solid #C9A24D;outline-offset:3px;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes lampOff{0%{background:#E3C77E;box-shadow:0 0 10px rgba(227,199,126,0.9);}100%{background:rgba(201,162,77,0.14);box-shadow:none;}}
+@keyframes dimDown{from{opacity:1;}to{opacity:0.55;}}
+@keyframes reelIn{from{transform:translateY(56px);}to{transform:translateY(0);}}
+@keyframes holdRing{0%{stroke-dashoffset:126;}70%{stroke-dashoffset:0;}100%{stroke-dashoffset:0;}}
+@keyframes sheen{0%{background-position:0% 50%;}100%{background-position:200% 50%;}}
+.rise{animation:rise 0.7s cubic-bezier(0.22,1,0.36,1) both;}
+.rise-1{animation-delay:0.05s;}
+.rise-2{animation-delay:0.18s;}
+.rise-3{animation-delay:0.34s;}
+.rise-4{animation-delay:0.50s;}
+.rise-5{animation-delay:0.66s;}
+.rise-6{animation-delay:0.82s;}
+.lamp{animation:lampOff 0.5s ease-out both;}
+.lamp-1{animation-delay:0.60s;}.lamp-2{animation-delay:0.66s;}.lamp-3{animation-delay:0.72s;}.lamp-4{animation-delay:0.78s;}.lamp-5{animation-delay:0.84s;}.lamp-6{animation-delay:0.90s;}.lamp-7{animation-delay:0.96s;}.lamp-8{animation-delay:1.02s;}.lamp-9{animation-delay:1.08s;}.lamp-10{animation-delay:1.14s;}
+.dim{animation:dimDown 0.9s ease-out 0.8s both;}
+.reel-in{display:block;animation:reelIn 0.6s cubic-bezier(0.34,1.4,0.64,1) both;}
+.reel-in-1{animation-delay:0.60s;}
+.reel-in-2{animation-delay:0.70s;}
+.hold-ring{stroke-dasharray:126;stroke-dashoffset:126;animation:holdRing 2.4s ease-in-out 1.4s infinite;}
+.cta-sheen{background-image:linear-gradient(110deg,#C9A24D 0%,#C9A24D 40%,#E3C77E 50%,#C9A24D 60%,#C9A24D 100%);background-size:200% 100%;animation:sheen 3.2s ease-in-out 2s infinite;}
+.ghost{transition:border-color 0.2s ease,background-color 0.2s ease;}
+.ghost:hover{border-color:#C9A24D;background-color:rgba(201,162,77,0.08);}
+@media (prefers-reduced-motion: reduce){
+  .rise,.lamp,.dim,.reel-in,.hold-ring,.cta-sheen{animation:none;}
+  .lamp{background:rgba(201,162,77,0.14);}
+  .dim{opacity:0.55;}
+  .hold-ring{stroke-dashoffset:0;}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div style="position: absolute; top: -140px; left: 50%; width: 460px; height: 460px; margin-left: -230px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.08) 0%, rgba(201,162,77,0.02) 45%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div class="rise rise-1" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 12px 0 12px; position: relative;">
+    <a href="#rules" aria-label="Back to rules" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; text-decoration: none;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EDE6D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">Your rule</span>
+    <span style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #C9A24D; border: 1px solid rgba(201,162,77,0.5); border-radius: 999px; padding: 3px 8px;">Devnet</span>
+    </span>
+  </div>
+
+  <div class="rise rise-2" style="padding: 10px 24px 0 24px; position: relative;">
+    <div style="border-radius: 22px; padding: 2px; background: linear-gradient(160deg, #A98A46 0%, #7E5E14 45%, #4E3A0C 100%); box-shadow: 0 14px 34px rgba(0,0,0,0.35);">
+      <div style="border-radius: 20px; background: linear-gradient(180deg, #1C2C25 0%, #16231E 100%); padding: 12px 16px 14px 16px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 2px;" aria-hidden="true">
+          <span class="lamp lamp-1" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #E3C77E;"></span>
+          <span class="lamp lamp-2" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #E3C77E;"></span>
+          <span class="lamp lamp-3" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #E3C77E;"></span>
+          <span class="lamp lamp-4" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #E3C77E;"></span>
+          <span class="lamp lamp-5" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #E3C77E;"></span>
+          <span class="lamp lamp-6" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #E3C77E;"></span>
+          <span class="lamp lamp-7" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #E3C77E;"></span>
+          <span class="lamp lamp-8" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #E3C77E;"></span>
+          <span class="lamp lamp-9" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #E3C77E;"></span>
+          <span class="lamp lamp-10" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #E3C77E;"></span>
+        </div>
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+          <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+            <span style="font-family: 'Fraunces', serif; font-style: italic; font-size: 17px; line-height: 1.3; color: #EDE6D6;">Charging top-ups at the SE3 spot rate</span>
+            <span style="font-size: 12px; color: #93A097; font-variant-numeric: tabular-nums;">Your agent: Charging agent, 6YwqYU...GSV5w</span>
+          </div>
+          <span style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px; background: rgba(242,185,75,0.10); border: 1px solid rgba(242,185,75,0.5); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #F2B94B; flex-shrink: 0;">
+            <span style="display: block; width: 8px; height: 8px; border-radius: 50%; border: 1px solid #F2B94B; box-sizing: border-box;"></span>
+            <span>Stopped</span>
+          </span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Fraunces', serif; font-size: 52px; font-weight: 300; line-height: 1; color: #EDE6D6; font-variant-numeric: tabular-nums; letter-spacing: -0.02em;">258</span>
+          <span style="font-size: 13px; color: #D3CCBB;">still in the rule, yours to take back</span>
+        </div>
+        <div class="dim" style="position: relative; display: flex; gap: 3px; height: 12px;">
+          <span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: linear-gradient(90deg, #C9A24D 0%, #C9A24D 80%, rgba(201,162,77,0.18) 80%, rgba(201,162,77,0.18) 100%);"></span><span style="flex: 1; border-radius: 2px; background: rgba(201,162,77,0.18);"></span><span style="flex: 1; border-radius: 2px; background: rgba(201,162,77,0.18);"></span><span style="flex: 1; border-radius: 2px; background: rgba(201,162,77,0.18);"></span><span style="flex: 1; border-radius: 2px; background: rgba(201,162,77,0.18);"></span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding-top: 6px; border-top: 1px solid rgba(237,230,214,0.10);">
+          <div style="display: flex; flex-direction: column; gap: 2px; padding: 6px 4px 0 4px;">
+            <span style="font-family: 'Fraunces', serif; font-size: 22px; line-height: 1; color: #EDE6D6; font-variant-numeric: tabular-nums;">42<span style="font-family: 'Manrope', sans-serif; font-size: 12px; color: #93A097; margin-left: 4px;">of 300</span></span>
+            <span style="font-size: 11px; color: #93A097;">spent by your agent</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px; padding: 6px 4px 0 4px;">
+            <span style="font-family: 'Fraunces', serif; font-size: 22px; line-height: 1; color: #9CC9A8; font-variant-numeric: tabular-nums;">6</span>
+            <span style="font-size: 11px; color: #93A097;">payments made</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px; padding: 6px 4px 0 4px;">
+            <span style="font-family: 'Fraunces', serif; font-size: 22px; line-height: 1; color: #D3CCBB; font-variant-numeric: tabular-nums;">6<span style="font-family: 'Manrope', sans-serif; font-size: 12px; color: #93A097; margin-left: 4px;">of 90</span></span>
+            <span style="font-size: 11px; color: #93A097;">day stopped on</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 0 24px; position: relative; min-height: 0;">
+
+    <div class="rise rise-3" style="display: flex; flex-direction: column; gap: 6px; padding: 0 4px;">
+      <h1 style="margin: 0; font-family: 'Fraunces', serif; font-weight: 400; font-size: 32px; line-height: 1.1; letter-spacing: -0.01em; color: #EDE6D6;">You stopped this rule.</h1>
+      <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #D3CCBB;">Your agent can still ask, but the program refuses every request now. The reason it gives: rule not active.</p>
+    </div>
+
+    <div class="rise rise-4" style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: #16231E; border: 1px solid rgba(237,230,214,0.16);">
+      <span style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 18px; background: rgba(228,164,142,0.12); flex-shrink: 0;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg>
+      </span>
+      <span style="flex: 1; font-size: 13px; line-height: 1.4; color: #D3CCBB;">Your agent's next request will be refused. No money can leave the rule.</span>
+    </div>
+
+    <div class="rise rise-4" style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: #16231E; border: 1px solid rgba(237,230,214,0.16);">
+      <span style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 18px; border: 1px solid rgba(201,162,77,0.55); background: rgba(201,162,77,0.08); flex-shrink: 0;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6h14"></path><path d="M5 12h14"></path><path d="M5 18h9"></path></svg>
+      </span>
+      <span style="flex: 1; font-size: 13px; line-height: 1.4; color: #D3CCBB;">Every payment and refusal under this rule stays on the blockchain.</span>
+      <a href="#decisions" style="display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 4px; color: #C9A24D; font-size: 13px; font-weight: 700; text-decoration: none; white-space: nowrap; flex-shrink: 0;">
+        <span>See them</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+      </a>
+    </div>
+
+  </div>
+
+  <div class="rise rise-5" style="display: flex; flex-direction: column; gap: 8px; padding: 12px 24px 26px 24px; position: relative;">
+    <button type="button" class="cta-sheen" style="position: relative; min-height: 68px; border: 0; border-radius: 18px; background-color: #C9A24D; color: #0F1A16; cursor: pointer; display: flex; align-items: center; gap: 14px; padding: 10px 14px; text-align: left; box-shadow: 0 10px 30px rgba(201,162,77,0.22);">
+      <svg width="44" height="44" viewBox="0 0 52 52" aria-hidden="true" style="flex-shrink: 0;">
+        <circle cx="26" cy="26" r="20" fill="none" stroke="rgba(15,26,22,0.22)" stroke-width="4"></circle>
+        <circle class="hold-ring" cx="26" cy="26" r="20" fill="none" stroke="#0F1A16" stroke-width="4" stroke-linecap="round" transform="rotate(-90 26 26)"></circle>
+        <rect x="17" y="24" width="18" height="13" rx="3" fill="#0F1A16"></rect>
+        <path d="M26 24v-4a6 6 0 0 1 12 0" fill="none" stroke="#0F1A16" stroke-width="2.4" stroke-linecap="round"></path>
+        <circle cx="26" cy="30.5" r="1.8" fill="#E3C77E"></circle>
+      </svg>
+      <span style="display: flex; flex-direction: column; gap: 3px;">
+        <span style="font-size: 16px; font-weight: 700; line-height: 1.2;">Close the rule and get 258 back to your wallet</span>
+        <span style="font-size: 12px; font-weight: 600; color: #3A2E0E;">Hold to sign in Seed Vault. Veto never sees your key.</span>
+      </span>
+    </button>
+    <p class="rise rise-6" style="margin: 0; text-align: center; font-size: 12px; color: #93A097;">Closing ends the rule for good. The 258 goes to your wallet, not to your agent.</p>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

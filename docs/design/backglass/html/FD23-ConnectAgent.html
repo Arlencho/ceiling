@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Give your agent its setup</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+button,a{font-family:inherit;}
+button:focus-visible,a:focus-visible{outline:2px solid #C9A24D;outline-offset:3px;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes stripLamp{0%,100%{box-shadow:0 0 0 4px rgba(227,199,126,0.14),0 0 6px rgba(227,199,126,0.5);}50%{box-shadow:0 0 0 4px rgba(227,199,126,0.22),0 0 14px rgba(227,199,126,0.95);}}
+@keyframes liveLamp{0%,100%{box-shadow:0 0 4px rgba(156,201,168,0.5);}50%{box-shadow:0 0 10px rgba(156,201,168,0.95);}}
+@keyframes waitLamp{0%,100%{background:rgba(201,162,77,0.25);box-shadow:0 0 0 rgba(227,199,126,0);}50%{background:#E3C77E;box-shadow:0 0 12px rgba(227,199,126,0.9);}}
+@keyframes waitRing{0%{transform:scale(1);opacity:0.6;}100%{transform:scale(2.6);opacity:0;}}
+@keyframes qrIn{from{opacity:0;transform:scale(0.96);}to{opacity:1;transform:scale(1);}}
+@keyframes sheen{0%{background-position:0% 50%;}100%{background-position:200% 50%;}}
+.rise{animation:rise 0.7s cubic-bezier(0.22,1,0.36,1) both;}
+.rise-1{animation-delay:0.05s;}
+.rise-2{animation-delay:0.18s;}
+.rise-3{animation-delay:0.30s;}
+.rise-4{animation-delay:0.44s;}
+.rise-5{animation-delay:0.90s;}
+.rise-6{animation-delay:1.05s;}
+.rise-7{animation-delay:1.20s;}
+.strip-lamp{animation:stripLamp 3s ease-in-out infinite;}
+.live-lamp{animation:liveLamp 3s ease-in-out infinite;}
+.wait-lamp{animation:waitLamp 2.2s ease-in-out infinite;}
+.wait-ring{transform-origin:center;animation:waitRing 2.2s ease-out infinite;}
+.qr{animation:qrIn 0.8s cubic-bezier(0.22,1,0.36,1) 0.6s both;}
+.cta-sheen{background-image:linear-gradient(110deg,#C9A24D 0%,#C9A24D 40%,#E3C77E 50%,#C9A24D 60%,#C9A24D 100%);background-size:200% 100%;animation:sheen 3.2s ease-in-out 1.8s infinite;}
+@media (prefers-reduced-motion: reduce){
+  .rise,.strip-lamp,.live-lamp,.wait-lamp,.wait-ring,.qr,.cta-sheen{animation:none;}
+  .wait-lamp{background:#E3C77E;}
+  .wait-ring{opacity:0;}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div style="position: absolute; top: -140px; left: 50%; width: 460px; height: 460px; margin-left: -230px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.16) 0%, rgba(201,162,77,0.04) 45%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div class="rise rise-1" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 24px 0 24px; position: relative;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <svg width="20" height="20" viewBox="0 0 100 100" aria-hidden="true"><path d="M16 14L50 80L84 14" fill="none" stroke="#C9A24D" stroke-width="9" stroke-linecap="butt" stroke-linejoin="miter"></path><circle cx="50" cy="37.4" r="12" fill="#E3C77E" stroke="#7E5E14" stroke-width="2"></circle></svg>
+      <span style="font-family: 'Fraunces', serif; font-size: 20px; font-weight: 500; letter-spacing: 0.02em;">Veto</span>
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #C9A24D; border: 1px solid rgba(201,162,77,0.5); border-radius: 999px; padding: 3px 8px; margin-left: 2px;">Devnet</span>
+    </div>
+    <span style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 999px; background: rgba(156,201,168,0.10); border: 1px solid rgba(156,201,168,0.45); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #9CC9A8;">
+      <span class="live-lamp" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #9CC9A8;"></span>
+      <span>Rule live</span>
+    </span>
+  </div>
+
+  <ol class="rise rise-2" aria-label="First run, step 5 of 5: Live" style="list-style: none; margin: 14px 24px 0 24px; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); position: relative;">
+    <span aria-hidden="true" style="position: absolute; top: 7px; left: 10%; right: 10%; height: 2px; background: rgba(201,162,77,0.22);"></span>
+    <span aria-hidden="true" style="position: absolute; top: 7px; left: 10%; width: 80%; height: 2px; background: #C9A24D;"></span>
+    <li style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; position: relative;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: #C9A24D; box-sizing: border-box;">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>
+      </span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; color: #D3CCBB;">Learn</span>
+    </li>
+    <li style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; position: relative;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: #C9A24D; box-sizing: border-box;">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>
+      </span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; color: #D3CCBB;">Connect wallet</span>
+    </li>
+    <li style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; position: relative;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: #C9A24D; box-sizing: border-box;">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>
+      </span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; color: #D3CCBB;">Add your agent</span>
+    </li>
+    <li style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; position: relative;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: #C9A24D; box-sizing: border-box;">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>
+      </span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; color: #D3CCBB;">Approve the rule</span>
+    </li>
+    <li aria-current="step" style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; position: relative;">
+      <span class="strip-lamp" style="display: block; width: 16px; height: 16px; border-radius: 50%; background: #E3C77E; box-sizing: border-box;"></span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; color: #E3C77E;">Live</span>
+    </li>
+  </ol>
+
+  <div class="rise rise-3" style="padding: 16px 24px 0 24px; position: relative; display: flex; flex-direction: column; gap: 6px;">
+    <h1 style="margin: 0; font-family: 'Fraunces', serif; font-weight: 400; font-size: 30px; line-height: 1.1; letter-spacing: -0.01em; color: #EDE6D6;">Give your agent its setup.</h1>
+    <p style="margin: 0; font-size: 14px; line-height: 1.45; color: #D3CCBB;">Your agent needs this to use the rule. Let it scan the code, or copy the text to it.</p>
+  </div>
+
+  <div class="rise rise-4" style="padding: 14px 24px 0 24px; position: relative;">
+    <div style="border-radius: 22px; padding: 2px; background: linear-gradient(160deg, #E3C77E 0%, #C9A24D 35%, #7E5E14 100%); box-shadow: 0 14px 34px rgba(0,0,0,0.35);">
+      <div style="border-radius: 20px; background: linear-gradient(180deg, #1C2C25 0%, #16231E 100%); padding: 14px 14px 12px 14px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <div class="qr" style="position: relative; width: 207px; height: 207px; border-radius: 12px; background: #0F1A16; border: 1px solid rgba(201,162,77,0.45); box-sizing: border-box; box-shadow: inset 0 1px 0 rgba(237,230,214,0.06);">
+          <span aria-hidden="true" style="position: absolute; top: -1px; left: -1px; width: 22px; height: 22px; border-top: 2px solid #E3C77E; border-left: 2px solid #E3C77E; border-radius: 12px 0 0 0;"></span>
+          <span aria-hidden="true" style="position: absolute; top: -1px; right: -1px; width: 22px; height: 22px; border-top: 2px solid #E3C77E; border-right: 2px solid #E3C77E; border-radius: 0 12px 0 0;"></span>
+          <span aria-hidden="true" style="position: absolute; bottom: -1px; left: -1px; width: 22px; height: 22px; border-bottom: 2px solid #E3C77E; border-left: 2px solid #E3C77E; border-radius: 0 0 0 12px;"></span>
+          <span aria-hidden="true" style="position: absolute; bottom: -1px; right: -1px; width: 22px; height: 22px; border-bottom: 2px solid #E3C77E; border-right: 2px solid #E3C77E; border-radius: 0 0 12px 0;"></span>
+          <svg width="175" height="175" viewBox="0 0 175 175" role="img" aria-label="Setup code for Charging agent. It holds the rule's address and its limits, never your key." style="position: absolute; top: 15px; left: 15px; display: block; shape-rendering: crispEdges;">
+            <g fill="#EDE6D6"><rect x="0" y="0" width="49" height="7"></rect><rect x="70" y="0" width="21" height="7"></rect><rect x="98" y="0" width="21" height="7"></rect><rect x="126" y="0" width="49" height="7"></rect><rect x="0" y="7" width="7" height="7"></rect><rect x="42" y="7" width="7" height="7"></rect><rect x="70" y="7" width="28" height="7"></rect><rect x="126" y="7" width="7" height="7"></rect><rect x="168" y="7" width="7" height="7"></rect><rect x="0" y="14" width="7" height="7"></rect><rect x="14" y="14" width="21" height="7"></rect><rect x="42" y="14" width="7" height="7"></rect><rect x="70" y="14" width="28" height="7"></rect><rect x="112" y="14" width="7" height="7"></rect><rect x="126" y="14" width="7" height="7"></rect><rect x="140" y="14" width="21" height="7"></rect><rect x="168" y="14" width="7" height="7"></rect><rect x="0" y="21" width="7" height="7"></rect><rect x="14" y="21" width="21" height="7"></rect><rect x="42" y="21" width="7" height="7"></rect><rect x="70" y="21" width="35" height="7"></rect><rect x="112" y="21" width="7" height="7"></rect><rect x="126" y="21" width="7" height="7"></rect><rect x="140" y="21" width="21" height="7"></rect><rect x="168" y="21" width="7" height="7"></rect><rect x="0" y="28" width="7" height="7"></rect><rect x="14" y="28" width="21" height="7"></rect><rect x="42" y="28" width="7" height="7"></rect><rect x="63" y="28" width="7" height="7"></rect><rect x="91" y="28" width="28" height="7"></rect><rect x="126" y="28" width="7" height="7"></rect><rect x="140" y="28" width="21" height="7"></rect><rect x="168" y="28" width="7" height="7"></rect><rect x="0" y="35" width="7" height="7"></rect><rect x="42" y="35" width="7" height="7"></rect><rect x="56" y="35" width="14" height="7"></rect><rect x="84" y="35" width="14" height="7"></rect><rect x="126" y="35" width="7" height="7"></rect><rect x="168" y="35" width="7" height="7"></rect><rect x="0" y="42" width="49" height="7"></rect><rect x="56" y="42" width="7" height="7"></rect><rect x="70" y="42" width="7" height="7"></rect><rect x="84" y="42" width="7" height="7"></rect><rect x="98" y="42" width="7" height="7"></rect><rect x="112" y="42" width="7" height="7"></rect><rect x="126" y="42" width="49" height="7"></rect><rect x="63" y="49" width="7" height="7"></rect><rect x="77" y="49" width="28" height="7"></rect><rect x="112" y="49" width="7" height="7"></rect><rect x="35" y="56" width="21" height="7"></rect><rect x="98" y="56" width="7" height="7"></rect><rect x="112" y="56" width="35" height="7"></rect><rect x="154" y="56" width="7" height="7"></rect><rect x="14" y="63" width="21" height="7"></rect><rect x="63" y="63" width="7" height="7"></rect><rect x="77" y="63" width="7" height="7"></rect><rect x="112" y="63" width="14" height="7"></rect><rect x="133" y="63" width="14" height="7"></rect><rect x="0" y="70" width="7" height="7"></rect><rect x="14" y="70" width="7" height="7"></rect><rect x="28" y="70" width="21" height="7"></rect><rect x="56" y="70" width="7" height="7"></rect><rect x="77" y="70" width="28" height="7"></rect><rect x="112" y="70" width="7" height="7"></rect><rect x="140" y="70" width="28" height="7"></rect><rect x="0" y="77" width="28" height="7"></rect><rect x="35" y="77" width="7" height="7"></rect><rect x="63" y="77" width="14" height="7"></rect><rect x="119" y="77" width="14" height="7"></rect><rect x="140" y="77" width="7" height="7"></rect><rect x="161" y="77" width="14" height="7"></rect><rect x="14" y="84" width="7" height="7"></rect><rect x="28" y="84" width="7" height="7"></rect><rect x="42" y="84" width="7" height="7"></rect><rect x="56" y="84" width="7" height="7"></rect><rect x="70" y="84" width="7" height="7"></rect><rect x="84" y="84" width="35" height="7"></rect><rect x="126" y="84" width="7" height="7"></rect><rect x="140" y="84" width="7" height="7"></rect><rect x="168" y="84" width="7" height="7"></rect><rect x="0" y="91" width="28" height="7"></rect><rect x="49" y="91" width="14" height="7"></rect><rect x="70" y="91" width="7" height="7"></rect><rect x="105" y="91" width="14" height="7"></rect><rect x="126" y="91" width="14" height="7"></rect><rect x="147" y="91" width="7" height="7"></rect><rect x="161" y="91" width="14" height="7"></rect><rect x="14" y="98" width="35" height="7"></rect><rect x="56" y="98" width="7" height="7"></rect><rect x="112" y="98" width="14" height="7"></rect><rect x="133" y="98" width="7" height="7"></rect><rect x="154" y="98" width="7" height="7"></rect><rect x="168" y="98" width="7" height="7"></rect><rect x="0" y="105" width="7" height="7"></rect><rect x="14" y="105" width="7" height="7"></rect><rect x="28" y="105" width="7" height="7"></rect><rect x="49" y="105" width="7" height="7"></rect><rect x="63" y="105" width="14" height="7"></rect><rect x="112" y="105" width="7" height="7"></rect><rect x="126" y="105" width="7" height="7"></rect><rect x="140" y="105" width="7" height="7"></rect><rect x="168" y="105" width="7" height="7"></rect><rect x="14" y="112" width="7" height="7"></rect><rect x="28" y="112" width="35" height="7"></rect><rect x="70" y="112" width="7" height="7"></rect><rect x="84" y="112" width="21" height="7"></rect><rect x="112" y="112" width="35" height="7"></rect><rect x="161" y="112" width="7" height="7"></rect><rect x="70" y="119" width="7" height="7"></rect><rect x="91" y="119" width="7" height="7"></rect><rect x="105" y="119" width="14" height="7"></rect><rect x="140" y="119" width="35" height="7"></rect><rect x="0" y="126" width="49" height="7"></rect><rect x="56" y="126" width="14" height="7"></rect><rect x="91" y="126" width="7" height="7"></rect><rect x="105" y="126" width="14" height="7"></rect><rect x="126" y="126" width="7" height="7"></rect><rect x="140" y="126" width="21" height="7"></rect><rect x="0" y="133" width="7" height="7"></rect><rect x="42" y="133" width="7" height="7"></rect><rect x="56" y="133" width="7" height="7"></rect><rect x="70" y="133" width="7" height="7"></rect><rect x="84" y="133" width="35" height="7"></rect><rect x="140" y="133" width="7" height="7"></rect><rect x="154" y="133" width="7" height="7"></rect><rect x="0" y="140" width="7" height="7"></rect><rect x="14" y="140" width="21" height="7"></rect><rect x="42" y="140" width="7" height="7"></rect><rect x="56" y="140" width="7" height="7"></rect><rect x="77" y="140" width="7" height="7"></rect><rect x="91" y="140" width="7" height="7"></rect><rect x="112" y="140" width="35" height="7"></rect><rect x="154" y="140" width="14" height="7"></rect><rect x="0" y="147" width="7" height="7"></rect><rect x="14" y="147" width="21" height="7"></rect><rect x="42" y="147" width="7" height="7"></rect><rect x="56" y="147" width="7" height="7"></rect><rect x="70" y="147" width="7" height="7"></rect><rect x="84" y="147" width="21" height="7"></rect><rect x="133" y="147" width="7" height="7"></rect><rect x="147" y="147" width="7" height="7"></rect><rect x="161" y="147" width="7" height="7"></rect><rect x="0" y="154" width="7" height="7"></rect><rect x="14" y="154" width="21" height="7"></rect><rect x="42" y="154" width="7" height="7"></rect><rect x="56" y="154" width="14" height="7"></rect><rect x="77" y="154" width="7" height="7"></rect><rect x="112" y="154" width="7" height="7"></rect><rect x="147" y="154" width="28" height="7"></rect><rect x="0" y="161" width="7" height="7"></rect><rect x="42" y="161" width="7" height="7"></rect><rect x="77" y="161" width="42" height="7"></rect><rect x="126" y="161" width="14" height="7"></rect><rect x="161" y="161" width="14" height="7"></rect><rect x="0" y="168" width="49" height="7"></rect><rect x="63" y="168" width="7" height="7"></rect><rect x="91" y="168" width="14" height="7"></rect><rect x="112" y="168" width="7" height="7"></rect><rect x="126" y="168" width="7" height="7"></rect><rect x="154" y="168" width="7" height="7"></rect></g>
+          </svg>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center;">
+          <span style="font-size: 13px; font-weight: 600; color: #EDE6D6;">Charging agent's rule</span>
+          <span style="font-size: 12px; color: #93A097;">Pay 6i99...PdCG only. Most 10 per payment, 300 total, 90 days.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rise rise-5" style="display: flex; flex-direction: column; gap: 8px; padding: 14px 24px 0 24px; position: relative;">
+    <button type="button" class="cta-sheen" style="height: 56px; border: 0; border-radius: 16px; background-color: #C9A24D; color: #0F1A16; font-size: 17px; font-weight: 700; letter-spacing: 0.01em; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 10px 30px rgba(201,162,77,0.22);">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+      <span>Copy setup text</span>
+    </button>
+    <p style="margin: 0; text-align: center; font-size: 12px; line-height: 1.4; color: #93A097;">The text holds the rule's address and its limits. Never your key.</p>
+  </div>
+
+  <div class="rise rise-6" style="padding: 12px 24px 0 24px; position: relative;">
+    <div style="display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 16px; background: #16231E; border: 1px solid rgba(201,162,77,0.35);" role="status">
+      <span style="position: relative; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex-shrink: 0;">
+        <span class="wait-ring" aria-hidden="true" style="position: absolute; width: 12px; height: 12px; border-radius: 50%; border: 1px solid #E3C77E; opacity: 0;"></span>
+        <span class="wait-lamp" style="display: block; width: 12px; height: 12px; border-radius: 50%; background: rgba(201,162,77,0.25); border: 1px solid rgba(227,199,126,0.7); box-sizing: border-box;"></span>
+      </span>
+      <span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0;">
+        <span style="font-size: 14px; font-weight: 600; color: #EDE6D6;">Waiting for your agent's first request</span>
+        <span style="font-size: 12px; color: #93A097; line-height: 1.35;">Nothing has moved. Its first ask will show up here and on Home.</span>
+      </span>
+    </div>
+  </div>
+
+  <div class="rise rise-7" style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; padding: 8px 24px 30px 24px; position: relative;">
+    <a href="#overview" style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; color: #C9A24D; font-size: 15px; font-weight: 700; text-decoration: none;">
+      <span>Go to overview</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg>
+    </a>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

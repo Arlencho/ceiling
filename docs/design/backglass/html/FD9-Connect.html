@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Connect wallet</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+button,a{font-family:inherit;}
+button:focus-visible,a:focus-visible{outline:2px solid #C9A24D;outline-offset:3px;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes lamp{0%,100%{background:rgba(201,162,77,0.18);box-shadow:none;}8%{background:#E3C77E;box-shadow:0 0 10px rgba(227,199,126,0.9);}30%{background:rgba(201,162,77,0.18);box-shadow:none;}}
+@keyframes ringOut{0%{transform:scale(0.55);opacity:0.9;}100%{transform:scale(1.6);opacity:0;}}
+@keyframes discIn{0%{transform:scale(0.6);opacity:0;}60%{transform:scale(1.06);opacity:1;}100%{transform:scale(1);opacity:1;}}
+@keyframes lockDrop{0%{transform:translateY(-10px);opacity:0;}100%{transform:translateY(0);opacity:1;}}
+@keyframes signalRun{0%{transform:translateX(0);opacity:0;}10%{opacity:1;}70%{transform:translateX(96px);opacity:1;}80%{transform:translateX(96px);opacity:0;}100%{transform:translateX(96px);opacity:0;}}
+@keyframes sheen{0%{background-position:0% 50%;}100%{background-position:200% 50%;}}
+.rise{animation:rise 0.7s cubic-bezier(0.22,1,0.36,1) both;}
+.rise-1{animation-delay:0.05s;}
+.rise-2{animation-delay:0.15s;}
+.rise-3{animation-delay:0.28s;}
+.rise-4{animation-delay:0.90s;}
+.rise-5{animation-delay:1.05s;}
+.rise-6{animation-delay:1.20s;}
+.lamp{animation:lamp 2.4s ease-in-out infinite;}
+.lamp-1{animation-delay:0s;}.lamp-2{animation-delay:0.2s;}.lamp-3{animation-delay:0.4s;}.lamp-4{animation-delay:0.6s;}.lamp-5{animation-delay:0.8s;}.lamp-6{animation-delay:1.0s;}.lamp-7{animation-delay:1.2s;}.lamp-8{animation-delay:1.4s;}.lamp-9{animation-delay:1.6s;}.lamp-10{animation-delay:1.8s;}
+.ring{transform-origin:center;animation:ringOut 1.8s cubic-bezier(0.22,1,0.36,1) both;}
+.ring-1{animation-delay:0.8s;}
+.ring-2{animation-delay:1.15s;}
+.disc{animation:discIn 0.7s cubic-bezier(0.34,1.4,0.64,1) 0.5s both;}
+.lock{animation:lockDrop 0.5s cubic-bezier(0.22,1,0.36,1) 0.9s both;}
+.signal{animation:signalRun 3.6s cubic-bezier(0.45,0,0.55,1) 1.4s infinite;}
+.ghost{transition:border-color 0.2s ease,background-color 0.2s ease;}
+.ghost:hover{border-color:#C9A24D;background-color:rgba(201,162,77,0.08);}
+.cta-sheen{background-image:linear-gradient(110deg,#C9A24D 0%,#C9A24D 40%,#E3C77E 50%,#C9A24D 60%,#C9A24D 100%);background-size:200% 100%;animation:sheen 3.2s ease-in-out 1.8s infinite;}
+@media (prefers-reduced-motion: reduce){
+  .rise,.lamp,.ring,.disc,.lock,.signal,.cta-sheen{animation:none;}
+  .lamp{background:#C9A24D;}
+  .ring{opacity:0;}
+  .signal{transform:translateX(96px);opacity:1;}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div style="position: absolute; top: -160px; left: 50%; width: 520px; height: 520px; margin-left: -260px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.18) 0%, rgba(201,162,77,0.05) 40%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div class="rise rise-1" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 12px 0 12px; position: relative;">
+    <a href="#how-4" aria-label="Back" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; text-decoration: none;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EDE6D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">Connect wallet</span>
+    <span style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #C9A24D; border: 1px solid rgba(201,162,77,0.5); border-radius: 999px; padding: 3px 8px;">Devnet</span>
+    </span>
+  </div>
+
+  <div class="rise rise-2" role="list" aria-label="Your setup: step 2 of 5, Connect wallet" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 10px 24px 0 24px; position: relative;">
+    <div role="listitem" style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+      <span style="display: block; width: 100%; height: 4px; border-radius: 2px; background: rgba(201,162,77,0.55);"></span>
+      <span style="min-height: 24px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #93A097; text-align: center; line-height: 1.2;">Learn</span>
+    </div>
+    <div role="listitem" aria-current="step" style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+      <span style="display: block; width: 100%; height: 4px; border-radius: 2px; background: #C9A24D; box-shadow: 0 0 8px rgba(201,162,77,0.6);"></span>
+      <span style="min-height: 24px; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #EDE6D6; text-align: center; line-height: 1.2;">Connect wallet</span>
+    </div>
+    <div role="listitem" style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+      <span style="display: block; width: 100%; height: 4px; border-radius: 2px; background: rgba(237,230,214,0.14);"></span>
+      <span style="min-height: 24px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #93A097; text-align: center; line-height: 1.2;">Add your agent</span>
+    </div>
+    <div role="listitem" style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+      <span style="display: block; width: 100%; height: 4px; border-radius: 2px; background: rgba(237,230,214,0.14);"></span>
+      <span style="min-height: 24px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #93A097; text-align: center; line-height: 1.2;">Approve the rule</span>
+    </div>
+    <div role="listitem" style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+      <span style="display: block; width: 100%; height: 4px; border-radius: 2px; background: rgba(237,230,214,0.14);"></span>
+      <span style="min-height: 24px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #93A097; text-align: center; line-height: 1.2;">Live</span>
+    </div>
+  </div>
+
+  <div class="rise rise-3" style="padding: 12px 24px 0 24px; position: relative;">
+    <div style="border-radius: 22px; padding: 2px; background: linear-gradient(160deg, #E3C77E 0%, #C9A24D 35%, #7E5E14 100%); box-shadow: 0 18px 40px rgba(0,0,0,0.35);">
+      <div style="border-radius: 20px; background: linear-gradient(180deg, #1C2C25 0%, #16231E 100%); padding: 14px 14px 12px 14px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 4px;" aria-hidden="true">
+          <span class="lamp lamp-1" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-2" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-3" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-4" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-5" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-6" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-7" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-8" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-9" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-10" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+        </div>
+
+        <svg width="310" height="170" viewBox="0 0 310 170" role="img" aria-label="Your phone holds the key inside Seed Vault. Only a signed approval, shown as a small brass check, travels to Veto. The key never leaves the phone." style="overflow: visible; display: block;">
+          <rect x="30" y="14" width="96" height="126" rx="14" fill="#0F1A16" stroke="#C9A24D" stroke-width="1.5"></rect>
+          <path d="M66 24h24" stroke="rgba(237,230,214,0.5)" stroke-width="1.5" stroke-linecap="round"></path>
+          <text x="78" y="128" text-anchor="middle" font-family="Manrope, sans-serif" font-size="9" font-weight="700" letter-spacing="1.3" fill="#C9A24D">SEED VAULT</text>
+
+          <g style="transform-box: fill-box; transform-origin: center;">
+            <circle class="ring ring-1" cx="78" cy="74" r="34" fill="none" stroke="#E3C77E" stroke-width="1.2"></circle>
+            <circle class="ring ring-2" cx="78" cy="74" r="34" fill="none" stroke="#C9A24D" stroke-width="1.2"></circle>
+          </g>
+          <g class="disc" style="transform-box: fill-box; transform-origin: center;">
+            <circle cx="78" cy="74" r="30" fill="#C9A24D"></circle>
+            <circle cx="78" cy="74" r="30" fill="url(#discShade)"></circle>
+            <g class="lock" style="transform-box: fill-box; transform-origin: center;">
+              <rect x="66" y="72" width="24" height="17" rx="4" fill="none" stroke="#0F1A16" stroke-width="2"></rect>
+              <path d="M71 72v-5a7 7 0 0 1 14 0v5" fill="none" stroke="#0F1A16" stroke-width="2" stroke-linecap="round"></path>
+              <circle cx="78" cy="80.5" r="2.2" fill="#0F1A16"></circle>
+            </g>
+          </g>
+          <defs>
+            <radialGradient id="discShade" cx="0.4" cy="0.35" r="0.75">
+              <stop offset="0" stop-color="#E3C77E"></stop>
+              <stop offset="0.5" stop-color="#C9A24D"></stop>
+              <stop offset="1" stop-color="#7E5E14"></stop>
+            </radialGradient>
+          </defs>
+
+          <line x1="140" y1="74" x2="236" y2="74" stroke="rgba(201,162,77,0.35)" stroke-width="1.5"></line>
+          <path d="M229 70l4 4-4 4" fill="none" stroke="rgba(201,162,77,0.55)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+          <text x="188" y="58" text-anchor="middle" font-family="Manrope, sans-serif" font-size="9" font-weight="700" letter-spacing="1.3" fill="#93A097">SIGNED</text>
+          <text x="188" y="98" text-anchor="middle" font-family="Manrope, sans-serif" font-size="9" font-weight="700" letter-spacing="1.3" fill="#93A097">APPROVAL</text>
+          <g class="signal" style="transform-box: fill-box; transform-origin: center;">
+            <circle cx="140" cy="74" r="9" fill="#E3C77E" stroke="#7E5E14" stroke-width="1"></circle>
+            <path d="M136 74l3 3 5-5" fill="none" stroke="#0F1A16" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+          </g>
+
+          <path d="M270 40l18 7v14c0 12-8 19-18 22-10-3-18-10-18-22V47z" fill="#0F1A16" stroke="#C9A24D" stroke-width="1.5" stroke-linejoin="round"></path>
+          <g transform="translate(261 50) scale(0.18)"><path d="M16 14L50 80L84 14" fill="none" stroke="#C9A24D" stroke-width="9" stroke-linecap="butt" stroke-linejoin="miter"></path><circle cx="50" cy="37.4" r="12" fill="#E3C77E" stroke="#7E5E14" stroke-width="2"></circle></g>
+          <text x="270" y="105" text-anchor="middle" font-family="Manrope, sans-serif" font-size="9" font-weight="700" letter-spacing="1.3" fill="#93A097">VETO</text>
+          <g transform="translate(258 116)">
+            <path d="M3 7a4 4 0 1 1 5.5 3.7L10 12h4l2 2-2 2h-2l-1 1h-2l-1-1H7l-1.5-1.3A4 4 0 0 1 3 7z" fill="none" stroke="#93A097" stroke-width="1.3" stroke-linejoin="round"></path>
+            <path d="M0 0l24 20" stroke="#E4A48E" stroke-width="1.6" stroke-linecap="round"></path>
+          </g>
+          <text x="270" y="154" text-anchor="middle" font-family="Manrope, sans-serif" font-size="9" font-weight="700" letter-spacing="1.3" fill="#93A097">NO KEY</text>
+        </svg>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 4px; font-size: 12px; color: #93A097;">
+          <span style="display: flex; align-items: center; gap: 6px;"><span style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #C9A24D;"></span><span>Your key stays on your phone</span></span>
+          <span>Veto never sees it</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 28px 0 28px; position: relative; gap: 12px;">
+    <div class="rise rise-4" style="display: flex; flex-direction: column; gap: 10px;">
+      <p style="margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: #C9A24D;">Seeker ID</p>
+      <h1 style="margin: 0; font-family: 'Fraunces', serif; font-weight: 400; font-size: 36px; line-height: 1.08; letter-spacing: -0.01em; color: #EDE6D6;">Connect your wallet.</h1>
+      <p style="margin: 0; font-size: 15px; line-height: 1.5; color: #D3CCBB;">You will approve with your Seeker ID (Seed Vault), the secure key store on this phone. Every rule you approve is signed there. Veto never sees your key.</p>
+    </div>
+    <div class="rise rise-5" style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-radius: 16px; background: rgba(242,185,75,0.06); border: 1px solid rgba(242,185,75,0.4);">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F2B94B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 1px;"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5"></path><circle cx="12" cy="16.5" r="0.8" fill="#F2B94B"></circle></svg>
+      <span style="font-size: 13px; line-height: 1.45; color: #D3CCBB;"><span style="font-weight: 700; color: #EDE6D6;">Test money only.</span> Veto runs on Solana devnet with test tokens. Your wallet must be set to devnet before you connect.</span>
+    </div>
+  </div>
+
+  <div class="rise rise-6" style="display: flex; flex-direction: column; gap: 8px; padding: 12px 24px 30px 24px; position: relative;">
+    <button type="button" class="cta-sheen" style="height: 56px; border: 0; border-radius: 16px; background-color: #C9A24D; color: #0F1A16; font-size: 17px; font-weight: 700; letter-spacing: 0.01em; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 10px 30px rgba(201,162,77,0.22);">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="3"></rect><path d="M3 10h18"></path><circle cx="16.5" cy="14.5" r="1.5" fill="#0F1A16"></circle></svg>
+      <span>Open Solana Mobile wallet</span>
+    </button>
+    <button type="button" class="ghost" style="height: 48px; border: 1px solid rgba(237,230,214,0.16); border-radius: 14px; background: #16231E; color: #EDE6D6; font-size: 15px; font-weight: 600; cursor: pointer;">Use another wallet</button>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

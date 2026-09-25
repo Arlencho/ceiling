@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Help</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+button,a{font-family:inherit;}
+button:focus-visible,a:focus-visible{outline:2px solid #C9A24D;outline-offset:3px;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes lamp{0%,100%{background:rgba(201,162,77,0.18);box-shadow:none;}8%{background:#E3C77E;box-shadow:0 0 10px rgba(227,199,126,0.9);}30%{background:rgba(201,162,77,0.18);box-shadow:none;}}
+@keyframes breathe{0%,100%{opacity:0.35;}50%{opacity:0.7;}}
+.rise{animation:rise 0.7s cubic-bezier(0.22,1,0.36,1) both;}
+.rise-1{animation-delay:0.05s;}
+.rise-2{animation-delay:0.18s;}
+.rise-3{animation-delay:0.32s;}
+.rise-4{animation-delay:0.44s;}
+.rise-5{animation-delay:0.56s;}
+.rise-6{animation-delay:0.68s;}
+.rise-7{animation-delay:0.80s;}
+.rise-8{animation-delay:0.92s;}
+.lamp{animation:lamp 4.8s ease-in-out infinite;}
+.lamp-1{animation-delay:0s;}.lamp-2{animation-delay:0.4s;}.lamp-3{animation-delay:0.8s;}.lamp-4{animation-delay:1.2s;}.lamp-5{animation-delay:1.6s;}.lamp-6{animation-delay:2.0s;}.lamp-7{animation-delay:2.4s;}.lamp-8{animation-delay:2.8s;}.lamp-9{animation-delay:3.2s;}.lamp-10{animation-delay:3.6s;}
+.breathe{animation:breathe 5s ease-in-out infinite;}
+.card{transition:border-color 0.2s ease,background-color 0.2s ease;}
+.card:hover{border-color:#C9A24D;background-color:rgba(201,162,77,0.06);}
+@media (prefers-reduced-motion: reduce){
+  .rise,.lamp,.breathe{animation:none;}
+  .lamp{background:#C9A24D;}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div class="breathe" style="position: absolute; top: -160px; left: 50%; width: 520px; height: 520px; margin-left: -260px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.20) 0%, rgba(201,162,77,0.05) 40%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div class="rise rise-1" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 12px 0 12px; position: relative;">
+    <a href="#rules" aria-label="Close" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; text-decoration: none;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EDE6D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12"></path><path d="M18 6L6 18"></path></svg>
+    </a>
+    <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">Help</span>
+    <span style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #C9A24D; border: 1px solid rgba(201,162,77,0.5); border-radius: 999px; padding: 3px 8px;">Devnet</span>
+    </span>
+  </div>
+
+  <div class="rise rise-2" style="padding: 14px 24px 0 24px; position: relative;">
+    <div style="border-radius: 22px; padding: 2px; background: linear-gradient(160deg, #E3C77E 0%, #C9A24D 35%, #7E5E14 100%); box-shadow: 0 14px 34px rgba(0,0,0,0.35);">
+      <div style="border-radius: 20px; background: linear-gradient(180deg, #1C2C25 0%, #16231E 100%); padding: 12px 14px 14px 14px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 4px;" aria-hidden="true">
+          <span class="lamp lamp-1" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-2" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-3" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-4" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-5" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-6" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-7" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-8" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-9" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-10" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px; padding: 0 4px;">
+          <h1 style="margin: 0; font-family: 'Fraunces', serif; font-weight: 400; font-size: 30px; line-height: 1.1; letter-spacing: -0.01em; color: #EDE6D6;">Your agent can only ask.</h1>
+          <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #D3CCBB;">You set one rule. The Veto program on Solana checks every request against it and pays or refuses. Your agent never holds your money.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 16px 24px 0 24px; position: relative; min-height: 0;">
+
+    <a href="#help-rule" class="rise rise-3 card" style="display: flex; align-items: center; gap: 14px; min-height: 84px; padding: 12px 14px; border-radius: 18px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); text-decoration: none; color: inherit;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; background: rgba(201,162,77,0.10); border: 1px solid rgba(201,162,77,0.45); flex-shrink: 0;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"></path><path d="M9 12l2 2 4-4"></path></svg>
+      </span>
+      <span style="flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+        <span style="font-size: 16px; font-weight: 700; color: #EDE6D6;">What a rule is</span>
+        <span style="font-size: 12px; line-height: 1.45; color: #93A097;">Who your agent may pay, the most per payment, the total it may ever spend, and when it ends. The money sits in an account only this rule uses.</span>
+      </span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#93A097" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M9 6l6 6-6 6"></path></svg>
+    </a>
+
+    <a href="#help-refusal" class="rise rise-4 card" style="display: flex; align-items: center; gap: 14px; min-height: 84px; padding: 12px 14px; border-radius: 18px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); text-decoration: none; color: inherit;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; background: rgba(228,164,142,0.10); border: 1px solid rgba(228,164,142,0.45); flex-shrink: 0;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg>
+      </span>
+      <span style="flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+        <span style="font-size: 16px; font-weight: 700; color: #EDE6D6;">What a refusal is</span>
+        <span style="font-size: 12px; line-height: 1.45; color: #93A097;">Your agent asked for something the rule does not allow, so the program said no. No money moves. The reason and time are saved on the blockchain.</span>
+      </span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#93A097" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M9 6l6 6-6 6"></path></svg>
+    </a>
+
+    <a href="#help-export" class="rise rise-5 card" style="display: flex; align-items: center; gap: 14px; min-height: 84px; padding: 12px 14px; border-radius: 18px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); text-decoration: none; color: inherit;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; background: rgba(156,201,168,0.10); border: 1px solid rgba(156,201,168,0.45); flex-shrink: 0;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9CC9A8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"></path><path d="M14 3v4h4"></path><path d="M9 13h6"></path><path d="M9 17h6"></path></svg>
+      </span>
+      <span style="flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+        <span style="font-size: 16px; font-weight: 700; color: #EDE6D6;">What the export proves</span>
+        <span style="font-size: 12px; line-height: 1.45; color: #93A097;">The file lists every payment and refusal under a rule. Anyone can check each line against the blockchain.</span>
+      </span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#93A097" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M9 6l6 6-6 6"></path></svg>
+    </a>
+
+    <a href="#welcome" class="rise rise-6 card" style="display: flex; align-items: center; gap: 14px; min-height: 60px; padding: 8px 14px; border-radius: 18px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); text-decoration: none; color: inherit;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; background: rgba(237,230,214,0.06); border: 1px solid rgba(237,230,214,0.22); flex-shrink: 0;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#D3CCBB" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6"></path><path d="M4 4v5h5"></path><path d="M10 9.5v5l4-2.5z" fill="#D3CCBB" stroke="none"></path></svg>
+      </span>
+      <span style="flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+        <span style="font-size: 16px; font-weight: 700; color: #EDE6D6;">Show the introduction again</span>
+        <span style="font-size: 12px; color: #93A097;">The short tour you saw at the start.</span>
+      </span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#93A097" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M9 6l6 6-6 6"></path></svg>
+    </a>
+
+  </div>
+
+  <p class="rise rise-7" style="margin: 0; padding: 12px 28px 30px 28px; text-align: center; font-size: 12px; line-height: 1.5; color: #93A097; position: relative;">You sign in Seed Vault. Veto never sees your key. This is Solana devnet with test tokens, not real money.</p>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

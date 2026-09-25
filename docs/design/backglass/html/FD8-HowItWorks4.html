@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>You decide</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+button,a{font-family:inherit;}
+button:focus-visible,a:focus-visible{outline:2px solid #C9A24D;outline-offset:3px;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes lamp{0%,100%{background:rgba(201,162,77,0.18);box-shadow:none;}8%{background:#E3C77E;box-shadow:0 0 10px rgba(227,199,126,0.9);}30%{background:rgba(201,162,77,0.18);box-shadow:none;}}
+@keyframes railLeft{0%{stroke-dashoffset:65;}18%,100%{stroke-dashoffset:0;}}
+@keyframes railUp{0%,30%{stroke-dashoffset:46;}50%,100%{stroke-dashoffset:0;}}
+@keyframes dotPing{0%{transform:scale(1);opacity:0.8;}100%{transform:scale(3.2);opacity:0;}}
+@keyframes phoneBuzz{0%,100%{transform:translateX(0);}10%{transform:translateX(-2px);}20%{transform:translateX(2px);}30%{transform:translateX(-2px);}40%{transform:translateX(0);}}
+@keyframes litIn{from{opacity:0.38;}to{opacity:1;}}
+@keyframes sheen{0%{background-position:0% 50%;}100%{background-position:200% 50%;}}
+.rise{animation:rise 0.7s cubic-bezier(0.22,1,0.36,1) both;}
+.rise-1{animation-delay:0.05s;}
+.rise-2{animation-delay:0.15s;}
+.rise-3{animation-delay:0.28s;}
+.rise-4{animation-delay:1.10s;}
+.rise-5{animation-delay:1.30s;}
+.rise-6{animation-delay:1.50s;}
+.lamp{animation:lamp 2.4s ease-in-out infinite;}
+.lamp-1{animation-delay:0s;}.lamp-2{animation-delay:0.2s;}.lamp-3{animation-delay:0.4s;}.lamp-4{animation-delay:0.6s;}.lamp-5{animation-delay:0.8s;}.lamp-6{animation-delay:1.0s;}.lamp-7{animation-delay:1.2s;}.lamp-8{animation-delay:1.4s;}.lamp-9{animation-delay:1.6s;}.lamp-10{animation-delay:1.8s;}
+.st{opacity:0.38;}
+.st.on{opacity:1;animation:litIn 0.6s ease-out both;}
+.st.on-1{animation-delay:0.5s;}
+.st.on-2{animation-delay:1.4s;}
+.st.on-3{animation-delay:2.6s;}
+.rail{stroke:rgba(201,162,77,0.28);}
+.rail.on{stroke:#C9A24D;}
+.rail-left{stroke:#C9A24D;stroke-dasharray:65;stroke-dashoffset:65;animation:railLeft 5s linear 0.8s both;}
+.rail-up{stroke:#C9A24D;stroke-dasharray:46;stroke-dashoffset:46;animation:railUp 5s linear 0.8s both;}
+.ping{transform-box:fill-box;transform-origin:center;animation:dotPing 2.2s ease-out 1.6s infinite;}
+.buzz{transform-box:fill-box;transform-origin:center;animation:phoneBuzz 2.2s ease-in-out 1.6s infinite;}
+.cta-sheen{background-image:linear-gradient(110deg,#C9A24D 0%,#C9A24D 40%,#E3C77E 50%,#C9A24D 60%,#C9A24D 100%);background-size:200% 100%;animation:sheen 3.2s ease-in-out 2s infinite;}
+@media (prefers-reduced-motion: reduce){
+  .rise,.lamp,.st.on,.rail-left,.rail-up,.ping,.buzz,.cta-sheen{animation:none;}
+  .lamp{background:#C9A24D;}
+  .rail-left,.rail-up{stroke-dashoffset:0;}
+  .ping{opacity:0;}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div style="position: absolute; top: -160px; left: 50%; width: 520px; height: 520px; margin-left: -260px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.16) 0%, rgba(201,162,77,0.04) 40%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div class="rise rise-1" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 12px 0 12px; position: relative;">
+    <a href="#how-3" aria-label="Back to step 3" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; text-decoration: none;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EDE6D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">How Veto works, 4 of 4</span>
+    <span style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #C9A24D; border: 1px solid rgba(201,162,77,0.5); border-radius: 999px; padding: 3px 8px;">Devnet</span>
+    </span>
+  </div>
+
+  <div class="rise rise-2" role="list" aria-label="Your setup: step 1 of 5, Learn" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 10px 24px 0 24px; position: relative;">
+    <div role="listitem" aria-current="step" style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+      <span style="display: block; width: 100%; height: 4px; border-radius: 2px; background: #C9A24D; box-shadow: 0 0 8px rgba(201,162,77,0.6);"></span>
+      <span style="min-height: 24px; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #EDE6D6; text-align: center; line-height: 1.2;">Learn</span>
+    </div>
+    <div role="listitem" style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+      <span style="display: block; width: 100%; height: 4px; border-radius: 2px; background: rgba(237,230,214,0.14);"></span>
+      <span style="min-height: 24px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #93A097; text-align: center; line-height: 1.2;">Connect wallet</span>
+    </div>
+    <div role="listitem" style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+      <span style="display: block; width: 100%; height: 4px; border-radius: 2px; background: rgba(237,230,214,0.14);"></span>
+      <span style="min-height: 24px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #93A097; text-align: center; line-height: 1.2;">Add your agent</span>
+    </div>
+    <div role="listitem" style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+      <span style="display: block; width: 100%; height: 4px; border-radius: 2px; background: rgba(237,230,214,0.14);"></span>
+      <span style="min-height: 24px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #93A097; text-align: center; line-height: 1.2;">Approve the rule</span>
+    </div>
+    <div role="listitem" style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+      <span style="display: block; width: 100%; height: 4px; border-radius: 2px; background: rgba(237,230,214,0.14);"></span>
+      <span style="min-height: 24px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #93A097; text-align: center; line-height: 1.2;">Live</span>
+    </div>
+  </div>
+
+  <div class="rise rise-3" style="padding: 8px 24px 0 24px; position: relative;">
+    <div style="border-radius: 22px; padding: 2px; background: linear-gradient(160deg, #E3C77E 0%, #C9A24D 35%, #7E5E14 100%); box-shadow: 0 18px 40px rgba(0,0,0,0.35);">
+      <div style="border-radius: 20px; background: linear-gradient(180deg, #1C2C25 0%, #16231E 100%); padding: 12px 14px 10px 14px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 4px;" aria-hidden="true">
+          <span class="lamp lamp-1" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-2" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-3" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-4" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-5" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-6" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-7" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-8" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-9" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+          <span class="lamp lamp-10" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: rgba(201,162,77,0.18);"></span>
+        </div>
+
+        <svg width="310" height="196" viewBox="0 0 310 196" role="img" aria-label="The Veto machine. In this step the saved record reaches your phone, which buzzes, and a dotted line leads back up to you: you decide what happens next." style="overflow: visible; display: block;">
+          <path class="rail" d="M70 52H133" stroke="rgba(201,162,77,0.28)" stroke-width="1.5" fill="none"></path>
+          <path class="rail" d="M177 52H244" stroke="rgba(201,162,77,0.28)" stroke-width="1.5" fill="none"></path>
+          <path class="rail" d="M262 80V120" stroke="rgba(201,162,77,0.28)" stroke-width="1.5" fill="none"></path>
+          <path class="rail" d="M234 142H177" stroke="rgba(201,162,77,0.28)" stroke-width="1.5" fill="none"></path>
+          <path class="rail" d="M135 142H70" stroke="rgba(201,162,77,0.28)" stroke-width="1.5" fill="none"></path>
+          <path class="rail-left" d="M135 142H70" stroke="#C9A24D" stroke-width="1.5" fill="none"></path>
+          <path class="rail" d="M48 122V76" stroke="rgba(201,162,77,0.28)" stroke-width="1.5" stroke-dasharray="3 4" fill="none"></path>
+          <path class="rail-up" d="M48 122V76" stroke="#C9A24D" stroke-width="1.5" fill="none"></path>
+          <path class="rail" d="M126 48l4 4-4 4" stroke="rgba(201,162,77,0.28)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path class="rail" d="M237 48l4 4-4 4" stroke="rgba(201,162,77,0.28)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path class="rail" d="M258 113l4 4 4-4" stroke="rgba(201,162,77,0.28)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path class="rail" d="M184 138l-4 4 4 4" stroke="rgba(201,162,77,0.28)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path class="rail on" d="M77 138l-4 4 4 4" stroke="rgba(201,162,77,0.28)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path class="rail on" d="M44 83l4-4 4 4" stroke="rgba(201,162,77,0.28)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+
+          <g class="st on on-3">
+            <circle cx="48" cy="52" r="20" fill="#0F1A16" stroke="#C9A24D" stroke-width="1.5"></circle>
+            <circle cx="48" cy="46" r="4.5" fill="none" stroke="#EDE6D6" stroke-width="1.5"></circle>
+            <path d="M39.5 62c1.5-5.5 4.5-8 8.5-8s7 2.5 8.5 8" fill="none" stroke="#EDE6D6" stroke-width="1.5" stroke-linecap="round"></path>
+            <text x="48" y="90" text-anchor="middle" font-family="Manrope, sans-serif" font-size="9.5" font-weight="700" letter-spacing="1.4" fill="#C9A24D">YOU</text>
+          </g>
+
+          <g class="st">
+            <circle cx="155" cy="52" r="20" fill="#0F1A16" stroke="#C9A24D" stroke-width="1.5"></circle>
+            <text x="155" y="58" text-anchor="middle" font-family="Fraunces, serif" font-size="18" font-weight="500" fill="#EDE6D6">?</text>
+            <text x="155" y="90" text-anchor="middle" font-family="Manrope, sans-serif" font-size="9.5" font-weight="700" letter-spacing="1.4" fill="#93A097">YOUR AGENT</text>
+          </g>
+
+          <g class="st">
+            <path d="M246 76V44Q246 34 256 34H268Q278 34 278 44V76" fill="none" stroke="#C9A24D" stroke-width="3" stroke-linecap="round"></path>
+            <rect x="232" y="12" width="60" height="17" rx="8.5" fill="#0F1A16" stroke="rgba(201,162,77,0.7)" stroke-width="1"></rect>
+            <text x="262" y="24" text-anchor="middle" font-family="Manrope, sans-serif" font-size="9" font-weight="700" letter-spacing="1.3" fill="#C9A24D">MAX 10</text>
+            <circle cx="262" cy="58" r="4.5" fill="rgba(242,185,75,0.18)" stroke="rgba(242,185,75,0.6)" stroke-width="1"></circle>
+            <text x="262" y="90" text-anchor="middle" font-family="Manrope, sans-serif" font-size="9.5" font-weight="700" letter-spacing="1.4" fill="#93A097">THE RULE</text>
+          </g>
+
+          <g class="st">
+            <rect x="236" y="124" width="52" height="36" rx="8" fill="#0F1A16" stroke="#C9A24D" stroke-width="1.5"></rect>
+            <circle cx="250" cy="142" r="5" fill="rgba(156,201,168,0.18)" stroke="rgba(156,201,168,0.6)" stroke-width="1"></circle>
+            <circle cx="274" cy="142" r="5" fill="#F2B94B" stroke="rgba(242,185,75,0.6)" stroke-width="1"></circle>
+            <text x="262" y="177" text-anchor="middle" font-family="Manrope, sans-serif" font-size="9.5" font-weight="700" letter-spacing="1.4" fill="#93A097">PAID OR</text>
+            <text x="262" y="189" text-anchor="middle" font-family="Manrope, sans-serif" font-size="9.5" font-weight="700" letter-spacing="1.4" fill="#93A097">REFUSED</text>
+          </g>
+
+          <g class="st on on-1">
+            <rect x="137" y="126" width="36" height="32" rx="6" fill="#0F1A16" stroke="#C9A24D" stroke-width="1.5"></rect>
+            <path d="M143 135h24M143 142h16M143 149h20" stroke="#EDE6D6" stroke-width="1.4" stroke-linecap="round"></path>
+            <circle cx="172" cy="127" r="6.5" fill="#16231E" stroke="#C9A24D" stroke-width="1.2"></circle>
+            <path d="M169 127l2 2 4-4" fill="none" stroke="#C9A24D" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path>
+            <text x="155" y="177" text-anchor="middle" font-family="Manrope, sans-serif" font-size="9.5" font-weight="700" letter-spacing="1.4" fill="#C9A24D">SAVED ON</text>
+            <text x="155" y="189" text-anchor="middle" font-family="Manrope, sans-serif" font-size="9.5" font-weight="700" letter-spacing="1.4" fill="#C9A24D">THE BLOCKCHAIN</text>
+          </g>
+
+          <g class="st on on-2">
+            <g class="buzz">
+              <rect x="37" y="123" width="22" height="38" rx="5" fill="#0F1A16" stroke="#C9A24D" stroke-width="1.5"></rect>
+              <path d="M44 129h8" stroke="#EDE6D6" stroke-width="1.4" stroke-linecap="round"></path>
+              <rect x="41" y="135" width="14" height="4" rx="1" fill="rgba(228,164,142,0.7)"></rect>
+              <rect x="41" y="142" width="14" height="10" rx="2" fill="none" stroke="rgba(201,162,77,0.7)" stroke-width="1"></rect>
+            </g>
+            <circle class="ping" cx="58" cy="125" r="4" fill="#E4A48E"></circle>
+            <circle cx="58" cy="125" r="4" fill="#E4A48E"></circle>
+            <text x="48" y="177" text-anchor="middle" font-family="Manrope, sans-serif" font-size="9.5" font-weight="700" letter-spacing="1.4" fill="#C9A24D">YOUR PHONE</text>
+          </g>
+        </svg>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 4px; font-size: 12px; color: #93A097;">
+          <span style="display: flex; align-items: center; gap: 6px;"><span style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #E4A48E;"></span><span>Your phone buzzes</span></span>
+          <span>The choice comes back to you</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rise rise-4" style="display: flex; flex-direction: column; gap: 8px; padding: 10px 24px 0 24px; position: relative;">
+    <div style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 14px; border-radius: 14px; background: #16231E; border: 1px solid rgba(237,230,214,0.16);">
+      <span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 16px; background: rgba(156,201,168,0.12); flex-shrink: 0;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9CC9A8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>
+      </span>
+      <span style="display: flex; flex-direction: column; gap: 1px;">
+        <span style="font-size: 14px; font-weight: 600; color: #EDE6D6;">Let that one payment through</span>
+        <span style="font-size: 12px; color: #93A097;">Only that one. The most per payment stays the same.</span>
+      </span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 14px; border-radius: 14px; background: #16231E; border: 1px solid rgba(237,230,214,0.16);">
+      <span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 16px; background: rgba(228,164,142,0.12); flex-shrink: 0;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+      </span>
+      <span style="display: flex; flex-direction: column; gap: 1px;">
+        <span style="font-size: 14px; font-weight: 600; color: #EDE6D6;">Stop the rule</span>
+        <span style="font-size: 12px; color: #93A097;">Your agent's next request is refused.</span>
+      </span>
+    </div>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 28px 0 28px; position: relative;">
+    <p class="rise rise-5" style="margin: 0 0 8px 0; font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: #C9A24D;">Step 4: you decide</p>
+    <h1 class="rise rise-5" style="margin: 0 0 10px 0; font-family: 'Fraunces', serif; font-weight: 400; font-size: 34px; line-height: 1.08; letter-spacing: -0.01em; color: #EDE6D6;">You decide.</h1>
+    <p class="rise rise-5" style="margin: 0; font-size: 15px; line-height: 1.5; color: #D3CCBB;">Your phone tells you. You can let that one payment through or stop the rule, and anyone can check the record on the blockchain.</p>
+  </div>
+
+  <div class="rise rise-6" style="display: flex; flex-direction: column; gap: 6px; padding: 12px 24px 30px 24px; position: relative;">
+    <a href="#connect" class="cta-sheen" style="height: 56px; border-radius: 16px; background-color: #C9A24D; color: #0F1A16; font-size: 17px; font-weight: 700; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 10px 30px rgba(201,162,77,0.22);">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="3"></rect><path d="M3 10h18"></path><circle cx="16.5" cy="14.5" r="1.5" fill="#0F1A16"></circle></svg>
+      <span>Connect wallet</span>
+    </a>
+    <a href="#how-3" style="display: flex; align-items: center; justify-content: center; height: 44px; color: #93A097; font-size: 15px; font-weight: 600; text-decoration: none;">Back</a>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
