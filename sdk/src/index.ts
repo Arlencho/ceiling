@@ -30,6 +30,32 @@ export type {
   RuleRequestProblem,
 } from "./rule-request.js";
 export type { Decision } from "./events.js";
+export {
+  HOLD_BPS_DENOMINATOR,
+  HOLD_KNOWN_CAPACITY,
+  HOLD_LEDGER_CAPACITY,
+  HOLD_PENDING_CAPACITY,
+  HOLD_WINDOW_SECS,
+  HoldVault,
+  decodeHoldLedger,
+  decodeHoldVault,
+  holdLedgerPda,
+  holdTokenPda,
+  holdVaultPda,
+  withdrawalOutlook,
+} from "./hold.js";
+export type {
+  HoldLedgerAccount,
+  HoldLedgerEntry,
+  HoldVaultAccount,
+  HoldVaultArgs,
+  HoldVaultView,
+  HoldWaitReason,
+  PendingChange,
+  PendingWithdrawal,
+  SentHoldTx,
+  WithdrawalOutlook,
+} from "./hold.js";
 export { PROGRAM_ID } from "./idl.js";
 export { ledgerPda, mandatePda } from "./layout.js";
 export type { LedgerAccount, LedgerEntry, MandateAccount } from "./layout.js";
