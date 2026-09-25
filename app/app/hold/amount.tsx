@@ -10,6 +10,7 @@ import { fetchMintDecimals, tokenProgramOfMint } from '../../lib/chain';
 import { askedBaseUnits, showDevnetUsdcFaucet } from '../../lib/faucet';
 import { formatHoldAmount, shortKey } from '../../lib/hold';
 import { ownerTokenAccount, readTokenAmount } from '../../lib/holdChain';
+import { protectStep } from '../../lib/onboardingHold';
 import { useHoldDraft } from './_layout';
 import { useHoldSession } from '../../lib/holdSession';
 
@@ -92,7 +93,7 @@ export default function HoldAmount() {
             setFormError(null);
             draft.setAmountText(text);
           }}
-          onBack={() => router.back()}
+          onBack={() => draft.onboarding ? router.replace(protectStep(draft.guardianText)) : router.back()}
           faucet={showFaucet && session.owner ? <GetDevnetUsdc owner={session.owner.toBase58()} /> : null}
           onNext={() => {
             if (draft.amountText.trim().length === 0) {

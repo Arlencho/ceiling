@@ -1,10 +1,10 @@
-(globalThis as { __DEV__?: boolean }).__DEV__ = false;
-
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
 
 import { act, createElement, type ReactElement, type ReactNode } from 'react';
 import { create, type ReactTestRenderer } from 'react-test-renderer';
+
+(globalThis as { __DEV__?: boolean }).__DEV__ = false;
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -213,6 +213,8 @@ test('rule live shows loading, empty, error, and the opened rule amounts', async
   const normal = visibleText(await mount(createElement(RuleLiveScreen, props)));
   assert.match(normal, /Your rule is live/);
   assert.match(normal, /12/);
+  assert.match(normal, /Next: protect your money/);
+  assert.doesNotMatch(normal, /Go to overview/);
   assert.doesNotMatch(normal, /\b300\b/);
 });
 
@@ -234,6 +236,8 @@ test('agent setup shows loading, empty, error, and the copy action', async () =>
   assert.match(normal, /Give your agent its setup/);
   assert.match(normal, /Copy setup text/);
   assert.match(normal, /RuleAddress111/);
+  assert.match(normal, /Next: protect your money/);
+  assert.doesNotMatch(normal, /Go to overview/);
 });
 
 test('alerts shows loading, empty, error, and the permission ask without a sample amount', async () => {
@@ -254,4 +258,47 @@ test('alerts shows loading, empty, error, and the permission ask without a sampl
   assert.match(normal, /Turn on alerts/);
   assert.match(normal, /more than the limit/);
   assert.doesNotMatch(normal, /asked for 14/);
+});
+
+test('Hold offers second Seeker, same phone and later without blocking the agent path', async () => {
+  const { ProtectScreen } = await import('./ProtectScreen');
+  let choice = '';
+  const root = await mount(createElement(ProtectScreen, {
+    cluster: 'devnet', owner: 'owner', error: null,
+    onSeeker: (address) => { choice = address; },
+    onPhone: () => { choice = 'phone'; }, onLater: () => { choice = 'later'; },
+  }));
+  assert.match(visibleText(root), /Protect the rest of your money/);
+  assert.match(visibleText(root), /1, 2 or 3 days/);
+  assert.match(visibleText(root), /A second key on this phone is weaker: if you lose this phone, or someone gets into it, both keys are at risk\./);
+  assert.match(visibleText(root), /It cannot send money anywhere else\./);
+  assert.match(visibleText(root), /You can set up Hold later from Overview\./);
+  const press = async (label: string) => act(async () => {
+    root.root.findAll((node) => (node.type as unknown) === 'Pressable' && node.props.accessibilityLabel === label)[0].props.onPress();
+  });
+  await press('Set up later');
+  assert.equal(choice, 'later');
+  await press('Set up with my second Seeker');
+  assert.match(visibleText(root), /tap Receive for Solana/);
+  await act(async () => {
+    root.root.findByType('TextInput' as never).props.onChangeText('So11111111111111111111111111111111111111112');
+  });
+  await press('Continue with this address');
+  assert.equal(choice, 'So11111111111111111111111111111111111111112');
+  await act(async () => root.unmount());
+});
+
+test('Hold offer with a kept address opens the input pre-filled', async () => {
+  const { ProtectScreen } = await import('./ProtectScreen');
+  const root = await mount(createElement(ProtectScreen, {
+    cluster: 'devnet', owner: 'owner', error: null,
+    initialAddress: 'So11111111111111111111111111111111111111112',
+    onSeeker: noop, onPhone: noop, onLater: noop,
+  }));
+  assert.match(visibleText(root), /tap Receive for Solana/);
+  assert.equal(
+    root.root.findByType('TextInput' as never).props.value,
+    'So11111111111111111111111111111111111111112',
+  );
+  await act(async () => root.unmount());
 });

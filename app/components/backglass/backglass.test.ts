@@ -398,13 +398,14 @@ describe('backglass components', { concurrency: 1 }, () => {
       );
       assert.equal(
         root.root.findByProps({ accessibilityRole: 'list' }).props.accessibilityLabel,
-        'Your setup: step 4 of 5, Approve the rule',
+        'Your setup: step 4 of 6, Approve the rule',
       );
       assert.ok(root.root.findByProps({ accessibilityLabel: 'Learn, done' }));
       assert.ok(root.root.findByProps({ accessibilityLabel: 'Connect wallet, done' }));
       assert.ok(root.root.findByProps({ accessibilityLabel: 'Add your agent, done' }));
       assert.ok(root.root.findByProps({ accessibilityLabel: 'Approve the rule, current step' }));
       assert.ok(root.root.findByProps({ accessibilityLabel: 'Live, not yet' }));
+      assert.ok(root.root.findByProps({ accessibilityLabel: 'Protect, not yet' }));
       assert.match(visibleText(root), /Learn/);
       assert.match(visibleText(root), /Live/);
       assert.equal(flatStyle(root.root.findByProps({ testID: 'stage-bar-learn' }).props.style).backgroundColor, '#C9A24D');
@@ -918,8 +919,8 @@ describe('backglass components', { concurrency: 1 }, () => {
     assert.equal(hasLabel('Lamp pulsing'), true);
     assert.equal(hasLabel('12 refusals'), true);
     assert.equal(hasLabel('258 remaining of 300'), true);
-    assert.equal(hasLabel('Your setup: step 1 of 5, Learn'), true);
-    assert.equal(hasLabel('Your setup: step 5 of 5, Live'), true);
+    assert.equal(hasLabel('Your setup: step 1 of 6, Learn'), true);
+    assert.equal(hasLabel('Your setup: step 6 of 6, Protect'), true);
     assert.match(
       String(root.root.findAll((node) => isHost(node, 'Svg') && String(node.props.accessibilityLabel ?? '').includes('Lit stations: You, Your agent'))[0]?.props.accessibilityLabel),
       /You, Your agent/,

@@ -85,7 +85,7 @@ export default function DesignKitScreen() {
       <Text style={styles.section}>First run</Text>
       <ProgressStrip current="learn" />
       <ProgressStrip current="approve" done={['learn', 'connect', 'agent']} />
-      <ProgressStrip current="live" done={['learn', 'connect', 'agent', 'approve', 'live']} />
+      <ProgressStrip current="protect" done={['learn', 'connect', 'agent', 'approve', 'live']} />
 
       <Text style={styles.section}>Machine</Text>
       <BrassFrame>

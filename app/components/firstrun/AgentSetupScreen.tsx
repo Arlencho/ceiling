@@ -36,7 +36,7 @@ export function AgentSetupScreen({
       footer={
         <>
           <BrassButton label="Turn on alerts" onPress={onAlerts} />
-          <QuietButton label="Go to overview" onPress={onOverview} />
+          <QuietButton label="Next: protect your money" onPress={onOverview} />
         </>
       }
     >

@@ -97,7 +97,7 @@ export function RuleLiveScreen({
       footer={
         <>
           <BrassButton label="Give your agent its setup" onPress={onSetup} />
-          <QuietButton label="Go to overview" onPress={onOverview} />
+          <QuietButton label="Next: protect your money" onPress={onOverview} />
           <Text style={styles.note}>No money has moved yet. Your agent has to ask first.</Text>
         </>
       }

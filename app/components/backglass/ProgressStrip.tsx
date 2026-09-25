@@ -8,6 +8,7 @@ export const FIRST_RUN_STAGES = [
   { id: 'agent', label: 'Add your agent' },
   { id: 'approve', label: 'Approve the rule' },
   { id: 'live', label: 'Live' },
+  { id: 'protect', label: 'Protect' },
 ] as const;
 
 export type FirstRunStage = (typeof FIRST_RUN_STAGES)[number]['id'];
