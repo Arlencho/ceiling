@@ -80,6 +80,25 @@ an override.
 The refusal carries the override that would have cleared it. The live devnet line is in the
 README: an amount, the per-payment maximum, the remaining cap, and `override_to_clear`.
 
+### Hold
+
+The mandate path above does not escrow. Hold is a separate vault in the same program, for a
+balance the owner deposits and cannot move with a raw transfer. The vault PDA (`["hold", owner,
+vault_id]`) is the authority of its token account.
+
+An everyday withdrawal is instant only when the vault is not frozen, the destination token
+account has already been paid by this vault, and the running 24 hour total stays inside both
+the daily limit and `big_share_bps` of the current balance. The usual share is 2500, a quarter
+of the vault. Anything else is held, not refused, until `execute` after `delay_secs` on the
+chain clock. The delay is 1, 2, or 3 days. The owner or the guardian can `stop` one hold or
+`freeze` the vault with no wait. While it is frozen, nothing leaves except `recover`, which
+sends the whole balance to the safe address. `unfreeze` and `skip` need the owner and the
+guardian together. With no guardian set, `unfreeze` waits out the current delay. Tightening a
+limit applies immediately. Loosening one, including the safe address or the guardian, waits out
+the current delay, and either key can cancel it. Eight holds can sit at once. A ninth is
+recorded as refused and is not paid. Sixteen destination accounts are remembered. Each action
+writes a hold ledger entry and an event. Mandate accounts are unchanged.
+
 ### The feed
 
 `https://www.elprisetjustnu.se/api/v1/prices/YYYY/MM-DD_SE3.json`, verified 2026-09-20: HTTP 200,
