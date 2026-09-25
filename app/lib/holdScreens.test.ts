@@ -693,3 +693,260 @@ test('home and rules share one Hold entry', async () => {
   assert.match(text, /Big money waits, and a second key can say no/);
   assert.match(text, /they cannot finish it/);
 });
+
+const guardBase = {
+  network: 'Devnet, a test network',
+  ownerLabel: '6Ywq...GSV5',
+  amountLabel: '1,000',
+  hasMoney: true,
+  tokenName: 'USDC',
+  frozen: false,
+  waiting: {
+    amountLabel: '400',
+    destinationLabel: '8xQf...Tz9A',
+    untilLabel: 'Waits until Thu 16 Nov, 22:13, unless stopped.',
+  },
+  changeLines: [] as string[],
+  changeAtLabel: null as string | null,
+  safeAddress: '4mKpSafeAddressFullR2vd',
+  safeLabel: '4mKp...R2vd',
+  result: null,
+  onClose() {},
+  onStop: async () => undefined,
+  onFreeze: async () => undefined,
+  onRecover: async () => undefined,
+  onOpenLink() {},
+};
+
+test('the guardian screen says what waits and offers stop and freeze, and nothing else', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const root = await mount(createElement(GuardScreen, { ...guardBase, status: 'ready', error: null }));
+  const text = textOf(root);
+  assert.match(text, /This vault belongs to 6Ywq\.\.\.GSV5\. It holds 1,000 USDC\. Your key is its guardian/);
+  assert.match(text, /Waiting to leave/);
+  assert.match(text, /400/);
+  assert.match(text, /To 8xQf\.\.\.Tz9A\. Waits until Thu 16 Nov, 22:13, unless stopped\./);
+  assert.match(text, /Stop this withdrawal/);
+  assert.match(text, /Freeze the vault/);
+  assert.match(text, /400 USDC stays in the vault/);
+  assert.match(text, /Move everything to the safe address/);
+  assert.doesNotMatch(text, /Unfreeze|Let it go|both keys|[Ss]ettings/);
+  assert.doesNotMatch(text, /[\u2013\u2014]/);
+});
+
+test('the guardian screen names the safe address before moving everything', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  let recovered = 0;
+  const root = await mount(
+    createElement(GuardScreen, {
+      ...guardBase,
+      status: 'ready',
+      error: null,
+      onRecover: async () => {
+        recovered += 1;
+      },
+    }),
+  );
+  assert.doesNotMatch(textOf(root), /goes to the safe address/);
+  await act(async () => {
+    pressable(root, 'Move everything to the safe address').props.onPress();
+  });
+  assert.match(
+    textOf(root),
+    /All 1,000 USDC goes to the safe address 4mKpSafeAddressFullR2vd\. Nothing else can receive it\./,
+  );
+  await act(async () => {
+    pressable(root, 'Move everything to the safe address').props.onLongPress();
+    await new Promise((resolve) => setImmediate(resolve));
+  });
+  assert.equal(recovered, 1);
+});
+
+test('the guardian screen explains a proposed change and a frozen vault', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const change = textOf(
+    await mount(
+      createElement(GuardScreen, {
+        ...guardBase,
+        status: 'ready',
+        error: null,
+        waiting: null,
+        changeLines: ['The everyday limit goes up from 50 USDC to 500 USDC a day'],
+        changeAtLabel: 'Wed 15 Nov, 22:13',
+      }),
+    ),
+  );
+  assert.match(change, /A settings change is waiting/);
+  assert.match(change, /The everyday limit goes up from 50 USDC to 500 USDC a day\./);
+  assert.match(change, /It applies Wed 15 Nov, 22:13\./);
+  assert.match(change, /Freezing does not stop the change/);
+  assert.doesNotMatch(change, /Stop this withdrawal/);
+  assert.match(change, /Freeze the vault/);
+
+  const frozen = textOf(
+    await mount(createElement(GuardScreen, { ...guardBase, status: 'ready', error: null, frozen: true })),
+  );
+  assert.match(frozen, /The vault is frozen\. Withdrawals cannot leave\./);
+  assert.doesNotMatch(frozen, /Freeze the vault/);
+  assert.match(frozen, /Stop this withdrawal/);
+  assert.match(frozen, /Removes it for good\. The vault stays frozen\./);
+});
+
+test('after a brake the guardian screen shows the confirmed result and the transaction link', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const opened: string[] = [];
+  const root = await mount(
+    createElement(GuardScreen, {
+      ...guardBase,
+      status: 'ready',
+      error: null,
+      waiting: null,
+      result: {
+        line: 'Stopped. 400 USDC to 8xQf...Tz9A will not be paid.',
+        link: 'https://explorer.solana.com/tx/abc?cluster=devnet',
+      },
+      onOpenLink: (link: string) => opened.push(link),
+    }),
+  );
+  const text = textOf(root);
+  assert.match(text, /Confirmed on the blockchain/);
+  assert.match(text, /Stopped\. 400 USDC to 8xQf\.\.\.Tz9A will not be paid\./);
+  await act(async () => {
+    pressable(root, 'See the transaction').props.onPress();
+  });
+  assert.deepEqual(opened, ['https://explorer.solana.com/tx/abc?cluster=devnet']);
+});
+
+test('the guardian screen says so when the connected key is not the guardian', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const text = textOf(
+    await mount(
+      createElement(GuardScreen, {
+        ...guardBase,
+        status: 'error',
+        error: 'The connected key is not the guardian of this vault. Connect the guardian key to brake it.',
+      }),
+    ),
+  );
+  assert.match(text, /not the guardian of this vault/);
+  assert.doesNotMatch(text, /Stop this withdrawal/);
+});
+
+test('the owner held screen explains when the guardian phone checks only when a guardian is set', async () => {
+  const { HeldScreen } = await import('../components/hold/HeldScreen');
+  const props = {
+    network: 'Test tokens',
+    status: 'ready' as const,
+    error: null,
+    amountLabel: '400',
+    tokenName: 'USDC',
+    destinationLabel: '8xQf...Tz9A',
+    waitLabel: '2 days',
+    countdown,
+    untilLabel: 'Thu 16 Nov, 22:13, unless stopped. Blockchain clock.',
+    reasons: ['New address'],
+    toldLine: 'Both phones were told.',
+    dailyLabel: '50',
+    onClose() {},
+    onAlerts() {},
+    onSkip() {},
+    onStop: async () => undefined,
+    onFreeze: async () => undefined,
+  };
+  assert.match(
+    textOf(await mount(createElement(HeldScreen, { ...props, guardianLine: "Your guardian's phone is told when it next checks, and it can stop this." }))),
+    /Your guardian's phone is told when it next checks, and it can stop this./,
+  );
+  assert.doesNotMatch(
+    textOf(await mount(createElement(HeldScreen, { ...props, guardianLine: null }))),
+    /Your guardian's phone is told when it next checks, and it can stop this./,
+  );
+});
+
+test('the Hold home lists the vaults you guard with their state', async () => {
+  const { VaultHome } = await import('../components/hold/VaultHome');
+  const guarded: string[] = [];
+  const root = await mount(
+    createElement(VaultHome, {
+      network: 'Test tokens',
+      status: 'ready',
+      error: null,
+      vaults: [],
+      guarded: [
+        {
+          address: 'A',
+          ownerLabel: '6Ywq...GSV5',
+          amountLabel: '1,000',
+          tokenName: 'USDC',
+          state: 'normal',
+          stateLabel: 'Normal. Nothing is waiting.',
+        },
+        {
+          address: 'B',
+          ownerLabel: '9Abc...Q1xz',
+          amountLabel: '20',
+          tokenName: 'USDC',
+          state: 'waiting',
+          stateLabel: 'Waiting: 5 USDC to 8xQf...Tz9A.',
+        },
+        {
+          address: 'C',
+          ownerLabel: '3Def...K7mn',
+          amountLabel: '0',
+          tokenName: 'USDC',
+          state: 'frozen',
+          stateLabel: 'Frozen. Nothing can leave.',
+        },
+      ],
+      onBack() {},
+      onSetup() {},
+      onOpen() {},
+      onSend() {},
+      onGuard: (address: string) => guarded.push(address),
+    }),
+  );
+  const text = textOf(root);
+  assert.match(text, /Vaults you guard/);
+  assert.match(text, /Vault of 6Ywq\.\.\.GSV5: 1,000 USDC/);
+  assert.match(text, /Normal\. Nothing is waiting\./);
+  assert.match(text, /Waiting: 5 USDC to 8xQf\.\.\.Tz9A\./);
+  assert.match(text, /Frozen\. Nothing can leave\./);
+  assert.doesNotMatch(text, /Your vault/);
+  await act(async () => {
+    pressable(root, 'Vault of 9Abc...Q1xz').props.onPress();
+  });
+  assert.deepEqual(guarded, ['B']);
+});
+
+
+test('an empty vault does not offer recovery even when zero has decimal places', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const root = await mount(createElement(GuardScreen, { ...guardBase, status: 'ready', amountLabel: '0.00', hasMoney: false }));
+  assert.doesNotMatch(textOf(root), /Move everything to the safe address/);
+});
+
+test('a funded vault offers recovery even when its displayed amount rounds to zero', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const root = await mount(createElement(GuardScreen, { ...guardBase, status: 'ready', amountLabel: '0', hasMoney: true }));
+  assert.match(textOf(root), /Move everything to the safe address/);
+});
+
+test('the guardian can recover at any time', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const root = await mount(createElement(GuardScreen, { ...guardBase, status: 'ready' }));
+  assert.match(textOf(root), /You can also move everything to the safe address at any time. It can only go there./);
+});
+
+test('keeping the money in the vault has a 48dp touch target', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const root = await mount(createElement(GuardScreen, { ...guardBase, status: 'ready' }));
+  await act(async () => { pressable(root, 'Move everything to the safe address').props.onPress(); });
+  assert.ok(pressable(root, 'Keep the money in the vault').props.style.minHeight >= 48);
+});
+
+test('a stale notification explains the missing withdrawal without offering Stop', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const root = await mount(createElement(GuardScreen, { ...guardBase, status: 'ready', waiting: null, missingWithdrawal: true }));
+  assert.match(textOf(root), /The withdrawal you were told about is no longer waiting./);
+  assert.doesNotMatch(textOf(root), /Stop this withdrawal|Nothing is waiting right now/);
+});

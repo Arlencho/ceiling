@@ -20,12 +20,15 @@ type HoldToApproveProps = {
   resetKey?: string | number;
 };
 
-export function HoldToApprove({
+export function HoldToApprove(props: HoldToApproveProps) {
+  return <HoldToApproveGesture key={props.resetKey} {...props} />;
+}
+
+function HoldToApproveGesture({
   label = 'Hold to approve rule',
   hint = 'You sign on this phone. Veto never sees your key.',
   onConfirm,
   disabled = false,
-  resetKey,
 }: HoldToApproveProps) {
   const reduced = useReducedMotion();
   const motionOn = motionAllowed(reduced);
@@ -35,15 +38,11 @@ export function HoldToApprove({
   const confirmed = useRef(false);
   const [done, setDone] = useState(false);
 
-  // A cancelled or failed signature must leave the button usable again.
-  useEffect(() => {
-    running.current?.stop();
-    running.current = null;
+  // Changing resetKey remounts the gesture and clears its confirmation state.
+  useEffect(() => () => {
     holding.current = false;
-    confirmed.current = false;
-    progress.setValue(0);
-    setDone(false);
-  }, [resetKey, progress]);
+    running.current?.stop();
+  }, []);
 
   function confirm() {
     if (disabled || confirmed.current) {

@@ -18,6 +18,7 @@ export function HeldScreen({
   untilLabel,
   reasons,
   toldLine,
+  guardianLine = null,
   dailyLabel,
   onClose,
   onAlerts,
@@ -38,6 +39,7 @@ export function HeldScreen({
   untilLabel: string;
   reasons: readonly string[];
   toldLine: string;
+  guardianLine?: string | null;
   dailyLabel: string;
   onClose: () => void;
   onAlerts: () => void;
@@ -79,6 +81,12 @@ export function HeldScreen({
             ))}
           </View>
         </View>
+        {guardianLine ? (
+          <View style={styles.guardian} accessibilityLabel={guardianLine}>
+            <Lamp state="on" litColor={colors.paid} size={10} accessibilityLabel="Guardian alerted" />
+            <Text style={styles.guardianText}>{guardianLine}</Text>
+          </View>
+        ) : null}
         <View style={styles.note}>
           <Text style={styles.body}>{toldLine}</Text>
           <Pressable accessibilityRole="link" accessibilityLabel="See plan" onPress={onAlerts}>
@@ -180,6 +188,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     padding: space.xl,
   },
+  guardian: { flexDirection: 'row', alignItems: 'center', gap: space.md, alignSelf: 'center' },
+  guardianText: { color: colors.paid, fontFamily: fonts.sansBold, fontSize: 14 },
   link: { color: colors.brass, fontFamily: fonts.sansBold, fontSize: 14 },
   center: {
     color: colors.muted,

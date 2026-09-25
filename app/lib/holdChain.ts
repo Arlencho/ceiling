@@ -5,8 +5,15 @@ import {
 } from '@solana/spl-token';
 import { Connection, PublicKey, Transaction, type TransactionInstruction } from '@solana/web3.js';
 
-import { createClient, fetchMintDecimals, tokenProgramOfMint, type ChainClient } from './chain';
+import {
+  createClient,
+  fetchMintDecimals,
+  ledgerBodyFetch,
+  tokenProgramOfMint,
+  type ChainClient,
+} from './chain';
 import type { AppConfig } from './config';
+import { isRateLimitError } from './rpcError';
 import {
   decodeHoldLedger,
   decodeHoldVault,
@@ -49,23 +56,62 @@ export async function readTokenAmount(connection: Connection, account: PublicKey
   return readU64(Buffer.from(info.data), 64);
 }
 
+/** Vaults this wallet owns. Vaults it only guards come from listGuardedVaults. */
 export async function listHoldVaults(client: ChainClient, wallet: PublicKey): Promise<HoldAccount[]> {
-  const [owned, guarded] = await Promise.all([
-    accountsFor(client, HOLD_OWNER_OFFSET, wallet),
-    accountsFor(client, HOLD_GUARDIAN_OFFSET, wallet),
-  ]);
-  const byAddress = new Map<string, HoldAccount>();
-  for (const account of [...owned, ...guarded]) {
-    byAddress.set(account.address.toBase58(), account);
+  return sortByVaultId(await accountsFor(client, HOLD_OWNER_OFFSET, wallet));
+}
+
+/** Vaults that name this wallet as the guardian key, found by the guardian field. */
+export async function listGuardedVaults(client: ChainClient, wallet: PublicKey): Promise<HoldAccount[]> {
+  if (wallet.equals(PublicKey.default)) return [];
+  return sortByVaultId(await accountsFor(client, HOLD_GUARDIAN_OFFSET, wallet));
+}
+
+/** Reads known vault addresses in one call. Missing or unreadable accounts are left out. */
+export async function readHoldVaults(client: ChainClient, addresses: readonly PublicKey[]): Promise<HoldAccount[]> {
+  if (addresses.length === 0) return [];
+  const infos = await withRateLimitRetry(() =>
+    client.connection.getMultipleAccountsInfo([...addresses], 'confirmed'),
+  );
+  const found: HoldAccount[] = [];
+  infos.forEach((info, index) => {
+    const address = addresses[index];
+    if (!info || !address) return;
+    try {
+      found.push(decodeHoldVault(Buffer.from(info.data), address));
+    } catch {
+      // Closed or reused account. Leave it out.
+    }
+  });
+  return sortByVaultId(found);
+}
+
+function sortByVaultId(rows: HoldAccount[]): HoldAccount[] {
+  return rows.sort((a, b) => (a.vaultId < b.vaultId ? -1 : a.vaultId > b.vaultId ? 1 : 0));
+}
+
+async function withRateLimitRetry<T>(run: () => Promise<T>): Promise<T> {
+  const delays = ledgerBodyFetch.retryMs;
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await run();
+    } catch (err) {
+      const delay = delays[attempt];
+      if (delay == null || !isRateLimitError(err)) throw err;
+      attempt += 1;
+      await ledgerBodyFetch.sleep(delay);
+    }
   }
-  return [...byAddress.values()].sort((a, b) => (a.vaultId < b.vaultId ? -1 : a.vaultId > b.vaultId ? 1 : 0));
 }
 
 async function accountsFor(client: ChainClient, offset: number, wallet: PublicKey): Promise<HoldAccount[]> {
-  const rows = await client.connection.getProgramAccounts(client.programId, {
-    commitment: 'confirmed',
-    filters: [{ dataSize: HOLD_VAULT_LEN }, { memcmp: { offset, bytes: wallet.toBase58() } }],
-  });
+  const rows = await withRateLimitRetry(() =>
+    client.connection.getProgramAccounts(client.programId, {
+      commitment: 'confirmed',
+      filters: [{ dataSize: HOLD_VAULT_LEN }, { memcmp: { offset, bytes: wallet.toBase58() } }],
+    }),
+  );
   return rows.map((row) => decodeHoldVault(Buffer.from(row.account.data), row.pubkey));
 }
 

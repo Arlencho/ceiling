@@ -7,12 +7,13 @@ import { dueHoldAlerts, futureHoldAlerts, holdAlertPlan, type HoldAlert } from '
 import { formatHoldAmount, shortKey } from './hold';
 import { tokenSymbol } from './tokens';
 import { holdClient, listHoldVaults, readChainClock, readHoldVault } from './holdChain';
+import { guardPath, raiseGuardAlerts, HOLD_SCHEDULED_KEY, type GuardAlert } from './holdGuard';
 import { holdCreatedAt } from './holdRead';
 import { loadSession } from './wallet';
 
 export const HOLD_CHANNEL_ID = 'hold';
 const SEEN_KEY = 'veto.hold.alerts.seen';
-const SCHEDULED_KEY = 'veto.hold.alerts.scheduled';
+const SCHEDULED_KEY = HOLD_SCHEDULED_KEY;
 
 export type HoldScheduler = {
   ensureChannel(): Promise<void>;
@@ -27,6 +28,7 @@ export function holdPathFromNoticeData(data: unknown): string | null {
   const vault = record.holdVault;
   const id = record.holdWithdrawal;
   if (typeof vault !== 'string' || vault.length === 0) return null;
+  if (record.holdGuard === true) return guardPath(vault, typeof id === 'string' ? id : null);
   if (typeof id !== 'string' || id.length === 0) return `/hold/frozen?vault=${encodeURIComponent(vault)}`;
   return `/hold/held?vault=${encodeURIComponent(vault)}&id=${encodeURIComponent(id)}`;
 }
@@ -70,11 +72,32 @@ export function expoHoldScheduler(): HoldScheduler {
   };
 }
 
+export function guardNoticeContent(alert: GuardAlert) {
+  return {
+    title: alert.title,
+    body: alert.body,
+    data: {
+      holdVault: alert.vault,
+      holdWithdrawal: alert.withdrawalId ?? '',
+      holdGuard: true,
+      holdAlert: alert.kind,
+    },
+  };
+}
+
+export async function presentGuardAlert(alert: GuardAlert): Promise<void> {
+  await Notifications.scheduleNotificationAsync({
+    identifier: alert.key,
+    content: guardNoticeContent(alert),
+    trigger: { channelId: HOLD_CHANNEL_ID },
+  });
+}
+
 function noticeContent(alert: HoldAlert, vault: string, withdrawalId: string) {
   return {
     title: alert.title,
     body: alert.body,
-    data: { holdVault: vault, holdWithdrawal: withdrawalId, holdAlert: alert.name },
+    data: { holdVault: vault, holdWithdrawal: withdrawalId, holdAlert: alert.name, holdGuard: alert.key.startsWith('guard:') },
   };
 }
 
@@ -138,7 +161,7 @@ export async function raiseHoldAlertsForOwner(args: {
     }
   }
   for (const key of scheduled) {
-    if (!liveKeys.has(key)) {
+    if (!key.startsWith('guard:') && !liveKeys.has(key)) {
       await args.scheduler.cancel(key);
       scheduled.delete(key);
     }
@@ -160,5 +183,34 @@ export async function raiseHoldAlertsOnScan(): Promise<void> {
   } catch {
     return;
   }
-  await raiseHoldAlertsForOwner({ owner, scheduler: expoHoldScheduler() });
+  const scheduler = expoHoldScheduler();
+  let ownerError: unknown = null;
+  try {
+    await raiseHoldAlertsForOwner({ owner, scheduler });
+  } catch (err) {
+    ownerError = err;
+  }
+  try {
+    await raiseHoldAlertsForGuardian({ guardian: owner, scheduler });
+  } catch (err) {
+    if (!ownerError) throw err;
+  }
+  if (ownerError) throw ownerError;
+}
+
+/** The same local read on the guardian phone: vaults that name this wallet as guardian. */
+export async function raiseHoldAlertsForGuardian(args: {
+  guardian: PublicKey;
+  scheduler: HoldScheduler;
+}): Promise<string[]> {
+  const loaded = tryLoadConfig();
+  if (!loaded.ok) return [];
+  return raiseGuardAlerts({
+    client: holdClient(loaded.config),
+    store: secureStore,
+    guardian: args.guardian,
+    scheduler: args.scheduler,
+    ensureChannel: () => args.scheduler.ensureChannel(),
+    present: presentGuardAlert,
+  });
 }
