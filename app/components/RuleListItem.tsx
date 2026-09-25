@@ -1,31 +1,27 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { formatTimeLeft, timeLeftParts } from '../lib/format';
 import { formatTokenDisplay } from '../lib/tokens';
 import { isActive, mandateRemaining } from '../lib/mandate';
 import type { MandateAccount } from '../lib/mandate';
-import { displayPurpose, ruleStatusLabel, spendRatio } from '../lib/ruleView';
+import { displayPurpose, ruleCardTimeLeft, ruleStatusLabel, spendRatio } from '../lib/ruleView';
 import { truncateAddress } from '../lib/wallet';
 import { BrassFrame } from './backglass/BrassFrame';
 import { BlockBar } from './backglass/BlockBar';
-import { barUnits, openedAtSec, ruleDay } from './daily/facts';
+import { barUnits } from './daily/facts';
 import { LivePill } from './daily/LivePill';
 import { colors, fonts, radii, space } from './theme';
-import type { LedgerRow } from '../lib/ring';
 
 export function RuleListItem({
   mandate,
   decimals,
   nowSec,
   current,
-  rows,
   onPress,
 }: {
   mandate: MandateAccount;
   decimals: number;
   nowSec: bigint;
   current: boolean;
-  rows?: readonly Pick<LedgerRow, 'kind' | 'ts'>[];
   onPress: () => void;
 }) {
   const purpose = displayPurpose(mandate.purpose);
@@ -36,12 +32,9 @@ export function RuleListItem({
   const remaining = mandateRemaining(mandate);
   const bars = barUnits(remaining, mandate.cap);
   const status = ruleStatusLabel(mandate, nowSec, current);
-  const time = formatTimeLeft(mandate.expiresAt, nowSec);
-  const left = timeLeftParts(mandate.expiresAt, nowSec);
+  const timeLeft = ruleCardTimeLeft(mandate.expiresAt, nowSec);
   const live = isActive(mandate, nowSec);
-  const clock = ruleDay(openedAtSec(rows ?? []), mandate.expiresAt, nowSec);
   const spentShare = Math.round(spendRatio(mandate.spent, mandate.cap) * 100);
-  const dayLine = clock ? `Day ${clock.day} of ${clock.total}` : time;
 
   const body = (
     <View style={styles.inner}>
@@ -56,12 +49,16 @@ export function RuleListItem({
         />
       </View>
       <View style={styles.figures}>
-        <Text style={styles.remaining}>{formatTokenDisplay(remaining, decimals, mint)}</Text>
-        <Text style={styles.of}>{`left of your ${cap} total`}</Text>
-        <Text style={styles.spent}>
-          <Text style={styles.spentFigure}>{spent}</Text>
-          {' spent'}
+        <Text style={styles.remaining} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
+          {formatTokenDisplay(remaining, decimals, mint)}
         </Text>
+        <View style={styles.subFigures}>
+          <Text style={styles.of}>{`left of your ${cap} total`}</Text>
+          <Text style={styles.spent}>
+            <Text style={styles.spentFigure}>{spent}</Text>
+            {' spent'}
+          </Text>
+        </View>
       </View>
       <View style={live ? undefined : styles.dim}>
         <BlockBar
@@ -72,7 +69,7 @@ export function RuleListItem({
       </View>
       <View style={styles.foot}>
         <Text style={styles.meta}>{`Most ${per} per payment\nPayee ${truncateAddress(mandate.merchant)} only`}</Text>
-        <Text style={styles.day}>{`${dayLine}. ${left.value} ${left.label}`}</Text>
+        <Text style={styles.day}>{timeLeft}</Text>
       </View>
     </View>
   );
@@ -122,9 +119,14 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   figures: {
+    gap: space.xs,
+  },
+  subFigures: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'baseline',
-    gap: space.md,
+    columnGap: space.md,
+    rowGap: 2,
   },
   remaining: {
     fontFamily: fonts.serifLight,
@@ -133,13 +135,14 @@ const styles = StyleSheet.create({
     color: colors.bone,
   },
   of: {
-    flex: 1,
+    flexShrink: 1,
     fontFamily: fonts.sans,
     fontSize: 13,
     lineHeight: 18,
     color: colors.body,
   },
   spent: {
+    flexShrink: 1,
     fontFamily: fonts.sans,
     fontSize: 13,
     lineHeight: 18,
@@ -161,6 +164,7 @@ const styles = StyleSheet.create({
     gap: space.md,
   },
   meta: {
+    flexShrink: 1,
     fontFamily: fonts.sans,
     fontSize: 12,
     lineHeight: 16,
