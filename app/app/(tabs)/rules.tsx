@@ -13,11 +13,13 @@ import { colors, fonts } from '../../components/theme';
 import { PAYEE_NOT_IN_RULESET, PAYEE_PREFILL, RULESET_ENVELOPE } from '../../lib/ruleset';
 import { TEMPLATES } from '../../lib/templates';
 import { useChain } from '../../lib/useChain';
+import { useRefreshOnFocus } from '../../lib/useRefreshOnFocus';
 import { useRulesets } from '../../lib/useRulesets';
 import { useWallet } from '../../lib/useWallet';
 
 export default function RulesScreen() {
   const chain = useChain();
+  useRefreshOnFocus(chain.refresh);
   const wallet = useWallet();
   const rulesets = useRulesets();
   const router = useRouter();

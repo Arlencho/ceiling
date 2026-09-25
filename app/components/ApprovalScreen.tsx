@@ -1,6 +1,6 @@
 import { PublicKey } from '@solana/web3.js';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -104,6 +104,8 @@ function ApprovalCard({
   const [nameError, setNameError] = useState<string | null>(null);
   const [observation, setObservation] = useState<{ key: string; value: PresignObservation } | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [openedAddress, setOpenedAddress] = useState<string | null>(null);
+  const openingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -319,9 +321,10 @@ function ApprovalCard({
   };
 
   const onApprove = async () => {
-    if (!ready || cap == null || maxPay == null || expiresAt == null) {
+    if (openingRef.current || openedAddress || !ready || cap == null || maxPay == null || expiresAt == null) {
       return;
     }
+    openingRef.current = true;
     setFormError(null);
     try {
       const merchant = new PublicKey(payeeText.trim());
@@ -339,24 +342,31 @@ function ApprovalCard({
         ...(request ? { mint: new PublicKey(request.mint) } : {}),
         ...(agent ? { agent } : {}),
       });
+      setOpenedAddress(result.mandate.address);
       router.replace(`/rule/${result.mandate.address}`);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Open failed');
+    } finally {
+      openingRef.current = false;
     }
   };
 
   const footer = wallet.ownerPublicKey ? (
     <View style={styles.footer}>
       {formError ? <Text style={styles.body}>{formError}</Text> : null}
-      <Button
-        label={wallet.busy ? 'Waiting on Seed Vault...' : 'Approve with Seed Vault'}
-        accessibilityLabel="Approve with Seed Vault"
-        busy={wallet.busy}
-        disabled={!ready}
-        onPress={() => {
-          void onApprove();
-        }}
-      />
+      {openedAddress ? (
+        <Text style={styles.body}>{`Opened on chain. Rule ${openedAddress}.`}</Text>
+      ) : (
+        <Button
+          label={wallet.busy ? 'Waiting on Seed Vault...' : 'Approve with Seed Vault'}
+          accessibilityLabel="Approve with Seed Vault"
+          busy={wallet.busy}
+          disabled={!ready}
+          onPress={() => {
+            void onApprove();
+          }}
+        />
+      )}
     </View>
   ) : null;
 

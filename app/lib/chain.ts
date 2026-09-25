@@ -13,6 +13,8 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
+  TransactionExpiredBlockheightExceededError,
+  TransactionExpiredTimeoutError,
   type ConfirmedSignatureInfo,
   type TransactionInstruction,
   type VersionedTransactionResponse,
@@ -196,10 +198,16 @@ export type ChainClient = {
   programId: PublicKey;
 };
 
+export const chainConnection = {
+  open(rpcUrl: string): Connection {
+    return new Connection(rpcUrl, 'confirmed');
+  },
+};
+
 export function createClient(config: AppConfig = loadConfig()): ChainClient {
   return {
     config,
-    connection: new Connection(config.rpcUrl, 'confirmed'),
+    connection: chainConnection.open(config.rpcUrl),
     programId: new PublicKey(config.programId),
   };
 }
@@ -351,17 +359,55 @@ export async function readRuleFunds(client: ChainClient, mandate: MandateAccount
   };
 }
 
+function blockhashOutlived(err: unknown): boolean {
+  if (
+    err instanceof TransactionExpiredBlockheightExceededError ||
+    err instanceof TransactionExpiredTimeoutError
+  ) {
+    return true;
+  }
+  if (!(err instanceof Error)) {
+    return false;
+  }
+  return (
+    err.name === 'TransactionExpiredBlockheightExceededError' ||
+    err.name === 'TransactionExpiredTimeoutError' ||
+    err.message.includes('block height exceeded') ||
+    err.message.includes('was not confirmed in')
+  );
+}
+
+// The blockhash is taken before the wallet round trip. A slow approval can pass
+// lastValidBlockHeight after the signature has already landed.
 async function confirmSignature(
   connection: Connection,
   signature: string,
   blockhash: string,
   lastValidBlockHeight: number,
 ): Promise<void> {
-  const result = await connection.confirmTransaction(
-    { signature, blockhash, lastValidBlockHeight },
-    'confirmed',
-  );
-  if (result.value.err) {
+  try {
+    const result = await connection.confirmTransaction(
+      { signature, blockhash, lastValidBlockHeight },
+      'confirmed',
+    );
+    if (result.value.err) {
+      throw new Error(`transaction ${signature} landed with an error`);
+    }
+    return;
+  } catch (err) {
+    if (!blockhashOutlived(err)) {
+      throw err;
+    }
+  }
+
+  const status = await connection.getSignatureStatuses([signature], {
+    searchTransactionHistory: true,
+  });
+  const row = status.value?.[0] ?? null;
+  if (row == null) {
+    throw new Error(`transaction ${signature} did not land and nothing moved`);
+  }
+  if (row.err) {
     throw new Error(`transaction ${signature} landed with an error`);
   }
 }
