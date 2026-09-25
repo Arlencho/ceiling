@@ -29,7 +29,7 @@ export const REASON_TEXT: Readonly<Record<number, string>> = Object.freeze({
   [REASON_ZERO_AMOUNT]: "zero amount",
   [REASON_ACCOUNT_FROZEN]: "account frozen",
   [REASON_OUTPUT_ACCOUNT_NOT_ALLOWED]: "output account not allowed",
-  [REASON_POOL_NOT_ALLOWED]: "pool not allowed",
+  [REASON_POOL_NOT_ALLOWED]: "pool account not allowed",
   [REASON_OVER_DAILY_LIMIT]: "over daily limit",
   [REASON_QUOTE_BELOW_FLOOR]: "quote below floor",
 });

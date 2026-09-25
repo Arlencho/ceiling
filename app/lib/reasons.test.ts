@@ -30,6 +30,7 @@ test('reason text matches the indexer table', () => {
   assert.equal(reasonText(8), 'insufficient funds');
   assert.equal(reasonText(9), 'zero amount');
   assert.equal(reasonText(10), 'account frozen');
+  assert.equal(reasonText(12), 'pool account not allowed');
   assert.equal(reasonText(99), 'unknown');
   assert.equal(REASON_TEXT[REASON_OVER_PER_TX_MAX], 'over per-payment maximum');
 });

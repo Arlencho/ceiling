@@ -262,7 +262,7 @@ The call returns `kind: "traded"` or `kind: "refused"`, with `amountIn`, `amount
 The program refuses the trade, and moves nothing, when:
 
 - The output account is not the pinned destination. Reason 11, output account not allowed.
-- A pool account (the pool, its authority, either vault, the pool mint, the fee account, or the exchange program) is not the one stored on the rule. Reason 12, pool not allowed.
+- A pool account (the pool, its authority, either vault, the pool mint, the fee account, or the exchange program) is not the one stored on the rule. Reason 12, pool account not allowed.
 - The trade would push the current 24 hour window over the daily limit. Reason 13, over daily limit.
 - The spot quote is already under the price floor `floor.num / floor.den`. Reason 14, quote below floor. The program then requires the tokens that come back to clear that same floor.
 

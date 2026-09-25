@@ -145,6 +145,9 @@ export async function openTradeRule(
   signAndSend: SignAndSend,
   input: OpenTradeInput,
 ): Promise<OpenTradeResult> {
+  if (!Number.isInteger(input.floorPercent) || input.floorPercent < 1 || input.floorPercent > 99) {
+    throw new Error('Floor percent must be a whole number from 1 to 99.');
+  }
   if (input.cap <= 0n || input.perTradeMax <= 0n || input.dailyLimit <= 0n) {
     throw new Error('Most per trade, per day, and the total set aside must be above zero.');
   }

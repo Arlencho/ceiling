@@ -216,5 +216,5 @@ test("program data inside a sibling invoke is not a Veto trade decision", () => 
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.kind, "refused");
   assert.equal(rows[0]?.reason, 12);
-  assert.equal(rows[0]?.reasonText, "pool not allowed");
+  assert.equal(rows[0]?.reasonText, "pool account not allowed");
 });
