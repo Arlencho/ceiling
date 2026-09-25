@@ -162,19 +162,27 @@ mock.module('react-native-svg', {
 
 const haptics: string[] = [];
 
-mock.module('expo-haptics', {
+// Mock the native boundary so the real lazily imported haptics wrapper runs
+// under both the CommonJS and ESM loaders used by supported Node versions.
+mock.module('expo', {
   namedExports: {
-    ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
-    NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' },
-    impactAsync: async (style: string) => {
-      haptics.push(`impact:${style}`);
-    },
-    selectionAsync: async () => {
-      haptics.push('selection');
-    },
-    notificationAsync: async (kind: string) => {
-      haptics.push(`notification:${kind}`);
-    },
+    requireOptionalNativeModule: () => ({
+      impactAsync: async (style: string) => {
+        haptics.push(`impact:${style}`);
+      },
+      selectionAsync: async () => {
+        haptics.push('selection');
+      },
+      notificationAsync: async (kind: string) => {
+        haptics.push(`notification:${kind}`);
+      },
+    }),
+  },
+});
+mock.module('expo-modules-core', {
+  namedExports: {
+    Platform: { OS: 'ios' },
+    UnavailabilityError: Error,
   },
 });
 

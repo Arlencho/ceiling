@@ -8,10 +8,13 @@ export type {
   PurposeCheck,
   PurposeCheckContext,
   PurposeCheckResult,
+  TradeArgs,
+  TradeResult,
+  TradeStatus,
   VetoAgentArgs,
 } from "./agent.js";
-export { loadAgentConfig } from "./config.js";
-export type { AgentConfig } from "./config.js";
+export { isTradeAgentConfig, loadAgentConfig } from "./config.js";
+export type { AgentConfig, TradeAgentConfig } from "./config.js";
 export {
   LABEL_MAX_CHARS,
   PURPOSE_MAX_BYTES,
@@ -19,15 +22,24 @@ export {
   RULE_REQUEST_DAYS_MAX,
   RULE_REQUEST_DAYS_MIN,
   RuleRequestRejected,
+  TRADE_REQUEST_CHECK_ORDER,
+  TradeRuleRequestRejected,
   createRuleRequest,
+  createTradeRuleRequest,
   parseRuleRequest,
+  parseTradeRuleRequest,
 } from "./rule-request.js";
 export type {
   ParsedRuleRequest,
+  ParsedTradeRuleRequest,
   RuleRequest,
   RuleRequestError,
   RuleRequestInput,
   RuleRequestProblem,
+  TradeRequestError,
+  TradeRequestProblem,
+  TradeRuleRequest,
+  TradeRuleRequestInput,
 } from "./rule-request.js";
 export type { Decision } from "./events.js";
 export {
@@ -57,10 +69,30 @@ export type {
   WithdrawalOutlook,
 } from "./hold.js";
 export { PROGRAM_ID } from "./idl.js";
-export { MANDATE_AGENT_OFFSET, ledgerPda, mandatePda } from "./layout.js";
-export type { LedgerAccount, LedgerEntry, MandateAccount } from "./layout.js";
-export { MissingListedTransactionError, decisionsForMandate, fetchLedger, fetchMandate, mandatesForAgent } from "./read.js";
-export type { AgentMandate, DecisionsForMandateOptions, MandateDecisions } from "./read.js";
+export {
+  MANDATE_AGENT_OFFSET,
+  TRADE_ENTRY_SIZE,
+  TRADE_LEDGER_CAPACITY,
+  TRADE_RULE_AGENT_OFFSET,
+  TRADE_WINDOW_SECS,
+  decodeTradeLedger,
+  decodeTradeRule,
+  ledgerPda,
+  mandatePda,
+  tradeLedgerPda,
+  tradeRulePda,
+} from "./layout.js";
+export type { LedgerAccount, LedgerEntry, MandateAccount, TradeLedgerAccount, TradeLedgerEntry, TradeRuleAccount } from "./layout.js";
+export {
+  MissingListedTransactionError,
+  decisionsForMandate,
+  fetchLedger,
+  fetchMandate,
+  fetchTradeRule,
+  mandatesForAgent,
+  tradeRulesForAgent,
+} from "./read.js";
+export type { AgentMandate, AgentTradeRule, DecisionsForMandateOptions, MandateDecisions } from "./read.js";
 export {
   REASON_ACCOUNT_FROZEN,
   REASON_DELEGATE_MISSING,
@@ -69,8 +101,12 @@ export {
   REASON_MERCHANT_NOT_ALLOWED,
   REASON_NOT_ACTIVE,
   REASON_OK,
+  REASON_OUTPUT_ACCOUNT_NOT_ALLOWED,
   REASON_OVER_CAP,
+  REASON_OVER_DAILY_LIMIT,
   REASON_OVER_PER_TX_MAX,
+  REASON_POOL_NOT_ALLOWED,
+  REASON_QUOTE_BELOW_FLOOR,
   REASON_STALE_NONCE,
   REASON_TEXT,
   REASON_ZERO_AMOUNT,

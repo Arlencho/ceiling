@@ -18,6 +18,17 @@ test("reason texts match app/lib/constants.ts", () => {
     fromSdk[Number(code)] = text;
   }
   assert.deepEqual(fromSdk, fromApp);
+  assert.equal(Object.keys(fromSdk).length, 15);
+  assert.equal(Object.keys(fromApp).length, 15);
+  const refusalCodes = Object.keys(fromSdk)
+    .map((code) => Number(code))
+    .filter((code) => code !== 0)
+    .sort((a, b) => a - b);
+  assert.deepEqual(refusalCodes, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+  assert.equal(fromSdk[11], "output account not allowed");
+  assert.equal(fromSdk[12], "pool not allowed");
+  assert.equal(fromSdk[13], "over daily limit");
+  assert.equal(fromSdk[14], "quote below floor");
   assert.match(source, /return REASON_TEXT\[reason\] \?\? 'unknown'/);
   assert.equal(reasonText(99), "unknown");
 });

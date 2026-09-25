@@ -9,6 +9,9 @@
   "instructions": [
     {
       "name": "apply_change",
+      "docs": [
+        "Apply a loosening change once the chain clock reaches `effective_at`."
+      ],
       "discriminator": [
         248,
         177,
@@ -80,6 +83,9 @@
     },
     {
       "name": "cancel_change",
+      "docs": [
+        "Drop a loosening change. Owner or guardian."
+      ],
       "discriminator": [
         100,
         30,
@@ -155,6 +161,12 @@
     },
     {
       "name": "charge",
+      "docs": [
+        "Submit a charge. Signed by the agent, decided by this program.",
+        "",
+        "Returns Ok whether the charge is paid or refused. See the module doc",
+        "for why a refusal must not be an error."
+      ],
       "discriminator": [
         26,
         55,
@@ -168,6 +180,10 @@
       "accounts": [
         {
           "name": "agent",
+          "docs": [
+            "The agent holds authority and nothing else. It is not the owner, it",
+            "pays only the transaction fee, and it cannot change any limit."
+          ],
           "signer": true,
           "relations": [
             "mandate"
@@ -234,6 +250,9 @@
     },
     {
       "name": "close_mandate",
+      "docs": [
+        "Reclaim rent once a mandate is finished. Only the owner, never while active."
+      ],
       "discriminator": [
         117,
         87,
@@ -284,7 +303,82 @@
       "args": []
     },
     {
+      "name": "close_trade_rule",
+      "docs": [
+        "Reclaim rent once a trade rule is finished or past expiry, and revoke",
+        "any delegation the source still gives the rule."
+      ],
+      "discriminator": [
+        93,
+        102,
+        200,
+        106,
+        195,
+        121,
+        250,
+        120
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "rule",
+          "writable": true
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "docs": [
+            "still a token account delegated to this rule, close revokes that."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "deposit",
+      "docs": [
+        "Move tokens into the vault token account."
+      ],
       "discriminator": [
         242,
         35,
@@ -398,7 +492,8 @@
           ]
         },
         {
-          "name": "token_program"
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": [
@@ -410,6 +505,9 @@
     },
     {
       "name": "execute",
+      "docs": [
+        "Pay a held withdrawal once the chain clock reaches its unlock time."
+      ],
       "discriminator": [
         130,
         221,
@@ -517,7 +615,8 @@
           ]
         },
         {
-          "name": "token_program"
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": [
@@ -529,6 +628,9 @@
     },
     {
       "name": "freeze",
+      "docs": [
+        "Block every outflow except `recover`. Owner or guardian."
+      ],
       "discriminator": [
         255,
         91,
@@ -604,6 +706,13 @@
     },
     {
       "name": "grant_override",
+      "docs": [
+        "Let one specific charge through above the per-payment ceiling.",
+        "",
+        "The owner signs, so the override is explicit. It is written to the",
+        "ledger, so it is on the record. It raises the per-payment ceiling only:",
+        "the total cap stays absolute."
+      ],
       "discriminator": [
         225,
         146,
@@ -672,7 +781,78 @@
       ]
     },
     {
+      "name": "grant_trade_override",
+      "docs": [
+        "Raise the per-trade ceiling for one nonce. The daily limit and the cap stay put."
+      ],
+      "discriminator": [
+        133,
+        223,
+        203,
+        45,
+        174,
+        92,
+        157,
+        151
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "rule",
+          "writable": true
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rule"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "amount_in",
+          "type": "u64"
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "init_vault",
+      "docs": [
+        "Open a Hold vault. The vault PDA is the authority of its token account."
+      ],
       "discriminator": [
         77,
         79,
@@ -773,7 +953,8 @@
           "name": "mint"
         },
         {
-          "name": "token_program"
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
           "name": "system_program",
@@ -793,6 +974,10 @@
     },
     {
       "name": "open_mandate",
+      "docs": [
+        "Open a mandate and delegate `cap` to it in the same transaction, so the",
+        "owner signs exactly once."
+      ],
       "discriminator": [
         116,
         145,
@@ -887,7 +1072,140 @@
       ]
     },
     {
+      "name": "open_trade_rule",
+      "docs": [
+        "Open a trade rule and delegate `cap` of the input token account to it."
+      ],
+      "discriminator": [
+        109,
+        183,
+        63,
+        166,
+        60,
+        202,
+        82,
+        15
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rule",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "args.rule_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "in_mint"
+        },
+        {
+          "name": "out_mint"
+        },
+        {
+          "name": "exchange_program"
+        },
+        {
+          "name": "pool"
+        },
+        {
+          "name": "pool_authority"
+        },
+        {
+          "name": "pool_in_vault"
+        },
+        {
+          "name": "pool_out_vault"
+        },
+        {
+          "name": "pool_mint"
+        },
+        {
+          "name": "pool_fee_account"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "OpenTradeRuleArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "propose_change",
+      "docs": [
+        "Tighten a rule now. A looser rule waits out the current delay."
+      ],
       "discriminator": [
         167,
         211,
@@ -974,6 +1292,9 @@
     },
     {
       "name": "recover",
+      "docs": [
+        "Send the whole vault balance to the safe address. Works while frozen."
+      ],
       "discriminator": [
         108,
         216,
@@ -1085,13 +1406,21 @@
           ]
         },
         {
-          "name": "token_program"
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
     },
     {
       "name": "revoke_mandate",
+      "docs": [
+        "Withdraw the agent's authority immediately, in one owner signature.",
+        "",
+        "Allowed from any status except already REVOKED, so an EXPIRED or",
+        "EXHAUSTED mandate can still drop its SPL delegation. A second revoke",
+        "is refused."
+      ],
       "discriminator": [
         252,
         97,
@@ -1151,7 +1480,80 @@
       "args": []
     },
     {
+      "name": "revoke_trade_rule",
+      "docs": [
+        "Withdraw the agent's authority. Allowed from any status except revoked."
+      ],
+      "discriminator": [
+        112,
+        252,
+        178,
+        223,
+        55,
+        115,
+        217,
+        201
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "rule",
+          "writable": true
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "writable": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "skip",
+      "docs": [
+        "Pay a held withdrawal before its unlock time. Both keys, and not while frozen."
+      ],
       "discriminator": [
         154,
         63,
@@ -1269,7 +1671,8 @@
           ]
         },
         {
-          "name": "token_program"
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": [
@@ -1281,6 +1684,9 @@
     },
     {
       "name": "stop",
+      "docs": [
+        "Cancel one held withdrawal. Owner or guardian, with no wait."
+      ],
       "discriminator": [
         42,
         133,
@@ -1360,7 +1766,124 @@
       ]
     },
     {
+      "name": "trade",
+      "docs": [
+        "Sell `amount_in` of the pinned input through the pinned pool.",
+        "",
+        "Returns Ok whether the trade is filled or refused."
+      ],
+      "discriminator": [
+        178,
+        144,
+        26,
+        216,
+        241,
+        187,
+        206,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "agent",
+          "signer": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "rule",
+          "writable": true
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "writable": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "exchange_program"
+        },
+        {
+          "name": "pool"
+        },
+        {
+          "name": "pool_authority"
+        },
+        {
+          "name": "pool_in_vault",
+          "writable": true
+        },
+        {
+          "name": "pool_out_vault",
+          "writable": true
+        },
+        {
+          "name": "pool_mint",
+          "writable": true
+        },
+        {
+          "name": "pool_fee_account",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount_in",
+          "type": "u64"
+        },
+        {
+          "name": "min_out",
+          "type": "u64"
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "unfreeze",
+      "docs": [
+        "Clear a freeze. Both keys, or the owner alone after the delay when no guardian is set."
+      ],
       "discriminator": [
         133,
         160,
@@ -1443,6 +1966,9 @@
     },
     {
       "name": "withdraw",
+      "docs": [
+        "Pay `amount` now when the rules allow it. Otherwise record a hold."
+      ],
       "discriminator": [
         183,
         18,
@@ -1556,7 +2082,8 @@
           ]
         },
         {
-          "name": "token_program"
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": [
@@ -1618,6 +2145,32 @@
         63,
         55,
         18
+      ]
+    },
+    {
+      "name": "TradeLedger",
+      "discriminator": [
+        200,
+        191,
+        201,
+        165,
+        93,
+        179,
+        79,
+        190
+      ]
+    },
+    {
+      "name": "TradeRule",
+      "discriminator": [
+        71,
+        199,
+        163,
+        41,
+        101,
+        116,
+        241,
+        212
       ]
     }
   ],
@@ -1841,6 +2394,32 @@
         62,
         106,
         169
+      ]
+    },
+    {
+      "name": "TradeRefused",
+      "discriminator": [
+        97,
+        219,
+        5,
+        169,
+        115,
+        219,
+        109,
+        235
+      ]
+    },
+    {
+      "name": "Traded",
+      "discriminator": [
+        225,
+        202,
+        73,
+        175,
+        147,
+        43,
+        160,
+        150
       ]
     }
   ],
@@ -2094,11 +2673,88 @@
       "code": 6049,
       "name": "BadVaultAuthority",
       "msg": "token account authority is not the vault"
+    },
+    {
+      "code": 6050,
+      "name": "InvalidTradeRulePda",
+      "msg": "trade rule address does not match its stored fields"
+    },
+    {
+      "code": 6051,
+      "name": "TradeDeltaMismatch",
+      "msg": "the swap moved a different amount than the rule allowed"
+    },
+    {
+      "code": 6052,
+      "name": "PoolAccountMismatch",
+      "msg": "pool accounts do not match the trade rule"
+    },
+    {
+      "code": 6053,
+      "name": "TradeLimitsOutOfOrder",
+      "msg": "per-trade maximum, daily limit, and cap are out of order"
+    },
+    {
+      "code": 6054,
+      "name": "FloorDenominatorRequired",
+      "msg": "floor denominator must be greater than zero"
+    },
+    {
+      "code": 6055,
+      "name": "ExchangeNotSupported",
+      "msg": "this exchange is not supported"
+    },
+    {
+      "code": 6056,
+      "name": "DestinationNotOwnedByOwner",
+      "msg": "destination token account is not owned by the rule owner"
+    },
+    {
+      "code": 6057,
+      "name": "UnexpectedTradeAccount",
+      "msg": "an extra account was passed to trade"
+    },
+    {
+      "code": 6058,
+      "name": "TradeRuleNotActive",
+      "msg": "trade rule is not active"
+    },
+    {
+      "code": 6059,
+      "name": "TradeRuleStillActive",
+      "msg": "trade rule is still active"
+    },
+    {
+      "code": 6060,
+      "name": "FloorRequired",
+      "msg": "floor numerator must be greater than zero"
+    },
+    {
+      "code": 6061,
+      "name": "DailyLimitRequired",
+      "msg": "daily limit must be greater than zero"
+    },
+    {
+      "code": 6062,
+      "name": "SourceAlreadyDelegated",
+      "msg": "source token account is already delegated to another account"
+    },
+    {
+      "code": 6063,
+      "name": "NotATokenAccount",
+      "msg": "account is not an initialized SPL token account"
     }
   ],
   "types": [
     {
       "name": "Entry",
+      "docs": [
+        "One decision, paid or refused, exactly as the program made it.",
+        "",
+        "`repr(C)` with explicit padding, because the ledger is a zero-copy account:",
+        "the ring is larger than the BPF stack frame and must never be deserialized",
+        "onto it."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -2124,6 +2780,11 @@
           },
           {
             "name": "suggested_override",
+            "docs": [
+              "For a refusal, the one-shot override that would have cleared this exact",
+              "charge, or zero when no override could. A decline that tells you how to",
+              "proceed is the difference between a limit and an answer."
+            ],
             "type": "u64"
           },
           {
@@ -2148,6 +2809,9 @@
     },
     {
       "name": "HoldChange",
+      "docs": [
+        "The desired rules, passed whole to `propose_change`."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -2575,6 +3239,10 @@
     },
     {
       "name": "HoldVault",
+      "docs": [
+        "Funds live in the vault token account. Its authority is this PDA, so a",
+        "raw transfer signed by the owner or the guardian cannot move them."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -2584,10 +3252,16 @@
           },
           {
             "name": "guardian",
+            "docs": [
+              "`Pubkey::default()` means no guardian is set."
+            ],
             "type": "pubkey"
           },
           {
             "name": "safe_address",
+            "docs": [
+              "Wallet that must own the token account `recover` pays."
+            ],
             "type": "pubkey"
           },
           {
@@ -2620,6 +3294,10 @@
           },
           {
             "name": "unfreeze_at",
+            "docs": [
+              "When no guardian is set, `unfreeze` arms this timestamp and finishes",
+              "only once the chain clock reaches it. Zero means no unfreeze is waiting."
+            ],
             "type": "i64"
           },
           {
@@ -2717,6 +3395,14 @@
     },
     {
       "name": "Ledger",
+      "docs": [
+        "A ring of the most recent decisions. Refusals are recorded here with the",
+        "same weight as payments, which is the point of the whole program.",
+        "",
+        "The ring is the authoritative recent window. Longer history is rebuilt by",
+        "indexing `Paid` and `Refused` events from transaction logs, so a busy week",
+        "wrapping the ring costs nothing."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -2730,10 +3416,16 @@
           },
           {
             "name": "total",
+            "docs": [
+              "Total entries ever written, including those the ring has overwritten."
+            ],
             "type": "u32"
           },
           {
             "name": "head",
+            "docs": [
+              "Index the next entry is written to."
+            ],
             "type": "u16"
           },
           {
@@ -2767,63 +3459,113 @@
     },
     {
       "name": "Mandate",
+      "docs": [
+        "A permission to spend, owned by the human and enforced by this program.",
+        "",
+        "The owner key never leaves Seed Vault and signs only `open_mandate`,",
+        "`grant_override`, `revoke_mandate` and `close_mandate`. The agent key signs",
+        "`charge` and can do nothing else: it cannot widen any limit, change the",
+        "merchant, extend the expiry, or move funds outside this account's rules."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
           {
             "name": "owner",
+            "docs": [
+              "Human who owns the funds and the mandate."
+            ],
             "type": "pubkey"
           },
           {
             "name": "agent",
+            "docs": [
+              "Key allowed to submit charges. Holds authority, never ownership."
+            ],
             "type": "pubkey"
           },
           {
             "name": "mint",
+            "docs": [
+              "Asset this mandate governs."
+            ],
             "type": "pubkey"
           },
           {
             "name": "source",
+            "docs": [
+              "The owner's token account. Funds stay here until a charge is allowed."
+            ],
             "type": "pubkey"
           },
           {
             "name": "merchant",
+            "docs": [
+              "The only wallet that may receive funds under this mandate."
+            ],
             "type": "pubkey"
           },
           {
             "name": "mandate_id",
+            "docs": [
+              "Distinguishes several mandates held by the same owner."
+            ],
             "type": "u64"
           },
           {
             "name": "cap",
+            "docs": [
+              "Total that may ever be spent, in base units."
+            ],
             "type": "u64"
           },
           {
             "name": "spent",
+            "docs": [
+              "Spent so far, in base units. Never exceeds `cap`."
+            ],
             "type": "u64"
           },
           {
             "name": "per_tx_max",
+            "docs": [
+              "Largest single payment allowed, in base units."
+            ],
             "type": "u64"
           },
           {
             "name": "expires_at",
+            "docs": [
+              "Unix seconds after which nothing may be spent."
+            ],
             "type": "i64"
           },
           {
             "name": "override_amount",
+            "docs": [
+              "One-shot allowance the owner granted for a specific charge."
+            ],
             "type": "u64"
           },
           {
             "name": "override_nonce",
+            "docs": [
+              "Nonce the override applies to. Zero means no override is pending."
+            ],
             "type": "u64"
           },
           {
             "name": "last_nonce",
+            "docs": [
+              "Highest nonce that has been paid. Blocks replay of a settled charge."
+            ],
             "type": "u64"
           },
           {
             "name": "purpose",
+            "docs": [
+              "What the money is for, in the owner's own words, fixed at creation."
+            ],
             "type": "string"
           },
           {
@@ -2882,6 +3624,54 @@
       }
     },
     {
+      "name": "OpenTradeRuleArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rule_id",
+            "type": "u64"
+          },
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "exchange_kind",
+            "type": "u8"
+          },
+          {
+            "name": "cap",
+            "type": "u64"
+          },
+          {
+            "name": "per_trade_max",
+            "type": "u64"
+          },
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          },
+          {
+            "name": "floor_num",
+            "type": "u64"
+          },
+          {
+            "name": "floor_den",
+            "type": "u64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "purpose",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
       "name": "Paid",
       "type": {
         "kind": "struct",
@@ -2916,6 +3706,9 @@
           },
           {
             "name": "fields",
+            "docs": [
+              "Which fields wait. See `CHANGE_*`."
+            ],
             "type": "u8"
           },
           {
@@ -2996,6 +3789,370 @@
           },
           {
             "name": "suggested_override",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeEntry",
+      "docs": [
+        "One trade decision. `repr(C)` with explicit padding, because the ledger is",
+        "zero-copy and the ring must never be deserialized onto the stack.",
+        "",
+        "`counterparty` is the pool on a paid trade and on most refusals. On reason",
+        "11 or 12 it is the account the agent tried."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ts",
+            "type": "i64"
+          },
+          {
+            "name": "amount_in",
+            "type": "u64"
+          },
+          {
+            "name": "amount_out",
+            "type": "u64"
+          },
+          {
+            "name": "min_out",
+            "type": "u64"
+          },
+          {
+            "name": "counterparty",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "suggested_override",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "reason",
+            "type": "u8"
+          },
+          {
+            "name": "_pad",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeLedger",
+      "docs": [
+        "A ring of the most recent trade decisions, including refusals."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rule",
+            "type": "pubkey"
+          },
+          {
+            "name": "total",
+            "docs": [
+              "Total entries ever written, including those the ring has overwritten."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "head",
+            "docs": [
+              "Index the next entry is written to."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_pad",
+            "type": {
+              "array": [
+                "u8",
+                1
+              ]
+            }
+          },
+          {
+            "name": "entries",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "TradeEntry"
+                  }
+                },
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeRefused",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rule",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_in",
+            "type": "u64"
+          },
+          {
+            "name": "min_out",
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "reason",
+            "type": "u8"
+          },
+          {
+            "name": "suggested_override",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeRule",
+      "docs": [
+        "A permission to swap, owned by the human and enforced by this program.",
+        "",
+        "The owner signs `open_trade_rule`, `grant_trade_override`, `revoke_trade_rule`",
+        "and `close_trade_rule`. The agent signs `trade` and can do nothing else."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "agent",
+            "docs": [
+              "Key allowed to submit trades. Holds authority, never ownership."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "source",
+            "docs": [
+              "The owner's input token account. Delegated to this rule for `cap`."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "destination",
+            "docs": [
+              "The owner's output token account, pinned at open."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "in_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "out_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "exchange_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "exchange_kind",
+            "docs": [
+              "0 is the SPL token-swap program named by `SPL_TOKEN_SWAP_ID`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_in_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_out_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_fee_account",
+            "docs": [
+              "Stored at open and compared on every trade. The fee owner is not hardcoded."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "rule_id",
+            "type": "u64"
+          },
+          {
+            "name": "cap",
+            "docs": [
+              "Total input that may ever be sold, in base units."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "spent",
+            "docs": [
+              "Input sold so far, in base units. Never exceeds `cap`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "per_trade_max",
+            "docs": [
+              "Largest single trade allowed, in base units, before a one-shot override."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "daily_limit",
+            "docs": [
+              "Most input that may be sold in the current 24 hour window."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "window_spent",
+            "type": "u64"
+          },
+          {
+            "name": "window_start",
+            "type": "i64"
+          },
+          {
+            "name": "floor_num",
+            "docs": [
+              "Minimum output per unit of input, as `floor_num / floor_den`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "floor_den",
+            "type": "u64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "override_amount",
+            "docs": [
+              "One-shot per-trade ceiling the owner granted for a specific nonce."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "override_nonce",
+            "docs": [
+              "Nonce the override applies to. Zero means no override is pending."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "last_nonce",
+            "docs": [
+              "Highest nonce that has been traded. A refusal does not advance it."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "purpose",
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "trade_count",
+            "type": "u32"
+          },
+          {
+            "name": "refusal_count",
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Traded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rule",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_in",
+            "type": "u64"
+          },
+          {
+            "name": "amount_out",
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "spent",
             "type": "u64"
           }
         ]

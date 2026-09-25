@@ -4,8 +4,22 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { PROGRAM_ID } from "./idl.js";
-import { MANDATE_AGENT_OFFSET, decodeLedger, decodeMandate, ledgerPda, mandatePda, u64Le } from "./layout.js";
-import { ledgerBytes, mandateBytes, type MandateFields } from "./testkit.js";
+import {
+  MANDATE_AGENT_OFFSET,
+  TRADE_ENTRY_SIZE,
+  TRADE_LEDGER_CAPACITY,
+  TRADE_RULE_AGENT_OFFSET,
+  decodeLedger,
+  decodeMandate,
+  decodeTradeLedger,
+  decodeTradeRule,
+  ledgerPda,
+  mandatePda,
+  tradeLedgerPda,
+  tradeRulePda,
+  u64Le,
+} from "./layout.js";
+import { ledgerBytes, mandateBytes, tradeLedgerBytes, tradeRuleBytes, tradeWorld, type MandateFields } from "./testkit.js";
 
 const DEVNET = {
   owner: "EGQdANFMq6xVjKcSrij4gWiH91q8TvhdY5e87KjjF2yc",
@@ -139,4 +153,129 @@ test("a round-tripped mandate keeps the source that was written", () => {
   assert.equal(decoded.expiresAt, -4n);
   assert.equal(decoded.purpose, "groceries");
   assert.equal(decoded.refusalCount, 9);
+});
+
+test("a trade rule address is the PDA of trade, owner, and the id as a little-endian u64", () => {
+  const owner = Keypair.generate().publicKey;
+  const id = 7n;
+  const [expected] = PublicKey.findProgramAddressSync(
+    [Buffer.from("trade"), owner.toBuffer(), u64Le(id)],
+    PROGRAM_ID,
+  );
+  assert.equal(tradeRulePda(PROGRAM_ID, owner, id).toBase58(), expected.toBase58());
+});
+
+test("a trade ledger address is the PDA of trade-ledger and the rule", () => {
+  const rule = Keypair.generate().publicKey;
+  const [expected] = PublicKey.findProgramAddressSync(
+    [Buffer.from("trade-ledger"), rule.toBuffer()],
+    PROGRAM_ID,
+  );
+  assert.equal(tradeLedgerPda(PROGRAM_ID, rule).toBase58(), expected.toBase58());
+});
+
+test("tradeRuleBytes is the on-chain layout, including the packed pool pubkey", () => {
+  const fields = tradeWorld().fields;
+  const raw = tradeRuleBytes(fields);
+  const agent = raw.subarray(TRADE_RULE_AGENT_OFFSET, TRADE_RULE_AGENT_OFFSET + 32);
+  assert.equal(new PublicKey(agent).toBase58(), fields.agent.toBase58());
+  assert.equal(raw[232], fields.exchangeKind);
+  assert.equal(new PublicKey(raw.subarray(233, 265)).toBase58(), fields.pool.toBase58());
+  const decoded = decodeTradeRule(raw);
+  assert.equal(decoded.destination.toBase58(), fields.destination.toBase58());
+  assert.equal(decoded.source.toBase58(), fields.source.toBase58());
+  assert.equal(decoded.inMint.toBase58(), fields.inMint.toBase58());
+  assert.equal(decoded.outMint.toBase58(), fields.outMint.toBase58());
+  assert.equal(decoded.poolFeeAccount.toBase58(), fields.poolFeeAccount.toBase58());
+  assert.equal(decoded.cap, fields.cap);
+  assert.equal(decoded.perTradeMax, fields.perTradeMax);
+  assert.equal(decoded.dailyLimit, fields.dailyLimit);
+  assert.equal(decoded.floorNum, fields.floorNum);
+  assert.equal(decoded.floorDen, fields.floorDen);
+  assert.equal(decoded.windowStart, fields.windowStart);
+  assert.equal(decoded.expiresAt, fields.expiresAt);
+  assert.equal(decoded.purpose, fields.purpose);
+  assert.equal(decoded.lastNonce, fields.lastNonce);
+  assert.equal(decoded.bump, fields.bump);
+});
+
+test("a trade ledger that has not wrapped reads the written entries oldest first", () => {
+  const rule = Keypair.generate().publicKey;
+  const pool = Keypair.generate().publicKey;
+  const raw = tradeLedgerBytes({
+    rule,
+    total: 2,
+    head: 2,
+    bump: 4,
+    entries: [
+      {
+        index: 0,
+        ts: 10n,
+        amountIn: 4n,
+        amountOut: 7n,
+        minOut: 6n,
+        counterparty: pool,
+        nonce: 4n,
+        suggestedOverride: 0n,
+        kind: 1,
+        reason: 0,
+      },
+      {
+        index: 1,
+        ts: 11n,
+        amountIn: 5n,
+        amountOut: 0n,
+        minOut: 9n,
+        counterparty: pool,
+        nonce: 5n,
+        suggestedOverride: 5n,
+        kind: 2,
+        reason: 14,
+      },
+    ],
+  });
+  const ledger = decodeTradeLedger(raw);
+  assert.equal(ledger.rule.toBase58(), rule.toBase58());
+  assert.equal(ledger.total, 2);
+  assert.equal(ledger.head, 2);
+  assert.equal(ledger.entries.length, 2);
+  assert.equal(ledger.entries[0]?.nonce, 4n);
+  assert.equal(ledger.entries[0]?.amountOut, 7n);
+  assert.equal(ledger.entries[1]?.nonce, 5n);
+  assert.equal(ledger.entries[1]?.reason, 14);
+  assert.equal(ledger.entries[1]?.suggestedOverride, 5n);
+});
+
+test("a wrapped trade ledger is read oldest first", () => {
+  const rule = Keypair.generate().publicKey;
+  const pool = Keypair.generate().publicKey;
+  const entries = [];
+  for (let i = 0; i < TRADE_LEDGER_CAPACITY; i += 1) {
+    entries.push({
+      index: i,
+      ts: BigInt(1_000 + i),
+      amountIn: BigInt(i + 1),
+      amountOut: BigInt((i + 1) * 2),
+      minOut: 1n,
+      counterparty: pool,
+      nonce: BigInt(i + 1),
+      suggestedOverride: 0n,
+      kind: 1,
+      reason: 0,
+    });
+  }
+  const raw = tradeLedgerBytes({ rule, total: 40, head: 8, bump: 2, entries });
+  assert.equal(raw.length, 8 + 40 + TRADE_LEDGER_CAPACITY * TRADE_ENTRY_SIZE);
+  const ledger = decodeTradeLedger(raw);
+  assert.equal(ledger.entries.length, 32);
+  assert.equal(ledger.head, 8);
+  assert.equal(ledger.total, 40);
+  assert.equal(ledger.entries[0]?.nonce, 9n);
+  assert.equal(ledger.entries[0]?.ts, 1_008n);
+  assert.equal(ledger.entries[0]?.amountIn, 9n);
+  assert.equal(ledger.entries[23]?.nonce, 32n);
+  assert.equal(ledger.entries[24]?.nonce, 1n);
+  assert.equal(ledger.entries[31]?.nonce, 8n);
+  assert.equal(ledger.entries[31]?.amountOut, 16n);
+  assert.equal(ledger.entries[31]?.counterparty.toBase58(), pool.toBase58());
 });

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Keypair } from "@solana/web3.js";
-import { decisionsFromTx, type TxView } from "./events.js";
+import { decisionsFromTx, tradeDecisionsFromTx, type TxView } from "./events.js";
 import { PROGRAM_ID } from "./idl.js";
-import { TOKEN_PROGRAM, chargeData, framed, paidLog, refusedLog } from "./testkit.js";
+import { TOKEN_PROGRAM, chargeData, framed, paidLog, refusedLog, tradeRefusedLog, tradedLog } from "./testkit.js";
 
 const PROGRAM = PROGRAM_ID.toBase58();
 
@@ -148,4 +148,73 @@ test("an unframed Program data line still decodes", () => {
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.amount, 8n);
   assert.equal(rows[0]?.nonce, 2n);
+});
+
+test("a Traded event is not a charge decision", () => {
+  const rule = Keypair.generate().publicKey;
+  const rows = decisionsFromTx(
+    view({
+      logs: framed(PROGRAM, [tradedLog(rule, 500n, 400n, 4n, 500n)]),
+      instructions: [chargeIx(rule.toBase58(), "dest", 500n, 4n)],
+    }),
+    PROGRAM,
+  );
+  assert.equal(rows.length, 0);
+});
+
+test("a Traded event reports the output that came back", () => {
+  const rule = Keypair.generate().publicKey;
+  const rows = tradeDecisionsFromTx(
+    view({
+      logs: framed(PROGRAM, [tradedLog(rule, 500n, 400n, 4n, 500n)]),
+      instructions: [],
+    }),
+    PROGRAM,
+    rule.toBase58(),
+  );
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.kind, "traded");
+  assert.equal(rows[0]?.amountIn, 500n);
+  assert.equal(rows[0]?.amountOut, 400n);
+  assert.equal(rows[0]?.nonce, 4n);
+  assert.equal(rows[0]?.reason, 0);
+  assert.equal(rows[0]?.reasonText, "ok");
+  assert.equal(rows[0]?.suggestedOverride, 0n);
+});
+
+test("a TradeRefused event keeps the reason and leaves amountOut at zero", () => {
+  const rule = Keypair.generate().publicKey;
+  const rows = tradeDecisionsFromTx(
+    view({
+      logs: framed(PROGRAM, [tradeRefusedLog(rule, 10_000n, 9_000n, 2n, 14, 0n)]),
+      instructions: [],
+    }),
+    PROGRAM,
+    rule.toBase58(),
+  );
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.kind, "refused");
+  assert.equal(rows[0]?.amountIn, 10_000n);
+  assert.equal(rows[0]?.amountOut, 0n);
+  assert.equal(rows[0]?.minOut, 9_000n);
+  assert.equal(rows[0]?.reason, 14);
+  assert.equal(rows[0]?.reasonText, "quote below floor");
+  assert.equal(rows[0]?.suggestedOverride, 0n);
+});
+
+test("program data inside a sibling invoke is not a Veto trade decision", () => {
+  const rule = Keypair.generate().publicKey;
+  const logs = [
+    `Program ${PROGRAM} invoke [1]`,
+    `Program ${TOKEN_PROGRAM.toBase58()} invoke [2]`,
+    tradedLog(rule, 1n, 1n, 1n, 1n),
+    `Program ${TOKEN_PROGRAM.toBase58()} success`,
+    tradeRefusedLog(rule, 1n, 1n, 1n, 12, 0n),
+    `Program ${PROGRAM} success`,
+  ];
+  const rows = tradeDecisionsFromTx(view({ logs, instructions: [] }), PROGRAM, rule.toBase58());
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.kind, "refused");
+  assert.equal(rows[0]?.reason, 12);
+  assert.equal(rows[0]?.reasonText, "pool not allowed");
 });
