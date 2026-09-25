@@ -1,0 +1,140 @@
+{
+  "blockTime": 1790244101,
+  "meta": {
+    "computeUnitsConsumed": 12417,
+    "costUnits": 14731,
+    "err": null,
+    "fee": 5000,
+    "innerInstructions": [],
+    "loadedAddresses": {
+      "readonly": [],
+      "writable": []
+    },
+    "logMessages": [
+      "Program 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV invoke [1]",
+      "Program log: Instruction: Charge",
+      "Program log: VETO REFUSED reason=5 (over per-payment maximum) amount=19301125 per_tx_max=10000000 remaining=289996499 override_to_clear=19301125",
+      "Program data: 5jGF0Go+aqnmSQI79NBewazyJ3ux02Rj+lo7Fxze003Dm5QzShqIhwWDJgEAAAAAoPS0agAAAAAFBYMmAQAAAAA=",
+      "Program 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV consumed 12417 of 200000 compute units",
+      "Program 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV success"
+    ],
+    "postBalances": [
+      496830000,
+      1488440,
+      12598400,
+      1488440,
+      2225042,
+      1066800,
+      833120,
+      20367267856
+    ],
+    "postTokenBalances": [
+      {
+        "accountIndex": 1,
+        "mint": "2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU",
+        "owner": "6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG",
+        "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "uiTokenAmount": {
+          "amount": "15269501",
+          "decimals": 6,
+          "uiAmount": 15.269501,
+          "uiAmountString": "15.269501"
+        }
+      },
+      {
+        "accountIndex": 3,
+        "mint": "2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU",
+        "owner": "EGQdANFMq6xVjKcSrij4gWiH91q8TvhdY5e87KjjF2yc",
+        "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "uiTokenAmount": {
+          "amount": "999989330499",
+          "decimals": 6,
+          "uiAmount": 999989.330499,
+          "uiAmountString": "999989.330499"
+        }
+      }
+    ],
+    "preBalances": [
+      496835000,
+      1488440,
+      12598400,
+      1488440,
+      2225042,
+      1066800,
+      833120,
+      20367267856
+    ],
+    "preTokenBalances": [
+      {
+        "accountIndex": 1,
+        "mint": "2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU",
+        "owner": "6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG",
+        "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "uiTokenAmount": {
+          "amount": "15269501",
+          "decimals": 6,
+          "uiAmount": 15.269501,
+          "uiAmountString": "15.269501"
+        }
+      },
+      {
+        "accountIndex": 3,
+        "mint": "2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU",
+        "owner": "EGQdANFMq6xVjKcSrij4gWiH91q8TvhdY5e87KjjF2yc",
+        "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "uiTokenAmount": {
+          "amount": "999989330499",
+          "decimals": 6,
+          "uiAmount": 999989.330499,
+          "uiAmountString": "999989.330499"
+        }
+      }
+    ],
+    "rewards": [],
+    "status": {
+      "Ok": null
+    }
+  },
+  "slot": 503413955,
+  "transaction": {
+    "message": {
+      "accountKeys": [
+        "6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w",
+        "2bt9HMQbNy6t2J4hnw15QF8iUesPrgJoNDvf99HNay7F",
+        "C6mjtsWRx6DgpM1AT3dEsHFMqKSQAWWLqbyk3ZJUkD6Q",
+        "FbhygYPyFk5PeiFppCezmMkqPqywTdAZxhkqxw79FBBE",
+        "GVwLhzvRNqa5PnKcLakdocC3czQfYrBXGpbHb7HLPEjG",
+        "2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU",
+        "3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+      ],
+      "header": {
+        "numReadonlySignedAccounts": 0,
+        "numReadonlyUnsignedAccounts": 3,
+        "numRequiredSignatures": 1
+      },
+      "instructions": [
+        {
+          "accounts": [
+            0,
+            4,
+            2,
+            3,
+            1,
+            5,
+            7
+          ],
+          "data": "3PdP9PB42r67Yb6LtRKYbcSCMXJBJnswd",
+          "programIdIndex": 6,
+          "stackHeight": 1
+        }
+      ],
+      "recentBlockhash": "2q7Lx2aVvP1pTz7TjKF6EWrG7mFwCCtbY9tP6LPG9eZc"
+    },
+    "signatures": [
+      "1bgS9nTpFTpSBGcKyQTM34PTdqS9ZrFzSiJZJUAz2ct3fxMRXzgkq5CMVcVbdcxE3XxK2Qg8neFHDckFuCd9j4D"
+    ]
+  },
+  "transactionIndex": 3,
+  "version": "legacy"
+}

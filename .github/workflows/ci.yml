@@ -203,6 +203,34 @@ jobs:
         run: |
           bash "$GITHUB_WORKSPACE/scripts/ci-assert-test-count.sh" indexer "$RUNNER_TEMP/ci-indexer-tests.txt"
 
+  service:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            service/package-lock.json
+            indexer/package-lock.json
+      - run: npm ci
+      - name: Install the shared event parser dependencies
+        run: npm ci
+        working-directory: indexer
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Test recorded devnet history
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/ci-service-tests.txt"
+      - name: Prove the service tests ran
+        run: |
+          bash "$GITHUB_WORKSPACE/scripts/ci-assert-test-count.sh" service "$RUNNER_TEMP/ci-service-tests.txt"
+
   sdk:
     runs-on: ubuntu-latest
     defaults:

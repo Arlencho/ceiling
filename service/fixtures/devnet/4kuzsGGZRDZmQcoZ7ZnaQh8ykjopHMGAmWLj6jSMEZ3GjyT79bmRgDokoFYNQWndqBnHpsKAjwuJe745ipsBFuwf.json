@@ -1,0 +1,74 @@
+{
+  "blockTime": 1790338823,
+  "meta": {
+    "computeUnitsConsumed": 11760,
+    "costUnits": 13514,
+    "err": null,
+    "fee": 5000,
+    "innerInstructions": [],
+    "loadedAddresses": {
+      "readonly": [],
+      "writable": []
+    },
+    "logMessages": [
+      "Program 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV invoke [1]",
+      "Program log: Instruction: ProposeChange",
+      "Program data: 1kkZGWTynmcVtY15juun0756dISIQjpKszIG8nUEmkHfH7OjGqRttQE=",
+      "Program log: HOLD CHANGE APPLIED fields=1",
+      "Program 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV consumed 11760 of 200000 compute units",
+      "Program 3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV success"
+    ],
+    "postBalances": [
+      272884560,
+      7208520,
+      11297920,
+      833120
+    ],
+    "postTokenBalances": [],
+    "preBalances": [
+      272889560,
+      7208520,
+      11297920,
+      833120
+    ],
+    "preTokenBalances": [],
+    "rewards": [],
+    "status": {
+      "Ok": null
+    }
+  },
+  "slot": 503984860,
+  "transaction": {
+    "message": {
+      "accountKeys": [
+        "GzcuUcmbtgTrEcZjKcb69ADt5afdVunbhPmM3Gnto3jx",
+        "2Tk8Qfd23udSkHZAQvx8x1TXU166n26HtjzCjaSeoqaU",
+        "G8pvz6qey9HrunfH229e3zzLUsEqRpXeYWLaTxv3LB8p",
+        "3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV"
+      ],
+      "header": {
+        "numReadonlySignedAccounts": 0,
+        "numReadonlyUnsignedAccounts": 1,
+        "numRequiredSignatures": 1
+      },
+      "instructions": [
+        {
+          "accounts": [
+            0,
+            1,
+            2
+          ],
+          "data": "TJYcwwhTA8YojQLQHLzLizozMZwoHFQnoPaUnzSFFSdL13MX35ABRo8g5htLYqbfPaTeyu2duXv448k1f57VvM5usQkQdMvYRKwmQ2EyCwYEmpPesDgqhhcDRhj",
+          "programIdIndex": 3,
+          "stackHeight": 1
+        }
+      ],
+      "recentBlockhash": "HARf9EsT9d2dsbQ6JKsLf5ky3P1pQMr7qavWTMEbwMqL"
+    },
+    "signatures": [
+      "4kuzsGGZRDZmQcoZ7ZnaQh8ykjopHMGAmWLj6jSMEZ3GjyT79bmRgDokoFYNQWndqBnHpsKAjwuJe745ipsBFuwf"
+    ]
+  },
+  "transactionIndex": 19,
+  "version": "legacy"
+}
