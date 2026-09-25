@@ -1,5 +1,7 @@
 # Veto
 
+Seeker owner? [Try Veto on devnet before October 8](docs/TESTERS.md).
+
 **Everyone stops the overspend. Only this one can prove it stopped.**
 
 Veto enforces a spending rule on chain: when a charge breaks it, the transfer is never executed
