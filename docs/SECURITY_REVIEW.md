@@ -235,3 +235,26 @@ Listed so the absence of a finding is evidence rather than silence.
 The mobile app, the SDK, the watcher's key handling, the merchant terminal and the RPC path are outside this
 pass. The SDK's own passes are on [PR 195](https://github.com/Arlencho/veto/pull/195) and [PR 203](https://github.com/Arlencho/veto/pull/203). Dependency advisories were not run (`cargo audit` is not installed here); Anchor 1.2.0 and
 anchor-spl 1.2.0 are the pinned versions. The devnet deployment was not probed live.
+
+## If someone forces you (Hold)
+
+Hold landed after this review and the verdicts above do not cover it. This section states, in plain
+words, what `programs/veto/src/hold.rs` guarantees when an owner is coerced, and what it does not.
+
+What the program guarantees:
+
+- An instant withdrawal only goes to a destination this vault has paid before. A new address never
+  gets money instantly.
+- Anything else waits 1, 2, or 3 days on the chain clock, whichever delay the vault was set to.
+- No single key, including the owner's, can shorten a wait. Paying a held withdrawal early (`skip`)
+  needs both the owner key and the guardian key. Loosening any rule waits out the current delay.
+  `recover` only goes to the safe address chosen in advance.
+- The guardian is alerted and can stop a held withdrawal, or freeze the whole vault, with one tap.
+
+What it does not do:
+
+- It does not protect a person's physical safety.
+- Someone who holds the owner for longer than the delay, or who gets both keys, can still get the money.
+- A guardian on the same phone as the owner key is not a second factor. Keep the guardian on a second
+  device kept somewhere else.
+- The vault's settings, including the safe address, are public on chain. Anyone can read them.
