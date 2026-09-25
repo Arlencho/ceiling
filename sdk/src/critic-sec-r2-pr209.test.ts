@@ -65,20 +65,24 @@ test("R5: the reason tables in README.md and DECISION_RECORD.md are the program'
 
 const PAIRED_DOCS = ["docs/PITCH.md", "docs/VIDEO.md", "docs/SECURITY_REVIEW.md", "README.md"];
 
-test("R6: every rewritten charge sentence on the quoted rule pairs reason 5 with the per-payment limit and reason 7 with inside the limits", () => {
+test("R6: every charge sentence that names reason 7 also pairs it with reason 5, over the per-payment limit, and inside the limits", () => {
   let hits = 0;
   for (const rel of PAIRED_DOCS) {
     for (const s of sentences(read(rel))) {
       if (!/reason 7/.test(s) || !/charge/i.test(s)) continue;
       hits += 1;
-      // Order-free: VIDEO.md:14 says the limit before the code.
+      // Order-free: the README sentence names the limit before reason 7.
       for (const part of [/reason 5/, /over the per-payment limit/i, /reason 7/, /inside the limits/i]) {
         assert.match(s, part, `${rel}: ${s}`);
       }
       assert.doesNotMatch(s, /before any limit/i, `${rel}: ${s}`);
     }
   }
-  assert.equal(hits, 5, "the five sentences round 1 pinned are all still present and paired");
+  assert.equal(
+    hits,
+    2,
+    "README id 1 and SECURITY_REVIEW id 1 still pair reason 5 with the per-payment limit and reason 7 with inside the limits",
+  );
   // The program agrees: per-payment maximum, then cap, then delegate.
   const lib = read("programs/veto/src/lib.rs");
   const body = lib.slice(lib.indexOf("fn evaluate("), lib.indexOf("fn suggested_override("));
@@ -88,7 +92,10 @@ test("R6: every rewritten charge sentence on the quoted rule pairs reason 5 with
 
 test("R7: VIDEO.md says the open is not a Decisions row, and the app lists paid, refused and override only", () => {
   const video = read("docs/VIDEO.md");
-  assert.match(video, /decision rows \(paid and refused; the open is not listed\) were written from 20:58:03 to 21:00:50 UTC/);
+  assert.match(video, /The open is not listed on Decisions\./);
+  assert.match(video, /16\.659625/);
+  assert.doesNotMatch(video, /6\.2325/);
+  assert.doesNotMatch(read("docs/DECK.md"), /6\.2325/);
   const format = read("app/lib/format.ts");
   const fn = format.slice(format.indexOf("export function isListedDecision("), format.indexOf("}", format.indexOf("export function isListedDecision(")));
   assert.match(fn, /KIND_PAID/);
@@ -101,7 +108,7 @@ test("R7: VIDEO.md says the open is not a Decisions row, and the app lists paid,
 
 const RULE_1 = "CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g";
 
-/** Every row README.md, DECK.md and VIDEO.md quote on rule 1, in chain order. */
+/** Rule 1, which README.md still quotes, in chain order. The video and the deck quote mandate 3hgrSbPX2VTrfnVekoL2qi2qDWNGBhWP3QgADAWz6X6N. */
 const EXPECTED: ReadonlyArray<{ at: string; log: RegExp }> = [
   { at: "2026-09-20T20:57:50Z", log: /^VETO OPENED cap=100000000 per_tx_max=500000 / },
   { at: "2026-09-20T20:58:03Z", log: /^VETO PAID amount=446000 / },
@@ -150,9 +157,12 @@ test(
       assert.match(line, want.log, `row ${i} ${row.signature}`);
       await new Promise((r) => setTimeout(r, 1200));
     }
-    // README.md links the 18:00 refusal by signature; DECK.md quotes its log line.
+    // README.md still links rule 1's 18:00 refusal. DECK.md quotes the current rule's 12:00 refusal.
     assert.equal(rows[3]!.signature, "3rTpyrHEScEPhjHL3cUDYSGwGAxU6JVzbdWVZbr4YMHt3wAM7ad9JGPC26R8aQMH9aqYVzrFqbEogX1CquNcWqib");
-    assert.match(read("docs/DECK.md"), /VETO REFUSED reason=5 \(over per-payment maximum\) amount=6232500/);
     assert.match(read("README.md"), /remaining=99339500 override_to_clear=6232500/);
+    assert.match(
+      read("docs/DECK.md"),
+      /VETO REFUSED reason=5 \(over per-payment maximum\) amount=16659625\s+per_tx_max=10000000 remaining=292000000 override_to_clear=16659625/,
+    );
   },
 );

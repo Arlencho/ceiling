@@ -8,13 +8,13 @@ Slide by slide for the submission. Ten slides. The organizer's page names presen
 
 > **The agent tried to pay. It didn't.**
 
-One screenshot, full bleed: the refusal card on the phone. It says "Your rule held. No payment
-made." Then the why line from the 18:00 SE3 refusal the [README](../README.md) already links:
+One screenshot, full bleed: the refusal on the phone, opened from Decisions. It says "No money
+moved." Then: "Your agent asked to pay 16.659625. Your rule allows 10 per payment, so the
+program refused." The fact labeled Needed to allow it is 16.659625. That is the 12:00 Swedish
+refusal on 2026-09-25, mandate `3hgrSbPX2VTrfnVekoL2qi2qDWNGBhWP3QgADAWz6X6N`, signature
+`2DAXYtVCkGPG8RdbYWJcJvZHk4F7tvkJCnqExuyg8qUrdK53DwNUBiCD1MBx3LrzHvd8YXVF7RXr5tz4EujfHo5B`.
 
-> Asked for 6.2325, over the 0.5 per-payment maximum. An override of 6.2325 would have cleared
-> it.
-
-Never styled as an error. That card, the explorer log on slide 6, and the verify beat in the
+Never styled as an error. That screen, the explorer log on slide 6, and the verify beat in the
 video are the same recorded decision. Not a second rule.
 
 No logo slide, no team slide, no agenda. The first slide is the refusal card.
@@ -80,13 +80,13 @@ Here the transfer is not executed. The decline is recorded.
 Screenshot of an explorer showing a confirmed transaction, with the program log visible:
 
 ```
-VETO REFUSED reason=5 (over per-payment maximum) amount=6232500
-per_tx_max=500000 remaining=99339500 override_to_clear=6232500
+VETO REFUSED reason=5 (over per-payment maximum) amount=16659625
+per_tx_max=10000000 remaining=292000000 override_to_clear=16659625
 ```
 
-That line is the program log on the 18:00 refusal the [README](../README.md) already links.
-Amount 6.2325, per-payment maximum 0.5, remaining 99.3395 of a 100 cap, override 6.2325.
-Same decision as slide 1.
+That line is the program log on the 12:00 Swedish refusal on slide 1. Amount 16.659625,
+per-payment maximum 10, remaining 292 of a 300 cap, override 16.659625. The 12.5 kWh bill at
+1.33277 SEK/kWh is that amount. Same decision as slide 1.
 
 > The transaction succeeded at deciding no. The payment did not happen. The balance is unchanged,
 > and neither party can edit the record.
@@ -107,12 +107,14 @@ Same decision as slide 1.
 
 ## 8. The diary on the quoted rule
 
-Screenshot: Decisions for mandate `CZw2prUtN6Kb5kmiGKYDk4zaVmFxdJ2RPj4MTujgR39g`. Signatures from 2026-09-20 20:57:50 UTC through 2026-09-21 22:00:11 UTC. Three paid, six refused. It paid when the amount was under 0.5. It has no signature after that.
+Screenshot: Decisions for mandate `3hgrSbPX2VTrfnVekoL2qi2qDWNGBhWP3QgADAWz6X6N`. Before 18:00 Swedish time on 2026-09-25 the chain shows one payment of 8 and four refusals, through the 12:00 refusal at 2026-09-25 10:00:25 UTC. It paid when the amount was 8, under the 10 ceiling.
 
 > The agent pays a bill repriced by a public index, on devnet, in our token, to our counterparty.
-> It buys no electricity. On this rule it paid three bills under the ceiling and refused six over
-> it, across that span. The price is the only input we do not control, and you can check it at
-> the same URL.
+> It buys no electricity. On this rule, before that hour, one payment under the ceiling is on
+> the chain and four charges over it were refused. From 18:00 Swedish time on 2026-09-25 the
+> demo is set so the watcher charges 6 kWh per slot, which is how later rows are meant to mix
+> paid and refused. Those later rows are not on this slide. The price is the only input we do
+> not control, and you can check it at the same URL.
 >
 > When the rule allows the bill, the program executes an SPL transfer of that token to an account
 > we created.
@@ -139,7 +141,7 @@ mints further supply of that same mint. Addresses are in [DEVNET.md](DEVNET.md).
 > One rule type. A delegate on a token account the owner controls. Several rules, one agent each.
 > A ruleset written once and applied to the next agent. One pay path. One refusal path with a
 > reason and an override hint. Connect your agent, Copy all and a QR, on an active rule. An export
-> anyone can re-read from the chain. The quoted rule's history is 20 to 21 September 2026, UTC.
+> anyone can re-read from the chain. The quoted refusal is the 12:00 Swedish slot on 2026-09-25.
 >
 > Submissions close October 8, 2026 ([Solana Mobile announcement](https://solanamobile.com/blog/clock-in-the-solana-mobile-hackathon)).
 
