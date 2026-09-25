@@ -39,6 +39,7 @@ Notifications.setNotificationHandler({
 TaskManager.defineTask(DECISION_NOTIFY_TASK, async () => {
   try {
     await runDecisionNotifyScan();
+    await import('../widgets/register').then((mod) => mod.refreshHomeWidgets());
     return BackgroundTask.BackgroundTaskResult.Success;
   } catch {
     return BackgroundTask.BackgroundTaskResult.Failed;
