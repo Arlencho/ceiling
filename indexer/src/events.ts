@@ -5,6 +5,9 @@ import {
   CHARGE_IX_DISC,
   KIND_PAID,
   PAID_EVENT_DISC,
+  TRADED_EVENT_DISC,
+  TRADE_IX_DISC,
+  TRADE_REFUSED_EVENT_DISC,
   reasonText,
   readU64Le,
   REFUSED_EVENT_DISC,
@@ -51,6 +54,10 @@ export function linesForProgram(logs: readonly string[], programId: string): rea
 }
 
 export type DecodedEvent = {
+  rule?: string;
+  amountIn?: bigint;
+  amountOut?: bigint;
+  minOut?: bigint;
   kind: DecisionKind;
   kindCode: number;
   mandate: string;
@@ -76,6 +83,20 @@ export function decodeEventsFromLogs(logs: readonly string[], programId?: string
 export function decodeEventBytes(raw: Uint8Array): DecodedEvent | null {
   if (raw.length < 8) return null;
   const disc = raw.subarray(0, 8);
+  const traded = buffersEqual(disc, TRADED_EVENT_DISC);
+  const refusedTrade = buffersEqual(disc, TRADE_REFUSED_EVENT_DISC);
+  if (traded || refusedTrade) {
+    if (raw.length !== (traded ? 72 : 73)) return null;
+    const rule = new PublicKey(raw.subarray(8, 40)).toBase58();
+    return {
+      rule, mandate: rule, kind: traded ? "traded" : "refused", kindCode: traded ? 1 : 2,
+      amount: readU64Le(raw, 40), amountIn: readU64Le(raw, 40),
+      amountOut: traded ? readU64Le(raw, 48) : 0n,
+      ...(refusedTrade ? { minOut: readU64Le(raw, 48) } : {}),
+      nonce: readU64Le(raw, 56), reason: traded ? 0 : raw[64]!,
+      suggestedOverride: traded ? 0n : readU64Le(raw, 65),
+    };
+  }
   if (buffersEqual(disc, PAID_EVENT_DISC)) {
     if (raw.length < 64) return null;
     return {
@@ -151,17 +172,27 @@ export function decisionsFromTx(tx: TxView, programId: string, mandateFilter?: s
     const out: Decision[] = [];
     for (const event of events) {
       if (mandateFilter && event.mandate !== mandateFilter) continue;
+      const trade = event.rule ? tx.instructions.find(ix =>
+        ix.programId === programId && ix.accounts[1] === event.rule &&
+        ix.data.length === 32 && ix.data.subarray(0, 8).equals(TRADE_IX_DISC) &&
+        readU64Le(ix.data, 8) === event.amountIn && readU64Le(ix.data, 24) === event.nonce,
+      ) : undefined;
       out.push({
+        ...(event.rule ? { rule: event.rule, amountIn: event.amountIn, amountOut: event.amountOut, minOut: event.minOut ?? (trade ? readU64Le(trade.data, 16) : undefined) } : {}),
         signature: tx.signature,
         slot: tx.slot,
         timestamp: tx.blockTime,
         mandate: event.mandate,
         amount: event.amount,
         nonce: event.nonce,
-        counterparty: counterpartyFromCharge(tx, event.mandate),
+        // Reason 12 may name any of seven pool accounts. The event does not
+        // carry which one differed, so history must not guess it from the pool.
+        counterparty: event.rule
+          ? (event.reason === 12 ? "" : trade?.accounts[event.reason === 11 ? 4 : 6] ?? "")
+          : counterpartyFromCharge(tx, event.mandate),
         kind: event.kind,
         reason: event.reason,
-        reasonText: reasonText(event.reason),
+        reasonText: event.rule && event.reason === 1 ? "rule not active" : event.rule && event.reason === 5 ? "over per-trade maximum" : reasonText(event.reason),
         suggestedOverride: event.suggestedOverride,
       });
     }

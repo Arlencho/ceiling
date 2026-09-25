@@ -35,6 +35,10 @@ export const REASON_TEXT: Record<number, string> = {
   8: "insufficient funds",
   9: "zero amount",
   10: "account frozen",
+  11: "destination not allowed",
+  12: "pool account not allowed",
+  13: "over daily limit",
+  14: "below price floor",
 };
 
 export function reasonText(code: number): string {
@@ -359,6 +363,7 @@ function requireDisc(data: Buffer, expected: Buffer, what: string): void {
 }
 
 function readPubkey(data: Buffer, offset: number): [PublicKey, number] {
+  need(data, offset, 32, "pubkey");
   return [new PublicKey(data.subarray(offset, offset + 32)), offset + 32];
 }
 
@@ -889,7 +894,7 @@ export function boundVetoDecision(
   want: DecisionTriple,
 ): BoundVetoDecision {
   const id = typeof programId === "string" ? programId : programId.toBase58();
-  const events = decodeEventsFromLogs(logs, id);
+  const events = decodeEventsFromLogs(logs, id).filter((event) => !event.rule);
   if (events.length === 0) return { status: "none" };
   const matches = bindByTriple(events, want, (event) => ({
     mandate: event.mandate,
@@ -903,7 +908,7 @@ export function boundVetoDecision(
   return {
     status: "one",
     decision: {
-      kind: event.kind,
+      kind: event.kind as "paid" | "refused",
       reasonCode: event.reason,
       reasonText: reasonText(event.reason),
       amount: event.amount,
@@ -1217,4 +1222,259 @@ export async function tokenAccountOwner(conn: Connection, address: PublicKey): P
   }
   if (info.data.length < 64) throw new Error("token account data too short");
   return new PublicKey(info.data.subarray(32, 64));
+}
+
+export const TRADE_RULE_DISCRIMINATOR = Buffer.from([71, 199, 163, 41, 101, 116, 241, 212]);
+
+export const TRADE_LEDGER_DISCRIMINATOR = Buffer.from([200, 191, 201, 165, 93, 179, 79, 190]);
+
+const TRADE_LEDGER_CAPACITY = 32;
+const TRADE_ENTRY_SIZE = 88;
+const TRADE_LEDGER_HEADER_SIZE = 40;
+
+function need(data: Buffer, offset: number, length: number, what: string): void {
+  if (offset < 0 || offset + length > data.length) throw new Error(`${what} overruns account data`);
+}
+export type TradeRuleAccount = {
+  owner: PublicKey;
+  agent: PublicKey;
+  source: PublicKey;
+  destination: PublicKey;
+  inMint: PublicKey;
+  outMint: PublicKey;
+  exchangeProgram: PublicKey;
+  exchangeKind: number;
+  pool: PublicKey;
+  poolAuthority: PublicKey;
+  poolInVault: PublicKey;
+  poolOutVault: PublicKey;
+  poolMint: PublicKey;
+  poolFeeAccount: PublicKey;
+  ruleId: bigint;
+  cap: bigint;
+  spent: bigint;
+  perTradeMax: bigint;
+  dailyLimit: bigint;
+  windowSpent: bigint;
+  windowStart: bigint;
+  floorNum: bigint;
+  floorDen: bigint;
+  expiresAt: bigint;
+  overrideAmount: bigint;
+  overrideNonce: bigint;
+  lastNonce: bigint;
+  purpose: string;
+  status: number;
+  tradeCount: number;
+  refusalCount: number;
+  bump: number;
+};
+
+export type TradeLedgerEntry = {
+  ts: bigint;
+  amountIn: bigint;
+  amountOut: bigint;
+  minOut: bigint;
+  counterparty: PublicKey;
+  nonce: bigint;
+  suggestedOverride: bigint;
+  kind: number;
+  reason: number;
+};
+
+export type TradeLedgerAccount = {
+  rule: PublicKey;
+  total: number;
+  head: number;
+  bump: number;
+  /** Live ring entries, oldest first. */
+  entries: TradeLedgerEntry[];
+};
+
+/** PDA seeds: "trade", owner, rule id as a u64 little-endian. */
+export function tradeRulePda(programId: PublicKey, owner: PublicKey, ruleId: bigint): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("trade"), owner.toBuffer(), u64Le(ruleId)],
+    programId,
+  );
+  return pda;
+}
+
+/** PDA seeds: "trade-ledger", rule address. */
+export function tradeLedgerPda(programId: PublicKey, rule: PublicKey): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("trade-ledger"), rule.toBuffer()],
+    programId,
+  );
+  return pda;
+}
+
+export function decodeTradeRule(data: Buffer): TradeRuleAccount {
+  requireDisc(data, TRADE_RULE_DISCRIMINATOR, "TradeRule");
+  let o = 8;
+  let owner: PublicKey;
+  let agent: PublicKey;
+  let source: PublicKey;
+  let destination: PublicKey;
+  let inMint: PublicKey;
+  let outMint: PublicKey;
+  let exchangeProgram: PublicKey;
+  let exchangeKind: number;
+  let pool: PublicKey;
+  let poolAuthority: PublicKey;
+  let poolInVault: PublicKey;
+  let poolOutVault: PublicKey;
+  let poolMint: PublicKey;
+  let poolFeeAccount: PublicKey;
+  [owner, o] = readPubkey(data, o);
+  [agent, o] = readPubkey(data, o);
+  [source, o] = readPubkey(data, o);
+  [destination, o] = readPubkey(data, o);
+  [inMint, o] = readPubkey(data, o);
+  [outMint, o] = readPubkey(data, o);
+  [exchangeProgram, o] = readPubkey(data, o);
+  [exchangeKind, o] = readU8(data, o);
+  [pool, o] = readPubkey(data, o);
+  [poolAuthority, o] = readPubkey(data, o);
+  [poolInVault, o] = readPubkey(data, o);
+  [poolOutVault, o] = readPubkey(data, o);
+  [poolMint, o] = readPubkey(data, o);
+  [poolFeeAccount, o] = readPubkey(data, o);
+  let ruleId: bigint;
+  let cap: bigint;
+  let spent: bigint;
+  let perTradeMax: bigint;
+  let dailyLimit: bigint;
+  let windowSpent: bigint;
+  let windowStart: bigint;
+  let floorNum: bigint;
+  let floorDen: bigint;
+  let expiresAt: bigint;
+  let overrideAmount: bigint;
+  let overrideNonce: bigint;
+  let lastNonce: bigint;
+  let purpose: string;
+  let status: number;
+  let tradeCount: number;
+  let refusalCount: number;
+  let bump: number;
+  [ruleId, o] = readU64(data, o);
+  [cap, o] = readU64(data, o);
+  [spent, o] = readU64(data, o);
+  [perTradeMax, o] = readU64(data, o);
+  [dailyLimit, o] = readU64(data, o);
+  [windowSpent, o] = readU64(data, o);
+  [windowStart, o] = readI64(data, o);
+  [floorNum, o] = readU64(data, o);
+  [floorDen, o] = readU64(data, o);
+  [expiresAt, o] = readI64(data, o);
+  [overrideAmount, o] = readU64(data, o);
+  [overrideNonce, o] = readU64(data, o);
+  [lastNonce, o] = readU64(data, o);
+  [purpose, o] = readString(data, o);
+  [status, o] = readU8(data, o);
+  [tradeCount, o] = readU32(data, o);
+  [refusalCount, o] = readU32(data, o);
+  [bump] = readU8(data, o);
+  return {
+    owner,
+    agent,
+    source,
+    destination,
+    inMint,
+    outMint,
+    exchangeProgram,
+    exchangeKind,
+    pool,
+    poolAuthority,
+    poolInVault,
+    poolOutVault,
+    poolMint,
+    poolFeeAccount,
+    ruleId,
+    cap,
+    spent,
+    perTradeMax,
+    dailyLimit,
+    windowSpent,
+    windowStart,
+    floorNum,
+    floorDen,
+    expiresAt,
+    overrideAmount,
+    overrideNonce,
+    lastNonce,
+    purpose,
+    status,
+    tradeCount,
+    refusalCount,
+    bump,
+  };
+}
+
+function decodeTradeEntry(data: Buffer, offset: number): TradeLedgerEntry {
+  need(data, offset, TRADE_ENTRY_SIZE, "trade ledger entry");
+  return {
+    ts: data.readBigInt64LE(offset),
+    amountIn: data.readBigUInt64LE(offset + 8),
+    amountOut: data.readBigUInt64LE(offset + 16),
+    minOut: data.readBigUInt64LE(offset + 24),
+    counterparty: new PublicKey(data.subarray(offset + 32, offset + 64)),
+    nonce: data.readBigUInt64LE(offset + 64),
+    suggestedOverride: data.readBigUInt64LE(offset + 72),
+    kind: data.readUInt8(offset + 80),
+    reason: data.readUInt8(offset + 81),
+  };
+}
+
+export function decodeTradeLedger(data: Buffer): TradeLedgerAccount {
+  requireDisc(data, TRADE_LEDGER_DISCRIMINATOR, "TradeLedger");
+  const min = 8 + TRADE_LEDGER_HEADER_SIZE + TRADE_LEDGER_CAPACITY * TRADE_ENTRY_SIZE;
+  if (data.length < min) {
+    throw new Error(`TradeLedger account is ${data.length} bytes, need ${min}`);
+  }
+  const total = data.readUInt32LE(40);
+  const head = data.readUInt16LE(44);
+  const live = Math.min(total, TRADE_LEDGER_CAPACITY);
+  const start = total >= TRADE_LEDGER_CAPACITY ? head % TRADE_LEDGER_CAPACITY : 0;
+  const entries: TradeLedgerEntry[] = [];
+  const base = 8 + TRADE_LEDGER_HEADER_SIZE;
+  for (let n = 0; n < live; n += 1) {
+    const index = (start + n) % TRADE_LEDGER_CAPACITY;
+    entries.push(decodeTradeEntry(data, base + index * TRADE_ENTRY_SIZE));
+  }
+  return {
+    rule: new PublicKey(data.subarray(8, 40)),
+    total,
+    head,
+    bump: data.readUInt8(46),
+    entries,
+  };
+}
+
+export type TradeIx = { amountIn: bigint; minOut: bigint; nonce: bigint; accounts: PublicKey[] };
+const TRADE_DISCRIMINATOR = Buffer.from([178, 144, 26, 216, 241, 187, 206, 130]);
+export function parseTradeFromTx(tx: RpcTx, programId: PublicKey): TradeIx[] {
+  const keys = flattenAccountKeys(tx, tx.meta?.loadedAddresses);
+  const msg = tx.transaction.message;
+  const instructions = [
+    ...(msg.compiledInstructions ?? msg.instructions ?? []),
+    ...(tx.meta?.innerInstructions ?? []).flatMap((group) => group.instructions ?? []),
+  ];
+  const out: TradeIx[] = [];
+  for (const ix of instructions) {
+    if (!keys[ix.programIdIndex]?.equals(programId)) continue;
+    const data = ixData(ix.data);
+    if (!data.subarray(0, 8).equals(TRADE_DISCRIMINATOR)) continue;
+    const indexes = "accountKeyIndexes" in ix ? ix.accountKeyIndexes : ix.accounts;
+    if (data.length !== 32 || !indexes || indexes.length !== 13) throw new Error("malformed trade instruction");
+    const accounts = indexes.map((i) => { if (!keys[i]) throw new Error("missing trade account"); return keys[i]!; });
+    out.push({ amountIn: data.readBigUInt64LE(8), minOut: data.readBigUInt64LE(16), nonce: data.readBigUInt64LE(24), accounts });
+  }
+  return out;
+}
+export function tradeReasonText(code: number): string {
+  if (code === 1) return "rule not active";
+  if (code === 5) return "over per-trade maximum";
+  return reasonText(code);
 }
