@@ -8,6 +8,152 @@
   },
   "instructions": [
     {
+      "name": "apply_change",
+      "discriminator": [
+        248,
+        177,
+        9,
+        41,
+        50,
+        98,
+        255,
+        50
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.owner",
+                "account": "HoldVault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vault_id",
+                "account": "HoldVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_change",
+      "discriminator": [
+        100,
+        30,
+        4,
+        148,
+        3,
+        244,
+        243,
+        168
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.owner",
+                "account": "HoldVault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vault_id",
+                "account": "HoldVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "charge",
       "discriminator": [
         26,
@@ -138,6 +284,325 @@
       "args": []
     },
     {
+      "name": "deposit",
+      "discriminator": [
+        242,
+        35,
+        198,
+        137,
+        82,
+        225,
+        242,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vault_id",
+                "account": "HoldVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "vault_token",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          },
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "execute",
+      "discriminator": [
+        130,
+        221,
+        242,
+        154,
+        13,
+        193,
+        189,
+        29
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.owner",
+                "account": "HoldVault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vault_id",
+                "account": "HoldVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_token",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          },
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "freeze",
+      "discriminator": [
+        255,
+        91,
+        207,
+        84,
+        251,
+        194,
+        254,
+        63
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.owner",
+                "account": "HoldVault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vault_id",
+                "account": "HoldVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "grant_override",
       "discriminator": [
         225,
@@ -203,6 +668,126 @@
         {
           "name": "nonce",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "init_vault",
+      "discriminator": [
+        77,
+        79,
+        85,
+        150,
+        33,
+        217,
+        52,
+        106
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "args.vault_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_token",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "InitVaultArgs"
+            }
+          }
         }
       ]
     },
@@ -302,6 +887,210 @@
       ]
     },
     {
+      "name": "propose_change",
+      "discriminator": [
+        167,
+        211,
+        18,
+        222,
+        93,
+        215,
+        74,
+        159
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vault_id",
+                "account": "HoldVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "values",
+          "type": {
+            "defined": {
+              "name": "HoldChange"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "recover",
+      "discriminator": [
+        108,
+        216,
+        38,
+        58,
+        109,
+        146,
+        116,
+        17
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.owner",
+                "account": "HoldVault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vault_id",
+                "account": "HoldVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_token",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          },
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "revoke_mandate",
       "discriminator": [
         252,
@@ -360,9 +1149,451 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "skip",
+      "discriminator": [
+        154,
+        63,
+        181,
+        53,
+        19,
+        26,
+        117,
+        45
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "guardian",
+          "signer": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vault_id",
+                "account": "HoldVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_token",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          },
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "stop",
+      "discriminator": [
+        42,
+        133,
+        32,
+        60,
+        171,
+        253,
+        184,
+        155
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.owner",
+                "account": "HoldVault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vault_id",
+                "account": "HoldVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "unfreeze",
+      "discriminator": [
+        133,
+        160,
+        68,
+        253,
+        80,
+        232,
+        218,
+        247
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "guardian",
+          "signer": true,
+          "optional": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vault_id",
+                "account": "HoldVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "withdraw",
+      "discriminator": [
+        183,
+        18,
+        70,
+        156,
+        148,
+        109,
+        161,
+        34
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vault_id",
+                "account": "HoldVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_token",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  45,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          },
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
+    {
+      "name": "HoldLedger",
+      "discriminator": [
+        195,
+        103,
+        143,
+        50,
+        70,
+        255,
+        84,
+        161
+      ]
+    },
+    {
+      "name": "HoldVault",
+      "discriminator": [
+        225,
+        219,
+        122,
+        198,
+        245,
+        163,
+        91,
+        55
+      ]
+    },
     {
       "name": "Ledger",
       "discriminator": [
@@ -391,6 +1622,201 @@
     }
   ],
   "events": [
+    {
+      "name": "HoldChangeApplied",
+      "discriminator": [
+        214,
+        73,
+        25,
+        25,
+        100,
+        242,
+        158,
+        103
+      ]
+    },
+    {
+      "name": "HoldChangeCancelled",
+      "discriminator": [
+        105,
+        91,
+        17,
+        180,
+        121,
+        125,
+        6,
+        176
+      ]
+    },
+    {
+      "name": "HoldChangeProposed",
+      "discriminator": [
+        10,
+        12,
+        18,
+        221,
+        178,
+        129,
+        99,
+        89
+      ]
+    },
+    {
+      "name": "HoldDeposited",
+      "discriminator": [
+        14,
+        183,
+        196,
+        175,
+        23,
+        89,
+        172,
+        201
+      ]
+    },
+    {
+      "name": "HoldExecuted",
+      "discriminator": [
+        0,
+        66,
+        40,
+        156,
+        42,
+        195,
+        127,
+        203
+      ]
+    },
+    {
+      "name": "HoldFrozen",
+      "discriminator": [
+        109,
+        125,
+        222,
+        166,
+        136,
+        63,
+        153,
+        164
+      ]
+    },
+    {
+      "name": "HoldHeld",
+      "discriminator": [
+        213,
+        77,
+        28,
+        129,
+        215,
+        57,
+        137,
+        224
+      ]
+    },
+    {
+      "name": "HoldOpened",
+      "discriminator": [
+        43,
+        30,
+        161,
+        191,
+        183,
+        229,
+        201,
+        113
+      ]
+    },
+    {
+      "name": "HoldPaid",
+      "discriminator": [
+        75,
+        217,
+        168,
+        36,
+        135,
+        161,
+        113,
+        223
+      ]
+    },
+    {
+      "name": "HoldRecovered",
+      "discriminator": [
+        26,
+        178,
+        12,
+        148,
+        227,
+        199,
+        14,
+        232
+      ]
+    },
+    {
+      "name": "HoldRefused",
+      "discriminator": [
+        154,
+        131,
+        154,
+        169,
+        135,
+        21,
+        58,
+        52
+      ]
+    },
+    {
+      "name": "HoldSkipped",
+      "discriminator": [
+        26,
+        204,
+        98,
+        122,
+        152,
+        219,
+        27,
+        65
+      ]
+    },
+    {
+      "name": "HoldStopped",
+      "discriminator": [
+        204,
+        29,
+        182,
+        240,
+        51,
+        231,
+        188,
+        149
+      ]
+    },
+    {
+      "name": "HoldUnfreezeScheduled",
+      "discriminator": [
+        158,
+        133,
+        180,
+        244,
+        162,
+        69,
+        74,
+        117
+      ]
+    },
+    {
+      "name": "HoldUnfrozen",
+      "discriminator": [
+        115,
+        249,
+        65,
+        139,
+        158,
+        138,
+        7,
+        112
+      ]
+    },
     {
       "name": "Paid",
       "discriminator": [
@@ -523,6 +1949,151 @@
       "code": 6020,
       "name": "NonceAlreadySettled",
       "msg": "override nonce is at or below the last paid nonce"
+    },
+    {
+      "code": 6021,
+      "name": "DelayNotAllowed",
+      "msg": "delay must be 1, 2, or 3 days"
+    },
+    {
+      "code": 6022,
+      "name": "ShareOutOfRange",
+      "msg": "share must be between 0 and 10000 basis points"
+    },
+    {
+      "code": 6023,
+      "name": "SafeAddressRequired",
+      "msg": "safe address is required"
+    },
+    {
+      "code": 6024,
+      "name": "GuardianIsOwner",
+      "msg": "the guardian must be a different key from the owner"
+    },
+    {
+      "code": 6025,
+      "name": "PositiveAmountRequired",
+      "msg": "amount must be greater than zero"
+    },
+    {
+      "code": 6026,
+      "name": "HoldMathOverflow",
+      "msg": "arithmetic overflow"
+    },
+    {
+      "code": 6027,
+      "name": "NotTheVaultOwner",
+      "msg": "signer is not the owner of this vault"
+    },
+    {
+      "code": 6028,
+      "name": "NotOwnerOrGuardian",
+      "msg": "signer is not the owner or the guardian"
+    },
+    {
+      "code": 6029,
+      "name": "NotTheGuardian",
+      "msg": "signer is not the guardian"
+    },
+    {
+      "code": 6030,
+      "name": "BothKeysRequired",
+      "msg": "both the owner and the guardian must sign"
+    },
+    {
+      "code": 6031,
+      "name": "InvalidVaultPda",
+      "msg": "vault address does not match its stored fields"
+    },
+    {
+      "code": 6032,
+      "name": "VaultTokenMismatch",
+      "msg": "vault token account does not match the vault"
+    },
+    {
+      "code": 6033,
+      "name": "HoldMintMismatch",
+      "msg": "token mint does not match the vault"
+    },
+    {
+      "code": 6034,
+      "name": "HoldSourceNotOwned",
+      "msg": "source token account is not owned by the vault owner"
+    },
+    {
+      "code": 6035,
+      "name": "DestinationIsVault",
+      "msg": "destination is the vault token account"
+    },
+    {
+      "code": 6036,
+      "name": "DestinationMismatch",
+      "msg": "destination does not match the pending withdrawal"
+    },
+    {
+      "code": 6037,
+      "name": "NotTheSafeAddress",
+      "msg": "destination is not the safe address"
+    },
+    {
+      "code": 6038,
+      "name": "WithdrawalNotPending",
+      "msg": "withdrawal is not pending"
+    },
+    {
+      "code": 6039,
+      "name": "TooEarly",
+      "msg": "the chain clock has not reached the unlock time"
+    },
+    {
+      "code": 6040,
+      "name": "VaultFrozen",
+      "msg": "the vault is frozen"
+    },
+    {
+      "code": 6041,
+      "name": "NotFrozen",
+      "msg": "the vault is not frozen"
+    },
+    {
+      "code": 6042,
+      "name": "UnfreezeNotReady",
+      "msg": "unfreeze is still waiting on the chain clock"
+    },
+    {
+      "code": 6043,
+      "name": "ChangeAlreadyPending",
+      "msg": "a loosening change is already pending"
+    },
+    {
+      "code": 6044,
+      "name": "NoPendingChange",
+      "msg": "there is no pending change"
+    },
+    {
+      "code": 6045,
+      "name": "ChangeNotReady",
+      "msg": "the chain clock has not reached the change"
+    },
+    {
+      "code": 6046,
+      "name": "ChangeUnchanged",
+      "msg": "the proposed values match the current rules"
+    },
+    {
+      "code": 6047,
+      "name": "NothingToRecover",
+      "msg": "the vault token account is empty"
+    },
+    {
+      "code": 6048,
+      "name": "HoldInsufficientFunds",
+      "msg": "the vault cannot cover this withdrawal"
+    },
+    {
+      "code": 6049,
+      "name": "BadVaultAuthority",
+      "msg": "token account authority is not the vault"
     }
   ],
   "types": [
@@ -571,6 +2142,575 @@
                 6
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldChange",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          },
+          {
+            "name": "delay_secs",
+            "type": "i64"
+          },
+          {
+            "name": "big_share_bps",
+            "type": "u16"
+          },
+          {
+            "name": "guardian",
+            "type": "pubkey"
+          },
+          {
+            "name": "safe_address",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldChangeApplied",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "fields",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldChangeCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldChangeProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "effective_at",
+            "type": "i64"
+          },
+          {
+            "name": "fields",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldDeposited",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldEntry",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ts",
+            "type": "i64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          },
+          {
+            "name": "withdrawal_id",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "reason",
+            "type": "u8"
+          },
+          {
+            "name": "_pad",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldFrozen",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "by",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldHeld",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          },
+          {
+            "name": "unlock_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldLedger",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "total",
+            "type": "u32"
+          },
+          {
+            "name": "head",
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_pad",
+            "type": {
+              "array": [
+                "u8",
+                1
+              ]
+            }
+          },
+          {
+            "name": "entries",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "HoldEntry"
+                  }
+                },
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "guardian",
+            "type": "pubkey"
+          },
+          {
+            "name": "safe_address",
+            "type": "pubkey"
+          },
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          },
+          {
+            "name": "delay_secs",
+            "type": "i64"
+          },
+          {
+            "name": "big_share_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldPaid",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldRecovered",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldRefused",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          },
+          {
+            "name": "reason",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldSkipped",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldStopped",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldUnfreezeScheduled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "effective_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldUnfrozen",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldVault",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "guardian",
+            "type": "pubkey"
+          },
+          {
+            "name": "safe_address",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_token",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_id",
+            "type": "u64"
+          },
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          },
+          {
+            "name": "window_spent",
+            "type": "u64"
+          },
+          {
+            "name": "window_start",
+            "type": "i64"
+          },
+          {
+            "name": "delay_secs",
+            "type": "i64"
+          },
+          {
+            "name": "unfreeze_at",
+            "type": "i64"
+          },
+          {
+            "name": "next_withdrawal_id",
+            "type": "u64"
+          },
+          {
+            "name": "big_share_bps",
+            "type": "u16"
+          },
+          {
+            "name": "frozen",
+            "type": "bool"
+          },
+          {
+            "name": "known_len",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "token_bump",
+            "type": "u8"
+          },
+          {
+            "name": "ledger_bump",
+            "type": "u8"
+          },
+          {
+            "name": "known",
+            "type": {
+              "array": [
+                "pubkey",
+                16
+              ]
+            }
+          },
+          {
+            "name": "pending",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "PendingWithdrawal"
+                  }
+                },
+                8
+              ]
+            }
+          },
+          {
+            "name": "change",
+            "type": {
+              "defined": {
+                "name": "PendingChange"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitVaultArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          },
+          {
+            "name": "guardian",
+            "type": "pubkey"
+          },
+          {
+            "name": "safe_address",
+            "type": "pubkey"
+          },
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          },
+          {
+            "name": "delay_secs",
+            "type": "i64"
+          },
+          {
+            "name": "big_share_bps",
+            "type": "u16"
           }
         ]
       }
@@ -761,6 +2901,74 @@
           {
             "name": "spent",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingChange",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "fields",
+            "type": "u8"
+          },
+          {
+            "name": "big_share_bps",
+            "type": "u16"
+          },
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          },
+          {
+            "name": "delay_secs",
+            "type": "i64"
+          },
+          {
+            "name": "guardian",
+            "type": "pubkey"
+          },
+          {
+            "name": "safe_address",
+            "type": "pubkey"
+          },
+          {
+            "name": "effective_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingWithdrawal",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          },
+          {
+            "name": "unlock_at",
+            "type": "i64"
+          },
+          {
+            "name": "status",
+            "type": "u8"
           }
         ]
       }
