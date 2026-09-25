@@ -1,0 +1,40 @@
+{
+  "tool": "veto-loadtest-cu",
+  "measurement": "LiteSVM 0.10 single-threaded compute units per decision. Cost per instruction, not throughput.",
+  "simulator": "LiteSVM 0.10, single-threaded",
+  "program": "target/deploy/veto.so (SBPFv0, ANCHOR_BUILD_SBF_ARCH=v0 anchor build --ignore-keys)",
+  "mandates": 5000,
+  "charges_per_mandate": 40,
+  "total_charges": 200000,
+  "unexpected_outcomes": 0,
+  "open_mandate": {"count": 5000, "min": 23074, "p50": 26074, "p95": 32074, "max": 47074, "mean": 26081.5},
+  "charge_paid": {"count": 100000, "min": 20156, "p50": 20186, "p95": 26162, "max": 44165, "mean": 21650.8},
+  "charge_refused_over_per_tx_max": {"count": 100000, "min": 12392, "p50": 12417, "p95": 18392, "max": 36396, "mean": 13881.7},
+  "veto_only_consumed": {
+    "method": "veto program consumed log line minus the SPL token consumed log line (paid only); refused has no CPI",
+    "paid_p50": 13906,
+    "refused_p50": 12417
+  },
+  "ring_wrap": {
+    "capacity": 32,
+    "method": "per-mandate paired delta of transaction-total CU, after wrap minus before wrap",
+    "paid_mean_delta": -0.94,
+    "paid_max_abs_delta": 0.94,
+    "paid_mandates": 5000,
+    "refused_mean_delta": -3.20,
+    "refused_max_abs_delta": 3.20,
+    "refused_mandates": 5000,
+    "conclusion": "ring wrap does not change compute units"
+  },
+  "devnet_cross_check": {
+    "paid_litesvm_veto_only_p50": 13906,
+    "paid_devnet": 14011,
+    "paid_delta": -105,
+    "refused_litesvm_veto_only_p50": 12417,
+    "refused_devnet": 12417,
+    "refused_delta": 0,
+    "paid_litesvm_tx_total_p50": 20186,
+    "refused_litesvm_tx_total_p50": 12417
+  },
+  "run_wall_seconds": 38.0
+}
