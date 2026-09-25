@@ -22,17 +22,17 @@ The example prints kind, reason code, reason text, suggested override, signature
 
 ## SKR charges
 
-`examples/skr-once.ts` targets the contained mainnet rule described in `docs/MAINNET.md` at the repository root. That guide is not present in this checkout; use the owner-provided rule address and agent key.
+`examples/skr-once.ts` demonstrates two charges. The program runs on devnet today, not mainnet. To run against a devnet rule, set `VETO_MINT` to that rule's actual mint, for example the 6-decimal second mint. The SKR default applies once the contained mainnet rule exists.
 
 From `sdk/`, with `VETO_RPC` already set in your environment:
 
 ```bash
-VETO_RULE=<rule-address> VETO_AGENT_KEY=<agent-key.json> npx tsx examples/skr-once.ts
+VETO_MINT=<actual-devnet-rule-mint> VETO_RULE=<rule-address> VETO_AGENT_KEY=<agent-key.json> npx tsx examples/skr-once.ts
 ```
 
 `VETO_RPC` is required and is never printed, including on failure. `VETO_RULE` is the mandate address and `VETO_AGENT_KEY` is the path to its agent's JSON secret key array. `VETO_MINT` defaults to `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`. The configured mint must match the rule and have 6 decimals; a mismatch stops execution before any charge.
 
-The example submits 8 SKR (8,000,000 base units), expects a paid decision, then submits 25 SKR (25,000,000 base units) and expects a refusal. Each result prints the amount, decision, reason code, reason text, signature, and slot. An unexpected decision exits nonzero. Use an active, funded rule with at least 8 SKR remaining, a per-payment maximum of at least 8 and below 25 SKR, no pending override, and enough agent SOL for transaction fees. Each run can spend another 8 SKR and incurs fees for both transactions.
+The example submits 8 SKR (8,000,000 base units), expects a paid decision with reason code 0, then submits 25 SKR (25,000,000 base units) and expects a refusal with reason code 5 (over the per-payment maximum). With a devnet mint override, these amounts are units of that mint; the output keeps the SKR label. Each result prints the amount, decision, reason code, reason text, signature, and slot. An unexpected decision or reason code exits nonzero. Local precheck messages are printed; other errors are suppressed. The example checks that the rule is active and has not expired according to the local clock before submitting. Use an active, unexpired, funded rule with at least 8 SKR remaining, a per-payment maximum of at least 8 and below 25 SKR, no pending override, and enough agent SOL for transaction fees. Each run can spend another 8 SKR and incurs fees for both transactions.
 
 `npm run typecheck:examples` checks this example and the existing examples using `tsconfig.test.json`, without executing them or accessing the network.
 
