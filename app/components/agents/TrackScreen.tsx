@@ -1,3 +1,4 @@
+import { redactRpc } from '../../lib/rpcPrivacy';
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -40,7 +41,7 @@ export function TrackScreen({
     try {
       await action();
     } catch (err) {
-      setShareError(err instanceof Error ? err.message : 'The share did not finish.');
+      setShareError(err instanceof Error ? redactRpc(err.message) : 'The share did not finish.');
     }
   }
 

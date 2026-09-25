@@ -1,3 +1,4 @@
+import { redactRpc } from './rpcPrivacy';
 import { KIND_ADVISORY_DECLINE } from './advisory';
 import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, kindName, statusName } from './constants';
 import type { RingEntry } from './ring';
@@ -155,7 +156,7 @@ export function explorerTxUrl(
   if (cluster === 'devnet' || cluster === 'testnet' || cluster === 'mainnet-beta') {
     return `https://explorer.solana.com/tx/${signature}?cluster=${cluster}`;
   }
-  const custom = encodeURIComponent(rpcUrl);
+  const custom = encodeURIComponent(redactRpc(rpcUrl));
   return `https://explorer.solana.com/tx/${signature}?cluster=custom&customUrl=${custom}`;
 }
 

@@ -1,3 +1,4 @@
+import { redactRpc } from '../../lib/rpcPrivacy';
 import { PublicKey } from '@solana/web3.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -135,7 +136,7 @@ export function useAgentHistories(): AgentScreenData {
           return;
         }
         setRules(null);
-        setLoadError(err instanceof Error ? err.message : 'The record could not be read.');
+        setLoadError(err instanceof Error ? redactRpc(err.message) : 'The record could not be read.');
       } finally {
         if (alive) {
           setFetching(false);

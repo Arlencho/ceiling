@@ -1,3 +1,4 @@
+import { redactRpc } from './rpcPrivacy';
 import { PublicKey } from '@solana/web3.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -76,7 +77,7 @@ export function useHoldBundle(address: string) {
       return next;
     } catch (err) {
       setStatus('error');
-      setError(err instanceof Error ? err.message : 'The vault could not be read.');
+      setError(err instanceof Error ? redactRpc(err.message) : 'The vault could not be read.');
     }
   }, [address, session.chain.configError, session.client]);
 

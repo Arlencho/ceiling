@@ -1,3 +1,4 @@
+import { redactRpc } from './rpcPrivacy';
 import { useCallback, useEffect, useState } from 'react';
 
 import { KIND_REFUSED } from './constants';
@@ -99,7 +100,7 @@ export function useOverrideGrant(args: {
         setConfirmKey(null);
       })
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Override failed');
+        setError(err instanceof Error ? redactRpc(err.message) : 'Override failed');
       })
       .finally(() => {
         setSigning(false);

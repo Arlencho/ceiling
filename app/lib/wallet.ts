@@ -1,3 +1,4 @@
+import { redactRpc } from './rpcPrivacy';
 import { Buffer } from 'buffer';
 import { Connection, Keypair, PublicKey, Transaction } from '@solana/web3.js';
 
@@ -229,7 +230,7 @@ function parseAgentSecret(raw: string): Keypair {
     }
     return Keypair.fromSecretKey(secret);
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
+    const detail = err instanceof Error ? redactRpc(err.message) : redactRpc(String(err));
     throw readFailed(detail);
   }
 }
@@ -242,7 +243,7 @@ function parseAgentsMap(raw: string): Record<string, string> {
     }
     return parsed as Record<string, string>;
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
+    const detail = err instanceof Error ? redactRpc(err.message) : redactRpc(String(err));
     throw readFailed(detail);
   }
 }
@@ -326,7 +327,7 @@ function numericCode(error: unknown): number | undefined {
 }
 
 export function explainWalletFailure(error: unknown, cluster: string): string {
-  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  const message = redactRpc(error instanceof Error ? error.message : typeof error === 'string' ? error : '');
   if (
     message === USER_CANCELLED_MESSAGE ||
     message === WALLET_REJECTED_MESSAGE ||

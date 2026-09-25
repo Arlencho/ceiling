@@ -1,3 +1,4 @@
+import { redactRpc } from '../../lib/rpcPrivacy';
 import { useRef, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -80,7 +81,7 @@ export function HoldSign({
       await onSign();
     } catch (err) {
       setResetKey((value) => value + 1);
-      setError(err instanceof Error ? err.message : 'The signature did not finish.');
+      setError(err instanceof Error ? redactRpc(err.message) : 'The signature did not finish.');
     } finally {
       busy.current = false;
     }

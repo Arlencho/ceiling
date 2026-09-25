@@ -1,3 +1,4 @@
+import { redactRpc } from '../../lib/rpcPrivacy';
 import { PublicKey } from '@solana/web3.js';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -158,7 +159,7 @@ export default function RuleDetailScreen() {
         if (!cancelled) {
           setLoadedFunds(null);
           setLoadedFor(null);
-          setLoadedError(err instanceof Error ? err.message : 'Could not read the rule account');
+          setLoadedError(err instanceof Error ? redactRpc(err.message) : 'Could not read the rule account');
           setErrorFor(ruleAddress);
         }
         return;
@@ -194,7 +195,7 @@ export default function RuleDetailScreen() {
         if (!cancelled) {
           setPayeeAccount(null);
           setPayeeFor(null);
-          setPayeeError(err instanceof Error ? err.message : 'Could not read the payee token account');
+          setPayeeError(err instanceof Error ? redactRpc(err.message) : 'Could not read the payee token account');
           setPayeeErrorFor(ruleAddress);
         }
       }
@@ -265,7 +266,7 @@ export default function RuleDetailScreen() {
       await Clipboard.setStringAsync(json);
       setMessage('Agent config copied.');
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Copy failed');
+      setFormError(err instanceof Error ? redactRpc(err.message) : 'Copy failed');
     }
   };
 
@@ -281,7 +282,7 @@ export default function RuleDetailScreen() {
       });
       setMessage('Agent address copied.');
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Copy failed');
+      setFormError(err instanceof Error ? redactRpc(err.message) : 'Copy failed');
     }
   };
 
@@ -304,7 +305,7 @@ export default function RuleDetailScreen() {
       setClosedNote(closedLine(gate.kind));
     } catch (err) {
       reopenHold = true;
-      setFormError(err instanceof Error ? err.message : 'Close failed');
+      setFormError(err instanceof Error ? redactRpc(err.message) : 'Close failed');
     } finally {
       setClosing(false);
       if (reopenHold) {
@@ -329,7 +330,7 @@ export default function RuleDetailScreen() {
         `Status on chain is now ${result.mandate.status === STATUS_REVOKED ? 'revoked' : String(result.mandate.status)}. The SPL delegation is dropped. Nothing already paid changes. The decisions stay readable.`,
       );
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Revoke failed');
+      setFormError(err instanceof Error ? redactRpc(err.message) : 'Revoke failed');
     }
   };
 

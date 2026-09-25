@@ -1,3 +1,4 @@
+import { redactRpc } from '../../lib/rpcPrivacy';
 import { PublicKey } from '@solana/web3.js';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -319,7 +320,7 @@ function RuleCompose({
       router.replace(`/rule/${result.mandate.address}`);
     } catch (err) {
       setHoldReset((value) => value + 1);
-      setFormError(err instanceof Error ? err.message : 'Open failed');
+      setFormError(err instanceof Error ? redactRpc(err.message) : 'Open failed');
     } finally {
       openingRef.current = false;
     }
@@ -348,7 +349,7 @@ function RuleCompose({
         `Saved ${saved.name} v${saved.version} on this phone. The ruleset itself is not on chain. Apply it to a new agent to stamp "${stamped}" into the purpose.`,
       );
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Save failed');
+      setFormError(err instanceof Error ? redactRpc(err.message) : 'Save failed');
     }
   };
 

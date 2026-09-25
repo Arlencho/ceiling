@@ -1,3 +1,4 @@
+import { redactRpc } from '../../lib/rpcPrivacy';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 
@@ -31,7 +32,7 @@ export default function AgentRoute() {
               router.push(FIRST_RUN_ROUTES.name);
             })
             .catch((err: unknown) => {
-              setError(err instanceof Error ? err.message : 'The test agent could not be created.');
+              setError(err instanceof Error ? redactRpc(err.message) : 'The test agent could not be created.');
             })
             .finally(() => {
               setBusy(false);

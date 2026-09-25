@@ -1,3 +1,4 @@
+import { redactRpc } from '../../lib/rpcPrivacy';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { PublicKey } from '@solana/web3.js';
@@ -56,7 +57,7 @@ export default function HoldAmount() {
         setHeld(null);
         setDecimals(null);
         setStatus('error');
-        setError(err instanceof Error ? err.message : 'The wallet balance could not be read.');
+        setError(err instanceof Error ? redactRpc(err.message) : 'The wallet balance could not be read.');
       }
     })();
     return () => {

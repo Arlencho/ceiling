@@ -1,3 +1,4 @@
+import { redactRpc } from './rpcPrivacy';
 import { Buffer } from 'buffer';
 
 import { qrModules } from './qrMatrix';
@@ -369,7 +370,7 @@ export function ruleCheckUrl(address: string, cluster: string, rpcUrl: string): 
   if (cluster === 'devnet' || cluster === 'testnet' || cluster === 'mainnet-beta') {
     return `https://explorer.solana.com/address/${address}?cluster=${cluster}`;
   }
-  return `https://explorer.solana.com/address/${address}?cluster=custom&customUrl=${encodeURIComponent(rpcUrl)}`;
+  return `https://explorer.solana.com/address/${address}?cluster=custom&customUrl=${encodeURIComponent(redactRpc(rpcUrl))}`;
 }
 
 export function trackRecordLayout(record: TrackRecord): ImageLayout {

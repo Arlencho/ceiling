@@ -1,3 +1,4 @@
+import { redactRpc } from './rpcPrivacy';
 import { Buffer } from 'buffer';
 import {
   ACCOUNT_SIZE,
@@ -894,7 +895,7 @@ export async function fetchAdvisoryDeclines(
   try {
     signatures = await listSignatures(client, mandate, 4);
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
+    const detail = err instanceof Error ? redactRpc(err.message) : redactRpc(String(err));
     throw new Error(`Failed to list mandate signatures: ${detail}`);
   }
   return readAdvisoryDeclines({
@@ -1074,7 +1075,7 @@ export async function fetchLedgerRows(
   try {
     signatures = await listSignatures(client, ledgerAddress, 4);
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
+    const detail = err instanceof Error ? redactRpc(err.message) : redactRpc(String(err));
     throw new Error(`Failed to list ledger signatures: ${detail}`);
   }
 

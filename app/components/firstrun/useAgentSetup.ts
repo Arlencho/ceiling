@@ -1,3 +1,4 @@
+import { redactRpc } from '../../lib/rpcPrivacy';
 import { PublicKey } from '@solana/web3.js';
 import { useEffect, useState } from 'react';
 
@@ -64,7 +65,7 @@ export function useAgentSetup(mandate: MandateAccount | null): AgentSetupState {
         try {
           funds = await readRuleFunds(client, mandate);
         } catch (err) {
-          fundsError = err instanceof Error ? err.message : 'Could not read the rule.';
+          fundsError = err instanceof Error ? redactRpc(err.message) : 'Could not read the rule.';
         }
         let payee: string | null = null;
         let payeeProblem: string | null = null;
@@ -78,7 +79,7 @@ export function useAgentSetup(mandate: MandateAccount | null): AgentSetupState {
             );
             payee = key.toBase58();
           } catch (err) {
-            payeeProblem = err instanceof Error ? err.message : 'Could not read the payee token account';
+            payeeProblem = err instanceof Error ? redactRpc(err.message) : 'Could not read the payee token account';
           }
         }
         const config =
@@ -118,7 +119,7 @@ export function useAgentSetup(mandate: MandateAccount | null): AgentSetupState {
           setState({
             ...IDLE,
             view: 'error',
-            error: err instanceof Error ? err.message : 'Could not prepare the setup.',
+            error: err instanceof Error ? redactRpc(err.message) : 'Could not prepare the setup.',
           });
         }
       }

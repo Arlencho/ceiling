@@ -1,3 +1,4 @@
+import { redactRpc } from '../../lib/rpcPrivacy';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -46,7 +47,7 @@ export default function QuietNoteRoute() {
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setSettingsError(err instanceof Error ? err.message : 'The quiet note settings could not be read.');
+          setSettingsError(err instanceof Error ? redactRpc(err.message) : 'The quiet note settings could not be read.');
         }
       });
     void loadAddressBook(secureStore)
@@ -161,7 +162,7 @@ export default function QuietNoteRoute() {
               setNotice(`The quiet note is set for ${when}.`);
             }
           } catch (err) {
-            setNotice(err instanceof Error ? err.message : 'The quiet note could not be saved.');
+            setNotice(err instanceof Error ? redactRpc(err.message) : 'The quiet note could not be saved.');
           } finally {
             setSaving(false);
           }
