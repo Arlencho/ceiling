@@ -7,7 +7,7 @@ CASE="$(mktemp -d)"
 trap 'rm -rf "$CASE"' EXIT
 mkdir -p "$CASE/bin" "$CASE/assets" "$CASE/output"
 # Keep PATH deterministic even when an Android SDK is installed on the host.
-for tool in bash dirname basename mktemp rm sed grep git unzip shasum wc tr cat chmod; do
+for tool in bash dirname basename mktemp rm sed grep git unzip shasum wc tr cat chmod sort; do
   ln -s "$(command -v "$tool")" "$CASE/bin/$tool"
 done
 export PATH="$CASE/bin"
@@ -24,9 +24,27 @@ if ! { [[ "$rc" -ne 0 ]] && grep -q 'APK file' "$CASE/stderr"; }; then fail 'ref
 echo 'ok - refuses a missing file'
 cat >"$CASE/bin/aapt2" <<'SDK'
 #!/usr/bin/env bash
-[[ "$1 $2" == 'dump badging' ]] || exit 1
-printf "package: name='app.veto' versionCode='7' versionName='1.2.3'\n"
-printf 'https://rpc.example.test/private-test-key\n' >&2
+if [[ "$1 $2" == 'dump badging' ]]; then
+  printf "package: name='%s' versionCode='7' versionName='1.2.3'\n" "${BADGING_PACKAGE:-com.veto.app}"
+  printf "sdkVersion:'23'\n"
+  printf "targetSdkVersion:'%s'\n" "${BADGING_SDK:-36}"
+  printf "uses-permission: name='android.permission.INTERNET'\n"
+  printf "uses-permission: name='android.permission.CAMERA'\n"
+  if [[ -n "${EXTRA_PERMISSION:-}" ]]; then printf "uses-permission: name='%s'\n" "$EXTRA_PERMISSION"; fi
+  printf 'https://rpc.example.test/private-test-key\n' >&2
+  exit 0
+fi
+if [[ "$1 $2" == 'dump xmltree' ]]; then
+  printf 'E: manifest\n'
+  if [[ -z "${NO_VETO_SCHEME:-}" ]]; then
+    printf '  A: http://schemas.android.com/apk/res/android:scheme(0x01010027)="veto" (Raw: "veto")\n'
+  fi
+  if [[ -n "${EXP_SCHEME:-}" ]]; then
+    printf '  A: http://schemas.android.com/apk/res/android:scheme(0x01010027)="exp+veto" (Raw: "exp+veto")\n'
+  fi
+  exit 0
+fi
+exit 1
 SDK
 cat >"$CASE/bin/apksigner" <<'SDK'
 #!/usr/bin/env bash
@@ -39,7 +57,7 @@ chmod +x "$CASE/bin/aapt2" "$CASE/bin/apksigner"
 # zip is only used to construct fixtures, outside the isolated PATH.
 ZIP=/usr/bin/zip
 bundle() {
-  printf '%s\000%s\000%s\n' "$1" "$2" "$3" >"$CASE/assets/index.android.bundle"
+  printf '%s\000%s\000%s\000%s\n' "$1" "$2" "$3" "${4:-devnet}" >"$CASE/assets/index.android.bundle"
   rm -f "$CASE/output/release.apk"
   (cd "$CASE" && "$ZIP" -q output/release.apk assets/index.android.bundle)
 }
@@ -50,7 +68,7 @@ bundle "$PROGRAM" "$MINT" "$EXPO_PUBLIC_VETO_RPC"
 run
 [[ "$rc" == 0 ]] || fail 'valid APK inspection succeeds'
 NOTES="$CASE/output/release-notes.md"
-for fact in 'Metadata tool: aapt2' 'Package: app.veto' 'versionCode: 7' 'versionName: 1.2.3' 'Signature verifies: yes' 'RPC present: yes' 'adb install release.apk' 'Solana devnet. Devnet USDC is a test token with no value.'; do
+for fact in 'Metadata tool: aapt2' 'Package: com.veto.app' 'versionCode: 7' 'versionName: 1.2.3' 'targetSdk: 36' 'Permission: android.permission.CAMERA' 'Permission: android.permission.INTERNET' 'Scheme: veto' 'Bundle names devnet: yes' 'Signature verifies: yes' 'RPC present: yes' 'adb install release.apk' 'Solana devnet. Devnet USDC is a test token with no value.'; do
   grep -Fxq "$fact" "$NOTES" || fail 'release notes contain the required facts'
 done
 grep -Fxq "Main commit: $(git -C "$ROOT" rev-parse main)" "$NOTES" || fail 'notes record main'
@@ -63,6 +81,30 @@ echo 'ok - produces notes without URLs from binary bundle or SDK output'
 SIGNATURE_FAIL=1 run
 if ! { [[ "$rc" -ne 0 ]] && grep -Fxq 'Signature verifies: no' "$NOTES"; }; then fail 'rejects failed signature'; fi
 echo 'ok - rejects failed signature'
+BADGING_PACKAGE=app.veto run
+if ! { [[ "$rc" -ne 0 ]] && grep -q 'not com.veto.app' "$CASE/stderr"; }; then fail 'rejects a wrong package'; fi
+echo 'ok - rejects a package that is not com.veto.app'
+BADGING_SDK=35 run
+if ! { [[ "$rc" -ne 0 ]] && grep -Fxq 'release-apk: targetSdk 35 is below 36' "$CASE/stderr"; }; then fail 'rejects targetSdk below 36'; fi
+echo 'ok - rejects targetSdk below 36'
+EXTRA_PERMISSION=android.permission.VIBRATE run
+if ! { [[ "$rc" -ne 0 ]] && grep -q 'blocked permission present: android.permission.VIBRATE' "$CASE/stderr"; }; then fail 'rejects a blocked permission'; fi
+echo 'ok - rejects a blocked permission from app.json'
+EXP_SCHEME=1 run
+if ! { [[ "$rc" -ne 0 ]] && grep -q 'development scheme present: exp+veto' "$CASE/stderr"; }; then fail 'rejects an exp+ scheme'; fi
+echo 'ok - rejects an exp+ scheme'
+NO_VETO_SCHEME=1 run
+if ! { [[ "$rc" -ne 0 ]] && grep -q 'veto scheme is missing' "$CASE/stderr"; }; then fail 'rejects a missing veto scheme'; fi
+echo 'ok - requires the veto scheme'
+bundle "$PROGRAM" "$MINT" "$EXPO_PUBLIC_VETO_RPC" 'mainnet-beta'
+run
+if ! { [[ "$rc" -ne 0 ]] && grep -q 'bundle names mainnet-beta' "$CASE/stderr"; }; then fail 'rejects a mainnet-beta bundle'; fi
+echo 'ok - rejects a bundle that names mainnet-beta'
+bundle "$PROGRAM" "$MINT" "$EXPO_PUBLIC_VETO_RPC" 'no-cluster-marker'
+run
+if ! { [[ "$rc" -ne 0 ]] && grep -Fxq 'Bundle names devnet: no' "$NOTES"; }; then fail 'rejects a bundle that does not name devnet'; fi
+echo 'ok - rejects a bundle that does not name devnet'
+bundle "$PROGRAM" "$MINT" "$EXPO_PUBLIC_VETO_RPC"
 for missing in program mint; do
   if [[ "$missing" == program ]]; then bundle '' "$MINT" ''; else bundle "$PROGRAM" '' ''; fi
   run
@@ -78,9 +120,12 @@ cat >"$CASE/bin/apkanalyzer" <<'SDK'
 #!/usr/bin/env bash
 [[ "$1" == manifest ]] || exit 1
 case "$2" in
-  application-id) echo app.veto ;;
+  application-id) echo com.veto.app ;;
   version-code) echo 7 ;;
   version-name) echo 1.2.3 ;;
+  target-sdk) echo 36 ;;
+  permissions) printf 'android.permission.INTERNET\nandroid.permission.CAMERA\n' ;;
+  print) printf '<manifest><application><data android:scheme="veto"/></application></manifest>\n' ;;
   *) exit 1 ;;
 esac
 SDK
