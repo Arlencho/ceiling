@@ -456,6 +456,13 @@ pub fn recover(ctx: Context<Recover>) -> Result<()> {
         VetoError::NotTheSafeAddress
     );
 
+    // These rows are claims on the balance that is about to leave. execute
+    // needs no key, so a row left in place pays the old destination out of
+    // the next deposit. Clear them before the transfer.
+    for slot in ctx.accounts.vault.pending.iter_mut() {
+        *slot = PendingWithdrawal::default();
+    }
+
     let info = ctx.accounts.vault.to_account_info();
     transfer_out_parts(
         info,
