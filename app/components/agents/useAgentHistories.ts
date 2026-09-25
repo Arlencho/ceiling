@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { loadAddressBook, saveAddressBook, withSavedName } from '../../lib/addressBook';
 import { createClient, fetchLedgerRows, fetchMintDecimals } from '../../lib/chain';
+import { fetchTradeLedgerRows } from '../../lib/tradeChain';
+import type { TradeRuleAccount } from '../../lib/tradeRule';
 import { STATUS_ACTIVE } from '../../lib/constants';
 import { describeAgentRead } from '../../lib/agentRead';
 import { buildAgentRecords, type AgentRecord, type GradeDecision, type RuleFacts } from '../../lib/grade';
@@ -11,6 +13,8 @@ import { secureStore } from '../../lib/mwa';
 import type { LedgerRow } from '../../lib/ring';
 import { displayPurpose } from '../../lib/ruleView';
 import { useChain } from '../../lib/useChain';
+
+const NO_TRADE_RULES: TradeRuleAccount[] = [];
 
 export type AgentScreenData = {
   status: 'loading' | 'empty' | 'error' | 'ready';
@@ -25,6 +29,22 @@ export type AgentScreenData = {
   refresh: () => void;
   saveName: (agent: string, name: string) => Promise<void>;
 };
+
+function tradeFacts(rule: TradeRuleAccount, decimals: number, rows: GradeDecision[]): RuleFacts {
+  return {
+    address: rule.address,
+    agent: rule.agent,
+    purpose: displayPurpose(rule.purpose),
+    cap: rule.cap,
+    spent: rule.spent,
+    perTxMax: rule.perTradeMax,
+    expiresAt: rule.expiresAt,
+    status: rule.status,
+    decimals,
+    mint: rule.inMint,
+    rows,
+  };
+}
 
 function toDecision(row: LedgerRow): GradeDecision {
   return {
@@ -73,7 +93,8 @@ export function useAgentHistories(): AgentScreenData {
     };
   }, [chain.nowMs]);
 
-  const mandateKey = chain.mandates.map((mandate) => mandate.address).join(',');
+  const tradeRules = chain.tradeRules ?? NO_TRADE_RULES;
+  const mandateKey = `${chain.mandates.map((mandate) => mandate.address).join(',')}|${tradeRules.map((rule) => rule.address).join(',')}`;
   const rowKey = chain.rows.map((row) => `${row.kind}:${row.nonce}:${row.ts}`).join(',');
 
   useEffect(() => {
@@ -83,11 +104,12 @@ export function useAgentHistories(): AgentScreenData {
     if (chain.mandateStatus === 'not-read' || chain.mandateStatus === 'rate-limited') {
       return;
     }
-    if (chain.mandates.length === 0) {
+    if (chain.mandates.length === 0 && tradeRules.length === 0) {
       return;
     }
     const config = chain.config;
     const mandates = chain.mandates;
+    const trades = tradeRules;
     const decimals = chain.decimals;
     let alive = true;
     void (async () => {
@@ -126,6 +148,16 @@ export function useAgentHistories(): AgentScreenData {
             rows: ledger.rows.map(toDecision),
           });
         }
+        for (const rule of trades) {
+          const ledger = await fetchTradeLedgerRows(client, rule);
+          let mintDecimals = decimals;
+          try {
+            mintDecimals = await fetchMintDecimals(client, new PublicKey(rule.inMint));
+          } catch {
+            mintDecimals = config.mintDecimals;
+          }
+          loaded.push(tradeFacts(rule, mintDecimals, ledger.rows.map(toDecision)));
+        }
         if (!alive) {
           return;
         }
@@ -146,14 +178,16 @@ export function useAgentHistories(): AgentScreenData {
     return () => {
       alive = false;
     };
-  }, [chain, chain.config, chain.decimals, chain.loading, chain.mandateStatus, chain.nowMs, chain.ready, mandateKey, rowKey]);
+  }, [chain, chain.config, chain.decimals, chain.loading, chain.mandateStatus, chain.nowMs, chain.ready, mandateKey, rowKey, tradeRules]);
 
   const nowSec = chain.nowMs > 0 ? BigInt(Math.floor(chain.nowMs / 1000)) : 0n;
+  const expected = chain.mandates.length + tradeRules.length;
   const aligned =
     rules != null &&
-    chain.mandates.length > 0 &&
-    rules.length === chain.mandates.length &&
-    chain.mandates.every((mandate) => rules.some((rule) => rule.address === mandate.address))
+    expected > 0 &&
+    rules.length === expected &&
+    chain.mandates.every((mandate) => rules.some((rule) => rule.address === mandate.address)) &&
+    tradeRules.every((rule) => rules.some((row) => row.address === rule.address))
       ? rules
       : null;
   const agents = useMemo(
@@ -172,7 +206,7 @@ export function useAgentHistories(): AgentScreenData {
     loadError,
     ready: chain.ready,
     nowMs: chain.nowMs,
-    mandateCount: chain.mandates.length,
+    mandateCount: chain.mandates.length + tradeRules.length,
     historiesReady: aligned != null,
   });
 

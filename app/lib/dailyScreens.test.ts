@@ -598,7 +598,7 @@ test('rules reads loading, empty, error, and a live rule from the chain', async 
   assert.match(textOf(root), /Scan a request/);
   assert.match(textOf(root), /Charging agent/);
   assert.match(textOf(root), /Cap a mint bot/);
-  assert.doesNotMatch(textOf(root), /Trading bot/);
+  assert.match(textOf(root), /Trading bot/);
   await act(async () => root.unmount());
 
   chain.mandateStatus = 'failed';

@@ -73,6 +73,21 @@ test('a 6232500-over-500000 per-payment refusal still has an override that would
   );
 });
 
+test('a trade over the per-trade maximum names the trade, not a payment', () => {
+  assert.equal(
+    refusalWhyLine({
+      reason: REASON_OVER_PER_TX_MAX,
+      amount: 2_000_000n,
+      suggestedOverride: 2_000_000n,
+      decimals: 9,
+      perTxMax: 1_000_000n,
+      mint: 'So11111111111111111111111111111111111111112',
+      unit: 'trade',
+    }),
+    'Asked for 0.002 wrapped SOL, over the 0.001 wrapped SOL per-trade maximum. An override of 0.002 wrapped SOL would have cleared it.',
+  );
+});
+
 test('a per-payment refusal with no override amount says so in plain language', () => {
   const overPer = renderReason(REASON_OVER_PER_TX_MAX, 0n, 6);
   assert.equal(overPer.overrideLine, 'No override would have cleared this.');

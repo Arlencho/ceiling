@@ -3,17 +3,23 @@ import { Buffer } from 'buffer';
 import {
   buffersEqual,
   CHARGE_IX_DISC,
+  CLOSE_TRADE_RULE_DISC,
   GRANT_OVERRIDE_DISC,
+  GRANT_TRADE_OVERRIDE_DISC,
   KIND_OPENED,
   KIND_OVERRIDE,
   KIND_PAID,
   KIND_REFUSED,
   KIND_REVOKED,
   OPEN_MANDATE_DISC,
+  OPEN_TRADE_RULE_DISC,
   PAID_EVENT_DISC,
   readU64Le,
   REFUSED_EVENT_DISC,
   REVOKE_MANDATE_DISC,
+  REVOKE_TRADE_RULE_DISC,
+  TRADE_REFUSED_EVENT_DISC,
+  TRADED_EVENT_DISC,
 } from './constants';
 import type { DecodedTxDecision } from './ring';
 
@@ -68,6 +74,31 @@ export function decodeEventBytes(signature: string, raw: Uint8Array): DecodedTxD
       suggestedOverride: readU64Le(raw, 57),
     };
   }
+  if (buffersEqual(disc, TRADED_EVENT_DISC)) {
+    if (raw.length < 72) {
+      return null;
+    }
+    return {
+      signature,
+      kind: KIND_PAID,
+      amount: readU64Le(raw, 40),
+      nonce: readU64Le(raw, 56),
+      reason: 0,
+    };
+  }
+  if (buffersEqual(disc, TRADE_REFUSED_EVENT_DISC)) {
+    if (raw.length < 73) {
+      return null;
+    }
+    return {
+      signature,
+      kind: KIND_REFUSED,
+      amount: readU64Le(raw, 40),
+      nonce: readU64Le(raw, 56),
+      reason: raw[64] ?? 0,
+      suggestedOverride: readU64Le(raw, 65),
+    };
+  }
   return null;
 }
 
@@ -97,8 +128,26 @@ export function decodeInstructionKind(
       reason: 0,
     };
   }
-  if (buffersEqual(disc, CHARGE_IX_DISC)) {
+  if (buffersEqual(disc, CHARGE_IX_DISC) || buffersEqual(disc, CLOSE_TRADE_RULE_DISC)) {
     return null;
+  }
+  if (buffersEqual(disc, OPEN_TRADE_RULE_DISC)) {
+    return { signature, kind: KIND_OPENED, amount: 0n, nonce: 0n, reason: 0 };
+  }
+  if (buffersEqual(disc, REVOKE_TRADE_RULE_DISC)) {
+    return { signature, kind: KIND_REVOKED, amount: 0n, nonce: 0n, reason: 0 };
+  }
+  if (buffersEqual(disc, GRANT_TRADE_OVERRIDE_DISC)) {
+    if (data.length < 24) {
+      return { signature, kind: KIND_OVERRIDE, amount: 0n, nonce: 0n, reason: 0 };
+    }
+    return {
+      signature,
+      kind: KIND_OVERRIDE,
+      amount: readU64Le(data, 8),
+      nonce: readU64Le(data, 16),
+      reason: 0,
+    };
   }
   return null;
 }

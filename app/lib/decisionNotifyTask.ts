@@ -5,6 +5,8 @@ import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 
 import { createClient, fetchLedger, fetchMintDecimals, fetchOwnerMandates } from './chain';
+import { fetchOwnerTradeRules, fetchTradeLedgerRows } from './tradeChain';
+import { poolByAddress } from './pools';
 import { tryLoadConfig } from './config';
 import type { MandateAccount } from './mandate';
 import { RATE_LIMIT_RETRY_MS } from './mandateRead';
@@ -164,6 +166,46 @@ async function scanOnce(): Promise<void> {
     } catch {
       unread += 1;
     }
+  }
+
+  try {
+    const tradeRules = await fetchOwnerTradeRules(client, owner);
+    for (const rule of tradeRules) {
+      try {
+        const ledger = await fetchTradeLedgerRows(client, rule);
+        const decimals = await decimalsForMint(client, rule.inMint, loaded.config.mintDecimals, decimalsCache);
+        const known = poolByAddress(rule.pool);
+        ledgers.push({
+          mandate: rule.address,
+          merchant: known?.pair ?? rule.pool,
+          perTxMax: rule.perTradeMax,
+          decimals,
+          mint: rule.inMint,
+          family: 'trade',
+          rows: ledger.rows.map((row) => ({
+            ts: row.ts,
+            kind: row.kind,
+            nonce: row.nonce,
+            reason: row.reason,
+            amount: row.amount,
+            suggestedOverride: row.suggestedOverride,
+            amountOut: row.amountOut,
+            outMint: rule.outMint,
+            outDecimals: known?.outputDecimals,
+          })),
+        });
+        quietLedgers.push({
+          mandate: rule.address,
+          rows: ledger.rows,
+          total: ledger.snapshot.total,
+          decimals,
+        });
+      } catch {
+        unread += 1;
+      }
+    }
+  } catch {
+    // Payment notices already collected still go out. The next check reads trade rules again.
   }
 
   const seenByMandate = new Map<string, Set<string>>();

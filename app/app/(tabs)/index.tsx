@@ -32,6 +32,7 @@ import { isActive, mandateRemaining } from '../../lib/mandate';
 import { liveMandateCount, showRulePill, tabPillFace } from '../../lib/mandateRead';
 import { NOTIFICATIONS_OFF_LINE } from '../../lib/notificationAsk';
 import { displayPurpose, spendRatio } from '../../lib/ruleView';
+import { tradePairLabel } from '../../lib/tradeRule';
 import { useChain } from '../../lib/useChain';
 import { useNotificationOffer } from '../../lib/useNotificationOffer';
 import { useRefreshOnFocus } from '../../lib/useRefreshOnFocus';
@@ -109,6 +110,20 @@ export default function OverviewScreen() {
             empty="No rule on chain for this owner yet. This screen reads real history only and never invents rows."
           />
         )}
+        {chain.mandateStatus === 'present' && !mandate && chain.tradeRule ? (
+          <View style={styles.block}>
+            <ContextBar
+              title={displayPurpose(chain.tradeRule.purpose)}
+              subtitle={`${tradePairLabel(chain.tradeRule)} · agent ${truncateAddress(chain.tradeRule.agent)}`}
+              onSwitch={() => router.push('/(tabs)/rules')}
+            />
+            <Button
+              label="Open this trade rule"
+              invert={false}
+              onPress={() => router.push(`/rule/${chain.tradeRule?.address}`)}
+            />
+          </View>
+        ) : null}
         {chain.mandateStatus === 'present' && mandate && left ? (
           <View style={styles.block}>
             {notifications.show ? (
