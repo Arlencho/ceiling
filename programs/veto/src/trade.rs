@@ -287,13 +287,19 @@ pub fn revoke_trade_rule(ctx: Context<RevokeTradeRule>) -> Result<()> {
         _pad: [0; 6],
     });
 
-    token::revoke(CpiContext::new(
-        ctx.accounts.token_program.key(),
-        token::Revoke {
-            source: ctx.accounts.source.to_account_info(),
-            authority: ctx.accounts.owner.to_account_info(),
-        },
-    ))?;
+    // The SPL revoke fails on a frozen source. Skip it there as close does:
+    // a frozen delegation is inert, and reopening requires a new approval.
+    let rule_key = ctx.accounts.rule.key();
+    let source = &ctx.accounts.source;
+    if source.delegate == COption::Some(rule_key) && !source.is_frozen() {
+        token::revoke(CpiContext::new(
+            ctx.accounts.token_program.key(),
+            token::Revoke {
+                source: ctx.accounts.source.to_account_info(),
+                authority: ctx.accounts.owner.to_account_info(),
+            },
+        ))?;
+    }
 
     msg!(
         "VETO TRADE REVOKED spent={} of cap={}",
@@ -305,8 +311,8 @@ pub fn revoke_trade_rule(ctx: Context<RevokeTradeRule>) -> Result<()> {
 
 /// Closable once the rule is not active or is past expiry. The second case
 /// covers a source the owner already closed, which makes revoke impossible.
-/// A source that still delegates to the rule is revoked here, so a closed
-/// rule never leaves authority behind.
+/// Revoke a source that still delegates to the rule unless it is frozen.
+/// Frozen delegation is inert, and reopening the rule requires a new approval.
 pub fn close_trade_rule(ctx: Context<CloseTradeRule>) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     require!(
@@ -316,11 +322,11 @@ pub fn close_trade_rule(ctx: Context<CloseTradeRule>) -> Result<()> {
 
     let rule_key = ctx.accounts.rule.key();
     let source = ctx.accounts.source.to_account_info();
-    let still_delegated = *source.owner == spl_token::ID
+    let should_revoke = *source.owner == spl_token::ID
         && spl_token::state::Account::unpack(&source.try_borrow_data()?)
-            .map(|account| account.delegate == COption::Some(rule_key))
+            .map(|account| account.delegate == COption::Some(rule_key) && !account.is_frozen())
             .unwrap_or(false);
-    if still_delegated {
+    if should_revoke {
         token::revoke(CpiContext::new(
             ctx.accounts.token_program.key(),
             token::Revoke {
@@ -330,7 +336,7 @@ pub fn close_trade_rule(ctx: Context<CloseTradeRule>) -> Result<()> {
         ))?;
     }
 
-    msg!("VETO TRADE CLOSED revoked={}", still_delegated);
+    msg!("VETO TRADE CLOSED revoked={}", should_revoke);
     Ok(())
 }
 
@@ -475,24 +481,23 @@ pub const FEE_DEN: u64 = 10_000;
 
 /// Input left after the pinned exchange's fees. SPL token-swap v2 on devnet
 /// accepts exactly one schedule: trade 25/10000 plus owner trade 5/10000, each
-/// rounded down on the input. The exchange rounds a nonzero fee that floors to
-/// zero up to one unit, so the real remainder is never larger than this.
+/// rounded down on the input with a minimum of one unit for nonzero input.
 pub fn input_after_fees(amount_in: u64) -> u64 {
     let amount = u128::from(amount_in);
     let den = u128::from(FEE_DEN);
-    let trade_fee = amount * u128::from(TRADE_FEE_NUM) / den;
-    let owner_fee = amount * u128::from(OWNER_TRADE_FEE_NUM) / den;
-    // Both fees are under a tenth of the input, so this cannot underflow and
-    // the result fits a u64.
-    (amount - trade_fee - owner_fee) as u64
+    let minimum = u128::from(amount_in > 0);
+    let trade_fee = (amount * u128::from(TRADE_FEE_NUM) / den).max(minimum);
+    let owner_fee = (amount * u128::from(OWNER_TRADE_FEE_NUM) / den).max(minimum);
+    // A one-unit input cannot cover both minimum fees and has no usable input.
+    amount.saturating_sub(trade_fee + owner_fee) as u64
 }
 
 /// `net * out_reserve / (in_reserve + net)`, where `net` is the input after
 /// the exchange fees.
 ///
-/// The curve rounds the output down further, so this quote is an optimistic
-/// bound. A floor failure here is certain. The floor itself is compared with
-/// the gross `amount_in`, since that is what the owner gives up.
+/// For the pinned curve and the fee schedule above this quote is exact, not
+/// an optimistic bound. A floor failure here is certain. The floor itself is
+/// compared with the gross `amount_in`, since that is what the owner gives up.
 pub fn spot_below_floor(
     amount_in: u64,
     in_reserve: u64,
@@ -578,10 +583,12 @@ fn settle_trade(
     ctx.accounts.source.reload()?;
     let source_after = ctx.accounts.source.amount;
     let dest_after = unpack_token(&ctx.accounts.destination.to_account_info())?.amount;
-    require!(
-        source_before.checked_sub(source_after) == Some(amount_in),
-        VetoError::TradeDeltaMismatch
-    );
+    // The exchange's curve rounding can consume less than the requested input.
+    // Charge only the observed debit, while retaining the requested output floor.
+    let amount_in = source_before
+        .checked_sub(source_after)
+        .filter(|delta| *delta > 0 && *delta <= amount_in)
+        .ok_or(error!(VetoError::TradeDeltaMismatch))?;
     let amount_out = dest_after
         .checked_sub(dest_before)
         .ok_or(error!(VetoError::TradeDeltaMismatch))?;
@@ -883,7 +890,7 @@ mod quote_tests {
     use super::{input_after_fees, spot_below_floor};
 
     #[test]
-    fn the_optimistic_quote_refuses_a_floor_the_curve_cannot_clear() {
+    fn the_spot_quote_refuses_a_floor_the_curve_cannot_clear() {
         let amount_in = 10_000_000u64;
         let in_reserve = 1_000_000_000_000u64;
         let out_reserve = 1_000_000_000_000_000u64;

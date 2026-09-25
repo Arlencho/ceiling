@@ -32,7 +32,7 @@ pub const REASON_DESTINATION_NOT_ALLOWED: u8 = 11;
 pub const REASON_POOL_NOT_ALLOWED: u8 = 12;
 /// The trade would push the current 24 hour window over `daily_limit`.
 pub const REASON_OVER_DAILY: u8 = 13;
-/// The optimistic spot quote is already under the price floor.
+/// The spot quote is already under the price floor.
 pub const REASON_BELOW_FLOOR: u8 = 14;
 
 /// A permission to swap, owned by the human and enforced by this program.
