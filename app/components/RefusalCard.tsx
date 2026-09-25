@@ -4,7 +4,7 @@ import { REASON_OVER_PER_TX_MAX } from '../lib/constants';
 import { formatBaseUnits } from '../lib/format';
 import { refusalWhyLine } from '../lib/reasons';
 import type { LedgerRow } from '../lib/ring';
-import { truncateAddress } from '../lib/wallet';
+import { payeeLabel } from '../lib/wallet';
 import { SealRow } from './backglass/SealRow';
 import { TiltStamp } from './backglass/TiltStamp';
 import { Button } from './Button';
@@ -17,6 +17,7 @@ export function RefusalCard({
   compact = false,
   onShare,
   proof,
+  payee,
 }: {
   row: LedgerRow;
   decimals: number;
@@ -24,6 +25,7 @@ export function RefusalCard({
   compact?: boolean;
   onShare?: () => void;
   proof?: string;
+  payee?: string;
 }) {
   const why = refusalWhyLine({
     reason: row.reason,
@@ -96,7 +98,7 @@ export function RefusalCard({
         <View style={styles.facts}>
           <View style={styles.fact}>
             <Text style={styles.factK}>Payment to</Text>
-            <Text style={styles.factV}>{truncateAddress(row.counterparty)}</Text>
+            <Text style={styles.factV}>{payeeLabel(payee)}</Text>
           </View>
           <View style={styles.fact}>
             <Text style={styles.factK}>Money moved</Text>

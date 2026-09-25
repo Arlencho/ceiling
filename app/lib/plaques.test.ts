@@ -36,12 +36,25 @@ function facts(rows: GradeDecision[], over: Partial<RuleFacts> = {}): RuleFacts 
   };
 }
 
-test('the first payment plaque names the amount, the payee and the limit', () => {
-  const rule = snapshotRule(facts([decision({ ts: START + DAY, amount: 8n })]), START + 5n * DAY);
+test('the first payment plaque names the amount, the rule payee and the limit', () => {
+  const rule = snapshotRule(
+    facts(
+      [
+        decision({
+          ts: START + DAY,
+          amount: 8n,
+          counterparty: '2bt9bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbay7F',
+        }),
+      ],
+      { merchant: '6i99aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaPdCG' },
+    ),
+    START + 5n * DAY,
+  );
   const plaque = plaquesForRule(rule, START + 5n * DAY).find((item) => item.id === 'first-payment');
   assert.ok(plaque?.earned);
   assert.equal(plaque.title, 'First payment inside the rule');
   assert.match(plaque.detail, /Paid 8 to 6i99\.\.\.PdCG/);
+  assert.doesNotMatch(plaque.detail, /2bt9/);
   assert.match(plaque.detail, /Limit per payment: 10/);
   assert.match(plaque.dateLabel, /^Day 2,/);
 });

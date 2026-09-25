@@ -4,7 +4,7 @@ import { formatBaseUnits, formatClock, formatDayHeading, formatUnix, roundShownA
 import { overrideRowView } from '../../lib/override';
 import { refusalWhyLine } from '../../lib/reasons';
 import type { LedgerRow } from '../../lib/ring';
-import { truncateAddress } from '../../lib/wallet';
+import { payeeLabel } from '../../lib/wallet';
 
 export type RowTone = 'paid' | 'refused' | 'allowed' | 'advisory';
 
@@ -116,14 +116,6 @@ function chainCopy(lead: string, signature: string | null | undefined): { detail
   return { detail, chainLink: null };
 }
 
-function shownPayee(counterparty: string, payee: string | undefined): string {
-  const owner = payee?.trim();
-  if (owner) {
-    return truncateAddress(owner);
-  }
-  return truncateAddress(counterparty);
-}
-
 export function decisionFace(
   row: LedgerRow,
   decimals: number,
@@ -181,7 +173,7 @@ export function decisionFace(
     };
   } else if (row.kind === KIND_PAID) {
     const amount = formatBaseUnits(row.amount, decimals);
-    const payee = shownPayee(row.counterparty, options?.payee);
+    const payee = payeeLabel(options?.payee);
     const limit = perTxMax != null ? formatBaseUnits(perTxMax, decimals) : null;
     const inside = limit != null ? `Inside your limit of ${limit} per payment.` : 'Inside the rule.';
     const chain = chainCopy(inside, row.signature);

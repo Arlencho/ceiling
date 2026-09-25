@@ -59,6 +59,8 @@ export type RuleFacts = {
   expiresAt: bigint;
   status: number;
   decimals: number;
+  /** Payee wallet on the rule. A charge's counterparty is that wallet's token account. */
+  merchant?: string;
   rows: readonly GradeDecision[];
 };
 

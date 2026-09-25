@@ -12,7 +12,7 @@ import { barSplit, decisionWhen, refusalBody, whyRefused } from '../../component
 import { Screen } from '../../components/Screen';
 import { colors, fonts, radii } from '../../components/theme';
 import { KIND_ADVISORY_DECLINE } from '../../lib/advisory';
-import { KIND_OVERRIDE, KIND_REFUSED, REASON_OVER_PER_TX_MAX } from '../../lib/constants';
+import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, REASON_OVER_PER_TX_MAX } from '../../lib/constants';
 import { findLedgerDecision, parseDecisionId } from '../../lib/exportRecord';
 import { useOverrideGrant } from '../../lib/useOverrideGrant';
 import { explorerTxUrl, formatBaseUnits, formatClock, formatUnix, isListedDecision } from '../../lib/format';
@@ -22,7 +22,7 @@ import { paidDecisionBody } from '../../lib/notify';
 import { nonceSequence, overrideRowView, sequenceLine } from '../../lib/override';
 import { renderReason } from '../../lib/reasons';
 import { useChain } from '../../lib/useChain';
-import { truncateAddress } from '../../lib/wallet';
+import { payeeLabel, truncateAddress } from '../../lib/wallet';
 
 export default function DecisionDetailScreen() {
   const { id: rawId } = useLocalSearchParams<{ id: string }>();
@@ -90,6 +90,9 @@ export default function DecisionDetailScreen() {
   const seqText = seq ? sequenceLine(seq, chain.decimals) : null;
   const overrideView = row && row.kind === KIND_OVERRIDE ? overrideRowView(row, chain.decimals) : null;
   const when = row ? decisionWhen(row.ts, chain.nowMs) : '';
+  const payee = payeeLabel(mandate?.merchant);
+  // A charge writes the destination token account as counterparty. The payee is the rule wallet.
+  const tokenAccount = chargeTokenAccount(row, mandate?.merchant);
 
   return (
     <Screen refreshing={chain.loading} onRefresh={onRefresh}>
@@ -126,6 +129,7 @@ export default function DecisionDetailScreen() {
                   decimals={chain.decimals}
                   perTxMax={mandate?.perTxMax}
                   when={when}
+                  payee={payee}
                 />
               </Rise>
             ) : row.kind === KIND_OVERRIDE && overrideView ? (
@@ -188,8 +192,9 @@ export default function DecisionDetailScreen() {
               />
               {row.slot != null ? <ProofRow label="slot" value={String(row.slot)} /> : null}
               {row.kind === KIND_ADVISORY_DECLINE ? null : (
-                <ProofRow label="payee" value={mandate ? truncateAddress(mandate.merchant) : 'on the rule'} />
+                <ProofRow label="payee" value={payee} />
               )}
+              {tokenAccount ? <ProofRow label="Payee token account" value={tokenAccount} /> : null}
             </View>
 
             {row.kind === KIND_REFUSED ? (
@@ -197,7 +202,7 @@ export default function DecisionDetailScreen() {
                 view={grant}
                 decimals={chain.decimals}
                 submitHeld={chain.submitHeld}
-                payee={truncateAddress(row.counterparty)}
+                payee={payee}
                 perTxMax={mandate?.perTxMax ?? 0n}
                 remaining={mandate ? mandateRemaining(mandate) : 0n}
               />
@@ -214,16 +219,33 @@ export default function DecisionDetailScreen() {
   );
 }
 
+function chargeTokenAccount(
+  row: { kind: number; counterparty: string } | null | undefined,
+  merchant: string | null | undefined,
+): string | null {
+  if (!row || (row.kind !== KIND_PAID && row.kind !== KIND_REFUSED)) {
+    return null;
+  }
+  const account = row.counterparty.trim();
+  const wallet = merchant?.trim() ?? '';
+  if (!account || account === wallet) {
+    return null;
+  }
+  return truncateAddress(account);
+}
+
 function RefusedBody({
   row,
   decimals,
   perTxMax,
   when,
+  payee,
 }: {
   row: NonNullable<ReturnType<typeof findLedgerDecision>>;
   decimals: number;
   perTxMax?: bigint;
   when: string;
+  payee: string;
 }) {
   const asked = formatBaseUnits(row.amount, decimals);
   const limit = perTxMax != null ? formatBaseUnits(perTxMax, decimals) : null;
@@ -259,7 +281,7 @@ function RefusedBody({
         </View>
         {split ? <LimitTrack allowedPct={split.allowedPct} overPct={split.overPct} /> : null}
         <View style={styles.grid}>
-          <Fact label="To payee" value={truncateAddress(row.counterparty)} />
+          <Fact label="To payee" value={payee} />
           <Fact label="Money moved" value={formatBaseUnits(0n, decimals)} />
           <Fact
             label="Why it was refused"
@@ -493,7 +515,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.line,
   },
   pk: {
-    width: 96,
+    width: 156,
     color: colors.muted,
     fontFamily: fonts.sans,
     fontSize: 13,

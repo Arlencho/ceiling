@@ -9,7 +9,7 @@ import { formatDisplayAmount } from '../../lib/format';
 import { overrideRowView } from '../../lib/override';
 import { reasonText } from '../../lib/reasons';
 import type { LedgerRow } from '../../lib/ring';
-import { truncateAddress } from '../../lib/wallet';
+import { payeeLabel } from '../../lib/wallet';
 import { colors, fonts, space } from '../theme';
 
 export function LatestDecision({
@@ -34,7 +34,7 @@ export function LatestDecision({
   const router = useRouter();
   const amount = formatDisplayAmount(row.amount, decimals);
   const limit = perTxMax != null ? formatDisplayAmount(perTxMax, decimals) : null;
-  const who = truncateAddress(payee || row.counterparty);
+  const who = payeeLabel(payee);
   const refused = row.kind === KIND_REFUSED;
   const paid = row.kind === KIND_PAID;
   const waived = row.kind === KIND_OVERRIDE;

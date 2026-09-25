@@ -20,7 +20,7 @@ import {
   type GradeDecision,
   type RuleSnapshot,
 } from './grade';
-import { truncateAddress } from './wallet';
+import { payeeLabel } from './wallet';
 
 export type PlaqueId = 'first-payment' | 'first-refusal' | 'ten-refusals' | 'thirty-days' | 'rule-ended';
 
@@ -56,7 +56,7 @@ function firstPayment(rule: RuleSnapshot): Plaque {
     );
   }
   const day = rule.startedAt == null ? null : elapsedDays(rule.startedAt, first.ts);
-  const payee = truncateAddress(first.counterparty);
+  const payee = payeeLabel(rule.merchant);
   return {
     id: 'first-payment',
     earned: true,

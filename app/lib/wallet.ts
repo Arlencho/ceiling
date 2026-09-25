@@ -108,6 +108,15 @@ export function truncateAddress(address: string, chars = 4): string {
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 }
 
+/** Short form of the payee wallet named on a rule. */
+export function payeeLabel(wallet: string | null | undefined): string {
+  const owner = wallet?.trim() ?? '';
+  if (!owner) {
+    return "the rule's payee";
+  }
+  return truncateAddress(owner);
+}
+
 export function publicKeyFromMwaAddress(address: string): PublicKey {
   // Mobile Wallet Adapter sends the address base64 encoded, but a base58
   // address has to be accepted too, and the two are not safely told apart by

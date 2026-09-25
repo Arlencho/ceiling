@@ -542,6 +542,34 @@ test('one decision shows what was asked, that nothing moved, and the chain recor
   assert.match(text, /Allow this one payment of 14/);
 });
 
+test('a refusal whose ledger names the payee token account shows the rule payee on screen', async () => {
+  const payee = '6i99aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaPdCG';
+  const tokenAccount = '2bt9bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbay7F';
+  const rule = mandate({ merchant: payee });
+  const row = refusedRow({ counterparty: tokenAccount });
+  params = { id: `${rule.address}:1700:2:2` };
+  const { assessOverride } = await import('./override');
+  chainState = baseChain({
+    mandate: rule,
+    mandates: [rule],
+    rows: [row],
+    probeOverride: async () =>
+      assessOverride({
+        row,
+        mandate: rule,
+        decimals: 0,
+        nowSec: 1_500n,
+      }),
+  });
+  const { default: Detail } = await import('../app/decision/[id]');
+  const text = visibleText(await mount(createElement(Detail)));
+  assert.match(text, /To payee\n6i99\.\.\.PdCG/);
+  assert.match(text, /This one payment only: 14 to 6i99\.\.\.PdCG/);
+  assert.match(text, /Payee token account\n2bt9\.\.\.ay7F/);
+  assert.doesNotMatch(text, /to 2bt9/);
+  assert.equal((text.match(/2bt9/g) ?? []).length, 1);
+});
+
 test('a cancelled or failed allow-once signature arms the hold again', async () => {
   const rule = mandate();
   const row = refusedRow();

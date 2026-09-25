@@ -113,6 +113,7 @@ export function useAgentHistories(): AgentScreenData {
           loaded.push({
             address: mandate.address,
             agent: mandate.agent,
+            merchant: mandate.merchant,
             purpose: displayPurpose(mandate.purpose),
             cap: mandate.cap,
             spent: mandate.spent,
