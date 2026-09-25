@@ -1,0 +1,44 @@
+# veto
+
+The command you run next to your agent. Pairing does not need a developer, and it does not need a copied setup block.
+
+## One command, one scan, one hold
+
+```bash
+veto connect
+```
+
+That creates a key on your machine when you do not already have one. The file is `~/.veto/agent.json` and its mode is `0600`. The terminal prints the address and this sentence: "This key lives on your machine. Veto never holds it."
+
+On devnet, a key that holds under 20 base fees of SOL gets a 1 SOL airdrop. The terminal says so. Mainnet does not.
+
+The command then asks for anything it does not already have: who is paid, the most per payment, the total, how many days, and the purpose. Amounts you type are integer base units. On devnet the mint defaults to devnet USDC `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`. On mainnet you give the mint.
+
+It prints a `veto://rule-request` link and a QR of that link. Scan the QR with the Veto app and hold to approve.
+
+The terminal waits until the rule for this key is on chain, then prints the terms in the token's name. Half a USDC, which is 500000 base units, reads as 0.50 USDC. It also prints one MCP config line. Your agent can pay with `veto pay <amount>`, or you paste that line into the agent's MCP config.
+
+The rule and the RPC are saved in `~/.veto/config.json`. If the RPC refuses `getProgramAccounts` filters, pass `--rule` with the rule address. That checks the rule you name and skips the request.
+
+## Pay
+
+```bash
+veto pay 500000
+```
+
+That is one charge, in base units, on the newest active rule for this key. A pending override is the nonce the SDK would use, and a different amount is not sent, so the override is not cleared by accident.
+
+A refusal is a successful decision. The command exits 0 and prints the kind, the reason code and text, the override that would have cleared it, the signature, and the explorer link. Amounts in that printout are named in the token. An RPC or key problem exits 1.
+
+## Status and decisions
+
+```bash
+veto status
+veto decisions --limit 20
+```
+
+`veto status` shows what the rule can still pay, the cap, the largest payment, the expiry, and the agent's fee SOL. When the SDK warns that the fee balance is low, that warning is printed too.
+
+`veto decisions` lists the newest decisions from the rule. Each row names the token and the signature.
+
+veto trade arrives with the trade rule.
