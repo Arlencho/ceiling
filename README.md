@@ -360,6 +360,8 @@ are in [docs/DEVNET.md](docs/DEVNET.md).
 
 ## A second mint
 
+The program is tested against a snapshot of the real SKR mint in [programs/veto/tests/skr_mint.rs](programs/veto/tests/skr_mint.rs).
+
 The second mandate on devnet (`7Bns2EMrzw9T8apGLRGynean4mkFMwHsEWoXbeTGnNtj`) is not an SKR
 integration. Solana Mobile's SKR mint is `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`. That
 account is on mainnet, and the same address is absent on devnet, which is the only cluster this
