@@ -3,8 +3,10 @@
 // Skipped unless VETO_E2E=1. `npm test` does not set that, so this file does
 // not touch a cluster from the unit suite. `make e2e-devnet` does.
 //
-// Needs keys/deployer.json (gitignored). That key is the mint authority for
-// the demo mint in docs/DEVNET.md. The payee is the merchant already on devnet.
+// Needs deployer.json (gitignored). VETO_KEYS_DIR names that folder when it is
+// set, otherwise keys/ at the repo root, the same rule as tools/lib.ts.
+// That key is the mint authority for the demo mint in docs/DEVNET.md.
+// The payee is the merchant already on devnet.
 // Each rule is exported while its mandate account still exists. Closed-mandate
 // export waits until issue 204 is fixed on main. The finally block returns
 // leftover SOL and tokens to that deployer key and closes the generated
@@ -51,6 +53,7 @@ import { decodeEventsFromLogs } from '../lib/events';
 import type { MandateAccount } from '../lib/mandate';
 import { openFundsRefusal, readTokenAmount } from '../lib/ruleAccount';
 import { ledgerPda } from '../lib/ring';
+import { readDeployerKey } from './keysDir';
 import { journeyReportPaths, publishJourneyReport } from './runReport';
 import {
   persistSession,
@@ -92,7 +95,6 @@ const VERIFY_AGREE = 'Mandate limits, ledger entry, and charge transaction agree
 const REPO = fileUrlDir(new URL('../..', import.meta.url));
 const TOOLS = join(REPO, 'tools');
 const reportPaths = journeyReportPaths(dirname(fileUrlDir(new URL('./last-run.md', import.meta.url))));
-const DEPLOYER_PATH = join(REPO, 'keys', 'deployer.json');
 
 process.env.VETO_RPC = RPC;
 process.env.EXPO_PUBLIC_VETO_RPC = process.env.EXPO_PUBLIC_VETO_RPC?.trim() || RPC;
@@ -454,7 +456,7 @@ test(
         'merchant associated token account does not match the devnet record',
       );
 
-      const deployerFile = readFileSync(DEPLOYER_PATH, 'utf8');
+      const deployerFile = readDeployerKey(REPO);
       const deployer = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(deployerFile) as number[]));
       const owner = Keypair.generate();
       const agentSdk = SdkKeypair.generate();
@@ -725,7 +727,7 @@ test(
       const fundNeed = OWNER_LAMPORTS + AGENT_LAMPORTS + 20_000_000;
       assert.ok(
         deployerBalance >= fundNeed + DEPLOYER_RESERVE,
-        `deployer holds ${deployerBalance} lamports, and funding needs ${fundNeed} plus a ${DEPLOYER_RESERVE} reserve`,
+        `deployer holds ${deployerBalance} lamports, and funding needs ${fundNeed} plus a ${DEPLOYER_RESERVE} reserve (0.57 SOL). Request devnet SOL at faucet.solana.com`,
       );
 
       const fundSig = await step('setup', 'fund owner and agent from deployer', async () => {
