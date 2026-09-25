@@ -150,6 +150,23 @@ test("trade returns the traded decision, including the output that came back", a
   assert.equal(result.slot, 90);
 });
 
+test("trade attributes a short fill that settles below the requested input", async () => {
+  const { w, veto } = agentFor();
+  const amountIn = 5_000_000n;
+  const settledIn = 4_999_999n;
+  const nonce = 3n;
+  preload(
+    w,
+    framed(PROGRAM_ID.toBase58(), [tradedLog(w.rule, settledIn, 4_250_000n, nonce, settledIn)]),
+  );
+  const result = await veto.trade({ amountIn, minOut: 1n, nonce });
+  assert.equal(result.kind, "traded");
+  assert.equal(result.amountIn, settledIn);
+  assert.equal(result.amountOut, 4_250_000n);
+  assert.equal(result.reasonCode, 0);
+  assert.equal(result.signature, "sig-trade");
+});
+
 test("trade returns a refusal with no output and the reason text", async () => {
   const { w, veto } = agentFor();
   const amountIn = 5_000_000n;

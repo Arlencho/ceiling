@@ -734,7 +734,8 @@ export class VetoAgent {
     }
     const view = viewFromRpc(tx, { signature, slot: tx.slot });
     const matches = tradeDecisionsFromTx(view, this.programId.toBase58(), ruleKey.toBase58()).filter(
-      (decision) => decision.amountIn === amountIn && decision.nonce === nonce,
+      (decision) =>
+        decision.nonce === nonce && (decision.kind !== "refused" || decision.amountIn === amountIn),
     );
     if (matches.length !== 1) {
       const detail =
