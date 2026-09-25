@@ -166,6 +166,7 @@ function sampleRule(): RuleFacts {
     expiresAt: START + 90n * DAY,
     status: STATUS_ACTIVE,
     decimals: 0,
+    merchant: '6i99aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaPdCG',
     rows: [
       decision({ kind: KIND_OPENED, ts: START, nonce: 0n, amount: 300n }),
       ...paid,
