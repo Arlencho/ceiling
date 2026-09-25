@@ -8,7 +8,7 @@ import test from "node:test";
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { VetoAgent } from "./agent.js";
-import { loadAgentConfig, type AgentConfig } from "./config.js";
+import { isTradeAgentConfig, loadAgentConfig, type AgentConfig } from "./config.js";
 import { PROGRAM_ID } from "./idl.js";
 import { ledgerPda } from "./layout.js";
 import {
@@ -23,7 +23,7 @@ import {
 } from "./testkit.js";
 
 function block(w: World, over: Partial<AgentConfig> = {}): AgentConfig {
-  return loadAgentConfig({
+  const loaded = loadAgentConfig({
     mandate: w.mandate.toBase58(),
     programId: PROGRAM_ID.toBase58(),
     mint: w.mint.publicKey.toBase58(),
@@ -35,6 +35,10 @@ function block(w: World, over: Partial<AgentConfig> = {}): AgentConfig {
     rpcUrl: "https://api.devnet.solana.com",
     ...over,
   });
+  if (isTradeAgentConfig(loaded)) {
+    throw new Error("test built a trade block");
+  }
+  return loaded;
 }
 
 /** A chain that presents a Mandate-shaped account naming the agent, drawing from the agent's own ATA. */

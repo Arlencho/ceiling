@@ -10,6 +10,10 @@ export const REASON_DELEGATE_MISSING = 7;
 export const REASON_INSUFFICIENT_FUNDS = 8;
 export const REASON_ZERO_AMOUNT = 9;
 export const REASON_ACCOUNT_FROZEN = 10;
+export const REASON_OUTPUT_ACCOUNT_NOT_ALLOWED = 11;
+export const REASON_POOL_NOT_ALLOWED = 12;
+export const REASON_OVER_DAILY_LIMIT = 13;
+export const REASON_QUOTE_BELOW_FLOOR = 14;
 
 /** Texts copied from app/lib/constants.ts. A drift test fails if they diverge. */
 export const REASON_TEXT: Readonly<Record<number, string>> = Object.freeze({
@@ -24,6 +28,10 @@ export const REASON_TEXT: Readonly<Record<number, string>> = Object.freeze({
   [REASON_INSUFFICIENT_FUNDS]: "insufficient funds",
   [REASON_ZERO_AMOUNT]: "zero amount",
   [REASON_ACCOUNT_FROZEN]: "account frozen",
+  [REASON_OUTPUT_ACCOUNT_NOT_ALLOWED]: "output account not allowed",
+  [REASON_POOL_NOT_ALLOWED]: "pool not allowed",
+  [REASON_OVER_DAILY_LIMIT]: "over daily limit",
+  [REASON_QUOTE_BELOW_FLOOR]: "quote below floor",
 });
 
 export function reasonText(reason: number): string {

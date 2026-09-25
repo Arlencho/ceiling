@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Keypair } from "@solana/web3.js";
 import { VetoAgent } from "./agent.js";
-import { loadAgentConfig, type AgentConfig } from "./config.js";
+import { isTradeAgentConfig, loadAgentConfig, type AgentConfig, type TradeAgentConfig } from "./config.js";
 import { PROGRAM_ID } from "./idl.js";
 import { world, type World } from "./testkit.js";
 
@@ -53,6 +53,7 @@ test("loadAgentConfig rejects a field that is not a usable value", () => {
 test("fromConfig accepts a block that matches the mandate and the agent key", async () => {
   const w = world();
   const config = loadAgentConfig(fields(w));
+  if (isTradeAgentConfig(config)) throw new Error("payment block");
   const veto = await VetoAgent.fromConfig(config, w.agent, w.connection);
   assert.equal(veto.mandate.toBase58(), config.mandate);
   assert.equal(veto.agent.publicKey.toBase58(), config.agent);
@@ -108,6 +109,46 @@ test("fromConfig rejects a payee token account the charge would not pay", async 
     fields(w, { payeeTokenAccount: Keypair.generate().publicKey.toBase58() }),
   );
   await assert.rejects(() => VetoAgent.fromConfig(config, w.agent, w.connection), /payee/);
+});
+
+test("a payment block without kind still loads", () => {
+  const w = world();
+  const input = fields(w);
+  const loaded = loadAgentConfig(input);
+  assert.equal(isTradeAgentConfig(loaded), false);
+  if (isTradeAgentConfig(loaded)) return;
+  assert.equal(loaded.mandate, input.mandate);
+  assert.equal("kind" in loaded, false);
+});
+
+test("loadAgentConfig reads a trade block and refuses a trade block with an extra key", () => {
+  const rule = Keypair.generate().publicKey.toBase58();
+  const agent = Keypair.generate().publicKey.toBase58();
+  const inMint = Keypair.generate().publicKey.toBase58();
+  const outMint = Keypair.generate().publicKey.toBase58();
+  const source = Keypair.generate().publicKey.toBase58();
+  const destination = Keypair.generate().publicKey.toBase58();
+  const input: TradeAgentConfig = {
+    kind: "trade",
+    rule,
+    programId: PROGRAM_ID.toBase58(),
+    agent,
+    inMint,
+    inMintDecimals: 9,
+    outMint,
+    outMintDecimals: 6,
+    sourceTokenAccount: source,
+    destinationTokenAccount: destination,
+    cluster: "devnet",
+    rpcUrl: "https://api.devnet.solana.com",
+  };
+  const loaded = loadAgentConfig(JSON.stringify(input));
+  assert.deepEqual(loaded, input);
+  assert.throws(() => loadAgentConfig({ ...input, extra: "no" }), /documented shape/);
+  const missing = { ...input } as Partial<TradeAgentConfig>;
+  delete missing.rule;
+  assert.throws(() => loadAgentConfig(missing), /documented shape/);
+  assert.throws(() => loadAgentConfig({ ...input, kind: "payment" }), /kind must be trade/);
 });
 
 test("fromConfig refuses a block whose programId differs from the programId passed in code", async () => {

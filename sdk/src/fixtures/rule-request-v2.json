@@ -1,0 +1,560 @@
+{
+  "description": "Shared trade rule request v2 fixtures. valid entries round-trip through the URL. invalid entries name the first problem in checkOrder. floorBps is a positive integer. 10000 is one output base unit per input base unit, and larger values are allowed.",
+  "checkOrder": [
+    "not_a_url",
+    "scheme",
+    "userinfo",
+    "port",
+    "host",
+    "path",
+    "duplicate_v",
+    "missing_v",
+    "bad_v",
+    "duplicate_kind",
+    "missing_kind",
+    "bad_kind",
+    "duplicate_agent",
+    "missing_agent",
+    "bad_agent",
+    "duplicate_in_mint",
+    "missing_in_mint",
+    "bad_in_mint",
+    "duplicate_out_mint",
+    "missing_out_mint",
+    "bad_out_mint",
+    "duplicate_pool",
+    "missing_pool",
+    "bad_pool",
+    "duplicate_per_trade",
+    "missing_per_trade",
+    "bad_per_trade",
+    "duplicate_daily",
+    "missing_daily",
+    "bad_daily",
+    "duplicate_cap",
+    "missing_cap",
+    "bad_cap",
+    "limits_out_of_order",
+    "duplicate_floor_bps",
+    "missing_floor_bps",
+    "bad_floor_bps",
+    "duplicate_days",
+    "missing_days",
+    "bad_days",
+    "duplicate_purpose",
+    "missing_purpose",
+    "bad_purpose",
+    "purpose_too_long",
+    "duplicate_agent_label",
+    "bad_agent_label",
+    "agent_label_too_long",
+    "duplicate_pool_label",
+    "bad_pool_label",
+    "pool_label_too_long"
+  ],
+  "valid": [
+    {
+      "name": "prints the documented URL for a pinned pool",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "inMint": "So11111111111111111111111111111111111111112",
+        "outMint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "pool": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "perTrade": "100",
+        "daily": "500",
+        "cap": "1000",
+        "floorBps": "9500",
+        "days": 30,
+        "purpose": "API fees"
+      },
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "expect": {
+        "v": 2,
+        "kind": "trade",
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "inMint": "So11111111111111111111111111111111111111112",
+        "outMint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "pool": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "perTrade": "100",
+        "daily": "500",
+        "cap": "1000",
+        "floorBps": "9500",
+        "days": 30,
+        "purpose": "API fees"
+      }
+    },
+    {
+      "name": "keeps optional labels",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "inMint": "So11111111111111111111111111111111111111112",
+        "outMint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "pool": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "perTrade": "100",
+        "daily": "500",
+        "cap": "1000",
+        "floorBps": "9500",
+        "days": 30,
+        "purpose": "API fees",
+        "agentLabel": "billing agent",
+        "poolLabel": "wsol pool"
+      },
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees&agentLabel=billing%20agent&poolLabel=wsol%20pool",
+      "expect": {
+        "v": 2,
+        "kind": "trade",
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "inMint": "So11111111111111111111111111111111111111112",
+        "outMint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "pool": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "perTrade": "100",
+        "daily": "500",
+        "cap": "1000",
+        "floorBps": "9500",
+        "days": 30,
+        "purpose": "API fees",
+        "agentLabel": "billing agent",
+        "poolLabel": "wsol pool"
+      }
+    },
+    {
+      "name": "canonicalizes a reordered query and drops an unknown key",
+      "url": "veto://rule-request?purpose=API%20fees&note=ignore&days=30&floorBps=9500&cap=1000&daily=500&perTrade=100&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&inMint=So11111111111111111111111111111111111111112&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&kind=trade&v=2",
+      "canonical": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "expect": {
+        "v": 2,
+        "kind": "trade",
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "inMint": "So11111111111111111111111111111111111111112",
+        "outMint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "pool": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "perTrade": "100",
+        "daily": "500",
+        "cap": "1000",
+        "floorBps": "9500",
+        "days": 30,
+        "purpose": "API fees"
+      }
+    },
+    {
+      "name": "accepts equal limits, an empty purpose, and the smallest floor",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "inMint": "So11111111111111111111111111111111111111112",
+        "outMint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "pool": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "perTrade": "10",
+        "daily": "10",
+        "cap": "10",
+        "floorBps": "1",
+        "days": 1,
+        "purpose": ""
+      },
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=10&daily=10&cap=10&floorBps=1&days=1&purpose=",
+      "expect": {
+        "v": 2,
+        "kind": "trade",
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "inMint": "So11111111111111111111111111111111111111112",
+        "outMint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "pool": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "perTrade": "10",
+        "daily": "10",
+        "cap": "10",
+        "floorBps": "1",
+        "days": 1,
+        "purpose": ""
+      }
+    },
+    {
+      "name": "accepts the u64 maximum on the amounts and the floor",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "inMint": "So11111111111111111111111111111111111111112",
+        "outMint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "pool": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "perTrade": "18446744073709551615",
+        "daily": "18446744073709551615",
+        "cap": "18446744073709551615",
+        "floorBps": "18446744073709551615",
+        "days": 3650,
+        "purpose": "ceiling"
+      },
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=18446744073709551615&daily=18446744073709551615&cap=18446744073709551615&floorBps=18446744073709551615&days=3650&purpose=ceiling",
+      "expect": {
+        "v": 2,
+        "kind": "trade",
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "inMint": "So11111111111111111111111111111111111111112",
+        "outMint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "pool": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "perTrade": "18446744073709551615",
+        "daily": "18446744073709551615",
+        "cap": "18446744073709551615",
+        "floorBps": "18446744073709551615",
+        "days": 3650,
+        "purpose": "ceiling"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "rejects a value that is not a URL",
+      "url": "not a url",
+      "problem": "not_a_url",
+      "message": "the request is not a URL"
+    },
+    {
+      "name": "rejects a scheme other than veto",
+      "url": "https://rule-request/?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "scheme",
+      "message": "the scheme must be veto"
+    },
+    {
+      "name": "rejects user info",
+      "url": "veto://operator@rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "userinfo",
+      "message": "the request must not include user info"
+    },
+    {
+      "name": "rejects a port",
+      "url": "veto://rule-request:443?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "port",
+      "message": "the request must not include a port"
+    },
+    {
+      "name": "rejects a host other than rule-request",
+      "url": "veto://rule-approve?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "host",
+      "message": "the host must be rule-request"
+    },
+    {
+      "name": "rejects a path",
+      "url": "veto://rule-request/open?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "path",
+      "message": "the path must be empty"
+    },
+    {
+      "name": "rejects a repeated version",
+      "url": "veto://rule-request?v=2&v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "duplicate_v",
+      "message": "version is repeated"
+    },
+    {
+      "name": "rejects a missing version",
+      "url": "veto://rule-request?kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "missing_v",
+      "message": "version is missing"
+    },
+    {
+      "name": "rejects version 1",
+      "url": "veto://rule-request?v=1&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "bad_v",
+      "message": "version must be 2"
+    },
+    {
+      "name": "rejects a repeated kind",
+      "url": "veto://rule-request?v=2&kind=trade&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "duplicate_kind",
+      "message": "kind is repeated"
+    },
+    {
+      "name": "rejects a missing kind",
+      "url": "veto://rule-request?v=2&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "missing_kind",
+      "message": "kind is missing"
+    },
+    {
+      "name": "rejects a kind other than trade",
+      "url": "veto://rule-request?v=2&kind=payment&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "bad_kind",
+      "message": "kind must be trade"
+    },
+    {
+      "name": "rejects a repeated agent",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "duplicate_agent",
+      "message": "agent is repeated"
+    },
+    {
+      "name": "rejects a missing agent",
+      "url": "veto://rule-request?v=2&kind=trade&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "missing_agent",
+      "message": "agent is missing"
+    },
+    {
+      "name": "rejects an agent that is not a key",
+      "url": "veto://rule-request?v=2&kind=trade&agent=not-a-key&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "bad_agent",
+      "message": "agent must be a canonical base58 address"
+    },
+    {
+      "name": "rejects a repeated inMint",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "duplicate_in_mint",
+      "message": "inMint is repeated"
+    },
+    {
+      "name": "rejects a missing inMint",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "missing_in_mint",
+      "message": "inMint is missing"
+    },
+    {
+      "name": "rejects an inMint that is not a key",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=not-a-key&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "bad_in_mint",
+      "message": "inMint must be a canonical base58 address"
+    },
+    {
+      "name": "rejects a repeated outMint",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "duplicate_out_mint",
+      "message": "outMint is repeated"
+    },
+    {
+      "name": "rejects a missing outMint",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "missing_out_mint",
+      "message": "outMint is missing"
+    },
+    {
+      "name": "rejects an outMint that is not a key",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=not-a-key&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "bad_out_mint",
+      "message": "outMint must be a canonical base58 address"
+    },
+    {
+      "name": "rejects a repeated pool",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "duplicate_pool",
+      "message": "pool is repeated"
+    },
+    {
+      "name": "rejects a missing pool",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "missing_pool",
+      "message": "pool is missing"
+    },
+    {
+      "name": "rejects a pool that is not a key",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=not-a-key&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "bad_pool",
+      "message": "pool must be a canonical base58 address"
+    },
+    {
+      "name": "rejects a repeated perTrade",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "duplicate_per_trade",
+      "message": "perTrade is repeated"
+    },
+    {
+      "name": "rejects a missing perTrade",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "missing_per_trade",
+      "message": "perTrade is missing"
+    },
+    {
+      "name": "rejects a zero perTrade",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=0&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "bad_per_trade",
+      "message": "perTrade must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects a repeated daily",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "duplicate_daily",
+      "message": "daily is repeated"
+    },
+    {
+      "name": "rejects a missing daily",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "missing_daily",
+      "message": "daily is missing"
+    },
+    {
+      "name": "rejects a zero daily",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=0&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "bad_daily",
+      "message": "daily must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects a repeated cap",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "duplicate_cap",
+      "message": "cap is repeated"
+    },
+    {
+      "name": "rejects a missing cap",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "missing_cap",
+      "message": "cap is missing"
+    },
+    {
+      "name": "rejects a zero cap",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=0&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "bad_cap",
+      "message": "cap must be a base-unit integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects perTrade above daily",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=500&daily=100&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "limits_out_of_order",
+      "message": "perTrade is greater than daily"
+    },
+    {
+      "name": "rejects daily above cap",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=2000&cap=1000&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "limits_out_of_order",
+      "message": "daily is greater than cap"
+    },
+    {
+      "name": "rejects a repeated floorBps",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&floorBps=9500&days=30&purpose=API%20fees",
+      "problem": "duplicate_floor_bps",
+      "message": "floorBps is repeated"
+    },
+    {
+      "name": "rejects a missing floorBps",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&days=30&purpose=API%20fees",
+      "problem": "missing_floor_bps",
+      "message": "floorBps is missing"
+    },
+    {
+      "name": "rejects a zero floorBps",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=0&days=30&purpose=API%20fees",
+      "problem": "bad_floor_bps",
+      "message": "floorBps must be an integer greater than 0 and at most the u64 maximum"
+    },
+    {
+      "name": "rejects a repeated days",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&days=30&purpose=API%20fees",
+      "problem": "duplicate_days",
+      "message": "days is repeated"
+    },
+    {
+      "name": "rejects a missing days",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&purpose=API%20fees",
+      "problem": "missing_days",
+      "message": "days is missing"
+    },
+    {
+      "name": "rejects days outside the range",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=0&purpose=API%20fees",
+      "problem": "bad_days",
+      "message": "days must be an integer from 1 to 3650"
+    },
+    {
+      "name": "rejects a repeated purpose",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees&purpose=API%20fees",
+      "problem": "duplicate_purpose",
+      "message": "purpose is repeated"
+    },
+    {
+      "name": "rejects a missing purpose",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30",
+      "problem": "missing_purpose",
+      "message": "purpose is missing"
+    },
+    {
+      "name": "rejects a purpose that is not UTF-8",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=%FF",
+      "problem": "bad_purpose",
+      "message": "purpose is not percent-encoded UTF-8"
+    },
+    {
+      "name": "rejects a purpose longer than 64 bytes",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "problem": "purpose_too_long",
+      "message": "purpose is longer than 64 bytes"
+    },
+    {
+      "name": "rejects a repeated agentLabel",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees&agentLabel=a&agentLabel=b",
+      "problem": "duplicate_agent_label",
+      "message": "agentLabel is repeated"
+    },
+    {
+      "name": "rejects an agentLabel that is not UTF-8",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees&agentLabel=%FF",
+      "problem": "bad_agent_label",
+      "message": "agentLabel is not percent-encoded UTF-8"
+    },
+    {
+      "name": "rejects an agentLabel longer than 64 characters",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees&agentLabel=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "problem": "agent_label_too_long",
+      "message": "agentLabel is longer than 64 characters"
+    },
+    {
+      "name": "rejects a repeated poolLabel",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees&poolLabel=a&poolLabel=b",
+      "problem": "duplicate_pool_label",
+      "message": "poolLabel is repeated"
+    },
+    {
+      "name": "rejects a poolLabel that is not UTF-8",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees&poolLabel=%80",
+      "problem": "bad_pool_label",
+      "message": "poolLabel is not percent-encoded UTF-8"
+    },
+    {
+      "name": "rejects a poolLabel longer than 64 characters",
+      "url": "veto://rule-request?v=2&kind=trade&agent=AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9&inMint=So11111111111111111111111111111111111111112&outMint=GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse&pool=9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu&perTrade=100&daily=500&cap=1000&floorBps=9500&days=30&purpose=API%20fees&poolLabel=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "problem": "pool_label_too_long",
+      "message": "poolLabel is longer than 64 characters"
+    }
+  ],
+  "rejectedInputs": [
+    {
+      "name": "create rejects a missing pool",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "inMint": "So11111111111111111111111111111111111111112",
+        "outMint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "perTrade": "100",
+        "daily": "500",
+        "cap": "1000",
+        "floorBps": "9500",
+        "days": 30,
+        "purpose": "API fees"
+      },
+      "problem": "missing_pool",
+      "message": "pool is missing"
+    },
+    {
+      "name": "create rejects perTrade above daily",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "inMint": "So11111111111111111111111111111111111111112",
+        "outMint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "pool": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "perTrade": "500",
+        "daily": "100",
+        "cap": "1000",
+        "floorBps": "9500",
+        "days": 30,
+        "purpose": "API fees"
+      },
+      "problem": "limits_out_of_order",
+      "message": "perTrade is greater than daily"
+    },
+    {
+      "name": "create rejects a zero floor",
+      "input": {
+        "agent": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+        "inMint": "So11111111111111111111111111111111111111112",
+        "outMint": "GyGKxMyg1p9SsHfm15MkNUu1u9TN2JtTspcdmrtGUdse",
+        "pool": "9hSR6S7WPtxmTojgo6GG3k4yDPecgJY292j7xrsUGWBu",
+        "perTrade": "100",
+        "daily": "500",
+        "cap": "1000",
+        "floorBps": "0",
+        "days": 30,
+        "purpose": "API fees"
+      },
+      "problem": "bad_floor_bps",
+      "message": "floorBps must be an integer greater than 0 and at most the u64 maximum"
+    }
+  ]
+}
