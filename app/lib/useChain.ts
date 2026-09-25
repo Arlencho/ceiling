@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import type { ReactNode } from 'react';
@@ -43,7 +44,7 @@ import type { LedgerRow, LedgerSnapshot } from './ring';
 import { isRateLimitError } from './rpcError';
 import { secureStore } from './mwa';
 import { useWallet } from './useWallet';
-import type { WalletStore } from './wallet';
+import { signatureNotYetVisibleMessage, type WalletStore } from './wallet';
 
 export const SELECTED_MANDATE_KEY = 'veto.mandate.selected';
 
@@ -63,6 +64,7 @@ export type ChainState = {
   decimals: number;
   nowMs: number;
   genesisHash: string | null;
+  submitHeld: boolean;
   refresh: () => Promise<void>;
   selectMandate: (address: string) => Promise<void>;
   open: (input: Omit<OpenMandateInput, 'owner' | 'agent'> & { agent?: PublicKey }) => Promise<OpenMandateResult>;
@@ -102,8 +104,32 @@ function useChainState(): ChainState {
   const [decimals, setDecimals] = useState(6);
   const [nowMs, setNowMs] = useState(0);
   const [genesisHash, setGenesisHash] = useState<string | null>(null);
+  const [submitHeld, setSubmitHeld] = useState(false);
+  const submitHeldRef = useRef(false);
+  const submitEpoch = useRef(0);
+
+  const holdIfPending = useCallback((err: unknown) => {
+    const message = err instanceof Error ? err.message : '';
+    if (
+      !message.startsWith('The transaction has not appeared on ') &&
+      !message.startsWith('The transaction was seen on ')
+    ) {
+      return;
+    }
+    submitEpoch.current += 1;
+    submitHeldRef.current = true;
+    setSubmitHeld(true);
+  }, []);
 
   const refresh = useCallback(async () => {
+    const epochAtStart = submitEpoch.current;
+    const releaseIfCurrent = () => {
+      if (submitEpoch.current !== epochAtStart) {
+        return;
+      }
+      submitHeldRef.current = false;
+      setSubmitHeld(false);
+    };
     setNowMs(Date.now());
     const loaded = tryLoadConfig();
     if (!loaded.ok) {
@@ -146,6 +172,7 @@ function useChainState(): ChainState {
       const preferred = await loadSelected(secureStore);
       const found = await fetchOwnerMandates(client, owner);
       setMandates(found);
+      releaseIfCurrent();
       const selected = pickMandate(found, preferred);
       if (!selected) {
         setMandate(null);
@@ -242,23 +269,31 @@ function useChainState(): ChainState {
       if (!wallet.ownerPublicKey) {
         throw new Error('Connect with Seed Vault first');
       }
+      if (submitHeldRef.current) {
+        throw new Error(signatureNotYetVisibleMessage(loaded.config.explorerCluster));
+      }
       const agentKey = await agentKeyForOpen(input.agent, () => wallet.createAgentKeypair());
       const client: ChainClient = createClient(loaded.config);
-      const result = await openMandate(client, wallet.signAndSend, {
-        owner: new PublicKey(wallet.ownerPublicKey),
-        agent: agentKey,
-        merchant: input.merchant,
-        cap: input.cap,
-        perTxMax: input.perTxMax,
-        expiresAt: input.expiresAt,
-        purpose: input.purpose,
-        mint: input.mint,
-      });
-      await saveSelected(secureStore, result.mandate.address);
-      await refresh();
-      return result;
+      try {
+        const result = await openMandate(client, wallet.signAndSend, {
+          owner: new PublicKey(wallet.ownerPublicKey),
+          agent: agentKey,
+          merchant: input.merchant,
+          cap: input.cap,
+          perTxMax: input.perTxMax,
+          expiresAt: input.expiresAt,
+          purpose: input.purpose,
+          mint: input.mint,
+        });
+        await saveSelected(secureStore, result.mandate.address);
+        await refresh();
+        return result;
+      } catch (err) {
+        holdIfPending(err);
+        throw err;
+      }
     },
-    [refresh, wallet],
+    [holdIfPending, refresh, wallet],
   );
 
   const revoke = useCallback(
@@ -275,17 +310,25 @@ function useChainState(): ChainState {
       if (!target) {
         throw new Error('No mandate on chain to revoke');
       }
+      if (submitHeldRef.current) {
+        throw new Error(signatureNotYetVisibleMessage(loaded.config.explorerCluster));
+      }
       const client = createClient(loaded.config);
-      const result = await revokeMandate(
-        client,
-        wallet.signAndSend,
-        new PublicKey(wallet.ownerPublicKey),
-        target,
-      );
-      await refresh();
-      return result;
+      try {
+        const result = await revokeMandate(
+          client,
+          wallet.signAndSend,
+          new PublicKey(wallet.ownerPublicKey),
+          target,
+        );
+        await refresh();
+        return result;
+      } catch (err) {
+        holdIfPending(err);
+        throw err;
+      }
     },
-    [mandate, mandates, refresh, wallet],
+    [holdIfPending, mandate, mandates, refresh, wallet],
   );
 
   const close = useCallback(
@@ -302,17 +345,25 @@ function useChainState(): ChainState {
       if (!target) {
         throw new Error('No mandate on chain to close');
       }
+      if (submitHeldRef.current) {
+        throw new Error(signatureNotYetVisibleMessage(loaded.config.explorerCluster));
+      }
       const client = createClient(loaded.config);
-      const result = await closeMandate(
-        client,
-        wallet.signAndSend,
-        new PublicKey(wallet.ownerPublicKey),
-        target,
-      );
-      await refresh();
-      return result;
+      try {
+        const result = await closeMandate(
+          client,
+          wallet.signAndSend,
+          new PublicKey(wallet.ownerPublicKey),
+          target,
+        );
+        await refresh();
+        return result;
+      } catch (err) {
+        holdIfPending(err);
+        throw err;
+      }
     },
-    [mandate, mandates, refresh, wallet],
+    [holdIfPending, mandate, mandates, refresh, wallet],
   );
 
   const probeLiveOverride = useCallback(
@@ -342,19 +393,27 @@ function useChainState(): ChainState {
       if (!target) {
         throw new Error('This rule is not loaded for this owner. Pull to retry.');
       }
+      if (submitHeldRef.current) {
+        throw new Error(signatureNotYetVisibleMessage(loaded.config.explorerCluster));
+      }
       const client = createClient(loaded.config);
-      const result = await grantOverride(
-        client,
-        wallet.signAndSend,
-        new PublicKey(wallet.ownerPublicKey),
-        target,
-        row,
-        decimals,
-      );
-      await refresh();
-      return result;
+      try {
+        const result = await grantOverride(
+          client,
+          wallet.signAndSend,
+          new PublicKey(wallet.ownerPublicKey),
+          target,
+          row,
+          decimals,
+        );
+        await refresh();
+        return result;
+      } catch (err) {
+        holdIfPending(err);
+        throw err;
+      }
     },
-    [decimals, mandate, mandates, refresh, wallet],
+    [decimals, holdIfPending, mandate, mandates, refresh, wallet],
   );
 
   const mandateStatus = mandateReadStatus({
@@ -383,6 +442,7 @@ function useChainState(): ChainState {
       decimals,
       nowMs,
       genesisHash,
+      submitHeld,
       refresh,
       selectMandate,
       open,
@@ -407,6 +467,7 @@ function useChainState(): ChainState {
       decimals,
       nowMs,
       genesisHash,
+      submitHeld,
       refresh,
       selectMandate,
       open,

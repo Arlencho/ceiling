@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { Button } from '../../components/Button';
 import { ConnectGate } from '../../components/ConnectGate';
 import { ContextBar } from '../../components/ContextBar';
 import { DecisionRow } from '../../components/DecisionRow';
@@ -12,13 +13,18 @@ import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
 import { formatBaseUnits, isListedDecision, timeLeftParts, todaysAgentDecisions } from '../../lib/format';
+import { NOTIFICATIONS_OFF_LINE } from '../../lib/notificationAsk';
 import { displayPurpose, spendRatio } from '../../lib/ruleView';
 import { useChain } from '../../lib/useChain';
+import { useNotificationOffer } from '../../lib/useNotificationOffer';
+import { useRefreshOnFocus } from '../../lib/useRefreshOnFocus';
 import { truncateAddress } from '../../lib/wallet';
 
 export default function OverviewScreen() {
   const chain = useChain();
   const router = useRouter();
+  useRefreshOnFocus(chain.refresh);
+  const notifications = useNotificationOffer(chain.mandate != null);
   const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
   const today = todaysAgentDecisions(chain.rows, chain.nowMs);
   const rpcUrl = chain.config?.rpcUrl ?? '';
@@ -51,6 +57,19 @@ export default function OverviewScreen() {
         )}
         {chain.mandateStatus === 'present' && mandate ? (
           <View style={styles.block}>
+            {notifications.show ? (
+              <View style={styles.block}>
+                <EmptyState>{NOTIFICATIONS_OFF_LINE}</EmptyState>
+                <Button
+                  label="Turn notifications on"
+                  accessibilityLabel="Turn notifications on"
+                  invert={false}
+                  onPress={() => {
+                    void notifications.turnOn();
+                  }}
+                />
+              </View>
+            ) : null}
             <ContextBar
               title={displayPurpose(mandate.purpose)}
               subtitle={`rule ${index + 1} of ${chain.mandates.length} · agent ${truncateAddress(mandate.agent)}`}

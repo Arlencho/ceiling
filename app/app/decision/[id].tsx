@@ -160,7 +160,7 @@ export default function DecisionDetailScreen() {
             ) : null}
 
             {row.kind === KIND_REFUSED ? (
-              <OverrideGrant view={grant} decimals={chain.decimals} />
+              <OverrideGrant view={grant} decimals={chain.decimals} submitHeld={chain.submitHeld} />
             ) : null}
 
             <View style={styles.proofs}>
@@ -209,7 +209,15 @@ export default function DecisionDetailScreen() {
   );
 }
 
-function OverrideGrant({ view, decimals }: { view: OverrideGrantView; decimals: number }) {
+function OverrideGrant({
+  view,
+  decimals,
+  submitHeld,
+}: {
+  view: OverrideGrantView;
+  decimals: number;
+  submitHeld: boolean;
+}) {
   const { assessment, confirming, signing, error, confirmed, onOffer, onCancel, onSign } = view;
   if (confirmed) {
     return (
@@ -257,7 +265,13 @@ function OverrideGrant({ view, decimals }: { view: OverrideGrantView; decimals: 
             label="Sign and record this override"
             accessibilityLabel="Sign and record this override"
             busy={signing}
-            onPress={onSign}
+            disabled={submitHeld}
+            onPress={() => {
+              if (submitHeld) {
+                return;
+              }
+              onSign();
+            }}
           />
           <Button
             label="Cancel"

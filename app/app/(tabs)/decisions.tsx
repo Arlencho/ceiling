@@ -14,10 +14,12 @@ import { LEDGER_CAPACITY } from '../../lib/constants';
 import { decisionTotals, groupByLocalDay, isListedDecision, newestFirst } from '../../lib/format';
 import { displayPurpose } from '../../lib/ruleView';
 import { useChain } from '../../lib/useChain';
+import { useRefreshOnFocus } from '../../lib/useRefreshOnFocus';
 import { truncateAddress } from '../../lib/wallet';
 
 export default function DecisionsScreen() {
   const chain = useChain();
+  useRefreshOnFocus(chain.refresh);
   const router = useRouter();
   const rpcUrl = chain.config?.rpcUrl ?? '';
   const cluster = chain.config?.explorerCluster ?? 'devnet';

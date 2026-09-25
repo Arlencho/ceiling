@@ -1,6 +1,6 @@
 import { PublicKey } from '@solana/web3.js';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AddressActions } from '../../components/AddressActions';
@@ -146,6 +146,8 @@ function RuleCompose({
   const [rulesetName, setRulesetName] = useState(selectedRuleset?.name ?? '');
   const [formError, setFormError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [openedAddress, setOpenedAddress] = useState<string | null>(null);
+  const openingRef = useRef(false);
 
   const setField = useCallback((key: keyof MandateFields, value: string) => {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -199,16 +201,23 @@ function RuleCompose({
   };
 
   const onOpen = async () => {
+    if (openingRef.current || openedAddress || chain.submitHeld) {
+      return;
+    }
+    openingRef.current = true;
     setFormError(null);
     setMessage(null);
     try {
       const purpose =
         applying && selectedRuleset ? applyRuleset(selectedRuleset).purpose : fields.purpose;
       const result = await openFromFields(purpose);
+      setOpenedAddress(result.mandate.address);
       setMessage(`Opened on chain. Rule ${result.mandate.address}.`);
       router.replace(`/rule/${result.mandate.address}`);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Open failed');
+    } finally {
+      openingRef.current = false;
     }
   };
 
@@ -250,11 +259,12 @@ function RuleCompose({
     <View style={styles.actions}>
       {formError ? <Text style={styles.msg}>{formError}</Text> : null}
       {message ? <Text style={styles.msg}>{message}</Text> : null}
-      {applying ? (
+      {openedAddress ? null : applying ? (
         <Button
           label={wallet.busy ? 'Waiting on Seed Vault...' : 'Apply to a new agent'}
           accessibilityLabel="Apply to a new agent"
           busy={wallet.busy}
+          disabled={chain.submitHeld}
           onPress={() => {
             void onOpen();
           }}
@@ -274,6 +284,7 @@ function RuleCompose({
             label={wallet.busy ? 'Waiting on Seed Vault...' : 'Open this rule'}
             accessibilityLabel="Open this rule"
             busy={wallet.busy}
+            disabled={chain.submitHeld}
             onPress={() => {
               void onOpen();
             }}

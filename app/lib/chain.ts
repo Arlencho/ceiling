@@ -13,6 +13,8 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
+  TransactionExpiredBlockheightExceededError,
+  TransactionExpiredTimeoutError,
   type ConfirmedSignatureInfo,
   type TransactionInstruction,
   type VersionedTransactionResponse,
@@ -50,6 +52,7 @@ import {
   type RuleAccountKind,
 } from './ruleAccount';
 import { displayPurpose } from './ruleView';
+import { signatureNotYetVisibleMessage, signatureSeenUnconfirmedMessage } from './wallet';
 import { assessOverride, type OverrideAssessment } from './override';
 import { decodeMandateAccount, type MandateAccount } from './mandate';
 import { mergeDecisionRows, readAdvisoryDeclines } from './advisory';
@@ -196,10 +199,16 @@ export type ChainClient = {
   programId: PublicKey;
 };
 
+export const chainConnection = {
+  open(rpcUrl: string): Connection {
+    return new Connection(rpcUrl, 'confirmed');
+  },
+};
+
 export function createClient(config: AppConfig = loadConfig()): ChainClient {
   return {
     config,
-    connection: new Connection(config.rpcUrl, 'confirmed'),
+    connection: chainConnection.open(config.rpcUrl),
     programId: new PublicKey(config.programId),
   };
 }
@@ -351,18 +360,84 @@ export async function readRuleFunds(client: ChainClient, mandate: MandateAccount
   };
 }
 
+function blockhashOutlived(err: unknown): boolean {
+  if (
+    err instanceof TransactionExpiredBlockheightExceededError ||
+    err instanceof TransactionExpiredTimeoutError
+  ) {
+    return true;
+  }
+  if (!(err instanceof Error)) {
+    return false;
+  }
+  return (
+    err.name === 'TransactionExpiredBlockheightExceededError' ||
+    err.name === 'TransactionExpiredTimeoutError' ||
+    err.message.includes('block height exceeded') ||
+    err.message.includes('was not confirmed in')
+  );
+}
+
+// The blockhash is taken before the wallet round trip. A slow approval can pass
+// lastValidBlockHeight after the signature has already landed, and the wallet
+// may have signed with a newer blockhash of its own. Absence right then does
+// not mean the signature can no longer land.
+export const signatureWatch = {
+  pollMs: 2_000,
+  windowMs: 90_000,
+  now: (): number => Date.now(),
+  sleep: (ms: number): Promise<void> =>
+    new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    }),
+};
+
 async function confirmSignature(
-  connection: Connection,
+  client: ChainClient,
   signature: string,
   blockhash: string,
   lastValidBlockHeight: number,
 ): Promise<void> {
-  const result = await connection.confirmTransaction(
-    { signature, blockhash, lastValidBlockHeight },
-    'confirmed',
-  );
-  if (result.value.err) {
-    throw new Error(`transaction ${signature} landed with an error`);
+  const connection = client.connection;
+  try {
+    const result = await connection.confirmTransaction(
+      { signature, blockhash, lastValidBlockHeight },
+      'confirmed',
+    );
+    if (result.value.err) {
+      throw new Error(`transaction ${signature} landed with an error`);
+    }
+    return;
+  } catch (err) {
+    if (!blockhashOutlived(err)) {
+      throw err;
+    }
+  }
+
+  const cluster = client.config.explorerCluster;
+  const started = signatureWatch.now();
+  let seen = false;
+  for (;;) {
+    const status = await connection.getSignatureStatuses([signature], {
+      searchTransactionHistory: true,
+    });
+    const row = status.value?.[0] ?? null;
+    if (row?.err) {
+      throw new Error(`transaction ${signature} landed with an error`);
+    }
+    const confirmation = row?.confirmationStatus;
+    if (confirmation === 'confirmed' || confirmation === 'finalized') {
+      return;
+    }
+    if (confirmation === 'processed') {
+      seen = true;
+    }
+    if (signatureWatch.now() - started >= signatureWatch.windowMs) {
+      throw new Error(
+        seen ? signatureSeenUnconfirmedMessage(cluster) : signatureNotYetVisibleMessage(cluster),
+      );
+    }
+    await signatureWatch.sleep(signatureWatch.pollMs);
   }
 }
 
@@ -530,7 +605,7 @@ export async function openMandate(
   if (!signature) {
     throw new Error('wallet returned no signature');
   }
-  await confirmSignature(client.connection, signature, latest.blockhash, latest.lastValidBlockHeight);
+  await confirmSignature(client, signature, latest.blockhash, latest.lastValidBlockHeight);
 
   const mandate = await fetchMandate(client, built.mandate);
   return { signature, mandate, ledger: built.ledger.toBase58() };
@@ -560,7 +635,7 @@ export async function revokeMandate(
   if (!signature) {
     throw new Error('wallet returned no signature');
   }
-  await confirmSignature(client.connection, signature, latest.blockhash, latest.lastValidBlockHeight);
+  await confirmSignature(client, signature, latest.blockhash, latest.lastValidBlockHeight);
   const next = await fetchMandate(client, new PublicKey(mandate.address));
   return { signature, mandate: next };
 }
@@ -668,7 +743,7 @@ export async function closeMandate(
   if (!signature) {
     throw new Error('wallet returned no signature');
   }
-  await confirmSignature(client.connection, signature, latest.blockhash, latest.lastValidBlockHeight);
+  await confirmSignature(client, signature, latest.blockhash, latest.lastValidBlockHeight);
   return { signature };
 }
 
@@ -726,7 +801,7 @@ export async function grantOverride(
   if (!signature) {
     throw new Error('wallet returned no signature');
   }
-  await confirmSignature(client.connection, signature, latest.blockhash, latest.lastValidBlockHeight);
+  await confirmSignature(client, signature, latest.blockhash, latest.lastValidBlockHeight);
 
   const next = await fetchMandate(client, new PublicKey(live.address));
   const ledger = await fetchLedgerRows(client, new PublicKey(live.address));
