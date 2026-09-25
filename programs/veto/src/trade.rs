@@ -113,8 +113,7 @@ pub fn open_trade_rule(ctx: Context<OpenTradeRule>, args: OpenTradeRuleArgs) -> 
         rule.spent = 0;
         rule.per_trade_max = args.per_trade_max;
         rule.daily_limit = args.daily_limit;
-        rule.window_spent = 0;
-        rule.window_start = now;
+        rule.daily_buckets = [TradeBucket::default(); TRADE_BUCKET_COUNT];
         rule.floor_num = args.floor_num;
         rule.floor_den = args.floor_den;
         rule.expires_at = args.expires_at;
@@ -447,27 +446,35 @@ fn pool_verdict(reason: u8, rule: &TradeRule) -> Verdict {
     }
 }
 
-/// Input already inside the current window, after a roll that is not written
-/// until a trade actually settles.
-fn current_window_spent(rule: &TradeRule, now: i64) -> Result<u64> {
-    let end = rule
-        .window_start
-        .checked_add(TRADE_WINDOW_SECS)
-        .ok_or(error!(VetoError::MathOverflow))?;
-    Ok(if now >= end { 0 } else { rule.window_spent })
+/// Retain the current hour and 24 preceding hours, including the whole oldest
+/// bucket. Every sale in the last 24 hours is included. Future buckets also
+/// count defensively if the clock moves backwards.
+pub fn current_window_spent(rule: &TradeRule, now: i64) -> Result<u64> {
+    let oldest = now.div_euclid(TRADE_BUCKET_SECS) - 24;
+    rule.daily_buckets
+        .iter()
+        .filter(|bucket| bucket.hour >= oldest)
+        .try_fold(0u64, |total, bucket| {
+            total
+                .checked_add(bucket.amount)
+                .ok_or(error!(VetoError::MathOverflow))
+        })
 }
 
 fn commit_window(rule: &mut TradeRule, amount_in: u64, now: i64) -> Result<()> {
-    let end = rule
-        .window_start
-        .checked_add(TRADE_WINDOW_SECS)
-        .ok_or(error!(VetoError::MathOverflow))?;
-    if now >= end {
-        rule.window_start = now;
-        rule.window_spent = 0;
+    let hour = now.div_euclid(TRADE_BUCKET_SECS);
+    let slot = hour.rem_euclid(TRADE_BUCKET_COUNT as i64) as usize;
+    let bucket = &mut rule.daily_buckets[slot];
+    if bucket.hour != hour {
+        // Never discard a future bucket after a backwards clock adjustment.
+        require!(
+            bucket.amount == 0 || bucket.hour < hour - 24,
+            VetoError::MathOverflow
+        );
+        *bucket = TradeBucket { hour, amount: 0 };
     }
-    rule.window_spent = rule
-        .window_spent
+    bucket.amount = bucket
+        .amount
         .checked_add(amount_in)
         .ok_or(error!(VetoError::MathOverflow))?;
     Ok(())
@@ -479,8 +486,8 @@ pub const TRADE_FEE_NUM: u64 = 25;
 pub const OWNER_TRADE_FEE_NUM: u64 = 5;
 pub const FEE_DEN: u64 = 10_000;
 
-/// Input left after the pinned exchange's fees. SPL token-swap v2 on devnet
-/// accepts exactly one schedule: trade 25/10000 plus owner trade 5/10000, each
+/// Input left after the schedule verified at open: trade 25/10000 plus
+/// owner trade 5/10000, each
 /// rounded down on the input with a minimum of one unit for nonzero input.
 pub fn input_after_fees(amount_in: u64) -> u64 {
     let amount = u128::from(amount_in);
@@ -609,7 +616,9 @@ fn settle_trade(
     if rule.spent >= rule.cap {
         rule.status = STATUS_EXHAUSTED;
     }
-    let remaining_today = rule.daily_limit.saturating_sub(rule.window_spent);
+    let remaining_today = rule
+        .daily_limit
+        .saturating_sub(current_window_spent(rule, now)?);
     let spent = rule.spent;
     let cap = rule.cap;
     let rule_key = rule.key();
@@ -745,6 +754,74 @@ fn require_pool_shape(ctx: &Context<OpenTradeRule>) -> Result<()> {
     require_keys_eq!(
         *ctx.accounts.pool.to_account_info().owner,
         ctx.accounts.exchange_program.key(),
+        VetoError::PoolAccountMismatch
+    );
+
+    // Versioned SPL token-swap v2 state: version, initialized, bump, seven
+    // pubkeys, eight fee words, curve tag and 32 curve parameter bytes.
+    let pool_info = ctx.accounts.pool.to_account_info();
+    let data = pool_info.try_borrow_data()?;
+    require!(
+        data.len() == 324 && data[0] == 1 && data[1] == 1,
+        VetoError::PoolAccountMismatch
+    );
+    let expected_fees = [
+        TRADE_FEE_NUM,
+        FEE_DEN,
+        OWNER_TRADE_FEE_NUM,
+        FEE_DEN,
+        0,
+        0,
+        20,
+        100,
+    ];
+    for (index, expected) in expected_fees.iter().enumerate() {
+        let offset = 227 + index * 8;
+        require!(
+            data[offset..offset + 8] == expected.to_le_bytes(),
+            VetoError::PoolAccountMismatch
+        );
+    }
+    require!(data[291] == 0, VetoError::PoolAccountMismatch);
+    let expected_keys = [
+        spl_token::ID,
+        ctx.accounts.pool_in_vault.key(),
+        ctx.accounts.pool_out_vault.key(),
+        ctx.accounts.pool_mint.key(),
+        ctx.accounts.in_mint.key(),
+        ctx.accounts.out_mint.key(),
+        ctx.accounts.pool_fee_account.key(),
+    ];
+    // Pools may be traded in either direction.
+    let forward = data[35..67] == expected_keys[1].to_bytes();
+    let ordered = if forward {
+        expected_keys
+    } else {
+        [
+            expected_keys[0],
+            expected_keys[2],
+            expected_keys[1],
+            expected_keys[3],
+            expected_keys[5],
+            expected_keys[4],
+            expected_keys[6],
+        ]
+    };
+    for (index, expected) in ordered.iter().enumerate() {
+        let offset = 3 + index * 32;
+        require!(
+            data[offset..offset + 32] == expected.to_bytes(),
+            VetoError::PoolAccountMismatch
+        );
+    }
+    let authority = Pubkey::create_program_address(
+        &[pool_info.key.as_ref(), &[data[2]]],
+        &ctx.accounts.exchange_program.key(),
+    )
+    .map_err(|_| error!(VetoError::PoolAccountMismatch))?;
+    require_keys_eq!(
+        authority,
+        ctx.accounts.pool_authority.key(),
         VetoError::PoolAccountMismatch
     );
 

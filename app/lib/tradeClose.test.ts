@@ -35,12 +35,12 @@ for (const delta of [-1, 0, 1]) {
     const now = 2_000_000_000;
     const clock = mock.method(Date, 'now', () => now * 1000);
     try {
-      const raw = Buffer.alloc(640);
+      const raw = Buffer.alloc(991);
       Buffer.from(TRADE_RULE_DISCRIMINATOR).copy(raw);
       owner.toBuffer().copy(raw, 8);
       source.toBuffer().copy(raw, 72);
       NATIVE_MINT.toBuffer().copy(raw, 136);
-      raw.writeBigInt64LE(BigInt(now - delta), 8 + 13 * 32 + 1 + 9 * 8);
+      raw.writeBigInt64LE(BigInt(now - delta), 8 + 13 * 32 + 1 + 7 * 8 + 25 * 16);
       const live = decodeTradeRuleAccount(rule.toBase58(), raw);
       const mintData = Buffer.alloc(82);
       mintData[44] = 9;

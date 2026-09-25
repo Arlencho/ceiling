@@ -290,6 +290,71 @@ export type Veto = {
       "args": []
     },
     {
+      "name": "closeTradeRule",
+      "discriminator": [
+        93,
+        102,
+        200,
+        106,
+        195,
+        121,
+        250,
+        120
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "rule",
+          "writable": true
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "deposit",
       "discriminator": [
         242,
@@ -404,7 +469,8 @@ export type Veto = {
           ]
         },
         {
-          "name": "tokenProgram"
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": [
@@ -523,7 +589,8 @@ export type Veto = {
           ]
         },
         {
-          "name": "tokenProgram"
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": [
@@ -678,6 +745,71 @@ export type Veto = {
       ]
     },
     {
+      "name": "grantTradeOverride",
+      "discriminator": [
+        133,
+        223,
+        203,
+        45,
+        174,
+        92,
+        157,
+        151
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "rule",
+          "writable": true
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rule"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "amountIn",
+          "type": "u64"
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "initVault",
       "discriminator": [
         77,
@@ -779,7 +911,8 @@ export type Veto = {
           "name": "mint"
         },
         {
-          "name": "tokenProgram"
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
           "name": "systemProgram",
@@ -887,6 +1020,133 @@ export type Veto = {
           "type": {
             "defined": {
               "name": "openMandateArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "openTradeRule",
+      "discriminator": [
+        109,
+        183,
+        63,
+        166,
+        60,
+        202,
+        82,
+        15
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rule",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "args.ruleId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "inMint"
+        },
+        {
+          "name": "outMint"
+        },
+        {
+          "name": "exchangeProgram"
+        },
+        {
+          "name": "pool"
+        },
+        {
+          "name": "poolAuthority"
+        },
+        {
+          "name": "poolInVault"
+        },
+        {
+          "name": "poolOutVault"
+        },
+        {
+          "name": "poolMint"
+        },
+        {
+          "name": "poolFeeAccount"
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "openTradeRuleArgs"
             }
           }
         }
@@ -1091,7 +1351,8 @@ export type Veto = {
           ]
         },
         {
-          "name": "tokenProgram"
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
@@ -1152,6 +1413,73 @@ export type Veto = {
         },
         {
           "name": "tokenProgram"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "revokeTradeRule",
+      "discriminator": [
+        112,
+        252,
+        178,
+        223,
+        55,
+        115,
+        217,
+        201
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "rule",
+          "writable": true
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "writable": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
@@ -1275,7 +1603,8 @@ export type Veto = {
           ]
         },
         {
-          "name": "tokenProgram"
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": [
@@ -1361,6 +1690,115 @@ export type Veto = {
       "args": [
         {
           "name": "id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "trade",
+      "discriminator": [
+        178,
+        144,
+        26,
+        216,
+        241,
+        187,
+        206,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "agent",
+          "signer": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "rule",
+          "writable": true
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  45,
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "writable": true,
+          "relations": [
+            "rule"
+          ]
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "exchangeProgram"
+        },
+        {
+          "name": "pool"
+        },
+        {
+          "name": "poolAuthority"
+        },
+        {
+          "name": "poolInVault",
+          "writable": true
+        },
+        {
+          "name": "poolOutVault",
+          "writable": true
+        },
+        {
+          "name": "poolMint",
+          "writable": true
+        },
+        {
+          "name": "poolFeeAccount",
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amountIn",
+          "type": "u64"
+        },
+        {
+          "name": "minOut",
+          "type": "u64"
+        },
+        {
+          "name": "nonce",
           "type": "u64"
         }
       ]
@@ -1562,7 +2000,8 @@ export type Veto = {
           ]
         },
         {
-          "name": "tokenProgram"
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": [
@@ -1624,6 +2063,32 @@ export type Veto = {
         63,
         55,
         18
+      ]
+    },
+    {
+      "name": "tradeLedger",
+      "discriminator": [
+        200,
+        191,
+        201,
+        165,
+        93,
+        179,
+        79,
+        190
+      ]
+    },
+    {
+      "name": "tradeRule",
+      "discriminator": [
+        71,
+        199,
+        163,
+        41,
+        101,
+        116,
+        241,
+        212
       ]
     }
   ],
@@ -1847,6 +2312,32 @@ export type Veto = {
         62,
         106,
         169
+      ]
+    },
+    {
+      "name": "tradeRefused",
+      "discriminator": [
+        97,
+        219,
+        5,
+        169,
+        115,
+        219,
+        109,
+        235
+      ]
+    },
+    {
+      "name": "traded",
+      "discriminator": [
+        225,
+        202,
+        73,
+        175,
+        147,
+        43,
+        160,
+        150
       ]
     }
   ],
@@ -2100,6 +2591,76 @@ export type Veto = {
       "code": 6049,
       "name": "badVaultAuthority",
       "msg": "token account authority is not the vault"
+    },
+    {
+      "code": 6050,
+      "name": "invalidTradeRulePda",
+      "msg": "trade rule address does not match its stored fields"
+    },
+    {
+      "code": 6051,
+      "name": "tradeDeltaMismatch",
+      "msg": "the swap moved a different amount than the rule allowed"
+    },
+    {
+      "code": 6052,
+      "name": "poolAccountMismatch",
+      "msg": "pool accounts do not match the trade rule"
+    },
+    {
+      "code": 6053,
+      "name": "tradeLimitsOutOfOrder",
+      "msg": "per-trade maximum, daily limit, and cap are out of order"
+    },
+    {
+      "code": 6054,
+      "name": "floorDenominatorRequired",
+      "msg": "floor denominator must be greater than zero"
+    },
+    {
+      "code": 6055,
+      "name": "exchangeNotSupported",
+      "msg": "this exchange is not supported"
+    },
+    {
+      "code": 6056,
+      "name": "destinationNotOwnedByOwner",
+      "msg": "destination token account is not owned by the rule owner"
+    },
+    {
+      "code": 6057,
+      "name": "unexpectedTradeAccount",
+      "msg": "an extra account was passed to trade"
+    },
+    {
+      "code": 6058,
+      "name": "tradeRuleNotActive",
+      "msg": "trade rule is not active"
+    },
+    {
+      "code": 6059,
+      "name": "tradeRuleStillActive",
+      "msg": "trade rule is still active"
+    },
+    {
+      "code": 6060,
+      "name": "floorRequired",
+      "msg": "floor numerator must be greater than zero"
+    },
+    {
+      "code": 6061,
+      "name": "dailyLimitRequired",
+      "msg": "daily limit must be greater than zero"
+    },
+    {
+      "code": 6062,
+      "name": "sourceAlreadyDelegated",
+      "msg": "source token account is already delegated to another account"
+    },
+    {
+      "code": 6063,
+      "name": "notATokenAccount",
+      "msg": "account is not an initialized SPL token account"
     }
   ],
   "types": [
@@ -2888,6 +3449,54 @@ export type Veto = {
       }
     },
     {
+      "name": "openTradeRuleArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ruleId",
+            "type": "u64"
+          },
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "exchangeKind",
+            "type": "u8"
+          },
+          {
+            "name": "cap",
+            "type": "u64"
+          },
+          {
+            "name": "perTradeMax",
+            "type": "u64"
+          },
+          {
+            "name": "dailyLimit",
+            "type": "u64"
+          },
+          {
+            "name": "floorNum",
+            "type": "u64"
+          },
+          {
+            "name": "floorDen",
+            "type": "u64"
+          },
+          {
+            "name": "expiresAt",
+            "type": "i64"
+          },
+          {
+            "name": "purpose",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
       "name": "paid",
       "type": {
         "kind": "struct",
@@ -3002,6 +3611,330 @@ export type Veto = {
           },
           {
             "name": "suggestedOverride",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tradeBucket",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "hour",
+            "type": "i64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tradeEntry",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ts",
+            "type": "i64"
+          },
+          {
+            "name": "amountIn",
+            "type": "u64"
+          },
+          {
+            "name": "amountOut",
+            "type": "u64"
+          },
+          {
+            "name": "minOut",
+            "type": "u64"
+          },
+          {
+            "name": "counterparty",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "suggestedOverride",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "reason",
+            "type": "u8"
+          },
+          {
+            "name": "pad",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "tradeLedger",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rule",
+            "type": "pubkey"
+          },
+          {
+            "name": "total",
+            "type": "u32"
+          },
+          {
+            "name": "head",
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "pad",
+            "type": {
+              "array": [
+                "u8",
+                1
+              ]
+            }
+          },
+          {
+            "name": "entries",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "tradeEntry"
+                  }
+                },
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "tradeRefused",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rule",
+            "type": "pubkey"
+          },
+          {
+            "name": "amountIn",
+            "type": "u64"
+          },
+          {
+            "name": "minOut",
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "reason",
+            "type": "u8"
+          },
+          {
+            "name": "suggestedOverride",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tradeRule",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "source",
+            "type": "pubkey"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          },
+          {
+            "name": "inMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "outMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "exchangeProgram",
+            "type": "pubkey"
+          },
+          {
+            "name": "exchangeKind",
+            "type": "u8"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "poolAuthority",
+            "type": "pubkey"
+          },
+          {
+            "name": "poolInVault",
+            "type": "pubkey"
+          },
+          {
+            "name": "poolOutVault",
+            "type": "pubkey"
+          },
+          {
+            "name": "poolMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "poolFeeAccount",
+            "type": "pubkey"
+          },
+          {
+            "name": "ruleId",
+            "type": "u64"
+          },
+          {
+            "name": "cap",
+            "type": "u64"
+          },
+          {
+            "name": "spent",
+            "type": "u64"
+          },
+          {
+            "name": "perTradeMax",
+            "type": "u64"
+          },
+          {
+            "name": "dailyLimit",
+            "type": "u64"
+          },
+          {
+            "name": "dailyBuckets",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "tradeBucket"
+                  }
+                },
+                25
+              ]
+            }
+          },
+          {
+            "name": "floorNum",
+            "type": "u64"
+          },
+          {
+            "name": "floorDen",
+            "type": "u64"
+          },
+          {
+            "name": "expiresAt",
+            "type": "i64"
+          },
+          {
+            "name": "overrideAmount",
+            "type": "u64"
+          },
+          {
+            "name": "overrideNonce",
+            "type": "u64"
+          },
+          {
+            "name": "lastNonce",
+            "type": "u64"
+          },
+          {
+            "name": "purpose",
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "tradeCount",
+            "type": "u32"
+          },
+          {
+            "name": "refusalCount",
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "traded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rule",
+            "type": "pubkey"
+          },
+          {
+            "name": "amountIn",
+            "type": "u64"
+          },
+          {
+            "name": "amountOut",
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "spent",
             "type": "u64"
           }
         ]

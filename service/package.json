@@ -12,7 +12,9 @@
     "lint": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts src/**/*.test.ts",
     "migrate": "tsx src/db/cli.ts",
-    "record-fixtures": "tsx scripts/record-fixtures.ts"
+    "record-fixtures": "tsx scripts/record-fixtures.ts",
+    "webhook": "tsx src/sources/webhook.ts",
+    "backfill": "tsx src/sources/backfill.ts"
   },
   "dependencies": { "@solana/web3.js": "^1.98.4", "bs58": "^6.0.0", "pg": "^8.16.3" },
   "devDependencies": { "@types/node": "^22.15.3", "@types/pg": "^8.15.5", "tsx": "^4.19.4", "typescript": "~5.8.3" }

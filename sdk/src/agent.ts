@@ -16,7 +16,6 @@ import {
 import { decisionsFromTx, tradeDecisionsFromTx, viewFromRpc, type RpcTransaction } from "./events.js";
 import { CHARGE_DISCRIMINATOR, PROGRAM_ID, TRADE_DISCRIMINATOR } from "./idl.js";
 import {
-  TRADE_WINDOW_SECS,
   asU64,
   decodeMandate,
   ledgerPda,
@@ -777,12 +776,13 @@ export class VetoAgent {
     return rule.lastNonce + 1n;
   }
 
-  /** What the rule still allows. A finished 24 hour window counts as unused. */
+  /** What the rule still allows under the conservative rolling daily limit. */
   async tradeStatus(): Promise<TradeStatus> {
     const rule = await this.loadTradeRule("VetoAgent.tradeStatus");
     const now = BigInt(Math.floor(Date.now() / 1000));
-    const windowEnd = rule.windowStart + BigInt(TRADE_WINDOW_SECS);
-    const spentToday = now >= windowEnd ? 0n : rule.windowSpent;
+    const hour = now >= 0n ? now / 3600n : (now - 3599n) / 3600n;
+    const spentToday = rule.dailyBuckets.reduce((sum, bucket) =>
+      bucket.hour >= hour - 24n ? sum + bucket.amount : sum, 0n);
     return {
       cap: rule.cap,
       spent: rule.spent,

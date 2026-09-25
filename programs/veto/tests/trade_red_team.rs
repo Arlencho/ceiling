@@ -66,7 +66,7 @@ struct PoolFees {
     host_denominator: u64,
 }
 
-/// The only schedule this ELF accepts. See `token_swap_fixture.rs`.
+/// The schedule Veto supports. The exchange also accepts higher fees.
 const ENFORCED_FEES: PoolFees = PoolFees {
     trade_numerator: 25,
     trade_denominator: 10_000,
@@ -1058,21 +1058,23 @@ fn trades_fill_the_daily_limit_then_the_next_is_reason_13_until_the_window_rolls
         assert_eq!(after.agent_out, before.agent_out);
         paid.push((now(&w.svm), amount));
     }
-    assert_eq!(read_rule(&w.svm, &w.rule).window_spent, 50 * IN_ONE);
+    assert_eq!(
+        veto::trade::current_window_spent(&read_rule(&w.svm, &w.rule), now(&w.svm)).unwrap(),
+        50 * IN_ONE
+    );
 
     let next = 10 * IN_ONE;
     let before = snap(&w);
     trade(&mut w, next, 1, 4).expect("over the daily limit confirms");
     assert_refused(&w, &before, REASON_OVER_DAILY, w.pool.pool, next, 4);
 
-    let start = read_rule(&w.svm, &w.rule).window_start;
+    let start = now(&w.svm);
     warp(&mut w.svm, start + TRADE_WINDOW_SECS - 1);
     let before = snap(&w);
     trade(&mut w, 1, 1, 5).expect("one second before the roll still refuses");
     assert_refused(&w, &before, REASON_OVER_DAILY, w.pool.pool, 1, 5);
-    assert_eq!(read_rule(&w.svm, &w.rule).window_start, start);
 
-    warp(&mut w.svm, start + TRADE_WINDOW_SECS);
+    warp(&mut w.svm, start + TRADE_WINDOW_SECS + 3600);
     let again = 20 * IN_ONE;
     let before = snap(&w);
     trade(&mut w, again, 1, 6).expect("a new window allows another trade");
@@ -1108,8 +1110,8 @@ fn over_the_remaining_cap_is_reason_6_and_an_override_cannot_clear_it() {
     trade(&mut w, 10 * IN_ONE, 1, 2).expect("pays");
     trade(&mut w, 10 * IN_ONE, 1, 3).expect("pays");
     assert_eq!(read_rule(&w.svm, &w.rule).remaining(), 10 * IN_ONE);
-    let start = read_rule(&w.svm, &w.rule).window_start;
-    warp(&mut w.svm, start + TRADE_WINDOW_SECS);
+    let start = now(&w.svm);
+    warp(&mut w.svm, start + TRADE_WINDOW_SECS + 3600);
 
     let amount_in = 20 * IN_ONE;
     let before = snap(&w);
@@ -1322,8 +1324,8 @@ fn an_override_trades_over_the_per_trade_maximum_and_does_not_lift_daily_or_cap(
     trade(&mut w, 10 * IN_ONE, 1, 2).expect("pays");
     trade(&mut w, 10 * IN_ONE, 1, 3).expect("pays");
     assert_eq!(read_rule(&w.svm, &w.rule).spent, 30 * IN_ONE);
-    let start = read_rule(&w.svm, &w.rule).window_start;
-    warp(&mut w.svm, start + TRADE_WINDOW_SECS);
+    let start = now(&w.svm);
+    warp(&mut w.svm, start + TRADE_WINDOW_SECS + 3600);
 
     let over_cap = 25 * IN_ONE;
     let before = snap(&w);
@@ -1795,7 +1797,10 @@ fn two_trades_in_one_transaction_cannot_slip_past_the_daily_limit() {
     assert_eq!(after.agent_out, before.agent_out);
     let rule = read_rule(&w.svm, &w.rule);
     assert_eq!(rule.spent, amount);
-    assert_eq!(rule.window_spent, amount);
+    assert_eq!(
+        veto::trade::current_window_spent(&rule, now(&w.svm)).unwrap(),
+        amount
+    );
     assert_eq!(rule.trade_count, 1);
     assert_eq!(rule.refusal_count, 1);
     assert_eq!(rule.last_nonce, 1);
@@ -1835,8 +1840,7 @@ fn a_forged_rule_at_its_canonical_pda_cannot_spend_the_owner_source() {
     rule.per_trade_max = 1_000 * IN_ONE;
     rule.daily_limit = 1_000 * IN_ONE;
     rule.spent = 0;
-    rule.window_spent = 0;
-    rule.window_start = now(&w.svm);
+    rule.daily_buckets = [veto::TradeBucket::default(); veto::TRADE_BUCKET_COUNT];
     rule.floor_num = 1;
     rule.floor_den = 1;
     rule.expires_at = FAR_FUTURE;
@@ -1878,5 +1882,199 @@ fn a_forged_rule_at_its_canonical_pda_cannot_spend_the_owner_source() {
     assert_eq!(
         token_account(&w.svm, &w.source).delegate,
         COption::Some(w.rule)
+    );
+}
+
+/// Regression: a fixed window previously allowed two daily limits to leave
+/// in a one-second boundary burst. The rolling limit refuses the second sale.
+#[test]
+fn redteam_window_boundary_burst_sells_twice_the_daily_limit_in_two_seconds() {
+    let mut w = open_world(Rules {
+        cap: 200 * IN_ONE,
+        per_trade_max: 50 * IN_ONE,
+        daily_limit: 50 * IN_ONE,
+        ..Rules::default()
+    });
+    let start = now(&w.svm);
+    let before = snap(&w);
+    warp(&mut w.svm, start + TRADE_WINDOW_SECS - 1);
+    trade(&mut w, 50 * IN_ONE, 1, 1).expect("last second of window one");
+    warp(&mut w.svm, start + TRADE_WINDOW_SECS);
+    trade(&mut w, 50 * IN_ONE, 1, 2).expect("first second of window two");
+    let after = snap(&w);
+    let sold = before.source - after.source;
+    assert_eq!(last_entry(&w.svm, &w.ledger).reason, REASON_OVER_DAILY);
+    assert_eq!(last_entry(&w.svm, &w.ledger).suggested_override, 0);
+    assert_eq!(sold, 50 * IN_ONE, "the second burst must move nothing");
+}
+
+/// The pinned exchange accepts higher trade fees, but Veto must refuse them.
+#[test]
+fn redteam_probe_pool_with_higher_trade_fee() {
+    unsupported_pool_is_refused(false);
+}
+
+#[test]
+fn constant_price_pool_is_refused_at_open() {
+    unsupported_pool_is_refused(true);
+}
+
+fn unsupported_pool_is_refused(constant_price: bool) {
+    let (mut svm, owner, _agent) = boot();
+    let in_mint = create_mint(&mut svm, &owner, IN_DECIMALS, &owner.pubkey());
+    let out_mint = create_mint(&mut svm, &owner, OUT_DECIMALS, &owner.pubkey());
+    let exchange_program = token_swap_id();
+    let swap_kp = Keypair::new();
+    let pool = swap_kp.pubkey();
+    let (authority, bump) = Pubkey::find_program_address(&[pool.as_ref()], &exchange_program);
+    let vault_in = create_token_account(&mut svm, &owner, &in_mint, &authority);
+    let vault_out = create_token_account(&mut svm, &owner, &out_mint, &authority);
+    mint_to(&mut svm, &owner, &in_mint, &vault_in, LIQUIDITY_IN);
+    mint_to(&mut svm, &owner, &out_mint, &vault_out, LIQUIDITY_OUT);
+    let pool_mint_kp = Keypair::new();
+    let pool_mint = pool_mint_kp.pubkey();
+    send(
+        &mut svm,
+        &owner,
+        &[&owner, &pool_mint_kp],
+        &[
+            system_instruction::create_account(
+                &owner.pubkey(),
+                &pool_mint,
+                10_000_000,
+                spl_token::state::Mint::LEN as u64,
+                &spl_token::ID,
+            ),
+            spl_token::instruction::initialize_mint2(
+                &spl_token::ID,
+                &pool_mint,
+                &authority,
+                None,
+                IN_DECIMALS,
+            )
+            .unwrap(),
+        ],
+    )
+    .unwrap();
+    let fee_account = create_token_account(&mut svm, &owner, &pool_mint, &fee_owner());
+    let lp_dest = create_token_account(&mut svm, &owner, &pool_mint, &owner.pubkey());
+    let fees = PoolFees {
+        trade_numerator: if constant_price { 25 } else { 5_000 },
+        ..ENFORCED_FEES
+    };
+    let init = Instruction {
+        program_id: exchange_program,
+        accounts: vec![
+            AccountMeta::new(pool, true),
+            AccountMeta::new_readonly(authority, false),
+            AccountMeta::new_readonly(vault_in, false),
+            AccountMeta::new_readonly(vault_out, false),
+            AccountMeta::new(pool_mint, false),
+            AccountMeta::new_readonly(fee_account, false),
+            AccountMeta::new(lp_dest, false),
+            AccountMeta::new_readonly(spl_token::ID, false),
+        ],
+        data: {
+            let mut data = initialize_data(bump, &fees);
+            if constant_price {
+                data[66] = 1;
+                data[67..75].copy_from_slice(&1000u64.to_le_bytes());
+            }
+            data
+        },
+    };
+    let r = send(
+        &mut svm,
+        &owner,
+        &[&owner, &swap_kp],
+        &[
+            system_instruction::create_account(
+                &owner.pubkey(),
+                &pool,
+                10_000_000,
+                SWAP_ACCOUNT_LEN,
+                &exchange_program,
+            ),
+            init,
+        ],
+    );
+    r.expect("pool init");
+    let hp = Pool {
+        pool,
+        authority,
+        vault_in,
+        vault_out,
+        pool_mint,
+        fee_account,
+    };
+    let agent = Keypair::new();
+    svm.airdrop(&agent.pubkey(), 10_000_000_000).unwrap();
+    let source = create_token_account(&mut svm, &owner, &in_mint, &owner.pubkey());
+    let destination = create_token_account(&mut svm, &owner, &out_mint, &owner.pubkey());
+    mint_to(&mut svm, &owner, &in_mint, &source, USER_FUNDS);
+    let rules = Rules {
+        floor_num: 900,
+        floor_den: 1,
+        ..Rules::default()
+    };
+    let (rule, ledger) = rule_pdas(&owner.pubkey(), rules.rule_id);
+    let ix = open_ix(
+        owner.pubkey(),
+        &rules,
+        agent.pubkey(),
+        source,
+        destination,
+        in_mint,
+        out_mint,
+        &hp,
+    );
+    let source_before = token_account(&svm, &source);
+    let err =
+        send(&mut svm, &owner, &[&owner], &[ix]).expect_err("unsupported pool must be refused");
+    assert!(err.contains("PoolAccountMismatch"), "{err}");
+    assert!(svm.get_account(&rule).is_none());
+    assert!(svm.get_account(&ledger).is_none());
+    assert_eq!(token_account(&svm, &source), source_before);
+}
+
+#[test]
+fn randomized_trades_never_sell_more_than_the_limit_in_any_rolling_day() {
+    let limit = 50 * IN_ONE;
+    let mut w = open_world(Rules {
+        cap: USER_FUNDS,
+        per_trade_max: limit,
+        daily_limit: limit,
+        ..Rules::default()
+    });
+    let start = now(&w.svm);
+    let mut timestamp = start;
+    let mut seed = 0x1234_5678u64;
+    let mut paid = Vec::new();
+    for nonce in 1..=600 {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        timestamp += ((seed >> 32) % 1800) as i64;
+        warp(&mut w.svm, timestamp);
+        let amount = (1 + seed % 50) * IN_ONE;
+        let before = token_amount(&w.svm, &w.source);
+        trade(&mut w, amount, 1, nonce).expect("trade or refusal confirms");
+        let sold = before - token_amount(&w.svm, &w.source);
+        if sold > 0 {
+            assert_eq!(sold, amount);
+            paid.push((timestamp, sold));
+        }
+        let rolling: u64 = paid
+            .iter()
+            .filter(|(ts, _)| *ts >= timestamp - TRADE_WINDOW_SECS)
+            .map(|(_, amount)| *amount)
+            .sum();
+        assert!(
+            rolling <= limit,
+            "sold {rolling} in the day ending {timestamp}"
+        );
+    }
+    assert!(timestamp - start > 5 * TRADE_WINDOW_SECS);
+    assert!(
+        paid.len() > 10,
+        "exercise accepted trades across multiple days"
     );
 }

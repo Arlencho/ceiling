@@ -4,10 +4,12 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { REASON_TEXT, reasonText } from "./reasons.js";
 
-test("the bundled IDL matches indexer/idl/veto.json byte for byte", () => {
-  const bundled = readFileSync(fileURLToPath(new URL("../idl/veto.json", import.meta.url)));
-  const upstream = readFileSync(fileURLToPath(new URL("../../indexer/idl/veto.json", import.meta.url)));
-  assert.equal(bundled.equals(upstream), true);
+test("all bundled IDLs match byte for byte", () => {
+  const bundled = readFileSync(new URL("../idl/veto.json", import.meta.url));
+  for (const pkg of ["indexer", "tools", "watcher"]) {
+    const copy = readFileSync(new URL(`../../${pkg}/idl/veto.json`, import.meta.url));
+    assert.equal(bundled.equals(copy), true, pkg);
+  }
 });
 
 test("reason texts match app/lib/constants.ts", () => {
@@ -26,7 +28,7 @@ test("reason texts match app/lib/constants.ts", () => {
     .sort((a, b) => a - b);
   assert.deepEqual(refusalCodes, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
   assert.equal(fromSdk[11], "output account not allowed");
-  assert.equal(fromSdk[12], "pool not allowed");
+  assert.equal(fromSdk[12], "pool account not allowed");
   assert.equal(fromSdk[13], "over daily limit");
   assert.equal(fromSdk[14], "quote below floor");
   assert.match(source, /return REASON_TEXT\[reason\] \?\? 'unknown'/);

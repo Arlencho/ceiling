@@ -121,8 +121,8 @@ export function floorFromSpot(
   inReserve: bigint,
   percent: number,
 ): { floorNum: bigint; floorDen: bigint } {
-  if (!Number.isInteger(percent) || percent < 1 || percent > 100) {
-    throw new Error('Floor percent must be a whole number from 1 to 100.');
+  if (!Number.isInteger(percent) || percent < 1 || percent > 99) {
+    throw new Error('Floor percent must be a whole number from 1 to 99.');
   }
   if (inReserve <= 0n || outReserve <= 0n) {
     throw new Error('This pool has no rate to read. Both vaults need a balance.');

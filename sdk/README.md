@@ -20,6 +20,22 @@ npx tsx examples/pay-once.ts <agent-key.json> <config.json> <amount-in-base-unit
 
 The example prints kind, reason code, reason text, suggested override, signature, and slot.
 
+## SKR charges
+
+`examples/skr-once.ts` demonstrates two charges. The program runs on devnet today, not mainnet. To run against a devnet rule, set `VETO_MINT` to that rule's actual mint, for example the 6-decimal second mint. The SKR default applies once the contained mainnet rule exists.
+
+From `sdk/`, with `VETO_RPC` already set in your environment:
+
+```bash
+VETO_MINT=<actual-devnet-rule-mint> VETO_RULE=<rule-address> VETO_AGENT_KEY=<agent-key.json> npx tsx examples/skr-once.ts
+```
+
+`VETO_RPC` is required and is never printed, including on failure. `VETO_RULE` is the mandate address and `VETO_AGENT_KEY` is the path to its agent's JSON secret key array. `VETO_MINT` defaults to `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`. The configured mint must match the rule and have 6 decimals; a mismatch stops execution before any charge.
+
+The example submits 8 SKR (8,000,000 base units), expects a paid decision with reason code 0, then submits 25 SKR (25,000,000 base units) and expects a refusal with reason code 5 (over the per-payment maximum). With a devnet mint override, these amounts are units of that mint; the output keeps the SKR label. Each result prints the amount, decision, reason code, reason text, signature, and slot. An unexpected decision or reason code exits nonzero. Local precheck messages are printed; other errors are suppressed. The example checks that the rule is active and has not expired according to the local clock before submitting. Use an active, unexpired, funded rule with at least 8 SKR remaining, a per-payment maximum of at least 8 and below 25 SKR, no pending override, and enough agent SOL for transaction fees. Each run can spend another 8 SKR and incurs fees for both transactions.
+
+`npm run typecheck:examples` checks this example and the existing examples using `tsconfig.test.json`, without executing them or accessing the network.
+
 ## Asking the owner for a rule
 
 The operator builds a rule request and renders it as a QR. The owner scans that QR and approves. The same URL is what `createRuleRequest` returns and what `parseRuleRequest` reads.
@@ -246,7 +262,7 @@ The call returns `kind: "traded"` or `kind: "refused"`, with `amountIn`, `amount
 The program refuses the trade, and moves nothing, when:
 
 - The output account is not the pinned destination. Reason 11, output account not allowed.
-- A pool account (the pool, its authority, either vault, the pool mint, the fee account, or the exchange program) is not the one stored on the rule. Reason 12, pool not allowed.
+- A pool account (the pool, its authority, either vault, the pool mint, the fee account, or the exchange program) is not the one stored on the rule. Reason 12, pool account not allowed.
 - The trade would push the current 24 hour window over the daily limit. Reason 13, over daily limit.
 - The spot quote is already under the price floor `floor.num / floor.den`. Reason 14, quote below floor. The program then requires the tokens that come back to clear that same floor.
 
