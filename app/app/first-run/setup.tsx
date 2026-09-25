@@ -17,7 +17,11 @@ export default function SetupRoute() {
         cluster={wallet.cluster}
         rows={[]}
         configJson={null}
-        status={mandate ? 'Open the rule to copy its setup. The text is on the rule screen.' : null}
+        status={
+          mandate
+            ? 'Your agent can find this rule by itself when it runs the Veto companion. Keep your agent running.'
+            : null
+        }
         onCopy={() => undefined}
         onAlerts={() => router.push(FIRST_RUN_ROUTES.alerts)}
         onOverview={() => router.replace('/')}
