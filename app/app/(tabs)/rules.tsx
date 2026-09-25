@@ -18,6 +18,7 @@ import { colors, fonts, radii, space } from '../../components/theme';
 import { liveMandateCount, showRulePill, tabPillFace } from '../../lib/mandateRead';
 import { PAYEE_NOT_IN_RULESET, PAYEE_PREFILL, RULESET_ENVELOPE } from '../../lib/ruleset';
 import { TEMPLATES } from '../../lib/templates';
+import { rulesTokenSummary, tokenSymbol } from '../../lib/tokens';
 import { useChain } from '../../lib/useChain';
 import { useRefreshOnFocus } from '../../lib/useRefreshOnFocus';
 import { useRulesets } from '../../lib/useRulesets';
@@ -44,6 +45,8 @@ export default function RulesScreen() {
       : count === 1
         ? 'One rule, one agent.'
         : `${count} rules, ${count} agents.`;
+  const tokenLine = rulesTokenSummary(chain.mandates.map((row) => row.mint));
+  const rulesetUnit = chain.config?.mint ? ` ${tokenSymbol(chain.config.mint)}` : '';
 
   return (
     <Screen
@@ -79,6 +82,7 @@ export default function RulesScreen() {
               <Text style={styles.meta}>{count === 1 ? '1 active' : `${liveCount} active`}</Text>
             </View>
             <Text style={styles.h2}>{heading}</Text>
+            {tokenLine ? <Text style={styles.tokenLine}>{tokenLine}</Text> : null}
             <EmptyState>
               Each rule has its own agent key and its own history. A rule opened from this app keeps its
               budget in its own token account. Pick one and Overview and Decisions are about it.
@@ -177,8 +181,7 @@ export default function RulesScreen() {
                       {set.name} v{set.version}
                     </Text>
                     <Text style={styles.tplSum}>
-                      {set.cap} total, {set.perTxMax} per payment, {set.expiryDays} days. Apply to a
-                      new agent.
+                      {`${set.cap}${rulesetUnit} total, ${set.perTxMax}${rulesetUnit} per payment, ${set.expiryDays} days. Apply to a new agent.`}
                     </Text>
                   </View>
                   <Text style={styles.use}>apply</Text>
@@ -238,6 +241,12 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 32,
     color: colors.bone,
+  },
+  tokenLine: {
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.body,
   },
   list: {
     gap: space.lg,

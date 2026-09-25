@@ -1,5 +1,5 @@
 import { STATUS_ACTIVE, STATUS_EXHAUSTED, STATUS_EXPIRED, STATUS_REVOKED, statusName } from './constants';
-import { formatBaseUnits } from './format';
+import { formatTokenAmount } from './tokens';
 import type { MandateAccount } from './mandate';
 import { parsePurposeStamp } from './ruleset';
 import { truncateAddress } from './wallet';
@@ -31,8 +31,8 @@ export function stampedRulesetLine(purpose: string): string | null {
 export function ruleSentence(mandate: MandateAccount, decimals: number): string {
   const purpose = displayPurpose(mandate.purpose);
   const merchant = truncateAddress(mandate.merchant);
-  const per = formatBaseUnits(mandate.perTxMax, decimals);
-  const cap = formatBaseUnits(mandate.cap, decimals);
+  const per = formatTokenAmount(mandate.perTxMax, decimals, mandate.mint);
+  const cap = formatTokenAmount(mandate.cap, decimals, mandate.mint);
   const until = formatExpiryDate(mandate.expiresAt);
   return `Pay ${merchant} up to ${per} at a time and ${cap} in total, until ${until}, for ${purpose}.`;
 }

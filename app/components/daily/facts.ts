@@ -93,8 +93,8 @@ export function wholePayments(cap: bigint, perPayment: bigint): bigint | null {
   return cap / perPayment;
 }
 
-const SHARE_CAPTION = /^1 block is one share of (\d+(?:\.\d+)?)$/;
-const PER_CAPTION = /^Most per payment: (\d+(?:\.\d+)?)$/;
+const SHARE_CAPTION = /^1 block is one share of (\d+(?:\.\d+)?)(?: ([^\s]+))?$/;
+const PER_CAPTION = /^Most per payment: (\d+(?:\.\d+)?)(?: ([^\s]+))?$/;
 
 function parseAmount(text: string): { value: bigint; scale: number } | null {
   if (!/^\d+(?:\.\d+)?$/.test(text)) {
@@ -116,8 +116,12 @@ function align(left: { value: bigint; scale: number }, right: { value: bigint; s
 
 /** Home passes a share caption. Say what one of the 30 blocks is. */
 export function homeBlockCaption(left: string, right: string, blocks = 30): string | null {
-  const capText = SHARE_CAPTION.exec(left)?.[1];
-  const perText = PER_CAPTION.exec(right)?.[1];
+  const share = SHARE_CAPTION.exec(left);
+  const perMatch = PER_CAPTION.exec(right);
+  const capText = share?.[1];
+  const perText = perMatch?.[1];
+  const token = share?.[2] ?? perMatch?.[2] ?? '';
+  const suffix = token ? ` ${token}` : '';
   if (!capText || !perText || blocks <= 0) {
     return null;
   }
@@ -131,11 +135,13 @@ export function homeBlockCaption(left: string, right: string, blocks = 30): stri
     return null;
   }
   if (pair.a / pair.b === BigInt(blocks) && pair.a % pair.b === 0n) {
-    return `1 block = 1 payment of ${perText}`;
+    return `1 block = 1 payment of ${perText}${suffix}`;
   }
   const slice = cap.value / BigInt(blocks);
   if (cap.value % BigInt(blocks) === 0n) {
-    return `1 block is ${formatBaseUnits(slice, cap.scale)} of your ${capText}`;
+    return `1 block is ${formatBaseUnits(slice, cap.scale)}${suffix} of your ${capText}${suffix}`;
   }
-  return blocks === 30 ? `1 block is one thirtieth of your ${capText}` : `1 block is one share of your ${capText}`;
+  return blocks === 30
+    ? `1 block is one thirtieth of your ${capText}${suffix}`
+    : `1 block is one share of your ${capText}${suffix}`;
 }

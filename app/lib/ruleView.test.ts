@@ -4,13 +4,14 @@ import test from 'node:test';
 import { STATUS_ACTIVE, STATUS_REVOKED } from './constants';
 import type { MandateAccount } from './mandate';
 import { displayPurpose, ruleSentence, ruleStatusLabel, stampedRulesetLine } from './ruleView';
+import { VTEST_MINT } from './tokens';
 
 function mandate(over: Partial<MandateAccount> = {}): MandateAccount {
   return {
     address: 'Mandate1111111111111111111111111111111111111',
     owner: 'Owner111111111111111111111111111111111111111',
     agent: 'Agent111111111111111111111111111111111111111',
-    mint: 'Mint1111111111111111111111111111111111111111',
+    mint: VTEST_MINT,
     source: 'Source11111111111111111111111111111111111111',
     merchant: '6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG',
     mandateId: 1n,
@@ -32,7 +33,7 @@ function mandate(over: Partial<MandateAccount> = {}): MandateAccount {
 
 test('the rule reads as a sentence a stranger can understand', () => {
   const line = ruleSentence(mandate(), 6);
-  assert.ok(line.startsWith('Pay 6i99...PdCG up to 0.5 at a time and 100 in total, until'));
+  assert.ok(line.startsWith('Pay 6i99...PdCG up to 0.5 VTEST at a time and 100 VTEST in total, until'));
   assert.ok(line.includes('for SE3 home charging.'));
   assert.equal(line.includes('[se3-charging v1]'), false);
 });

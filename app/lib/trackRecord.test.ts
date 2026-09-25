@@ -7,6 +7,7 @@ import jsQR from 'jsqr';
 import { KIND_ADVISORY_DECLINE } from './advisory';
 import { KIND_OPENED, KIND_PAID, KIND_REFUSED, REASON_OVER_PER_TX_MAX, STATUS_ACTIVE, STATUS_EXPIRED } from './constants';
 import { snapshotRule, type GradeDecision, type RuleFacts } from './grade';
+import { VTEST_MINT } from './tokens';
 import {
   glyphOn,
   pngComment,
@@ -44,6 +45,7 @@ function facts(rows: GradeDecision[], over: Partial<RuleFacts> = {}): RuleFacts 
     expiresAt: START + 90n * DAY,
     status: STATUS_EXPIRED,
     decimals: 0,
+    mint: VTEST_MINT,
     rows: [decision({ kind: KIND_OPENED, ts: START, nonce: 0n, amount: 300n }), ...rows],
     ...over,
   };
@@ -73,7 +75,7 @@ test('a finished rule card states the outside count, the return, and Devnet', ()
   assert.equal(record.follow, 'Refused every time.');
   const lines = trackRecordLines(record).join('\n');
   assert.match(lines, /Devnet, test tokens/);
-  assert.match(lines, /32 returned to the owner/);
+  assert.match(lines, /32 VTEST returned to the owner/);
   assert.doesNotMatch(lines, /decline/i);
   const text = trackRecordText(record, ruleCheckUrl(ADDRESS, 'devnet', 'https://api.devnet.solana.com'));
   assert.match(text, /explorer\.solana\.com\/address\/.+cluster=devnet/);

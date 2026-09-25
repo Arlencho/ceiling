@@ -17,6 +17,7 @@ import {
   type NotifyMandateLedger,
 } from './notify';
 import { refusalWhyLine } from './reasons';
+import { VTEST_MINT } from './tokens';
 
 const MERCHANT = '11111111111111111111111111111111';
 const MANDATE_A = 'MandateAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
@@ -41,6 +42,7 @@ function ledger(
     merchant: MERCHANT,
     perTxMax,
     decimals: 6,
+    mint: VTEST_MINT,
     rows,
   };
 }
@@ -51,6 +53,7 @@ const refusalArgs = {
   suggestedOverride: 6_232_500n,
   decimals: 6,
   perTxMax: 500_000n,
+  mint: VTEST_MINT,
 };
 
 function refusalRow(): NotifyLedgerRow {
@@ -68,7 +71,7 @@ test('a refusal notification repeats the decision screen reason line', () => {
   const line = refusalWhyLine(refusalArgs);
   assert.equal(
     line,
-    'Asked for 6.2325, over the 0.5 per-payment maximum. An override of 6.2325 would have cleared it.',
+    'Asked for 6.2325 VTEST, over the 0.5 VTEST per-payment maximum. An override of 6.2325 VTEST would have cleared it.',
   );
   const plan = planDecisionNotices([ledger(MANDATE_A, [refusalRow()])], new Map());
   assert.equal(plan.notices.length, 1);
@@ -120,8 +123,9 @@ test('a paid notification repeats the decision screen paid line', () => {
     decimals: 6,
     perTxMax: 500_000n,
     merchant: MERCHANT,
+    mint: VTEST_MINT,
   });
-  assert.equal(body, '0.446, under 0.5 per payment. The payee for this rule is 1111...1111.');
+  assert.equal(body, '0.446 VTEST, under 0.5 VTEST per payment. The payee for this rule is 1111...1111.');
   const plan = planDecisionNotices(
     [
       ledger(MANDATE_A, [

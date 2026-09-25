@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { KIND_OPENED, KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, KIND_REVOKED, REASON_MERCHANT_NOT_ALLOWED, REASON_OVER_PER_TX_MAX, STATUS_ACTIVE, STATUS_EXPIRED, STATUS_REVOKED } from './constants';
 import { snapshotRule, type GradeDecision, type RuleFacts } from './grade';
+import { VTEST_MINT } from './tokens';
 import { earnedPlaques, plaquesForRule, plaqueShareText, ruleEndedInsideCap } from './plaques';
 
 const START = 1_700_000_000n;
@@ -31,6 +32,7 @@ function facts(rows: GradeDecision[], over: Partial<RuleFacts> = {}): RuleFacts 
     expiresAt: START + 90n * DAY,
     status: STATUS_ACTIVE,
     decimals: 0,
+    mint: VTEST_MINT,
     rows: [decision({ kind: KIND_OPENED, ts: START, nonce: 0n, amount: 300n }), ...rows],
     ...over,
   };
@@ -53,9 +55,9 @@ test('the first payment plaque names the amount, the rule payee and the limit', 
   const plaque = plaquesForRule(rule, START + 5n * DAY).find((item) => item.id === 'first-payment');
   assert.ok(plaque?.earned);
   assert.equal(plaque.title, 'First payment inside the rule');
-  assert.match(plaque.detail, /Paid 8 to 6i99\.\.\.PdCG/);
+  assert.match(plaque.detail, /Paid 8 VTEST to 6i99\.\.\.PdCG/);
   assert.doesNotMatch(plaque.detail, /2bt9/);
-  assert.match(plaque.detail, /Limit per payment: 10/);
+  assert.match(plaque.detail, /Limit per payment: 10 VTEST/);
   assert.match(plaque.dateLabel, /^Day 2,/);
 });
 
@@ -74,7 +76,7 @@ test('the first refusal plaque says nothing moved', () => {
   const plaque = plaquesForRule(rule, START + 2n * DAY).find((item) => item.id === 'first-refusal');
   assert.ok(plaque?.earned);
   assert.equal(plaque.title, 'First refusal saved');
-  assert.match(plaque.detail, /Asked 14, the limit is 10/);
+  assert.match(plaque.detail, /Asked 14 VTEST, the limit is 10 VTEST/);
   assert.match(plaque.detail, /Nothing moved/);
 });
 
@@ -120,7 +122,7 @@ test('30 days inside the rule counts only what had happened by that day', () => 
   const plaque = plaquesForRule(rule, now).find((item) => item.id === 'thirty-days');
   assert.equal(plaque?.earned, true);
   assert.match(plaque?.detail ?? '', /^1 paid, 1 refused, 0 allowed after a refusal/);
-  assert.match(plaque?.detail ?? '', /292 of 300 left that day/);
+  assert.match(plaque?.detail ?? '', /292 VTEST of 300 VTEST left that day/);
   assert.doesNotMatch(plaque?.detail ?? '', /2 paid/);
 });
 
@@ -134,7 +136,7 @@ test('a rule that reaches its end inside the cap is engraved, and an early revok
   const plaque = plaquesForRule(finished, now).find((item) => item.id === 'rule-ended');
   assert.equal(plaque?.earned, true);
   assert.equal(plaque?.title, 'Rule finished, rest returned');
-  assert.match(plaque?.detail ?? '', /32 of 300 left in your wallet/);
+  assert.match(plaque?.detail ?? '', /32 VTEST of 300 VTEST left in your wallet/);
 
   const revoked = snapshotRule(
     facts([decision({ kind: KIND_REVOKED, ts: START + 10n * DAY, nonce: 0n, amount: 0n })], {

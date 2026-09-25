@@ -5,6 +5,7 @@ import test from 'node:test';
 import { Keypair } from '@solana/web3.js';
 
 import { KIND_PAID, KIND_REFUSED, STATUS_ACTIVE } from './constants';
+import { VTEST_MINT } from './tokens';
 import type { MandateAccount } from './mandate';
 import {
   QUIET_NOTE_HONEST,
@@ -55,7 +56,7 @@ function mandate(): MandateAccount {
     address: 'rule',
     owner: 'owner',
     agent: Keypair.generate().publicKey.toBase58(),
-    mint: 'mint',
+    mint: VTEST_MINT,
     source: 'source',
     merchant: Keypair.generate().publicKey.toBase58(),
     mandateId: 1n,
@@ -81,6 +82,7 @@ function copyFor(rows: { ts: bigint; kind: number; amount: bigint }[], total: nu
     spent: 5n,
     expiresAt: EXPIRES,
     decimals: 0,
+    mint: VTEST_MINT,
     rows,
     ledgerTotal: total,
     now: NOW,
@@ -118,7 +120,7 @@ test('the note text is computed from today, and a quiet day with moved mode stay
   ]);
   assert.equal(quiet.moved, false);
   assert.match(quiet.headline, /Nothing paid, nothing moved/);
-  assert.match(quiet.detail, /4 of 9 left/);
+  assert.match(quiet.detail, /4 VTEST of 9 VTEST left/);
   assert.match(quiet.detail, /Last check 18:30/);
   assert.doesNotMatch(quiet.body, /258 of 300/);
   assert.equal(daysToGoPhrase(EXPIRES, BigInt(Math.floor(NOW.getTime() / 1000))) != null, true);
@@ -152,7 +154,7 @@ test('the note text is computed from today, and a quiet day with moved mode stay
   assert.ok(evening.schedule);
   assert.equal(evening.schedule.when === 'now', false);
   assert.match(evening.schedule.body, /Nothing paid, nothing moved/);
-  assert.match(evening.schedule.body, /4 of 9 left/);
+  assert.match(evening.schedule.body, /4 VTEST of 9 VTEST left/);
 });
 
 test('a note already scheduled for today is not sent a second time', () => {
@@ -295,7 +297,7 @@ test('an enabled evening note schedules the body from the day, and a denied perm
   });
   assert.equal(calls[0], 'cancel');
   assert.match(calls[1] ?? '', /Depot agent was paid once today/);
-  assert.match(calls[1] ?? '', /2 left the rule/);
+  assert.match(calls[1] ?? '', /2 VTEST left the rule/);
   assert.doesNotMatch(calls[1] ?? '', /258 of 300/);
   const kept = parseQuietSettings(memory.saved);
   assert.equal(kept.scheduledBody, calls[1]);

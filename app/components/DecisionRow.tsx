@@ -5,7 +5,8 @@ import * as RN from 'react-native';
 import { ADVISORY_DECLINE_LABEL, KIND_ADVISORY_DECLINE } from '../lib/advisory';
 import { KIND_OVERRIDE, KIND_REFUSED } from '../lib/constants';
 import { encodeDecisionId } from '../lib/exportRecord';
-import { explorerTxUrl, formatBaseUnits } from '../lib/format';
+import { explorerTxUrl } from '../lib/format';
+import { formatTokenAmount } from '../lib/tokens';
 import { overrideRowView } from '../lib/override';
 import type { LedgerRow } from '../lib/ring';
 import { decisionFace, type RowTone } from './records/copy';
@@ -25,6 +26,7 @@ export function DecisionRow({
   rpcUrl,
   mandateAddress,
   perTxMax,
+  mint,
   variant = 'list',
   nowMs,
   payee,
@@ -38,6 +40,7 @@ export function DecisionRow({
   rpcUrl: string;
   mandateAddress: string;
   perTxMax?: bigint;
+  mint?: string | null;
   variant?: 'list' | 'today';
   nowMs?: number;
   payee?: string;
@@ -46,10 +49,10 @@ export function DecisionRow({
   divider?: boolean;
 }) {
   const router = useRouter();
-  const face = decisionFace(row, decimals, perTxMax, nowMs, { payee });
+  const face = decisionFace(row, decimals, perTxMax, nowMs, { payee, mint });
   const tone = TONE[face.tone];
   const id = encodeDecisionId(mandateAddress, row);
-  const amount = formatBaseUnits(row.amount, decimals);
+  const amount = formatTokenAmount(row.amount, decimals, mint);
 
   const openDetail = () => {
     router.push(`/decision/${encodeURIComponent(id)}`);
@@ -68,7 +71,7 @@ export function DecisionRow({
   } else if (row.kind === KIND_REFUSED) {
     accessibilityLabel = 'Refused, recorded';
   } else if (row.kind === KIND_OVERRIDE) {
-    accessibilityLabel = `Waived by the owner ${overrideRowView(row, decimals).amount}`;
+    accessibilityLabel = `Waived by the owner ${overrideRowView(row, decimals, mint).amount}`;
   }
 
   return (

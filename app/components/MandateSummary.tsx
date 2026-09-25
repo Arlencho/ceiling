@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { formatBaseUnits, formatStatusLabel, formatTimeLeft, formatUnix } from '../lib/format';
+import { formatStatusLabel, formatTimeLeft, formatUnix } from '../lib/format';
+import { formatTokenAmount } from '../lib/tokens';
 import type { MandateAccount } from '../lib/mandate';
 import { mandateRemaining } from '../lib/mandate';
 import { displayPurpose, stampedRulesetLine } from '../lib/ruleView';
@@ -26,10 +27,10 @@ export function MandateSummary({
       <Row label="Status" value={formatStatusLabel(mandate.status)} />
       <Row label="Purpose" value={displayPurpose(mandate.purpose)} />
       {stamp ? <Row label="Ruleset stamp" value={stamp} /> : null}
-      <Row label="Cap" value={formatBaseUnits(mandate.cap, decimals)} />
-      <Row label="Spent" value={formatBaseUnits(mandate.spent, decimals)} />
-      <Row label="Remaining" value={formatBaseUnits(remaining, decimals)} />
-      <Row label="Per payment" value={formatBaseUnits(mandate.perTxMax, decimals)} />
+      <Row label="Cap" value={formatTokenAmount(mandate.cap, decimals, mandate.mint)} />
+      <Row label="Spent" value={formatTokenAmount(mandate.spent, decimals, mandate.mint)} />
+      <Row label="Remaining" value={formatTokenAmount(remaining, decimals, mandate.mint)} />
+      <Row label="Per payment" value={formatTokenAmount(mandate.perTxMax, decimals, mandate.mint)} />
       <Row label="Expires" value={formatUnix(mandate.expiresAt)} />
       <Row label="Time left" value={formatTimeLeft(mandate.expiresAt, nowSec)} />
       <Row label="Payee" value={truncateAddress(mandate.merchant)} />

@@ -517,6 +517,7 @@ export async function openMandate(
           balance: tokenBalance,
           cap: input.cap,
           decimals,
+          mint: mint.toBase58(),
         });
   if (lamportsShort || tokenMessage) {
     const solMessage = lamportsShort

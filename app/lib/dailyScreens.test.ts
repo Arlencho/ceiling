@@ -10,6 +10,7 @@ import { barUnits, networkLabel, refusalStreak, ruleDay } from '../components/da
 import { space } from '../components/theme';
 import { KIND_PAID, KIND_REFUSED, STATUS_REVOKED } from './constants';
 import type { MandateAccount } from './mandate';
+import { VTEST_DEVNET_NOTE, VTEST_MINT } from './tokens';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 (globalThis as { __DEV__?: boolean }).__DEV__ = false;
@@ -461,6 +462,22 @@ test('home reads loading, empty, error, and the chain amounts', async () => {
   assert.match(normal, /garage charger/);
   assert.doesNotMatch(normal, /Charging agent/);
   await act(async () => root.unmount());
+
+  const vtest = mandate({ mint: VTEST_MINT });
+  chain.mandate = vtest;
+  chain.mandates = [vtest];
+  chain.config = { ...chain.config, mint: VTEST_MINT, explorerCluster: 'devnet' };
+  root = await mount(createElement(Screen));
+  const noted = textOf(root);
+  assert.equal(noted.split(VTEST_DEVNET_NOTE).length - 1, 1);
+  assert.match(noted, /258 VTEST/);
+  await act(async () => root.unmount());
+
+  chain.config = { ...chain.config, explorerCluster: 'mainnet-beta' };
+  root = await mount(createElement(Screen));
+  assert.equal(textOf(root).includes(VTEST_DEVNET_NOTE), false);
+  chain.config = { ...chain.config, explorerCluster: 'devnet' };
+  await act(async () => root.unmount());
 });
 
 test('rules reads loading, empty, error, and a live rule from the chain', async () => {
@@ -477,6 +494,9 @@ test('rules reads loading, empty, error, and a live rule from the chain', async 
   root = await mount(createElement(Screen));
   assert.match(textOf(root), /Nothing on chain for this owner yet/);
   assert.match(textOf(root), /Scan a request/);
+  assert.match(textOf(root), /Charging agent/);
+  assert.match(textOf(root), /Cap a mint bot/);
+  assert.doesNotMatch(textOf(root), /Trading bot/);
   await act(async () => root.unmount());
 
   chain.mandateStatus = 'failed';

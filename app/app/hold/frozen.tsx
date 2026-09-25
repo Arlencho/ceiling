@@ -63,7 +63,7 @@ export default function HoldFrozen() {
           tokenName={loaded.tokenName}
           stoppedLine={
             bundle
-              ? `Nothing can leave while this vault is frozen, not even the everyday ${formatHoldAmount(bundle.account.dailyLimit, decimals)} a day. All ${amountLabel} ${loaded.tokenName} is still here.`
+              ? `Nothing can leave while this vault is frozen, not even the everyday ${formatHoldAmount(bundle.account.dailyLimit, decimals)} ${loaded.tokenName} a day. All ${amountLabel} ${loaded.tokenName} is still here.`
               : ''
           }
           sinceLabel={

@@ -23,7 +23,8 @@ import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts, radii, space } from '../../components/theme';
 import { KIND_REFUSED } from '../../lib/constants';
-import { formatBaseUnits, isListedDecision, timeLeftParts, todaysAgentDecisions } from '../../lib/format';
+import { isListedDecision, timeLeftParts, todaysAgentDecisions } from '../../lib/format';
+import { devnetTestTokenNote, formatTokenAmount } from '../../lib/tokens';
 import { isActive, mandateRemaining } from '../../lib/mandate';
 import { liveMandateCount, showRulePill, tabPillFace } from '../../lib/mandateRead';
 import { NOTIFICATIONS_OFF_LINE } from '../../lib/notificationAsk';
@@ -53,6 +54,12 @@ export default function OverviewScreen() {
   const live = mandate ? isActive(mandate, nowSec) : false;
   const liveCount = liveMandateCount(chain.mandates, chain.nowMs);
   const spentShare = Math.round(ratio * 100);
+  const mint = mandate?.mint;
+  const remainingText = formatTokenAmount(remaining, chain.decimals, mint);
+  const capText = formatTokenAmount(mandate?.cap ?? 0n, chain.decimals, mint);
+  const spentText = formatTokenAmount(mandate?.spent ?? 0n, chain.decimals, mint);
+  const perText = formatTokenAmount(mandate?.perTxMax ?? 0n, chain.decimals, mint);
+  const tokenNote = devnetTestTokenNote(mint, chain.config?.explorerCluster ?? null);
 
   const onRefresh = useCallback(() => {
     void chain.refresh();
@@ -108,6 +115,7 @@ export default function OverviewScreen() {
               subtitle={`rule ${index + 1} of ${chain.mandates.length} · agent ${truncateAddress(mandate.agent)}`}
               onSwitch={() => router.push('/(tabs)/rules')}
             />
+            {tokenNote ? <Text style={styles.tokenNote}>{tokenNote}</Text> : null}
             {live ? (
               <HomeStay
                 mandate={mandate}
@@ -120,15 +128,15 @@ export default function OverviewScreen() {
             <SpendBoard
               kicker="Your agent can still spend"
               aside={`Pays only ${truncateAddress(mandate.merchant)}`}
-              remainingText={formatBaseUnits(remaining, chain.decimals)}
-              ofText={`of ${formatBaseUnits(mandate.cap, chain.decimals)}`}
-              spentText={formatBaseUnits(mandate.spent, chain.decimals)}
+              remainingText={remainingText}
+              ofText={`of ${capText}`}
+              spentText={spentText}
               spentCaption="spent so far"
               remaining={bars.remaining}
               cap={bars.cap}
-              accessibilityLabel={`${formatBaseUnits(remaining, chain.decimals)} left of ${formatBaseUnits(mandate.cap, chain.decimals)}. ${spentShare} percent of the total is spent.`}
-              leftCaption={`1 block is one share of ${formatBaseUnits(mandate.cap, chain.decimals)}`}
-              rightCaption={`Most per payment: ${formatBaseUnits(mandate.perTxMax, chain.decimals)}`}
+              accessibilityLabel={`${remainingText} left of ${capText}. ${spentShare} percent of the total is spent.`}
+              leftCaption={`1 block is one share of ${capText}`}
+              rightCaption={`Most per payment: ${perText}`}
             />
             <View style={styles.pair}>
               <DayClock
@@ -179,7 +187,8 @@ export default function OverviewScreen() {
                     perTxMax={mandate.perTxMax}
                     mandateAddress={mandate.address}
                     payee={mandate.merchant}
-                    remainingText={`${formatBaseUnits(remaining, chain.decimals)} left`}
+                    mint={mandate.mint}
+                    remainingText={remainingText}
                     fresh={i === 0 && row.kind === KIND_REFUSED}
                     last={i === listed.length - 1}
                   />
@@ -231,6 +240,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     color: colors.muted,
+  },
+  tokenNote: {
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.body,
   },
   hint: {
     fontFamily: fonts.sans,

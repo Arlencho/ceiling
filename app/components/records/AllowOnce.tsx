@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { formatBaseUnits } from '../../lib/format';
+import { formatTokenAmount } from '../../lib/tokens';
 import type { OverrideGrantView } from '../../lib/useOverrideGrant';
 import { HoldToApprove } from '../backglass/HoldToApprove';
 import { EmptyState } from '../EmptyState';
@@ -15,6 +15,7 @@ export function AllowOnce({
   payee,
   perTxMax,
   remaining,
+  mint,
 }: {
   view: OverrideGrantView;
   decimals: number;
@@ -22,6 +23,7 @@ export function AllowOnce({
   payee: string;
   perTxMax: bigint;
   remaining: bigint;
+  mint?: string | null;
 }) {
   const { assessment, confirming, signing, error, confirmed, onOffer, onCancel, onSign } = view;
   const [resetKey, setResetKey] = useState(0);
@@ -39,7 +41,7 @@ export function AllowOnce({
       <View style={styles.block}>
         <Text style={styles.kicker}>Read back from chain</Text>
         <Text style={styles.body}>
-          Override of {formatBaseUnits(confirmed.amount, decimals)} for nonce {confirmed.nonce.toString()} is
+          Override of {formatTokenAmount(confirmed.amount, decimals, mint)} for nonce {confirmed.nonce.toString()} is
           on the ledger as a recorded decision. The agent can retry this nonce.
         </Text>
       </View>
@@ -62,10 +64,10 @@ export function AllowOnce({
     );
   }
 
-  const amount = formatBaseUnits(assessment.amount, decimals);
-  const limit = formatBaseUnits(perTxMax, decimals);
-  const left = formatBaseUnits(remaining, decimals);
-  const after = formatBaseUnits(remaining > assessment.amount ? remaining - assessment.amount : 0n, decimals);
+  const amount = formatTokenAmount(assessment.amount, decimals, mint);
+  const limit = formatTokenAmount(perTxMax, decimals, mint);
+  const left = formatTokenAmount(remaining, decimals, mint);
+  const after = formatTokenAmount(remaining > assessment.amount ? remaining - assessment.amount : 0n, decimals, mint);
 
   function sign() {
     if (submitHeld || signing) {

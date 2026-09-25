@@ -4,7 +4,8 @@ import { PublicKey } from '@solana/web3.js';
 import { tryLoadConfig } from './config';
 import { secureStore } from './mwa';
 import { dueHoldAlerts, futureHoldAlerts, holdAlertPlan, type HoldAlert } from './holdAlerts';
-import { formatHoldAmount, holdTokenName, shortKey } from './hold';
+import { formatHoldAmount, shortKey } from './hold';
+import { tokenSymbol } from './tokens';
 import { holdClient, listHoldVaults, readChainClock, readHoldVault } from './holdChain';
 import { holdCreatedAt } from './holdRead';
 import { loadSession } from './wallet';
@@ -110,7 +111,7 @@ export async function raiseHoldAlertsForOwner(args: {
   await args.scheduler.ensureChannel();
   for (const listed of vaults) {
     const bundle = await readHoldVault(client, listed.address);
-    const tokenName = holdTokenName(loaded.config.explorerCluster);
+    const tokenName = tokenSymbol(bundle.account.mint.toBase58());
     for (const row of bundle.account.pending) {
       const createdAt = holdCreatedAt(bundle.account, row, bundle.ledger.entries);
       const amountLabel = `${formatHoldAmount(row.amount, bundle.decimals)} ${tokenName}`;

@@ -4,7 +4,7 @@ import { ActivityIndicator } from 'react-native';
 
 import { loadAddressBook, saveAddressBook, withSavedName } from '../../lib/addressBook';
 import type { OpenMandateResult } from '../../lib/chain';
-import { formatBaseUnits } from '../../lib/format';
+import { formatTokenAmount } from '../../lib/tokens';
 import { secureStore } from '../../lib/mwa';
 import { canonicalAddress, parseRuleRequest, type RuleRequestV1 } from '../../lib/ruleRequest';
 import { useChain } from '../../lib/useChain';
@@ -147,7 +147,7 @@ export function FirstRunGuide({ onFinish }: { onFinish: () => void }) {
   if (stage === 'name') {
     const facts =
       request && amountsReady
-        ? factsFromRequest(request, (amount) => formatBaseUnits(amount, chain.decimals))
+        ? factsFromRequest(request, (amount) => formatTokenAmount(amount, chain.decimals, request.mint))
         : null;
     return (
       <NameAgentScreen

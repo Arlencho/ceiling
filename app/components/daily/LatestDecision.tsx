@@ -5,7 +5,7 @@ import { Circle, Path, Svg } from 'react-native-svg';
 import { ADVISORY_DECLINE_LABEL, KIND_ADVISORY_DECLINE } from '../../lib/advisory';
 import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, REASON_OVER_PER_TX_MAX } from '../../lib/constants';
 import { encodeDecisionId } from '../../lib/exportRecord';
-import { formatDisplayAmount } from '../../lib/format';
+import { formatTokenDisplay, tokenSymbol } from '../../lib/tokens';
 import { overrideRowView } from '../../lib/override';
 import { reasonText } from '../../lib/reasons';
 import type { LedgerRow } from '../../lib/ring';
@@ -18,6 +18,7 @@ export function LatestDecision({
   perTxMax,
   mandateAddress,
   payee,
+  mint,
   remainingText,
   fresh,
   last,
@@ -27,13 +28,15 @@ export function LatestDecision({
   perTxMax?: bigint;
   mandateAddress: string;
   payee: string;
+  mint?: string | null;
   remainingText: string;
   fresh: boolean;
   last: boolean;
 }) {
   const router = useRouter();
-  const amount = formatDisplayAmount(row.amount, decimals);
-  const limit = perTxMax != null ? formatDisplayAmount(perTxMax, decimals) : null;
+  const amount = formatTokenDisplay(row.amount, decimals, mint);
+  const limit = perTxMax != null ? formatTokenDisplay(perTxMax, decimals, mint) : null;
+  const zeroPaid = mint ? `0 ${tokenSymbol(mint)} paid` : '0 paid';
   const who = payeeLabel(payee);
   const refused = row.kind === KIND_REFUSED;
   const paid = row.kind === KIND_PAID;
@@ -47,17 +50,17 @@ export function LatestDecision({
   if (refused && row.reason === REASON_OVER_PER_TX_MAX && limit) {
     title = `Refused: agent asked ${amount}, limit is ${limit}`;
     detail = 'No money moved. Reason saved.';
-    side = '0 paid';
+    side = zeroPaid;
   } else if (refused) {
     title = `Refused: ${reasonText(row.reason)}`;
     detail = 'No money moved. Reason saved.';
-    side = '0 paid';
+    side = zeroPaid;
   } else if (paid) {
     title = `Paid ${amount} to ${who}`;
     detail = limit ? `Within the limit of ${limit}. ${remainingText} left.` : `${remainingText} left.`;
     side = `${amount} paid`;
   } else if (waived) {
-    const view = overrideRowView(row, decimals);
+    const view = overrideRowView(row, decimals, mint);
     title = `${view.say} ${view.italic}`;
     detail = 'This one payment was allowed. The limit did not change.';
     side = `${view.amount} paid`;

@@ -27,6 +27,7 @@ import { loadAddressBook, saveAddressBook, withSavedName } from '../lib/addressB
 import { parseOptionalAgentAddress } from '../lib/agentAddress';
 import { createClient, type OpenMandateResult } from '../lib/chain';
 import { formatBaseUnits } from '../lib/format';
+import { devnetTestTokenNote, withToken } from '../lib/tokens';
 import { secureStore } from '../lib/mwa';
 import { evaluatePresign, type PresignObservation } from '../lib/presign';
 import { observePresign } from '../lib/presignRead';
@@ -281,8 +282,8 @@ function ApprovalCard({
       ? approvalSentence({
           agent: addressLine(agentParty, false).primary || 'the agent',
           payee: addressLine(payeeParty, false).primary || 'the payee',
-          max: formatBaseUnits(maxPay, decimals),
-          cap: formatBaseUnits(cap, decimals),
+          max: withToken(formatBaseUnits(maxPay, decimals), mintText),
+          cap: withToken(formatBaseUnits(cap, decimals), mintText),
           until: formatUntilDate(expiresAt),
         })
       : null;
@@ -433,8 +434,9 @@ function ApprovalCard({
   ) : null;
 
   const dayCount = choice.kind === 'days' ? choice.days : null;
-  const maxText = maxPay != null && decimals != null ? formatBaseUnits(maxPay, decimals) : null;
-  const capText = cap != null && decimals != null ? formatBaseUnits(cap, decimals) : null;
+  const maxText = maxPay != null && decimals != null ? withToken(formatBaseUnits(maxPay, decimals), mintText) : null;
+  const capText = cap != null && decimals != null ? withToken(formatBaseUnits(cap, decimals), mintText) : null;
+  const tokenNote = devnetTestTokenNote(mintText, chain.config?.explorerCluster ?? null);
   const paymentCount = cap != null && maxPay != null && maxPay > 0n ? cap / maxPay : null;
   const blockCount =
     paymentCount != null && paymentCount > 0n && paymentCount <= 60n ? Number(paymentCount) : BLOCK_COUNT;
@@ -499,6 +501,7 @@ function ApprovalCard({
             <Text style={styles.purposeText}>{request ? request.purpose : purpose}</Text>
           </View>
         ) : null}
+        {tokenNote ? <Text style={styles.body}>{tokenNote}</Text> : null}
         {cap != null && maxPay != null && decimals != null && capText && maxText ? (
           <View style={styles.block}>
             <View style={styles.limitHead}>

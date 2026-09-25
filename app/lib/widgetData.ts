@@ -19,12 +19,12 @@ import {
   STATUS_REVOKED,
 } from './constants';
 import {
-  formatBaseUnits,
   formatClock,
   isListedDecision,
   remainingCap,
   timeLeftParts,
 } from './format';
+import { formatTokenAmount } from './tokens';
 import { isActive, type MandateAccount } from './mandate';
 import { isRateLimitError } from './rpcError';
 import type { RingEntry } from './ring';
@@ -219,6 +219,7 @@ export function decisionCopy(
   decimals: number,
   nowMs: number,
   ledgerError: boolean,
+  mint?: string | null,
 ): { line: string; short: string } {
   if (ledgerError) {
     return { line: WIDGET_DECISION_UNREAD, short: WIDGET_DECISION_UNREAD };
@@ -226,7 +227,7 @@ export function decisionCopy(
   if (!row) {
     return { line: WIDGET_NO_DECISION, short: WIDGET_NO_DECISION };
   }
-  const amount = formatBaseUnits(row.amount, decimals);
+  const amount = formatTokenAmount(row.amount, decimals, mint);
   const when = decisionWhen(row.ts, nowMs);
   if (row.kind === KIND_PAID) {
     return {
@@ -285,13 +286,14 @@ export function buildRuleFace(args: {
     args.decimals,
     args.nowMs,
     entries == null,
+    args.mandate.mint,
   );
   return {
     address: args.mandate.address,
     label,
     heading: spendHeading(label),
-    remainingText: formatBaseUnits(remaining, args.decimals),
-    capText: formatBaseUnits(args.mandate.cap, args.decimals),
+    remainingText: formatTokenAmount(remaining, args.decimals, args.mandate.mint),
+    capText: formatTokenAmount(args.mandate.cap, args.decimals, args.mandate.mint),
     barRemaining: bar.remaining,
     barCap: bar.cap,
     daysLeft: daysLeftLine(args.mandate.expiresAt, nowSec),

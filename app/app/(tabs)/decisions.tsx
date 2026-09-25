@@ -15,7 +15,8 @@ import { Screen } from '../../components/Screen';
 import { colors, fonts, radii, touchTarget } from '../../components/theme';
 import { KIND_ADVISORY_DECLINE } from '../../lib/advisory';
 import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, LEDGER_CAPACITY } from '../../lib/constants';
-import { decisionTotals, formatBaseUnits, groupByLocalDay, isListedDecision, newestFirst } from '../../lib/format';
+import { decisionTotals, groupByLocalDay, isListedDecision, newestFirst } from '../../lib/format';
+import { formatTokenAmount } from '../../lib/tokens';
 import { mandateRemaining } from '../../lib/mandate';
 import { liveMandateCount, showRulePill, tabPillFace } from '../../lib/mandateRead';
 import type { LedgerRow } from '../../lib/ring';
@@ -141,8 +142,9 @@ export default function DecisionsScreen() {
                   </Text>
                   <Text style={styles.ruleSub}>
                     {chain.mandates.length === 1 ? 'Your only rule' : `${chain.mandates.length} rules`}.{' '}
-                    {formatBaseUnits(mandateRemaining(mandate), chain.decimals)} left of your{' '}
-                    {formatBaseUnits(mandate.cap, chain.decimals)} total. Agent {truncateAddress(mandate.agent)}.
+                    {formatTokenAmount(mandateRemaining(mandate), chain.decimals, mandate.mint)} left of your{' '}
+                    {formatTokenAmount(mandate.cap, chain.decimals, mandate.mint)} total. Agent{' '}
+                    {truncateAddress(mandate.agent)}.
                   </Text>
                 </View>
                 <Text style={styles.chevron}>⌄</Text>
@@ -191,6 +193,7 @@ export default function DecisionsScreen() {
                         rpcUrl={rpcUrl}
                         mandateAddress={mandate.address}
                         perTxMax={mandate.perTxMax}
+                        mint={mandate.mint}
                         payee={mandate.merchant}
                         nowMs={chain.nowMs}
                         bare

@@ -1,5 +1,6 @@
 import { KIND_PAID, KIND_REFUSED } from './constants';
-import { isLocalDay, formatBaseUnits, remainingCap } from './format';
+import { isLocalDay, remainingCap } from './format';
+import { formatTokenAmount } from './tokens';
 import { isActive, type MandateAccount } from './mandate';
 import { parseAddressBook, ADDRESS_BOOK_KEY } from './addressBook';
 import { canonicalAddress } from './ruleRequest';
@@ -213,6 +214,7 @@ export function quietNoteCopy(args: {
   spent: bigint;
   expiresAt: bigint;
   decimals: number;
+  mint?: string | null;
   rows: readonly { ts: bigint; kind: number; amount: bigint }[];
   ledgerTotal: number | null;
   now: Date;
@@ -245,7 +247,7 @@ export function quietNoteCopy(args: {
   } else if (paidCount === 0) {
     headline = `All good today. ${args.name} asked ${countPhrase(refusedCount)} outside the rule and was refused. Nothing paid, nothing moved.`;
   } else if (refusedCount === 0) {
-    const amount = formatBaseUnits(paidAmount, args.decimals);
+    const amount = formatTokenAmount(paidAmount, args.decimals, args.mint);
     headline = `${args.name} was paid ${countPhrase(paidCount)} today. ${amount} left the rule.`;
   } else {
     headline = `${args.name} was paid ${countPhrase(paidCount)} and refused ${countPhrase(refusedCount)} today.`;
@@ -253,8 +255,8 @@ export function quietNoteCopy(args: {
   if (truncated) {
     headline = `From the decisions still stored on this rule. ${headline}`;
   }
-  const left = formatBaseUnits(remainingCap(args.cap, args.spent), args.decimals);
-  const cap = formatBaseUnits(args.cap, args.decimals);
+  const left = formatTokenAmount(remainingCap(args.cap, args.spent), args.decimals, args.mint);
+  const cap = formatTokenAmount(args.cap, args.decimals, args.mint);
   const daysPhrase = daysToGoPhrase(args.expiresAt, nowSec);
   const detail = `${left} of ${cap} left. ${daysPhrase ?? 'The rule has ended.'} Last check ${clockLabel(args.now)}.`;
   return {
@@ -300,6 +302,7 @@ export function quietRuleFor(args: {
     spent: chosen.spent,
     expiresAt: chosen.expiresAt,
     decimals: ledger.decimals,
+    mint: chosen.mint,
     rows: ledger.rows,
     ledgerTotal: ledger.total,
     now: args.now,

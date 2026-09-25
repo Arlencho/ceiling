@@ -1,6 +1,5 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { PublicKey } from '@solana/web3.js';
 
 import { PromiseScreen } from '../../components/hold/PromiseScreen';
 import { VaultHome, type VaultCard } from '../../components/hold/VaultHome';
@@ -16,6 +15,7 @@ import {
 import { holdClient, listHoldVaults, readTokenAmount } from '../../lib/holdChain';
 import { raiseHoldAlertsOnScan } from '../../lib/holdNotify';
 import { fetchMintDecimals } from '../../lib/chain';
+import { tokenSymbol } from '../../lib/tokens';
 import { useHoldSession } from '../../lib/holdSession';
 
 export default function HoldIndex() {
@@ -41,17 +41,23 @@ export default function HoldIndex() {
     try {
       const client = holdClient(session.config);
       const rows = await listHoldVaults(client, session.owner);
-      const mint = new PublicKey(session.config.mint);
-      const decimals = await fetchMintDecimals(client, mint);
+      const decimalsByMint = new Map<string, number>();
       const cards: VaultCard[] = [];
       for (const row of rows) {
+        const mintKey = row.mint.toBase58();
+        let decimals = decimalsByMint.get(mintKey);
+        if (decimals == null) {
+          decimals = await fetchMintDecimals(client, row.mint);
+          decimalsByMint.set(mintKey, decimals);
+        }
         const balance = (await readTokenAmount(client.connection, row.vaultToken)) ?? 0n;
         const days = daysFromDelay(row.delaySecs);
         const pending = row.pending[0];
+        const tokenName = tokenSymbol(mintKey);
         cards.push({
           address: row.address.toBase58(),
           amountLabel: formatHoldAmount(balance, decimals),
-          tokenName: session.tokenName,
+          tokenName,
           dailyLabel: formatHoldAmount(row.dailyLimit, decimals),
           waitLabel: days ? waitLabel(days) : 'an unusual wait',
           frozen: row.frozen,
@@ -59,7 +65,7 @@ export default function HoldIndex() {
             row.pending.length > 1
               ? `${row.pending.length} withdrawals are waiting`
               : pending
-                ? `${formatHoldAmount(pending.amount, decimals)} ${session.tokenName} is waiting`
+                ? `${formatHoldAmount(pending.amount, decimals)} ${tokenName} is waiting`
                 : null,
           guardianLabel: isDefaultKey(row.guardian.toBase58())
             ? 'is not set'
@@ -75,7 +81,7 @@ export default function HoldIndex() {
       setStatus('error');
       setError(err instanceof Error ? err.message : 'The vaults could not be read.');
     }
-  }, [session.chain.configError, session.client, session.config, session.owner, session.tokenName]);
+  }, [session.chain.configError, session.client, session.config, session.owner]);
 
   useEffect(() => {
     if (!session.wallet.ready) return;

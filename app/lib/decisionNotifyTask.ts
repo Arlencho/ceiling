@@ -151,6 +151,7 @@ async function scanOnce(): Promise<void> {
         merchant: mandate.merchant,
         perTxMax: mandate.perTxMax,
         decimals,
+        mint: mandate.mint,
         rows: snapshot.entries,
       });
       quietLedgers.push({

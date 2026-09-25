@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { explorerTxUrl, formatBaseUnits } from '../../lib/format';
+import { explorerTxUrl } from '../../lib/format';
+import { formatTokenAmount } from '../../lib/tokens';
 import type { MandateAccount } from '../../lib/mandate';
 import { truncateAddress } from '../../lib/wallet';
 import { ScoreReel, SealRow, StatTile } from '../backglass';
@@ -22,8 +23,8 @@ export function liveFactsFromMandate(args: {
   const who = args.agentName?.trim() ? args.agentName.trim() : 'Your agent';
   const payee = truncateAddress(args.mandate.merchant, 4);
   const amountsKnown = args.decimals != null;
-  const cap = amountsKnown ? formatBaseUnits(args.mandate.cap, args.decimals ?? 0) : null;
-  const max = amountsKnown ? formatBaseUnits(args.mandate.perTxMax, args.decimals ?? 0) : null;
+  const cap = amountsKnown ? formatTokenAmount(args.mandate.cap, args.decimals ?? 0, args.mandate.mint) : null;
+  const max = amountsKnown ? formatTokenAmount(args.mandate.perTxMax, args.decimals ?? 0, args.mandate.mint) : null;
   const summary =
     cap && max
       ? `${who} can now ask to pay ${payee}, at most ${max} per payment and ${cap} in total, for ${totalDays} days. It can only ask. It cannot take.`

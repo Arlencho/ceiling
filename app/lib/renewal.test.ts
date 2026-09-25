@@ -5,6 +5,7 @@ import { Keypair } from '@solana/web3.js';
 
 import { KIND_OPENED, KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, STATUS_ACTIVE, STATUS_REVOKED } from './constants';
 import type { MandateAccount } from './mandate';
+import { VTEST_MINT } from './tokens';
 import {
   LET_END_KEY,
   LET_END_NOTE,
@@ -36,7 +37,7 @@ function mandate(partial: Partial<MandateAccount> = {}): MandateAccount {
     address: 'RuleAddress11111111111111111111111111111111',
     owner: 'owner',
     agent: AGENT,
-    mint: 'mint',
+    mint: VTEST_MINT,
     source: 'source',
     merchant: MERCHANT,
     mandateId: 1n,
@@ -109,7 +110,7 @@ test('the banner and the prefilled rule use the chain amounts, not the sample ca
   const banner = renewalBanner(rule, 0, NOW);
   assert.ok(banner);
   assert.equal(banner.title, 'Your rule ends in 7 days.');
-  assert.match(banner.body, /63 left goes back to your wallet/);
+  assert.match(banner.body, /63 VTEST left goes back to your wallet/);
   assert.equal(renewalBanner(rule, 0, EXPIRES - 8n * DAY), null);
 
   const view = buildRenewalView({
@@ -123,11 +124,11 @@ test('the banner and the prefilled rule use the chain amounts, not the sample ca
   assert.ok(view);
   assert.equal(view.paidCount, 4);
   assert.equal(view.refusedCount, 2);
-  assert.equal(view.spentText, '17');
-  assert.equal(view.capText, '80');
-  assert.equal(view.leftText, '63');
-  assert.equal(view.highestAskedText, '19, refused');
-  assert.equal(view.highestPaidText, '6, the limit');
+  assert.equal(view.spentText, '17 VTEST');
+  assert.equal(view.capText, '80 VTEST');
+  assert.equal(view.leftText, '63 VTEST');
+  assert.equal(view.highestAskedText, '19 VTEST, refused');
+  assert.equal(view.highestPaidText, '6 VTEST, the limit');
   assert.equal(view.allowedText, '1 time');
   assert.equal(view.baseline.expiryDays, '90');
   assert.equal(view.baseline.purpose, 'depot top ups');
@@ -141,7 +142,7 @@ test('the banner and the prefilled rule use the chain amounts, not the sample ca
       leftUnused: view.leftUnused,
       paidAtLimit: view.paidAtLimit,
     }),
-    /the highest payment was 6 and 63 was never needed/,
+    /the highest payment was 6 VTEST and 63 VTEST was never needed/,
   );
   assert.doesNotMatch(view.ifNothing, /39/);
   assert.equal(view.recordNote, null);

@@ -110,11 +110,13 @@ export function RenewalScreen({
                     : field.key === 'purpose'
                       ? draft.purpose
                       : draft[field.key];
+              const amountField = field.key === 'perTxMax' || field.key === 'cap';
+              const valueText = amountField && view.token ? `${shown} ${view.token}` : shown;
               return (
                 <View key={field.key}>
                   <View style={styles.row}>
                     <Text style={styles.rowK}>{field.label}</Text>
-                    <Text style={[styles.rowV, field.key === 'purpose' && styles.purpose]}>{shown}</Text>
+                    <Text style={[styles.rowV, field.key === 'purpose' && styles.purpose]}>{valueText}</Text>
                     <Pressable
                       accessibilityRole="link"
                       accessibilityLabel={`Change ${field.label}`}

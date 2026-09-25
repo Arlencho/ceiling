@@ -10,7 +10,8 @@ import {
   STATUS_EXPIRED,
   STATUS_REVOKED,
 } from './constants';
-import { formatBaseUnits, remainingCap } from './format';
+import { remainingCap } from './format';
+import { formatTokenAmount } from './tokens';
 import {
   elapsedDays,
   formatWeekdayDate,
@@ -62,7 +63,7 @@ function firstPayment(rule: RuleSnapshot): Plaque {
     earned: true,
     title,
     dateLabel: plaqueDateLabel(day, first.ts),
-    detail: `Paid ${formatBaseUnits(first.amount, rule.decimals)} to ${payee}. Limit per payment: ${rule.perTxMaxLabel}.`,
+    detail: `Paid ${formatTokenAmount(first.amount, rule.decimals, rule.mint)} to ${payee}. Limit per payment: ${rule.perTxMaxLabel}.`,
     atSec: first.ts,
   };
 }
@@ -80,7 +81,7 @@ function firstRefusal(rule: RuleSnapshot): Plaque {
     );
   }
   const day = rule.startedAt == null ? null : elapsedDays(rule.startedAt, first.ts);
-  const amount = formatBaseUnits(first.amount, rule.decimals);
+  const amount = formatTokenAmount(first.amount, rule.decimals, rule.mint);
   const detail =
     first.reason === REASON_OVER_PER_TX_MAX
       ? `Asked ${amount}, the limit is ${rule.perTxMaxLabel}. Nothing moved. Reason saved for anyone to check.`
@@ -117,7 +118,7 @@ function tenRefusals(rule: RuleSnapshot): Plaque {
     earned: true,
     title,
     dateLabel: plaqueDateLabel(day, tenth.ts),
-    detail: 'Your agent asked outside the rule 10 times. Stopped every time. Money moved: 0.',
+    detail: `Your agent asked outside the rule 10 times. Stopped every time. Money moved: ${formatTokenAmount(0n, rule.decimals, rule.mint)}.`,
     atSec: tenth.ts,
   };
 }
@@ -167,7 +168,7 @@ function thirtyDays(rule: RuleSnapshot, nowSec: bigint): Plaque {
     earned: true,
     title,
     dateLabel: plaqueDateLabel(day, mark),
-    detail: `${counts.paid} paid, ${counts.refused} refused, ${counts.allowed} allowed after a refusal. ${formatBaseUnits(left, rule.decimals)} of ${rule.capLabel} left that day.`,
+    detail: `${counts.paid} paid, ${counts.refused} refused, ${counts.allowed} allowed after a refusal. ${formatTokenAmount(left, rule.decimals, rule.mint)} of ${rule.capLabel} left that day.`,
     atSec: mark,
   };
 }
@@ -221,7 +222,7 @@ function ruleEnded(rule: RuleSnapshot, nowSec: bigint): Plaque {
   const detail =
     left === 0n
       ? `The rule ended with nothing left of ${rule.capLabel}. The cap held.`
-      : `The rule ended with ${formatBaseUnits(left, rule.decimals)} of ${rule.capLabel} left in your wallet.`;
+      : `The rule ended with ${formatTokenAmount(left, rule.decimals, rule.mint)} of ${rule.capLabel} left in your wallet.`;
   return {
     id: 'rule-ended',
     earned: true,
