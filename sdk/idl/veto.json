@@ -336,6 +336,14 @@
               }
             ]
           }
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
@@ -2627,6 +2635,26 @@
       "code": 6059,
       "name": "TradeRuleStillActive",
       "msg": "trade rule is still active"
+    },
+    {
+      "code": 6060,
+      "name": "FloorRequired",
+      "msg": "floor numerator must be greater than zero"
+    },
+    {
+      "code": 6061,
+      "name": "DailyLimitRequired",
+      "msg": "daily limit must be greater than zero"
+    },
+    {
+      "code": 6062,
+      "name": "SourceAlreadyDelegated",
+      "msg": "source token account is already delegated to another account"
+    },
+    {
+      "code": 6063,
+      "name": "NotATokenAccount",
+      "msg": "account is not an initialized SPL token account"
     }
   ],
   "types": [

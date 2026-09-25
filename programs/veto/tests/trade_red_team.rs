@@ -1183,8 +1183,11 @@ fn a_pool_drained_on_the_output_side_by_a_third_party_is_reason_14() {
     assert_eq!(token_amount(&w.svm, &w.agent_out), before.agent_out);
 }
 
+/// A floor the fee-free quote clears but the 30 bps exchange fee does not. The
+/// quote takes the fee out of the input first, so this is a recorded refusal
+/// instead of an error inside the swap.
 #[test]
-fn a_quote_that_clears_the_floor_but_the_exchange_fee_does_not_is_rejected_with_no_entry() {
+fn a_quote_that_clears_the_floor_before_the_exchange_fee_but_not_after_is_reason_14() {
     let amount_in = 10 * IN_ONE;
     let quote = optimistic_quote(amount_in, LIQUIDITY_IN, LIQUIDITY_OUT);
     let mut w = open_world(Rules {
@@ -1198,23 +1201,33 @@ fn a_quote_that_clears_the_floor_but_the_exchange_fee_does_not_is_rejected_with_
     assert_eq!(seen, quote);
     assert!(
         u128::from(seen) * u128::from(amount_in) >= u128::from(amount_in) * u128::from(quote),
-        "the optimistic quote must clear this floor"
+        "the fee-free quote must clear this floor"
     );
+    let net = optimistic_quote(
+        veto::trade::input_after_fees(amount_in),
+        LIQUIDITY_IN,
+        LIQUIDITY_OUT,
+    );
+    assert!(net < quote, "the fee must push the quote under the floor");
 
     let before = snap(&w);
     let total = read_ledger(&w.svm, &w.ledger).total;
-    let opened = last_entry(&w.svm, &w.ledger);
-    assert_eq!(opened.kind, TRADE_KIND_OPENED);
-    assert_err(
-        trade(&mut w, amount_in, 1, 1),
-        "exceeds desired slippage limit",
+    trade(&mut w, amount_in, 1, 1).expect("below-floor refusal confirms");
+    assert_refused(
+        &w,
+        &before,
+        veto::REASON_BELOW_FLOOR,
+        w.pool.pool,
+        amount_in,
+        1,
     );
     assert_held(&w, &before, &[]);
-    assert_no_new_entry(&w, total);
-    assert_eq!(last_entry(&w.svm, &w.ledger).kind, TRADE_KIND_OPENED);
-    assert_eq!(last_entry(&w.svm, &w.ledger).reason, REASON_OK);
-    assert_eq!(read_rule(&w.svm, &w.rule).trade_count, 0);
-    assert_eq!(read_rule(&w.svm, &w.rule).refusal_count, 0);
+    assert_eq!(read_ledger(&w.svm, &w.ledger).total, total + 1);
+    let rule = read_rule(&w.svm, &w.rule);
+    assert_eq!(rule.trade_count, 0);
+    assert_eq!(rule.refusal_count, 1);
+    assert_eq!(rule.spent, 0);
+    assert_eq!(rule.last_nonce, 0);
 }
 
 #[test]
@@ -1662,6 +1675,94 @@ fn open_rejects_a_mismatched_pool_a_foreign_destination_and_limits_out_of_order(
     assert_eq!(token_account(&w.svm, &w.source).delegate, delegate_before);
     assert_eq!(token_amount(&w.svm, &w.agent_out), 1);
     assert_eq!(read_rule(&w.svm, &w.rule).status, STATUS_ACTIVE);
+}
+
+/// Opens rule `rule_id` for the same owner on a fresh, undelegated source.
+fn open_second(
+    w: &mut World,
+    rules: Rules,
+    source: Option<Pubkey>,
+) -> Result<litesvm::types::TransactionMetadata, String> {
+    let owner = w.owner.insecure_clone();
+    let source = source.unwrap_or_else(|| {
+        let fresh = create_token_account(&mut w.svm, &owner, &w.in_mint, &owner.pubkey());
+        mint_to(&mut w.svm, &owner, &w.in_mint, &fresh, USER_FUNDS);
+        fresh
+    });
+    let ix = open_ix(
+        owner.pubkey(),
+        &rules,
+        w.agent.pubkey(),
+        source,
+        w.destination,
+        w.in_mint,
+        w.out_mint,
+        &w.pool,
+    );
+    send(&mut w.svm, &owner, &[&owner], &[ix])
+}
+
+#[test]
+fn open_refuses_a_zero_floor_and_creates_nothing() {
+    let mut w = open_world(Rules::default());
+    let zero = Rules {
+        rule_id: 51,
+        floor_num: 0,
+        ..Rules::default()
+    };
+    assert_err(open_second(&mut w, zero, None), "FloorRequired");
+    let (rule, ledger) = rule_pdas(&w.owner.pubkey(), 51);
+    assert!(w.svm.get_account(&rule).is_none());
+    assert!(w.svm.get_account(&ledger).is_none());
+
+    // The same rule with a floor of one opens.
+    let one = Rules {
+        rule_id: 52,
+        floor_num: 1,
+        ..Rules::default()
+    };
+    open_second(&mut w, one, None).expect("a nonzero floor opens");
+}
+
+#[test]
+fn open_refuses_a_zero_daily_limit_and_creates_nothing() {
+    let mut w = open_world(Rules::default());
+    let zero = Rules {
+        rule_id: 53,
+        per_trade_max: 0,
+        daily_limit: 0,
+        ..Rules::default()
+    };
+    assert_err(open_second(&mut w, zero, None), "DailyLimitRequired");
+    let (rule, ledger) = rule_pdas(&w.owner.pubkey(), 53);
+    assert!(w.svm.get_account(&rule).is_none());
+    assert!(w.svm.get_account(&ledger).is_none());
+}
+
+#[test]
+fn a_second_rule_cannot_take_over_a_source_another_rule_holds() {
+    let mut w = open_world(Rules::default());
+    let held = token_account(&w.svm, &w.source);
+    assert_eq!(held.delegate, COption::Some(w.rule));
+
+    let second = Rules {
+        rule_id: 54,
+        ..Rules::default()
+    };
+    let source = w.source;
+    assert_err(
+        open_second(&mut w, second, Some(source)),
+        "SourceAlreadyDelegated",
+    );
+    let (rule, _) = rule_pdas(&w.owner.pubkey(), 54);
+    assert!(w.svm.get_account(&rule).is_none());
+    let after = token_account(&w.svm, &w.source);
+    assert_eq!(after.delegate, COption::Some(w.rule));
+    assert_eq!(after.delegated_amount, held.delegated_amount);
+
+    // The first rule still trades.
+    trade(&mut w, 10 * IN_ONE, 1, 1).expect("first rule still trades");
+    assert_eq!(last_entry(&w.svm, &w.ledger).kind, TRADE_KIND_TRADED);
 }
 
 // ---------------------------------------------------------------------------

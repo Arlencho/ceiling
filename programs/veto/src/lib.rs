@@ -453,7 +453,8 @@ pub mod veto {
         trade::revoke_trade_rule(ctx)
     }
 
-    /// Reclaim rent once a trade rule is finished. Never while it is active.
+    /// Reclaim rent once a trade rule is finished or past expiry, and revoke
+    /// any delegation the source still gives the rule.
     pub fn close_trade_rule(ctx: Context<CloseTradeRule>) -> Result<()> {
         trade::close_trade_rule(ctx)
     }
@@ -804,6 +805,14 @@ pub enum VetoError {
     TradeRuleNotActive,
     #[msg("trade rule is still active")]
     TradeRuleStillActive,
+    #[msg("floor numerator must be greater than zero")]
+    FloorRequired,
+    #[msg("daily limit must be greater than zero")]
+    DailyLimitRequired,
+    #[msg("source token account is already delegated to another account")]
+    SourceAlreadyDelegated,
+    #[msg("account is not an initialized SPL token account")]
+    NotATokenAccount,
 }
 
 #[derive(Accounts)]
@@ -1342,4 +1351,12 @@ pub struct CloseTradeRule<'info> {
         bump
     )]
     pub ledger: AccountLoader<'info, TradeLedger>,
+
+    /// CHECK: The rule's pinned source. It may already be closed. When it is
+    /// still a token account delegated to this rule, close revokes that.
+    #[account(mut, address = rule.source @ VetoError::SourceMismatch)]
+    pub source: UncheckedAccount<'info>,
+
+    #[account(address = anchor_spl::token::ID)]
+    pub token_program: Program<'info, anchor_spl::token::Token>,
 }
