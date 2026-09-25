@@ -117,3 +117,39 @@ npm run record-fixtures --prefix service
 The executable recorder uses `VETO_RPC` when set, otherwise the public Solana devnet RPC. It never writes or prints the endpoint. Requests are sequential with a bounded exponential back-off and a timeout. Transaction files use their signatures as names. `accounts.json` contains the program account snapshot with its context slot; `manifest.json` lists the signatures and completion time. The snapshot is captured first and history is bounded by that slot. During a download, `capture.json` preserves that boundary and the signature list across retries. Once the manifest exists, subsequent runs leave the capture unchanged. Interrupted transaction downloads can resume from saved files; the temporary capture checkpoint is removed on completion.
 
 Tests are offline. They check that each successful lifecycle instruction produces a record, each successful charge produces Paid or Refused, and surviving mandate fields agree with account bytes. For each surviving ledger they compare total history length and the last 32 entries, including counts per kind, charge amounts, nonces, destinations, reasons, and suggested overrides. Close removes both accounts, so no surviving ledger can independently attest a close count. Its recorded instruction count is checked separately; synthetic tests cover kinds absent from the live capture.
+
+## Webhook and backfill sources
+
+After migrating the database, run `npm run webhook`. Set `INDEX_WEBHOOK_AUTH`
+to the exact Authorization header value configured in Helius. Startup fails if
+it is empty. The receiver listens on `PORT` (default 8080), accepts POST batches
+up to 8 MiB, and returns 401 for missing or incorrect authentication. Raw JSON
+transactions go through the decoder directly. Enhanced transactions are fetched
+by signature because their payloads omit the logs required by the decoder.
+Successful responses include the number of newly inserted decisions. Partial
+batch failures return 503; retry the whole batch safely. Each transaction is
+atomic and existing instruction identities leave counters unchanged.
+
+Both sources use `VETO_RPC`, defaulting to `https://api.devnet.solana.com`, and
+standard `PG*` database variables. RPC calls have a 30 second timeout and six
+attempts with exponential back-off. Endpoint URLs, RPC error bodies, and
+transport errors are never logged, so query-string API keys cannot leak.
+
+Run `npm run backfill` periodically to scan finalized program history and then
+finalize stored decisions. Pagination runs newest to oldest until the stored
+signature or the end of available RPC history; replay runs oldest first to
+recover ownership even for closed mandates. Use an archival RPC for complete
+history. The cursor advances to the scan's newest signature only after every
+transaction succeeds. Failed scans replay safely on the next run. Concurrent
+backfill scans serialize with a database advisory lock.
+
+All new rows, including webhook rows, start confirmed. Only the backfill
+finalizer promotes them, checking both the finalized slot watermark and each
+signature's successful finalized status at the stored slot. Missing or forked
+signatures remain confirmed; fork reversal is outside these sources' scope.
+
+The shared adapter indexes lifecycle and charge records through `insertDecision`.
+It resolves immutable owner and agent identity from earlier decisions, existing
+rules, or a validated mandate account. A closed account without indexed opening
+history fails explicitly and needs backfill before webhook redelivery. These
+sources do not maintain the separate mutable `rules` account snapshot.
