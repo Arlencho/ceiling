@@ -1,10 +1,4 @@
-import { AppState } from 'react-native';
-import {
-  registerWidgetConfigurationScreen,
-  registerWidgetTaskHandler,
-  requestWidgetUpdate,
-  type WidgetTaskHandlerProps,
-} from 'react-native-android-widget';
+import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
 
 import {
   RULE_WIDGET_NAME,
@@ -19,11 +13,14 @@ import {
   readWidgetBindings,
   type WidgetBoard,
 } from '../lib/widgetData';
-import { RuleChoiceScreen } from './RuleChoiceScreen';
-import { widgetElement } from './androidWidget';
+
+// The decision task imports this module. Native widget packages stay behind
+// a dynamic import so loading the task does not parse react-native.
 
 export async function refreshHomeWidgets(): Promise<void> {
   try {
+    const { requestWidgetUpdate } = await import('react-native-android-widget');
+    const { widgetElement } = await import('./androidWidget');
     const board = await loadWidgetBoard(Date.now());
     const bindings = await readWidgetBindings();
     await requestWidgetUpdate({
@@ -60,6 +57,7 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<
   if (widgetAction === 'WIDGET_CLICK') {
     return;
   }
+  const { widgetElement } = await import('./androidWidget');
   renderWidget(widgetElement({ kind: 'message', body: WIDGET_LOADING_COPY }));
   let board: WidgetBoard;
   try {
@@ -87,21 +85,28 @@ export function registerHomeWidgets(): void {
     return;
   }
   registered = true;
-  try {
-    registerWidgetTaskHandler(widgetTaskHandler);
-    registerWidgetConfigurationScreen(RuleChoiceScreen);
-    const kick = () => {
-      void refreshHomeWidgets();
-    };
-    if (AppState.currentState === 'active') {
+  void finishHomeWidgetRegistration().catch(() => {
+    registered = false;
+  });
+}
+
+async function finishHomeWidgetRegistration(): Promise<void> {
+  const { registerWidgetTaskHandler, registerWidgetConfigurationScreen } = await import(
+    'react-native-android-widget'
+  );
+  const { AppState } = await import('react-native');
+  const { RuleChoiceScreen } = await import('./RuleChoiceScreen');
+  registerWidgetTaskHandler(widgetTaskHandler);
+  registerWidgetConfigurationScreen(RuleChoiceScreen);
+  const kick = () => {
+    void refreshHomeWidgets();
+  };
+  if (AppState.currentState === 'active') {
+    kick();
+  }
+  AppState.addEventListener('change', (state) => {
+    if (state === 'active') {
       kick();
     }
-    AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
-        kick();
-      }
-    });
-  } catch {
-    registered = false;
-  }
+  });
 }
