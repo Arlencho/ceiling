@@ -26,7 +26,7 @@ import { colors, fonts, radii, space } from '../../components/theme';
 import { KIND_REFUSED } from '../../lib/constants';
 import { isListedDecision, timeLeftParts, todaysAgentDecisions } from '../../lib/format';
 import { showDevnetUsdcFaucet } from '../../lib/faucet';
-import { devnetTestTokenNote, formatTokenAmount } from '../../lib/tokens';
+import { mainnetPreviewNote, devnetTestTokenNote, formatTokenAmount } from '../../lib/tokens';
 import { useWallet } from '../../lib/useWallet';
 import { isActive, mandateRemaining } from '../../lib/mandate';
 import { liveMandateCount, showRulePill, tabPillFace } from '../../lib/mandateRead';
@@ -64,7 +64,7 @@ export default function OverviewScreen() {
   const capText = formatTokenAmount(mandate?.cap ?? 0n, chain.decimals, mint);
   const spentText = formatTokenAmount(mandate?.spent ?? 0n, chain.decimals, mint);
   const perText = formatTokenAmount(mandate?.perTxMax ?? 0n, chain.decimals, mint);
-  const tokenNote = devnetTestTokenNote(mint, chain.config?.explorerCluster ?? null);
+  const tokenNote = mainnetPreviewNote(mint, chain.config?.explorerCluster ?? null) ?? devnetTestTokenNote(mint, chain.config?.explorerCluster ?? null);
   const offerFaucet =
     chain.mandateStatus === 'empty' &&
     wallet.ownerPublicKey != null &&
@@ -96,7 +96,7 @@ export default function OverviewScreen() {
       onRefresh={onRefresh}
     >
       <ConnectGate>
-        <HoldEntry />
+        <HoldEntry cluster={wallet.cluster} />
         {chain.configError ? <EmptyState>{chain.configError}</EmptyState> : null}
         {chain.mandateStatus === 'empty' ? (
           <View style={styles.block}>

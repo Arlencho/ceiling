@@ -29,7 +29,7 @@ import { parseOptionalAgentAddress } from '../lib/agentAddress';
 import { createClient, type OpenMandateResult } from '../lib/chain';
 import { formatBaseUnits } from '../lib/format';
 import { showDevnetUsdcFaucet } from '../lib/faucet';
-import { devnetTestTokenNote, withToken } from '../lib/tokens';
+import { mainnetPreviewNote, devnetTestTokenNote, withToken } from '../lib/tokens';
 import { secureStore } from '../lib/mwa';
 import { evaluatePresign, type PresignObservation } from '../lib/presign';
 import { observePresign } from '../lib/presignRead';
@@ -457,7 +457,7 @@ function ApprovalCard({
   const dayCount = choice.kind === 'days' ? choice.days : null;
   const maxText = maxPay != null && decimals != null ? withToken(formatBaseUnits(maxPay, decimals), mintText) : null;
   const capText = cap != null && decimals != null ? withToken(formatBaseUnits(cap, decimals), mintText) : null;
-  const tokenNote = devnetTestTokenNote(mintText, chain.config?.explorerCluster ?? null);
+  const tokenNote = mainnetPreviewNote(mintText, chain.config?.explorerCluster ?? null) ?? devnetTestTokenNote(mintText, chain.config?.explorerCluster ?? null);
   const paymentCount = cap != null && maxPay != null && maxPay > 0n ? cap / maxPay : null;
   const blockCount =
     paymentCount != null && paymentCount > 0n && paymentCount <= 60n ? Number(paymentCount) : BLOCK_COUNT;
