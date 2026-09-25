@@ -9,6 +9,7 @@ import { KIND_OPENED, KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, STATUS_ACTIVE } fr
 import type { MandateAccount } from './mandate';
 import { defaultQuietSettings, quietNoteCopy, type QuietSettings } from './quietNote';
 import { buildRenewalView, type RenewalView } from './renewal';
+import { VTEST_MINT } from './tokens';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -135,7 +136,7 @@ function rule(): MandateAccount {
     address: 'rule-ending',
     owner: 'owner',
     agent: AGENT,
-    mint: 'mint',
+    mint: VTEST_MINT,
     source: 'source',
     merchant: MERCHANT,
     mandateId: 1n,
@@ -185,6 +186,7 @@ function noteCopy() {
     spent: 5n,
     expiresAt: BigInt(Math.floor(quietNow.getTime() / 1000) + 40 * 86400),
     decimals: 0,
+    mint: VTEST_MINT,
     rows: [{ ts: BigInt(Math.floor(quietNow.getTime() / 1000)), kind: KIND_REFUSED, amount: 3n }],
     ledgerTotal: 1,
     now: quietNow,
@@ -248,10 +250,10 @@ test('the renewal screen reads loading, an absent rule, a failed read, and the c
   const shown = textOf(root);
   assert.match(shown, /Your rule ends in 7 days/);
   assert.match(shown, /Depot agent/);
-  assert.match(shown, /19, refused/);
-  assert.match(shown, /6, the limit/);
+  assert.match(shown, /19 VTEST, refused/);
+  assert.match(shown, /6 VTEST, the limit/);
   assert.match(shown, /1 time/);
-  assert.match(shown, /63 was never needed/);
+  assert.match(shown, /63 VTEST was never needed/);
   assert.match(shown, /90 days, to /);
   assert.match(shown, /Let this one end/);
   assert.match(shown, /Nothing else happens/);
@@ -356,7 +358,7 @@ test('the home banner appears only inside the seven days and opens the renewal s
     }),
   );
   assert.match(textOf(root), /Your rule ends in 7 days/);
-  assert.match(textOf(root), /63 left/);
+  assert.match(textOf(root), /63 VTEST left/);
   await act(async () => {
     press(root, 'Your rule ends in 7 days').props.onPress();
   });
@@ -451,7 +453,7 @@ test('the quiet note screen reads loading, no rule, a failed read, and today', a
   assert.match(shown, /21:00/);
   assert.match(shown, /Turn on the quiet note/);
   assert.match(shown, /Depot agent asked once outside the rule and was refused/);
-  assert.match(shown, /4 of 9 left/);
+  assert.match(shown, /4 VTEST of 9 VTEST left/);
   assert.match(shown, /Last check 20:52/);
   assert.doesNotMatch(shown, /The quiet note is on/);
   assert.doesNotMatch(shown, /258 of 300/);

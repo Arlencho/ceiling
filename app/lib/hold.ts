@@ -2,6 +2,7 @@ import { PublicKey } from '@solana/web3.js';
 
 import { truncateAddress } from './wallet';
 import { formatBaseUnits, parseBaseUnits } from './format';
+import { tokenSymbol } from './tokens';
 
 export const HOLD_SHARE_BPS = 2500;
 export const HOLD_DAYS = [1, 2, 3] as const;
@@ -49,7 +50,11 @@ export function waitLabel(days: HoldDays): string {
   return days === 1 ? '1 day' : `${days} days`;
 }
 
-export function holdTokenName(cluster: string): string {
+export function holdTokenName(cluster: string, mint?: string | null): string {
+  const named = mint?.trim() ? tokenSymbol(mint) : '';
+  if (named) {
+    return named;
+  }
   if (cluster === 'devnet' || cluster === 'testnet') return 'test tokens';
   return 'tokens';
 }

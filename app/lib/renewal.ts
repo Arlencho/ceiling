@@ -3,6 +3,7 @@ import { PublicKey } from '@solana/web3.js';
 import { openedAtSec, ruleDay } from '../components/daily/facts';
 import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, PURPOSE_MAX_LEN } from './constants';
 import { formatBaseUnits, parseBaseUnits } from './format';
+import { formatTokenAmount, tokenSymbol } from './tokens';
 import { formatWeekdayDate } from './grade';
 import { isActive, mandateRemaining, type MandateAccount } from './mandate';
 import { displayPurpose, formatExpiryDate } from './ruleView';
@@ -54,6 +55,8 @@ export type RenewalView = {
   letEndDetail: string;
   headline: string;
   ifNothing: string;
+  /** Symbol, or the shortened mint, for the amounts on this rule. */
+  token: string;
 };
 
 export function inRenewalWindow(mandate: MandateAccount, nowSec: bigint): boolean {
@@ -102,7 +105,7 @@ export function renewalBanner(
   if (!inRenewalWindow(mandate, nowSec)) {
     return null;
   }
-  const left = formatBaseUnits(mandateRemaining(mandate), decimals);
+  const left = formatTokenAmount(mandateRemaining(mandate), decimals, mandate.mint);
   const endsIn = endsInPhrase(mandate.expiresAt, nowSec);
   const endsOn = formatWeekdayDate(mandate.expiresAt);
   return {
@@ -167,21 +170,30 @@ export function overrideCount(rows: readonly RenewalRow[]): number {
   return count;
 }
 
-export function highestAskedText(rows: readonly RenewalRow[], decimals: number): string {
+export function highestAskedText(
+  rows: readonly RenewalRow[],
+  decimals: number,
+  mint?: string | null,
+): string {
   const ask = highestAsk(rows);
   if (!ask) {
     return 'None yet';
   }
-  const amount = formatBaseUnits(ask.amount, decimals);
+  const amount = formatTokenAmount(ask.amount, decimals, mint);
   return ask.refused ? `${amount}, refused` : `${amount}, paid`;
 }
 
-export function highestPaidText(rows: readonly RenewalRow[], perTxMax: bigint, decimals: number): string {
+export function highestPaidText(
+  rows: readonly RenewalRow[],
+  perTxMax: bigint,
+  decimals: number,
+  mint?: string | null,
+): string {
   const paid = highestPaidAmount(rows);
   if (paid == null) {
     return 'None';
   }
-  const amount = formatBaseUnits(paid, decimals);
+  const amount = formatTokenAmount(paid, decimals, mint);
   return paid === perTxMax ? `${amount}, the limit` : amount;
 }
 
@@ -323,7 +335,8 @@ export function buildRenewalView(args: {
     return null;
   }
   const left = mandateRemaining(args.mandate);
-  const leftText = formatBaseUnits(left, args.decimals);
+  const mint = args.mandate.mint;
+  const leftText = formatTokenAmount(left, args.decimals, mint);
   const endsIn = endsInPhrase(args.mandate.expiresAt, args.nowSec);
   const endsOn = formatWeekdayDate(args.mandate.expiresAt);
   const endsOnShort = shortDate(args.mandate.expiresAt, args.nowSec);
@@ -340,12 +353,12 @@ export function buildRenewalView(args: {
     endsOnShort,
     paidCount: args.mandate.spendCount,
     refusedCount: args.mandate.refusalCount,
-    spentText: formatBaseUnits(args.mandate.spent, args.decimals),
-    capText: formatBaseUnits(args.mandate.cap, args.decimals),
+    spentText: formatTokenAmount(args.mandate.spent, args.decimals, mint),
+    capText: formatTokenAmount(args.mandate.cap, args.decimals, mint),
     leftText,
     leftUnused: left > 0n,
-    highestAskedText: highestAskedText(args.rows, args.decimals),
-    highestPaidText: highestPaidText(args.rows, args.mandate.perTxMax, args.decimals),
+    highestAskedText: highestAskedText(args.rows, args.decimals, mint),
+    highestPaidText: highestPaidText(args.rows, args.mandate.perTxMax, args.decimals, mint),
     paidAtLimit: paid != null && paid === args.mandate.perTxMax,
     allowedText: timesPhrase(overrideCount(args.rows)),
     recordNote: truncated
@@ -355,6 +368,7 @@ export function buildRenewalView(args: {
     letEndDetail: `${leftText} goes back to your wallet on ${endsOnShort}. Nothing else happens.`,
     headline: `Your rule ends in ${endsIn}.`,
     ifNothing: `On ${endsOn}. If you do nothing, it ends and the ${leftText} left goes back to your wallet.`,
+    token: tokenSymbol(mint),
   };
 }
 

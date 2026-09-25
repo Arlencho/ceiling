@@ -8,6 +8,7 @@ import { PublicKey } from '@solana/web3.js';
 
 import { KIND_PAID, STATUS_ACTIVE } from './constants';
 import type { MandateAccount } from './mandate';
+import { VTEST_MINT } from './tokens';
 import type { RingEntry } from './ring';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -106,7 +107,7 @@ function mandate(): MandateAccount {
     address: ADDRESS,
     owner: new PublicKey(Buffer.alloc(32, 3)).toBase58(),
     agent: AGENT,
-    mint: new PublicKey(Buffer.alloc(32, 5)).toBase58(),
+    mint: VTEST_MINT,
     source: new PublicKey(Buffer.alloc(32, 6)).toBase58(),
     merchant: new PublicKey(Buffer.alloc(32, 7)).toBase58(),
     mandateId: 1n,
@@ -249,16 +250,16 @@ test('the large widget shows what the agent can still spend, the last decision, 
   const root = await mount(createElement(HomeWidgetFace, { status: 'ready', size: 'large', face }));
   const text = visibleText(root);
   assert.match(text, /Research agent can still spend/);
-  assert.match(text, /^30$/m);
-  assert.match(text, /of \n40/);
+  assert.match(text, /^30 VTEST$/m);
+  assert.match(text, /of \n40 VTEST/);
   assert.match(text, /12 days left/);
-  assert.match(text, /Last paid 4, yesterday 18:02/);
+  assert.match(text, /Last paid 4 VTEST, yesterday 18:02/);
   assert.match(text, /2 paid, 1 refused/);
   assert.match(text, /Rule live/);
   assert.match(text, /Updated 25 Sep 08:12/);
   assert.equal(text.includes('258'), false);
   const bar = root.root.findByProps({ accessibilityRole: 'progressbar' });
-  assert.equal(bar.props.accessibilityLabel, '30 remaining of 40');
+  assert.equal(bar.props.accessibilityLabel, '30 VTEST remaining of 40 VTEST');
   assert.equal(flatStyle(root.root.findByProps({ testID: 'block-fill-21' }).props.style).width, '100%');
   assert.equal(flatStyle(root.root.findByProps({ testID: 'block-fill-22' }).props.style).width, '50%');
   assert.ok(root.root.findByProps({ accessibilityLabel: 'Veto Catch mark' }));
@@ -271,8 +272,8 @@ test('a small widget shows that rule and its last decision', async () => {
   const root = await mount(createElement(HomeWidgetFace, { status: 'ready', size: 'small', face }));
   const text = visibleText(root);
   assert.match(text, /Research agent can still spend/);
-  assert.match(text, /of \n40/);
-  assert.match(text, /Last: paid 4, yesterday/);
+  assert.match(text, /of \n40 VTEST/);
+  assert.match(text, /Last: paid 4 VTEST, yesterday/);
   assert.equal(text.includes('days left'), false);
   assert.equal(text.includes('2 paid'), false);
   assert.equal(root.root.findAll((node) => node.props.accessibilityRole === 'progressbar').length, 0);

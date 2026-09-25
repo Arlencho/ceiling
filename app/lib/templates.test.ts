@@ -40,3 +40,11 @@ test('templateById returns the mint bot starting point', () => {
   assert.ok(found);
   assert.equal(found.fields.purpose, 'cap a mint bot');
 });
+
+test('trading bot is not a starting point', () => {
+  assert.equal(templateById('trading-bot'), undefined);
+  assert.equal(
+    TEMPLATES.some((row) => row.id === 'trading-bot' || row.title === 'Trading bot'),
+    false,
+  );
+});

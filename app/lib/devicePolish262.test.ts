@@ -165,6 +165,10 @@ test('the home block line says one payment when the cap is 30 payments, and plai
     '1 block = 1 payment of 10',
   );
   assert.equal(
+    homeBlockCaption('1 block is one share of 300 VTEST', 'Most per payment: 10 VTEST'),
+    '1 block = 1 payment of 10 VTEST',
+  );
+  assert.equal(
     homeBlockCaption('1 block is one share of 300', 'Most per payment: 15'),
     '1 block is 10 of your 300',
   );

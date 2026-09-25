@@ -1,5 +1,5 @@
 import { REASON_NOT_ACTIVE, REASON_OVER_PER_TX_MAX, reasonText } from './constants';
-import { formatBaseUnits } from './format';
+import { formatTokenAmount } from './tokens';
 
 export { reasonText };
 
@@ -13,6 +13,7 @@ export function renderReason(
   reason: number,
   suggestedOverride: bigint,
   decimals: number,
+  mint?: string | null,
 ): ReasonView {
   const text = reasonText(reason);
   if (reason !== REASON_OVER_PER_TX_MAX) {
@@ -22,7 +23,7 @@ export function renderReason(
     return {
       reason,
       text,
-      overrideLine: `An override of ${formatBaseUnits(suggestedOverride, decimals)} would have cleared it.`,
+      overrideLine: `An override of ${formatTokenAmount(suggestedOverride, decimals, mint)} would have cleared it.`,
     };
   }
   return {
@@ -38,11 +39,12 @@ export function refusalWhyLine(args: {
   suggestedOverride: bigint;
   decimals: number;
   perTxMax?: bigint;
+  mint?: string | null;
 }): string {
-  const view = renderReason(args.reason, args.suggestedOverride, args.decimals);
+  const view = renderReason(args.reason, args.suggestedOverride, args.decimals, args.mint);
   if (args.reason === REASON_OVER_PER_TX_MAX && args.perTxMax != null) {
-    const amount = formatBaseUnits(args.amount, args.decimals);
-    const limit = formatBaseUnits(args.perTxMax, args.decimals);
+    const amount = formatTokenAmount(args.amount, args.decimals, args.mint);
+    const limit = formatTokenAmount(args.perTxMax, args.decimals, args.mint);
     const extra = view.overrideLine ? ` ${view.overrideLine}` : '';
     return `Asked for ${amount}, over the ${limit} per-payment maximum.${extra}`;
   }

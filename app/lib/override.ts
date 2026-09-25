@@ -10,7 +10,7 @@ import {
   reasonText,
   statusName,
 } from './constants';
-import { formatBaseUnits } from './format';
+import { formatTokenAmount } from './tokens';
 import { isActive, mandateRemaining, type MandateAccount } from './mandate';
 
 export const CAP_OVERRIDE_REFUSAL =
@@ -137,12 +137,13 @@ export function overrideCommitCopy(args: {
   remaining: bigint;
   cap: bigint;
   decimals: number;
+  mint?: string | null;
   pendingOtherNonce?: bigint;
 }): OverrideCommit {
-  const amount = formatBaseUnits(args.amount, args.decimals);
-  const perTxMax = formatBaseUnits(args.perTxMax, args.decimals);
-  const remaining = formatBaseUnits(args.remaining, args.decimals);
-  const cap = formatBaseUnits(args.cap, args.decimals);
+  const amount = formatTokenAmount(args.amount, args.decimals, args.mint);
+  const perTxMax = formatTokenAmount(args.perTxMax, args.decimals, args.mint);
+  const remaining = formatTokenAmount(args.remaining, args.decimals, args.mint);
+  const cap = formatTokenAmount(args.cap, args.decimals, args.mint);
   const paragraphs = [
     `You are about to grant an override of ${amount} for nonce ${args.nonce.toString()}.`,
     `The per-payment maximum on this rule is ${perTxMax}. It does not change. This override allows this one payment of ${amount}, used once, never above the remaining cap (${remaining} remaining of ${cap}). ${CAP_OVERRIDE_REFUSAL}`,
@@ -185,7 +186,7 @@ export function assessOverride(args: {
     return { status: 'blocked', why: guard.why };
   }
   if (args.mandate.overrideNonce === args.row.nonce && args.mandate.overrideAmount > 0n) {
-    const amount = formatBaseUnits(args.mandate.overrideAmount, args.decimals);
+    const amount = formatTokenAmount(args.mandate.overrideAmount, args.decimals, args.mandate.mint);
     return {
       status: 'already',
       amount: args.mandate.overrideAmount,
@@ -208,6 +209,7 @@ export function assessOverride(args: {
       remaining: mandateRemaining(args.mandate),
       cap: args.mandate.cap,
       decimals: args.decimals,
+      mint: args.mandate.mint,
       pendingOtherNonce: pending,
     }),
   };
@@ -245,8 +247,12 @@ export function overrideProbeIsCurrent(
   return currentKey === nextKey;
 }
 
-export function overrideRowView(row: OverrideSource, decimals: number): OverrideRowView {
-  const amount = formatBaseUnits(row.amount, decimals);
+export function overrideRowView(
+  row: OverrideSource,
+  decimals: number,
+  mint?: string | null,
+): OverrideRowView {
+  const amount = formatTokenAmount(row.amount, decimals, mint);
   return {
     say: 'Waived',
     italic: 'by the owner',
@@ -287,14 +293,14 @@ export function nonceSequence<T extends OverrideSource>(
   return { nonce, asked, refused, waived, paid, reason };
 }
 
-export function sequenceLine(seq: NonceSequence, decimals: number): string | null {
+export function sequenceLine(seq: NonceSequence, decimals: number, mint?: string | null): string | null {
   const steps = Number(seq.refused) + Number(seq.waived) + Number(seq.paid);
   if (steps < 2) {
     return null;
   }
   const parts: string[] = [];
   if (seq.asked != null) {
-    parts.push(`Asked for ${formatBaseUnits(seq.asked, decimals)}.`);
+    parts.push(`Asked for ${formatTokenAmount(seq.asked, decimals, mint)}.`);
   }
   if (seq.refused) {
     const why = seq.reason != null ? ` (${reasonText(seq.reason)})` : '';

@@ -28,6 +28,7 @@ import {
 } from '../../lib/ruleGuidance';
 import { PURPOSE_MAX_LEN } from '../../lib/constants';
 import { formatBaseUnits, parseBaseUnits } from '../../lib/format';
+import { devnetTestTokenNote, formatTokenAmount, tokenSymbol } from '../../lib/tokens';
 import type { MandateAccount } from '../../lib/mandate';
 import { displayPurpose } from '../../lib/ruleView';
 import {
@@ -194,6 +195,9 @@ function RuleCompose({
   const [openedAddress, setOpenedAddress] = useState<string | null>(null);
   const [holdReset, setHoldReset] = useState(0);
   const openingRef = useRef(false);
+  const formMint = chain.config?.mint ?? null;
+  const formSymbol = tokenSymbol(formMint);
+  const tokenNote = devnetTestTokenNote(formMint, chain.config?.explorerCluster ?? null);
 
   const setField = useCallback((key: keyof MandateFields, value: string) => {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -225,8 +229,8 @@ function RuleCompose({
     if (count != null && per > 0n) {
       board = {
         payments: count.toString(),
-        per: formatBaseUnits(per, chain.decimals),
-        cap: formatBaseUnits(cap, chain.decimals),
+        per: formatTokenAmount(per, chain.decimals, formMint),
+        cap: formatTokenAmount(cap, chain.decimals, formMint),
         bars: barUnits(cap, cap),
       };
     }
@@ -422,6 +426,7 @@ function RuleCompose({
           </EmptyState>
         )}
 
+        {tokenNote ? <Text style={styles.tokenNote}>{tokenNote}</Text> : null}
         {authoring ? (
           <Field
             label="Ruleset name"
@@ -434,6 +439,8 @@ function RuleCompose({
           <View style={styles.dialField}>
             <Field
               label="Cap"
+              accessibilityLabel={formSymbol ? `Cap, ${formSymbol}` : 'Cap'}
+              suffix={formSymbol || undefined}
               value={fields.cap}
               onChangeText={(text) => setField('cap', text)}
               placeholder="total, in tokens"
@@ -453,6 +460,8 @@ function RuleCompose({
           <View style={styles.dialField}>
             <Field
               label="Per-payment maximum"
+              accessibilityLabel={formSymbol ? `Per-payment maximum, ${formSymbol}` : 'Per-payment maximum'}
+              suffix={formSymbol || undefined}
               value={fields.perTxMax}
               onChangeText={(text) => setField('perTxMax', text)}
               placeholder="largest single payment"
@@ -556,6 +565,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
+  },
+  tokenNote: {
+    color: colors.body,
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    lineHeight: 20,
   },
   meta: {
     color: colors.muted,

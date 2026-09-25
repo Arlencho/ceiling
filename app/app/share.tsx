@@ -109,6 +109,7 @@ export default function ShareScreen() {
     ? decisionFace(row, chain.decimals, mandate?.perTxMax, chain.nowMs, {
         payee: mandate?.merchant,
         amounts: 'exact',
+        mint: mandate?.mint,
       })
     : null;
   const purpose = mandate ? displayPurpose(mandate.purpose) : '';

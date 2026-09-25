@@ -70,8 +70,8 @@ export default function HoldSend() {
             outlook.outcome === 'held'
               ? heldReasonChips({
                   reasons: outlook.reasons,
-                  amountLabel: formatHoldAmount(amount, decimals),
-                  dailyLabel: formatHoldAmount(bundleNow.account.dailyLimit, decimals),
+                  amountLabel: `${formatHoldAmount(amount, decimals)} ${loaded.tokenName}`,
+                  dailyLabel: `${formatHoldAmount(bundleNow.account.dailyLimit, decimals)} ${loaded.tokenName}`,
                   shareLabel: vaultShareText(amount, bundleNow.balance),
                 })
               : [],
@@ -92,7 +92,7 @@ export default function HoldSend() {
     return () => {
       alive = false;
     };
-  }, [amountText, bundle, decimals, destinationText, loaded.client, loaded.nowSec]);
+  }, [amountText, bundle, decimals, destinationText, loaded.client, loaded.nowSec, loaded.tokenName]);
 
   return (
     <Screen onRefresh={() => void loaded.reload()} refreshing={loaded.status === 'loading'}>
@@ -114,6 +114,7 @@ export default function HoldSend() {
             setDestinationText(text);
           }}
           onBack={() => router.back()}
+          tokenName={loaded.tokenName}
           signLabel={preview?.signLabel ?? 'Sign and send'}
           signingDisabled={loaded.wallet.busy || !preview || preview.outlook.outcome === 'refused'}
           onSign={async () => {

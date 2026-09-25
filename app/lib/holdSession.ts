@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useChain } from './useChain';
 import { useWallet } from './useWallet';
 import { holdNetworkPill, holdTokenName } from './hold';
+import { tokenSymbol } from './tokens';
 import { holdClient, readHoldVault, type HoldVaultBundle } from './holdChain';
 import type { ChainClient } from './chain';
 
@@ -22,7 +23,7 @@ export function useHoldSession() {
     owner,
     client,
     network: holdNetworkPill(cluster),
-    tokenName: holdTokenName(cluster),
+    tokenName: holdTokenName(cluster, config?.mint),
     cluster,
   };
 }
@@ -89,7 +90,8 @@ export function useHoldBundle(address: string) {
     };
   }, [load]);
 
-  return { ...session, status, error, bundle, nowSec, reload: load };
+  const tokenName = bundle ? tokenSymbol(bundle.account.mint.toBase58()) : session.tokenName;
+  return { ...session, status, error, bundle, nowSec, reload: load, tokenName };
 }
 
 export type HoldSessionClient = ChainClient;

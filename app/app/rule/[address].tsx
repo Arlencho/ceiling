@@ -33,6 +33,7 @@ import { ADVISORY_DECLINE_LABEL, KIND_ADVISORY_DECLINE } from '../../lib/advisor
 import { createClient, fetchAdvisoryDeclines, readRuleFunds, type RuleFunds } from '../../lib/chain';
 import { STATUS_REVOKED } from '../../lib/constants';
 import { formatBaseUnits, formatTimeLeft, newestFirst, timeLeftParts } from '../../lib/format';
+import { formatTokenAmount, withToken } from '../../lib/tokens';
 import type { LedgerRow } from '../../lib/ring';
 import { isActive, mandateRemaining } from '../../lib/mandate';
 import { mayClaimAbsence } from '../../lib/mandateRead';
@@ -244,7 +245,7 @@ export default function RuleDetailScreen() {
     ? ruleDay(sameLedger ? openedAtSec(chain.rows) : null, mandate.expiresAt, nowSec)
     : null;
   const left = mandate ? timeLeftParts(mandate.expiresAt, nowSec) : null;
-  const remainingText = formatBaseUnits(remaining, amountDecimals);
+  const remainingText = formatTokenAmount(remaining, amountDecimals, mandate?.mint);
   const connectStatus = mandate
     ? agentConnectStatus({
         active,
@@ -385,20 +386,20 @@ export default function RuleDetailScreen() {
             <SpendBoard
               kicker={active ? 'Your agent can still spend' : 'Still in the rule'}
               remainingText={remainingText}
-              ofText={active ? `of ${formatBaseUnits(mandate.cap, amountDecimals)}` : 'still in the rule, yours to take back'}
-              spentText={formatBaseUnits(mandate.spent, amountDecimals)}
-              spentCaption={active ? 'spent so far' : `of ${formatBaseUnits(mandate.cap, amountDecimals)} spent`}
+              ofText={active ? `of ${formatTokenAmount(mandate.cap, amountDecimals, mandate.mint)}` : 'still in the rule, yours to take back'}
+              spentText={formatTokenAmount(mandate.spent, amountDecimals, mandate.mint)}
+              spentCaption={active ? 'spent so far' : `of ${formatTokenAmount(mandate.cap, amountDecimals, mandate.mint)} spent`}
               remaining={bars.remaining}
               cap={bars.cap}
-              accessibilityLabel={`${remainingText} left of ${formatBaseUnits(mandate.cap, amountDecimals)}`}
-              leftCaption={`1 block = one payment of ${formatBaseUnits(mandate.perTxMax, amountDecimals)}`}
+              accessibilityLabel={`${remainingText} left of ${formatTokenAmount(mandate.cap, amountDecimals, mandate.mint)}`}
+              leftCaption={`1 block = one payment of ${formatTokenAmount(mandate.perTxMax, amountDecimals, mandate.mint)}`}
               rightCaption={funds ? 'Kept in its own account' : 'Reading where this rule keeps its budget.'}
               dimmed={!active}
             />
             <View style={styles.stats}>
               <View style={styles.stat}>
                 <Text style={styles.statK}>Most per payment</Text>
-                <Text style={styles.statV}>{`${formatBaseUnits(mandate.perTxMax, amountDecimals)} at a time`}</Text>
+                <Text style={styles.statV}>{`${formatTokenAmount(mandate.perTxMax, amountDecimals, mandate.mint)} at a time`}</Text>
               </View>
               <View style={styles.stat}>
                 <Text style={styles.statK}>The rule ends</Text>
@@ -433,13 +434,13 @@ export default function RuleDetailScreen() {
             <View style={styles.defs}>
               <Def label="Purpose" value={displayPurpose(mandate.purpose)} />
               {stamp ? <Def label="Stamped in purpose" value={stamp} /> : null}
-              <Def label="Total cap" value={formatBaseUnits(mandate.cap, amountDecimals)} />
-              <Def label="Per payment, max" value={formatBaseUnits(mandate.perTxMax, amountDecimals)} />
+              <Def label="Total cap" value={formatTokenAmount(mandate.cap, amountDecimals, mandate.mint)} />
+              <Def label="Per payment, max" value={formatTokenAmount(mandate.perTxMax, amountDecimals, mandate.mint)} />
               <Def label="Expires" value={formatExpiryDate(mandate.expiresAt)} />
               <Def label="Payee" value={truncateAddress(mandate.merchant)} />
               <Def
                 label="Spent so far"
-                value={`${formatBaseUnits(mandate.spent, amountDecimals)} of ${formatBaseUnits(mandate.cap, amountDecimals)}`}
+                value={`${formatTokenAmount(mandate.spent, amountDecimals, mandate.mint)} of ${formatTokenAmount(mandate.cap, amountDecimals, mandate.mint)}`}
               />
               <Def label="Time left" value={formatTimeLeft(mandate.expiresAt, nowSec)} />
               <Def
@@ -453,7 +454,7 @@ export default function RuleDetailScreen() {
                       ? 'not on chain'
                       : funds.decimals == null
                         ? 'unavailable'
-                        : formatBaseUnits(funds.balance, funds.decimals)
+                        : withToken(formatBaseUnits(funds.balance, funds.decimals), mandate.mint)
                 }
               />
               <Def label="Account" value={mandate.source} stacked />
@@ -496,6 +497,7 @@ export default function RuleDetailScreen() {
                     rpcUrl={chain.config?.rpcUrl ?? ''}
                     mandateAddress={mandate.address}
                     perTxMax={mandate.perTxMax}
+                    mint={mandate.mint}
                   />
                 ))}
               </View>

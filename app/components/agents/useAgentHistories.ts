@@ -121,6 +121,7 @@ export function useAgentHistories(): AgentScreenData {
             expiresAt: mandate.expiresAt,
             status: mandate.status,
             decimals: mintDecimals,
+            mint: mandate.mint,
             rows: ledger.rows.map(toDecision),
           });
         }

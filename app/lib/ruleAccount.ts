@@ -3,7 +3,7 @@ import { ACCOUNT_SIZE, AccountLayout, getAssociatedTokenAddressSync } from '@sol
 import { PublicKey } from '@solana/web3.js';
 
 import { readU64Le } from './constants';
-import { formatBaseUnits } from './format';
+import { formatTokenAmount } from './tokens';
 
 /** createAccountWithSeed limit. A u64 mandate id keeps veto-rule-<id> inside it. */
 export const MAX_RULE_TOKEN_SEED_LENGTH = 32;
@@ -154,15 +154,16 @@ export function openFundsRefusal(args: {
   balance: bigint;
   cap: bigint;
   decimals: number;
+  mint?: string | null;
 }): string | null {
   if (args.ataFound && args.balance >= args.cap) {
     return null;
   }
   const held = args.ataFound ? args.balance : 0n;
   const short = args.cap > held ? args.cap - held : 0n;
-  const heldText = formatBaseUnits(held, args.decimals);
-  const capText = formatBaseUnits(args.cap, args.decimals);
-  const shortText = formatBaseUnits(short, args.decimals);
+  const heldText = formatTokenAmount(held, args.decimals, args.mint);
+  const capText = formatTokenAmount(args.cap, args.decimals, args.mint);
+  const shortText = formatTokenAmount(short, args.decimals, args.mint);
   const where = args.ataFound
     ? `The associated token account ${args.ata.toBase58()} holds ${heldText}.`
     : `The associated token account ${args.ata.toBase58()} was not found. It holds ${heldText}.`;

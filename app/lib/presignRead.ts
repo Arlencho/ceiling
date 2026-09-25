@@ -36,6 +36,7 @@ export async function observePresign(args: {
     ownerTokenBalance: null,
     cap: 0n,
     decimals: 0,
+    mint: args.mint.toBase58(),
     mintReadable: false,
     solLamports: null,
     rentAndFeesLamports: tokenRent + mandateRent + ledgerRent + OPEN_FEE_MARGIN_LAMPORTS,

@@ -1,4 +1,4 @@
-import { formatBaseUnits } from './format';
+import { formatTokenAmount } from './tokens';
 
 export const NO_TOKEN_MESSAGE = 'You do not hold this token yet';
 
@@ -23,6 +23,7 @@ export type PresignObservation = {
   ownerTokenBalance: bigint | null;
   cap: bigint;
   decimals: number;
+  mint?: string | null;
   mintReadable: boolean;
   solLamports: number | null;
   rentAndFeesLamports: number;
@@ -57,8 +58,8 @@ function tokenCheck(observation: PresignObservation): PresignCheck {
     };
   }
   if (observation.ownerTokenBalance < observation.cap) {
-    const held = formatBaseUnits(observation.ownerTokenBalance, observation.decimals);
-    const cap = formatBaseUnits(observation.cap, observation.decimals);
+    const held = formatTokenAmount(observation.ownerTokenBalance, observation.decimals, observation.mint);
+    const cap = formatTokenAmount(observation.cap, observation.decimals, observation.mint);
     return {
       id: 'tokens',
       ok: false,

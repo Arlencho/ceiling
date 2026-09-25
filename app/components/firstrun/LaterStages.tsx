@@ -2,7 +2,7 @@ import { useEffect, useState, type ComponentType } from 'react';
 import { ActivityIndicator } from 'react-native';
 
 import type { OpenMandateResult } from '../../lib/chain';
-import { formatBaseUnits } from '../../lib/format';
+import { formatTokenAmount } from '../../lib/tokens';
 import type { RuleRequestV1 } from '../../lib/ruleRequest';
 import { useChain } from '../../lib/useChain';
 import { colors } from '../theme';
@@ -178,7 +178,9 @@ function AlertsGate({
       cluster={cluster}
       address={opened?.mandate.address ?? null}
       exampleLimit={
-        amountsReady && opened ? formatBaseUnits(opened.mandate.perTxMax, chain.decimals) : null
+        amountsReady && opened
+          ? formatTokenAmount(opened.mandate.perTxMax, chain.decimals, opened.mandate.mint)
+          : null
       }
       onNotNow={onFinish}
     />

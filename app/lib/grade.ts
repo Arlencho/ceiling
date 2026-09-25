@@ -15,7 +15,8 @@ import {
   REASON_STALE_NONCE,
   REASON_ZERO_AMOUNT,
 } from './constants';
-import { formatDisplayAmount, remainingCap } from './format';
+import { remainingCap } from './format';
+import { formatTokenDisplay } from './tokens';
 import { canonicalAddress } from './ruleRequest';
 import { truncateAddress } from './wallet';
 
@@ -59,6 +60,8 @@ export type RuleFacts = {
   expiresAt: bigint;
   status: number;
   decimals: number;
+  /** Mandate mint. Amounts name this token. */
+  mint?: string;
   /** Payee wallet on the rule. A charge's counterparty is that wallet's token account. */
   merchant?: string;
   rows: readonly GradeDecision[];
@@ -466,8 +469,9 @@ export function snapshotRule(rule: RuleFacts, nowSec: bigint): RuleSnapshot {
   const day = ruleDayNumber(startedAt, rule.expiresAt, nowSec);
   const totalDays = ruleTotalDays(startedAt, rule.expiresAt);
   const remaining = remainingCap(rule.cap, rule.spent);
-  const remainingLabel = formatDisplayAmount(remaining, rule.decimals);
-  const capLabel = formatDisplayAmount(rule.cap, rule.decimals);
+  const mint = rule.mint;
+  const remainingLabel = formatTokenDisplay(remaining, rule.decimals, mint);
+  const capLabel = formatTokenDisplay(rule.cap, rule.decimals, mint);
   const facts = countRule(rule.rows);
   const dayLabel =
     day != null && totalDays != null
@@ -480,8 +484,8 @@ export function snapshotRule(rule: RuleFacts, nowSec: bigint): RuleSnapshot {
     shortAddress: truncateAddress(rule.address),
     remainingLabel,
     capLabel,
-    spentLabel: formatDisplayAmount(rule.spent, rule.decimals),
-    perTxMaxLabel: formatDisplayAmount(rule.perTxMax, rule.decimals),
+    spentLabel: formatTokenDisplay(rule.spent, rule.decimals, mint),
+    perTxMaxLabel: formatTokenDisplay(rule.perTxMax, rule.decimals, mint),
     remainingRatio: ratio(remaining, rule.cap),
     day,
     totalDays,

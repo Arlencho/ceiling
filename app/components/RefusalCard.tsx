@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { REASON_OVER_PER_TX_MAX } from '../lib/constants';
-import { formatBaseUnits } from '../lib/format';
+import { formatTokenAmount } from '../lib/tokens';
 import { refusalWhyLine } from '../lib/reasons';
 import type { LedgerRow } from '../lib/ring';
 import { payeeLabel } from '../lib/wallet';
@@ -14,6 +14,7 @@ export function RefusalCard({
   row,
   decimals,
   perTxMax,
+  mint,
   compact = false,
   onShare,
   proof,
@@ -22,6 +23,7 @@ export function RefusalCard({
   row: LedgerRow;
   decimals: number;
   perTxMax?: bigint;
+  mint?: string | null;
   compact?: boolean;
   onShare?: () => void;
   proof?: string;
@@ -33,12 +35,13 @@ export function RefusalCard({
     suggestedOverride: row.suggestedOverride,
     decimals,
     perTxMax,
+    mint,
   });
-  const asked = formatBaseUnits(row.amount, decimals);
-  const limit = perTxMax != null ? formatBaseUnits(perTxMax, decimals) : null;
+  const asked = formatTokenAmount(row.amount, decimals, mint);
+  const limit = perTxMax != null ? formatTokenAmount(perTxMax, decimals, mint) : null;
   const offer =
     row.reason === REASON_OVER_PER_TX_MAX && row.suggestedOverride > 0n
-      ? formatBaseUnits(row.suggestedOverride, decimals)
+      ? formatTokenAmount(row.suggestedOverride, decimals, mint)
       : null;
   const split = perTxMax != null && perTxMax > 0n && row.amount > 0n ? barSplit(row.amount, perTxMax) : null;
   const tilt =

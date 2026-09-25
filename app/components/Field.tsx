@@ -12,6 +12,7 @@ export function Field({
   accessibilityLabel,
   multiline = false,
   hint,
+  suffix,
 }: {
   label: string;
   value: string;
@@ -21,29 +22,42 @@ export function Field({
   accessibilityLabel?: string;
   multiline?: boolean;
   hint?: string;
+  suffix?: string;
 }) {
   const scrollFocused = useScrollFocusedField();
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput
-        accessibilityLabel={accessibilityLabel ?? label}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.muted}
-        editable={editable}
-        autoCapitalize="none"
-        autoCorrect={false}
-        multiline={multiline}
-        onFocus={(event) => {
-          const target = event.nativeEvent.target;
-          if (typeof target === 'number') {
-            scrollFocused(target);
-          }
-        }}
-        style={[styles.input, multiline && styles.multiline, !editable && styles.locked]}
-      />
+      <View style={styles.inputRow}>
+        <TextInput
+          accessibilityLabel={accessibilityLabel ?? label}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.muted}
+          editable={editable}
+          autoCapitalize="none"
+          autoCorrect={false}
+          multiline={multiline}
+          onFocus={(event) => {
+            const target = event.nativeEvent.target;
+            if (typeof target === 'number') {
+              scrollFocused(target);
+            }
+          }}
+          style={[
+            styles.input,
+            suffix ? styles.inputWithSuffix : null,
+            multiline && styles.multiline,
+            !editable && styles.locked,
+          ]}
+        />
+        {suffix ? (
+          <View style={styles.suffixWrap} pointerEvents="none">
+            <Text style={styles.suffix}>{suffix}</Text>
+          </View>
+        ) : null}
+      </View>
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
     </View>
   );
@@ -61,6 +75,10 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
+  inputRow: {
+    position: 'relative',
+    alignSelf: 'stretch',
+  },
   input: {
     backgroundColor: colors.surface,
     borderColor: colors.line,
@@ -73,6 +91,21 @@ const styles = StyleSheet.create({
     paddingVertical: space.xl,
     fontFamily: fonts.sansSemibold,
     minHeight: 48,
+  },
+  inputWithSuffix: {
+    paddingRight: 96,
+  },
+  suffixWrap: {
+    position: 'absolute',
+    right: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+  },
+  suffix: {
+    fontFamily: fonts.sansBold,
+    fontSize: 14,
+    color: colors.muted,
   },
   multiline: {
     minHeight: 72,

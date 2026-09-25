@@ -8,6 +8,7 @@ import { space } from '../components/theme';
 import { KIND_PAID, KIND_REFUSED, REASON_OVER_PER_TX_MAX, STATUS_ACTIVE } from './constants';
 import type { MandateAccount } from './mandate';
 import type { LedgerRow } from './ring';
+import { VTEST_MINT } from './tokens';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -156,7 +157,7 @@ function mandate(over: Partial<MandateAccount> = {}): MandateAccount {
     address: 'Mandate1111111111111111111111111111111111111',
     owner: 'Owner111111111111111111111111111111111111111',
     agent: 'Agent111111111111111111111111111111111111111',
-    mint: 'Mint1111111111111111111111111111111111111111',
+    mint: VTEST_MINT,
     source: 'Source11111111111111111111111111111111111111',
     merchant: 'Payee11111111111111111111111111111111111111',
     mandateId: 1n,
@@ -479,7 +480,7 @@ test('the decision list shows the payee and two decimals, and the detail keeps t
   chainState = baseChain({ decimals: 6, rows: [row], mandate: rule, mandates: [rule] });
   const { default: Decisions } = await import('../app/(tabs)/decisions');
   const list = visibleText(await mount(createElement(Decisions)));
-  assert.match(list, /Paid 15\.15 to Paye\.\.\.1111/);
+  assert.match(list, /Paid 15\.15 VTEST to Paye\.\.\.1111/);
   assert.match(list, /See it on the blockchain/);
   assert.doesNotMatch(list, /15\.15275|2bt9|RPC/);
   params = { id: `${rule.address}:${row.ts.toString()}:${row.kind}:${row.nonce.toString()}` };
@@ -497,17 +498,17 @@ test('decisions lists paid and refused rows in plain words and the filter keeps 
   const root = await mount(createElement(Decisions));
   const text = visibleText(root);
   assert.match(text, /Decisions under the rule/);
-  assert.match(text, /Paid 8 to Paye\.\.\.1111/);
-  assert.match(text, /Inside your limit of 10 per payment/);
-  assert.match(text, /Refused: your agent asked 14, your limit is 10 per payment/);
+  assert.match(text, /Paid 8 VTEST to Paye\.\.\.1111/);
+  assert.match(text, /Inside your limit of 10 VTEST per payment/);
+  assert.match(text, /Refused: your agent asked 14 VTEST, your limit is 10 VTEST per payment/);
   assert.match(text, /No money moved\. Reason saved on the blockchain/);
-  assert.match(text, /258 left of your 300 total/);
+  assert.match(text, /258 VTEST left of your 300 VTEST total/);
   await act(async () => {
     pressable(root, 'Refused').props.onPress();
   });
   const filtered = visibleText(root);
   assert.match(filtered, /Refused: your agent asked 14/);
-  assert.doesNotMatch(filtered, /Paid 8 to/);
+  assert.doesNotMatch(filtered, /Paid 8 VTEST to/);
 });
 
 test('one decision shows what was asked, that nothing moved, and the chain record', async () => {
@@ -531,15 +532,15 @@ test('one decision shows what was asked, that nothing moved, and the chain recor
   const root = await mount(createElement(Detail));
   const text = visibleText(root);
   assert.match(text, /No money moved/);
-  assert.match(text, /Your agent asked to pay 14/);
-  assert.match(text, /Your rule allows 10 per payment/);
+  assert.match(text, /Your agent asked to pay 14 VTEST/);
+  assert.match(text, /Your rule allows 10 VTEST per payment/);
   assert.match(text, /Money moved/);
-  assert.match(text, /Over your per-payment limit of 10/);
+  assert.match(text, /Over your per-payment limit of 10 VTEST/);
   assert.match(text, /Saved on the blockchain/);
-  assert.match(text, /This one payment only: 14 to Paye\.\.\.1111/);
-  assert.match(text, /Your limit stays 10 per payment/);
-  assert.match(text, /258 now, 244 after it is paid/);
-  assert.match(text, /Allow this one payment of 14/);
+  assert.match(text, /This one payment only: 14 VTEST to Paye\.\.\.1111/);
+  assert.match(text, /Your limit stays 10 VTEST per payment/);
+  assert.match(text, /258 VTEST now, 244 VTEST after it is paid/);
+  assert.match(text, /Allow this one payment of 14 VTEST/);
 });
 
 test('a refusal whose ledger names the payee token account shows the rule payee on screen', async () => {
@@ -564,7 +565,7 @@ test('a refusal whose ledger names the payee token account shows the rule payee 
   const { default: Detail } = await import('../app/decision/[id]');
   const text = visibleText(await mount(createElement(Detail)));
   assert.match(text, /To payee\n6i99\.\.\.PdCG/);
-  assert.match(text, /This one payment only: 14 to 6i99\.\.\.PdCG/);
+  assert.match(text, /This one payment only: 14 VTEST to 6i99\.\.\.PdCG/);
   assert.match(text, /Payee token account\n2bt9\.\.\.ay7F/);
   assert.doesNotMatch(text, /to 2bt9/);
   assert.equal((text.match(/2bt9/g) ?? []).length, 1);

@@ -1,6 +1,7 @@
 import { KIND_ADVISORY_DECLINE } from '../../lib/advisory';
 import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, REASON_OVER_PER_TX_MAX } from '../../lib/constants';
-import { formatBaseUnits, formatClock, formatDayHeading, formatUnix, roundShownAmounts } from '../../lib/format';
+import { formatClock, formatDayHeading, formatUnix, roundShownAmounts } from '../../lib/format';
+import { formatTokenAmount } from '../../lib/tokens';
 import { overrideRowView } from '../../lib/override';
 import { refusalWhyLine } from '../../lib/reasons';
 import type { LedgerRow } from '../../lib/ring';
@@ -21,6 +22,7 @@ export type DecisionFace = {
 export type DecisionFaceOptions = {
   payee?: string;
   amounts?: 'screen' | 'exact';
+  mint?: string | null;
 };
 
 const CHAIN_LINK = 'See it on the blockchain';
@@ -89,10 +91,11 @@ export function refusedTitle(args: {
   perTxMax?: bigint;
   reason: number;
   suggestedOverride: bigint;
+  mint?: string | null;
 }): string {
   if (args.reason === REASON_OVER_PER_TX_MAX && args.perTxMax != null) {
-    const asked = formatBaseUnits(args.amount, args.decimals);
-    const limit = formatBaseUnits(args.perTxMax, args.decimals);
+    const asked = formatTokenAmount(args.amount, args.decimals, args.mint);
+    const limit = formatTokenAmount(args.perTxMax, args.decimals, args.mint);
     return `Refused: your agent asked ${asked}, your limit is ${limit} per payment`;
   }
   const why = refusalWhyLine({
@@ -101,6 +104,7 @@ export function refusedTitle(args: {
     suggestedOverride: args.suggestedOverride,
     decimals: args.decimals,
     perTxMax: args.perTxMax,
+    mint: args.mint,
   }).replace(/\.$/, '');
   return `Refused: ${why}`;
 }
@@ -125,9 +129,10 @@ export function decisionFace(
 ): DecisionFace {
   const when = rowWhen(row.ts, nowMs);
   const screen = options?.amounts !== 'exact';
+  const mint = options?.mint;
   let face: DecisionFace;
   if (row.kind === KIND_ADVISORY_DECLINE) {
-    const amount = formatBaseUnits(row.amount, decimals);
+    const amount = formatTokenAmount(row.amount, decimals, mint);
     const reason = row.reasonText.trim();
     const chain = chainCopy('Not a refusal by the rule. Your agent signed this note itself.', row.signature);
     face = {
@@ -153,14 +158,15 @@ export function decisionFace(
         perTxMax,
         reason: row.reason,
         suggestedOverride: row.suggestedOverride,
+        mint,
       }),
       detail: chain.detail,
-      figure: formatBaseUnits(0n, decimals),
+      figure: formatTokenAmount(0n, decimals, mint),
       when,
       chainLink: chain.chainLink,
     };
   } else if (row.kind === KIND_OVERRIDE) {
-    const view = overrideRowView(row, decimals);
+    const view = overrideRowView(row, decimals, mint);
     const chain = chainCopy(view.why, row.signature);
     face = {
       tone: 'allowed',
@@ -172,9 +178,9 @@ export function decisionFace(
       chainLink: chain.chainLink,
     };
   } else if (row.kind === KIND_PAID) {
-    const amount = formatBaseUnits(row.amount, decimals);
+    const amount = formatTokenAmount(row.amount, decimals, mint);
     const payee = payeeLabel(options?.payee);
-    const limit = perTxMax != null ? formatBaseUnits(perTxMax, decimals) : null;
+    const limit = perTxMax != null ? formatTokenAmount(perTxMax, decimals, mint) : null;
     const inside = limit != null ? `Inside your limit of ${limit} per payment.` : 'Inside the rule.';
     const chain = chainCopy(inside, row.signature);
     face = {
@@ -214,10 +220,11 @@ export function refusalBody(args: {
   perTxMax?: bigint;
   reason: number;
   suggestedOverride: bigint;
+  mint?: string | null;
 }): string {
   if (args.reason === REASON_OVER_PER_TX_MAX && args.perTxMax != null) {
-    const asked = formatBaseUnits(args.amount, args.decimals);
-    const limit = formatBaseUnits(args.perTxMax, args.decimals);
+    const asked = formatTokenAmount(args.amount, args.decimals, args.mint);
+    const limit = formatTokenAmount(args.perTxMax, args.decimals, args.mint);
     return `Your agent asked to pay ${asked}. Your rule allows ${limit} per payment, so the program refused.`;
   }
   return refusalWhyLine({
@@ -226,6 +233,7 @@ export function refusalBody(args: {
     suggestedOverride: args.suggestedOverride,
     decimals: args.decimals,
     perTxMax: args.perTxMax,
+    mint: args.mint,
   });
 }
 
@@ -234,9 +242,10 @@ export function whyRefused(args: {
   decimals: number;
   perTxMax?: bigint;
   fallback: string;
+  mint?: string | null;
 }): string {
   if (args.reason === REASON_OVER_PER_TX_MAX && args.perTxMax != null) {
-    return `Over your per-payment limit of ${formatBaseUnits(args.perTxMax, args.decimals)}`;
+    return `Over your per-payment limit of ${formatTokenAmount(args.perTxMax, args.decimals, args.mint)}`;
   }
   return args.fallback.replace(/\.$/, '');
 }

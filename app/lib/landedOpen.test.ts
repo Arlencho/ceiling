@@ -11,6 +11,7 @@ import {
   type Transaction,
 } from '@solana/web3.js';
 import { useEffect, type ComponentType, type ReactNode } from 'react';
+import { tokenSymbol } from './tokens';
 import { act, createElement } from 'react';
 import { create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -824,7 +825,7 @@ test.describe('landed open', { concurrency: 1 }, () => {
       assert.match(text, /Allowed once: this payment of 0\.00018/);
       assert.match(text, /0\.00018/);
       assert.equal(text.includes('No decisions on this rule yet'), false);
-      assert.ok(labelsOf(root).includes('Waived by the owner 0.00018'));
+      assert.ok(labelsOf(root).includes(`Waived by the owner 0.00018 ${tokenSymbol(MINT.toBase58())}`));
     } finally {
       root.unmount();
     }

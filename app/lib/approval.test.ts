@@ -199,8 +199,8 @@ test('saving a name stores it for that address only', () => {
   );
 });
 
-test('charging, compute, and trading templates open with limits already filled in', () => {
-  assert.deepEqual([...BUILD_YOUR_OWN_IDS], ['charging-agent', 'buying-compute', 'trading-bot']);
+test('charging and compute templates open with limits already filled in', () => {
+  assert.deepEqual([...BUILD_YOUR_OWN_IDS], ['charging-agent', 'buying-compute']);
   for (const id of BUILD_YOUR_OWN_IDS) {
     const template = templateById(id);
     assert.ok(template, id);

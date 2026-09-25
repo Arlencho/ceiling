@@ -160,7 +160,7 @@ test('two overlapping scans in one JS context announce a decision once and persi
 
   assert.equal(ledgerReads, 2);
   assert.equal(scheduled.length, 1);
-  assert.equal(scheduled[0]?.content.body, refusalWhyLine({ ...fresh, decimals: 6, perTxMax: 500_000n }));
+  assert.equal(scheduled[0]?.content.body, refusalWhyLine({ ...fresh, decimals: 6, perTxMax: 500_000n, mint: MINT }));
   assert.deepEqual(scheduled[0]?.content.data, { decisionId: encodeDecisionId(MANDATE, fresh) });
 
   // A restart reads the same secure-store value and stays quiet.
@@ -236,7 +236,7 @@ test('a decision that appears after a rule was seeded is announced once', async 
   assert.deepEqual(scheduled[0]?.content.data, { decisionId: encodeDecisionId(MANDATE, fresh) });
   assert.equal(
     scheduled[0]?.content.body,
-    refusalWhyLine({ ...fresh, decimals: 6, perTxMax: 500_000n }),
+    refusalWhyLine({ ...fresh, decimals: 6, perTxMax: 500_000n, mint: MINT }),
   );
 });
 

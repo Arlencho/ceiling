@@ -1,5 +1,5 @@
 import { REASON_OVER_PER_TX_MAX } from './constants';
-import { formatBaseUnits } from './format';
+import { formatTokenAmount } from './tokens';
 import {
   addLocalDays,
   localDate,
@@ -57,7 +57,11 @@ function sameAmounts(rows: readonly GradeDecision[]): boolean {
   return rows.every((row) => row.amount === first);
 }
 
-function amountSpan(rows: readonly GradeDecision[], decimals: number): { min: string; max: string } | null {
+function amountSpan(
+  rows: readonly GradeDecision[],
+  decimals: number,
+  mint: string | null | undefined,
+): { min: string; max: string; minRaw: bigint; maxRaw: bigint } | null {
   if (rows.length === 0) {
     return null;
   }
@@ -71,15 +75,26 @@ function amountSpan(rows: readonly GradeDecision[], decimals: number): { min: st
       max = row.amount;
     }
   }
-  return { min: formatBaseUnits(min, decimals), max: formatBaseUnits(max, decimals) };
+  return {
+    min: formatTokenAmount(min, decimals, mint),
+    max: formatTokenAmount(max, decimals, mint),
+    minRaw: min,
+    maxRaw: max,
+  };
 }
 
-export function weekReasonDetail(rows: readonly GradeDecision[], decimals: number, perTxMaxLabel: string, reason: number): string {
+export function weekReasonDetail(
+  rows: readonly GradeDecision[],
+  decimals: number,
+  perTxMaxLabel: string,
+  reason: number,
+  mint?: string | null,
+): string {
   const count = rows.length;
-  const span = amountSpan(rows, decimals);
+  const span = amountSpan(rows, decimals, mint);
   const times = count === 1 ? '1 time' : `${count} times`;
   if (reason === REASON_OVER_PER_TX_MAX && span) {
-    if (span.min === span.max) {
+    if (span.minRaw === span.maxRaw) {
       return count === 1
         ? `Asked ${span.min}. Limit stayed ${perTxMaxLabel}.`
         : `Asked ${span.min}, ${times}. Limit stayed ${perTxMaxLabel}.`;
@@ -87,7 +102,7 @@ export function weekReasonDetail(rows: readonly GradeDecision[], decimals: numbe
     return `${times}, asked between ${span.min} and ${span.max}. Limit stayed ${perTxMaxLabel}.`;
   }
   if (!span || sameAmounts(rows)) {
-    return span && span.min !== '0' ? `${times}, asked ${span.min}.` : times;
+    return span && span.minRaw !== 0n ? `${times}, asked ${span.min}.` : times;
   }
   return `${times}, asked between ${span.min} and ${span.max}.`;
 }
@@ -194,7 +209,7 @@ export function weekReviewFor(
       ruleAddress: rule.address,
       title: weekReasonTitle(reason, rule.perTxMaxLabel),
       count: rows.length,
-      detail: weekReasonDetail(rows, rule.decimals, rule.perTxMaxLabel, reason),
+      detail: weekReasonDetail(rows, rule.decimals, rule.perTxMaxLabel, reason, rule.mint),
     }));
   const heading =
     window.days.length === 7
@@ -215,7 +230,7 @@ export function weekReviewFor(
     days,
     paidCount: paidRows.length,
     paidAmount,
-    paidAmountLabel: formatBaseUnits(paidAmount, rule.decimals),
+    paidAmountLabel: formatTokenAmount(paidAmount, rule.decimals, rule.mint),
     refusedCount: refusedRows.length,
     allowances: allowanceRows.length,
     reasons,

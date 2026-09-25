@@ -1,6 +1,6 @@
 import { KIND_PAID, KIND_REFUSED } from './constants';
 import { encodeDecisionId, parseDecisionId } from './exportRecord';
-import { formatBaseUnits } from './format';
+import { formatTokenAmount } from './tokens';
 import { refusalWhyLine } from './reasons';
 import { truncateAddress } from './wallet';
 
@@ -28,6 +28,7 @@ export type NotifyMandateLedger = {
   merchant: string;
   perTxMax: bigint;
   decimals: number;
+  mint?: string | null;
   rows: readonly NotifyLedgerRow[];
 };
 
@@ -48,9 +49,10 @@ export function paidDecisionBody(args: {
   decimals: number;
   perTxMax: bigint;
   merchant: string;
+  mint?: string | null;
 }): string {
-  const amount = formatBaseUnits(args.amount, args.decimals);
-  const limit = formatBaseUnits(args.perTxMax, args.decimals);
+  const amount = formatTokenAmount(args.amount, args.decimals, args.mint);
+  const limit = formatTokenAmount(args.perTxMax, args.decimals, args.mint);
   const payee = truncateAddress(args.merchant);
   return `${amount}, under ${limit} per payment. The payee for this rule is ${payee}.`;
 }
@@ -72,12 +74,14 @@ function noticeFor(ledger: NotifyMandateLedger, row: NotifyLedgerRow, id: string
         suggestedOverride: row.suggestedOverride,
         decimals: ledger.decimals,
         perTxMax: ledger.perTxMax,
+        mint: ledger.mint,
       })
     : paidDecisionBody({
         amount: row.amount,
         decimals: ledger.decimals,
         perTxMax: ledger.perTxMax,
         merchant: ledger.merchant,
+        mint: ledger.mint,
       });
   return {
     id,

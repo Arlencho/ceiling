@@ -4,6 +4,7 @@ import test from 'node:test';
 import { KIND_ADVISORY_DECLINE } from './advisory';
 import { KIND_OPENED, KIND_PAID, KIND_REFUSED, REASON_OVER_CAP, REASON_OVER_PER_TX_MAX, STATUS_ACTIVE } from './constants';
 import { addLocalDays, localDate, snapshotRule, type GradeDecision, type RuleFacts } from './grade';
+import { VTEST_MINT } from './tokens';
 import { weekFileText, weekReviewFor } from './weekReview';
 
 function noon(year: number, month: number, day: number): bigint {
@@ -44,6 +45,7 @@ function facts(rows: GradeDecision[]): RuleFacts {
     expiresAt: OPEN + 90n * 86400n,
     status: STATUS_ACTIVE,
     decimals: 0,
+    mint: VTEST_MINT,
     rows: [decision({ kind: KIND_OPENED, ts: OPEN, nonce: 0n, amount: 300n }), ...rows],
   };
 }
@@ -82,9 +84,9 @@ test('a week is seven local days with paid and refused counts, and a quiet day s
   assert.equal(review.kicker, 'Charging agent, week 1 of 13');
   const limit = review.reasons.find((reason) => reason.reason === REASON_OVER_PER_TX_MAX);
   assert.ok(limit);
-  assert.equal(limit.title, 'Asked more than 10 per payment');
-  assert.match(limit.detail, /asked between 12 and 16/);
-  assert.match(limit.detail, /Limit stayed 10/);
+  assert.equal(limit.title, 'Asked more than 10 VTEST per payment');
+  assert.match(limit.detail, /asked between 12 VTEST and 16 VTEST/);
+  assert.match(limit.detail, /Limit stayed 10 VTEST/);
   const file = weekFileText(review);
   assert.match(file, /2 paid, 2 refused|1 paid, 2 refused/);
   assert.match(file, /0 moved/);

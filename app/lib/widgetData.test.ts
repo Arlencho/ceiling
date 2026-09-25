@@ -17,6 +17,7 @@ import {
   STATUS_REVOKED,
 } from './constants';
 import type { MandateAccount } from './mandate';
+import { VTEST_MINT } from './tokens';
 import type { RingEntry } from './ring';
 
 mock.module('expo-constants', { defaultExport: { expoConfig: { extra: {} } } });
@@ -35,7 +36,7 @@ function mandate(over: Partial<MandateAccount> = {}): MandateAccount {
     address: ADDRESS,
     owner: new PublicKey(Buffer.alloc(32, 3)).toBase58(),
     agent: AGENT,
-    mint: new PublicKey(Buffer.alloc(32, 5)).toBase58(),
+    mint: VTEST_MINT,
     source: new PublicKey(Buffer.alloc(32, 6)).toBase58(),
     merchant: new PublicKey(Buffer.alloc(32, 7)).toBase58(),
     mandateId: 1n,
@@ -163,12 +164,12 @@ test('a rule face shows what that agent can still spend from the mandate', async
     updatedLabel: 'Updated 25 Sep 08:12',
   });
   assert.equal(face.heading, 'Research agent can still spend');
-  assert.equal(face.remainingText, '30');
-  assert.equal(face.capText, '40');
+  assert.equal(face.remainingText, '30 VTEST');
+  assert.equal(face.capText, '40 VTEST');
   assert.equal(face.barRemaining, 30);
   assert.equal(face.barCap, 40);
   assert.equal(face.daysLeft, '12 days left');
-  assert.equal(face.decisionLine, 'Last paid 4, yesterday 18:02');
+  assert.equal(face.decisionLine, 'Last paid 4 VTEST, yesterday 18:02');
   assert.equal(face.tally, '2 paid, 1 refused');
   assert.equal(face.uri, ruleWidgetUri(ADDRESS));
   assert.equal(face.uri.startsWith('veto://rule/'), true);
@@ -202,7 +203,7 @@ test('the large widget follows the selected rule and a small widget follows its 
   assert.equal(large.kind, 'rule');
   if (large.kind === 'rule') {
     assert.equal(large.face.address, OTHER);
-    assert.equal(large.face.remainingText, '9');
+    assert.equal(large.face.remainingText, '9 VTEST');
     assert.equal(large.size, 'large');
   }
   const small = drawForRule(board, { '7': ADDRESS }, 7);
@@ -241,7 +242,7 @@ test('a missing ledger still shows the remaining cap and says the decision was n
     ledgers: new Map([[ADDRESS, { error: true }]]),
     decimalsFor: () => 0,
   });
-  assert.equal(board.selected?.remainingText, '30');
+  assert.equal(board.selected?.remainingText, '30 VTEST');
   assert.equal(board.selected?.decisionLine, WIDGET_DECISION_UNREAD);
 });
 

@@ -15,7 +15,8 @@ import { KIND_ADVISORY_DECLINE } from '../../lib/advisory';
 import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, REASON_OVER_PER_TX_MAX } from '../../lib/constants';
 import { findLedgerDecision, parseDecisionId } from '../../lib/exportRecord';
 import { useOverrideGrant } from '../../lib/useOverrideGrant';
-import { explorerTxUrl, formatBaseUnits, formatClock, formatUnix, isListedDecision } from '../../lib/format';
+import { explorerTxUrl, formatClock, formatUnix, isListedDecision } from '../../lib/format';
+import { formatTokenAmount } from '../../lib/tokens';
 import { mandateRemaining } from '../../lib/mandate';
 import { mayClaimAbsence } from '../../lib/mandateRead';
 import { paidDecisionBody } from '../../lib/notify';
@@ -87,7 +88,7 @@ export default function DecisionDetailScreen() {
   };
 
   const seq = row && row.kind !== KIND_ADVISORY_DECLINE ? nonceSequence(chain.rows, row.nonce) : null;
-  const seqText = seq ? sequenceLine(seq, chain.decimals) : null;
+  const seqText = seq ? sequenceLine(seq, chain.decimals, mandate?.mint) : null;
   const overrideView = row && row.kind === KIND_OVERRIDE ? overrideRowView(row, chain.decimals) : null;
   const when = row ? decisionWhen(row.ts, chain.nowMs) : '';
   const payee = payeeLabel(mandate?.merchant);
@@ -120,7 +121,7 @@ export default function DecisionDetailScreen() {
               <AdvisoryDeclineDetail
                 when={`${formatUnix(row.ts)} · ${formatClock(row.ts)}`}
                 reason={row.reasonText}
-                amount={formatBaseUnits(row.amount, chain.decimals)}
+                amount={formatTokenAmount(row.amount, chain.decimals, mandate?.mint)}
               />
             ) : row.kind === KIND_REFUSED ? (
               <Rise delayMs={80}>
@@ -128,6 +129,7 @@ export default function DecisionDetailScreen() {
                   row={row}
                   decimals={chain.decimals}
                   perTxMax={mandate?.perTxMax}
+                  mint={mandate?.mint}
                   when={when}
                   payee={payee}
                 />
@@ -146,7 +148,7 @@ export default function DecisionDetailScreen() {
               <Rise delayMs={80}>
                 <View style={styles.stack}>
                   <StatusPill label="Paid" tone="paid" when={when} />
-                  <Text style={styles.headline}>Paid {formatBaseUnits(row.amount, chain.decimals)}.</Text>
+                  <Text style={styles.headline}>Paid {formatTokenAmount(row.amount, chain.decimals, mandate?.mint)}.</Text>
                   <Text style={styles.body}>
                     {mandate
                       ? paidDecisionBody({
@@ -154,8 +156,9 @@ export default function DecisionDetailScreen() {
                           decimals: chain.decimals,
                           perTxMax: mandate.perTxMax,
                           merchant: mandate.merchant,
+                          mint: mandate.mint,
                         })
-                      : `${formatBaseUnits(row.amount, chain.decimals)}. The payee for this rule is the rule.`}
+                      : `${formatTokenAmount(row.amount, chain.decimals, undefined)}. The payee for this rule is the rule.`}
                   </Text>
                 </View>
               </Rise>
@@ -205,6 +208,7 @@ export default function DecisionDetailScreen() {
                 payee={payee}
                 perTxMax={mandate?.perTxMax ?? 0n}
                 remaining={mandate ? mandateRemaining(mandate) : 0n}
+                mint={mandate?.mint}
               />
             ) : null}
 
@@ -238,22 +242,24 @@ function RefusedBody({
   row,
   decimals,
   perTxMax,
+  mint,
   when,
   payee,
 }: {
   row: NonNullable<ReturnType<typeof findLedgerDecision>>;
   decimals: number;
   perTxMax?: bigint;
+  mint?: string | null;
   when: string;
   payee: string;
 }) {
-  const asked = formatBaseUnits(row.amount, decimals);
-  const limit = perTxMax != null ? formatBaseUnits(perTxMax, decimals) : null;
-  const reason = renderReason(row.reason, row.suggestedOverride, decimals);
+  const asked = formatTokenAmount(row.amount, decimals, mint);
+  const limit = perTxMax != null ? formatTokenAmount(perTxMax, decimals, mint) : null;
+  const reason = renderReason(row.reason, row.suggestedOverride, decimals, mint);
   const split = perTxMax != null ? barSplit(row.amount, perTxMax) : null;
   const needed =
     row.reason === REASON_OVER_PER_TX_MAX && row.suggestedOverride > 0n
-      ? formatBaseUnits(row.suggestedOverride, decimals)
+      ? formatTokenAmount(row.suggestedOverride, decimals, mint)
       : 'No override would have cleared this.';
   return (
     <View style={styles.stack}>
@@ -266,6 +272,7 @@ function RefusedBody({
           perTxMax,
           reason: row.reason,
           suggestedOverride: row.suggestedOverride,
+          mint,
         })}
       </Text>
       <View style={styles.compare}>
@@ -282,13 +289,14 @@ function RefusedBody({
         {split ? <LimitTrack allowedPct={split.allowedPct} overPct={split.overPct} /> : null}
         <View style={styles.grid}>
           <Fact label="To payee" value={payee} />
-          <Fact label="Money moved" value={formatBaseUnits(0n, decimals)} />
+          <Fact label="Money moved" value={formatTokenAmount(0n, decimals, mint)} />
           <Fact
             label="Why it was refused"
             value={whyRefused({
               reason: row.reason,
               decimals,
               perTxMax,
+              mint,
               fallback: reason.text,
             })}
           />

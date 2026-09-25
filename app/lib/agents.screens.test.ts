@@ -8,6 +8,7 @@ import { create, type ReactTestInstance, type ReactTestRenderer } from 'react-te
 import { KIND_ADVISORY_DECLINE } from './advisory';
 import { KIND_OPENED, KIND_PAID, KIND_REFUSED, REASON_OVER_PER_TX_MAX, STATUS_ACTIVE } from './constants';
 import { buildAgentRecords, type AgentRecord, type GradeDecision, type RuleFacts } from './grade';
+import { VTEST_MINT } from './tokens';
 import type { AgentScreenData } from '../components/agents/useAgentHistories';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -166,6 +167,7 @@ function sampleRule(): RuleFacts {
     expiresAt: START + 90n * DAY,
     status: STATUS_ACTIVE,
     decimals: 0,
+    mint: VTEST_MINT,
     merchant: '6i99aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaPdCG',
     rows: [
       decision({ kind: KIND_OPENED, ts: START, nonce: 0n, amount: 300n }),
@@ -382,7 +384,7 @@ test('plaques show loading, empty, error, and an engraved fact', async () => {
   const normal = visibleText(await mount(createElement(PlaquesScreen, { ...props, data: screenData({ agents: readyAgents() }) })));
   assert.match(normal, /Engraved under this rule/);
   assert.match(normal, /First payment inside the rule/);
-  assert.match(normal, /Paid 8 to/);
+  assert.match(normal, /Paid 8 VTEST to/);
   assert.match(normal, /Test tokens/);
 });
 
@@ -447,7 +449,7 @@ test('week in review shows loading, empty, error, and the seven-day counts', asy
   const text = visibleText(normal);
   assert.match(text, /Week in review/);
   assert.match(text, /Why it was refused/);
-  assert.match(text, /Asked more than 10 per payment/);
+  assert.match(text, /Asked more than 10 VTEST per payment/);
   assert.match(text, /Test tokens/);
   await act(async () => {
     button(normal, 'Save this week as a file').props.onPress();

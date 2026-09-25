@@ -17,6 +17,7 @@ export function SendScreen({
   onSign,
   signLabel,
   signingDisabled = false,
+  tokenName,
 }: {
   network: string;
   status: 'loading' | 'error' | 'empty' | 'ready';
@@ -31,6 +32,7 @@ export function SendScreen({
   onSign: () => Promise<void>;
   signLabel: string;
   signingDisabled?: boolean;
+  tokenName?: string;
 }) {
   return (
     <View style={styles.wrap}>
@@ -41,7 +43,12 @@ export function SendScreen({
           Small and familiar can leave at once. Big, new, or over your everyday limit waits. You sign
           with your key. The guardian key cannot start a withdrawal.
         </Text>
-        <HoldInput label="Amount" value={amountText} onChangeText={onAmount} hint="How much leaves your vault." />
+        <HoldInput
+          label="Amount"
+          value={amountText}
+          onChangeText={onAmount}
+          hint={tokenName ? `How much ${tokenName} leaves your vault.` : 'How much leaves your vault.'}
+        />
         <HoldInput
           label="Destination address"
           value={destinationText}
