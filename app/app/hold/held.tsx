@@ -33,7 +33,7 @@ export default function HoldHeld() {
     null;
   const decimals = bundle?.decimals ?? 0;
   const amountLabel = row ? formatHoldAmount(row.amount, decimals) : '0';
-  const dailyLabel = bundle ? formatHoldAmount(bundle.account.dailyLimit, decimals) : '0';
+  const dailyLabel = `${bundle ? formatHoldAmount(bundle.account.dailyLimit, decimals) : '0'} ${loaded.tokenName}`;
   const days = bundle ? daysFromDelay(bundle.account.delaySecs) : null;
   const now = loaded.nowSec ?? 0n;
   const countdown = row ? countdownFromChain(now, row.unlockAt) : countdownFromChain(1n, 0n);

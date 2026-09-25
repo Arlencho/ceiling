@@ -68,7 +68,7 @@ export default function HoldIndex() {
           address: row.address.toBase58(),
           amountLabel: formatHoldAmount(balance, decimals),
           tokenName,
-          dailyLabel: formatHoldAmount(row.dailyLimit, decimals),
+          dailyLabel: `${formatHoldAmount(row.dailyLimit, decimals)} ${tokenName}`,
           waitLabel: days ? waitLabel(days) : 'an unusual wait',
           frozen: row.frozen,
           pendingLabel:
