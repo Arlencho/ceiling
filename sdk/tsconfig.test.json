@@ -5,6 +5,6 @@
     "declaration": false,
     "rootDir": "."
   },
-  "include": ["src/**/*.ts", "examples/**/*.ts"],
+  "include": ["src/**/*.ts", "examples/**/*.ts", "e2e/**/*.ts"],
   "exclude": []
 }
