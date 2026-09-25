@@ -1,20 +1,24 @@
 import { useNavigation, useRouter } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
-import { Button } from '../../components/Button';
+import { BrassWell, Glow, ScreenHeader, TopicRow } from '../../components/records/chrome';
+import { networkFoot } from '../../components/records/copy';
 import { Screen } from '../../components/Screen';
-import { TopBar } from '../../components/TopBar';
 import { colors, fonts } from '../../components/theme';
 import { finishHelpExport } from '../../lib/helpNavigation';
 
 export default function HelpExportScreen() {
   const navigation = useNavigation();
   const router = useRouter();
+  const cluster = process.env.EXPO_PUBLIC_VETO_EXPLORER_CLUSTER;
   return (
     <Screen>
-      <TopBar back="Back" meta="3 of 3" help={false} />
-      <Text style={styles.eyebrow}>The record</Text>
-      <Text style={styles.h2}>What the export proves</Text>
+      <Glow />
+      <ScreenHeader title="Help" cluster={cluster} onBack={() => router.back()} />
+      <BrassWell>
+        <Text style={styles.kicker}>The record</Text>
+        <Text style={styles.h1}>What the export proves</Text>
+      </BrassWell>
       <Text style={styles.body}>
         Share is an action on a decision, not a tab. You choose what to prove: this decision, a
         date range, or everything under this rule. CSV opens in a spreadsheet. JSON is the
@@ -28,36 +32,44 @@ export default function HelpExportScreen() {
         The record is complete over payments, never over attempts. A charge the agent never
         submitted cannot appear, and the export does not invent a row for a gap.
       </Text>
-      <View style={styles.actions}>
-        <Button
-          label="Done"
-          onPress={() => finishHelpExport(router, navigation.getState()?.routes ?? null)}
-        />
-      </View>
+      <TopicRow
+        tone="paid"
+        glyph="✓"
+        title="Done"
+        body="Leave help and return to where you were."
+        accessibilityLabel="Done"
+        onPress={() => finishHelpExport(router, navigation.getState()?.routes ?? null)}
+      />
+      <Text style={styles.foot}>{networkFoot()}</Text>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  eyebrow: {
-    color: colors.muted,
+  kicker: {
+    color: colors.brass,
+    fontFamily: fonts.sansBold,
     fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 1,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
-    fontFamily: fonts.mono,
   },
-  h2: {
-    color: colors.text,
-    fontSize: 32,
+  h1: {
+    color: colors.bone,
     fontFamily: fonts.serif,
+    fontSize: 32,
+    lineHeight: 36,
   },
   body: {
     color: colors.body,
+    fontFamily: fonts.sans,
     fontSize: 16,
     lineHeight: 24,
   },
-  actions: {
-    marginTop: 12,
+  foot: {
+    textAlign: 'center',
+    color: colors.muted,
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 18,
   },
 });
