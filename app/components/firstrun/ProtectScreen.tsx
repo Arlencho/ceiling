@@ -9,6 +9,7 @@ export function ProtectScreen({
   cluster,
   owner,
   error,
+  initialAddress = '',
   onSeeker,
   onPhone,
   onLater,
@@ -16,16 +17,17 @@ export function ProtectScreen({
   cluster: string | null;
   owner: string;
   error: string | null;
+  initialAddress?: string;
   onSeeker: (address: string) => void;
   onPhone: () => void;
   onLater: () => void;
 }) {
-  const [choosing, setChoosing] = useState(false);
-  const [address, setAddress] = useState('');
+  const [choosing, setChoosing] = useState(initialAddress.trim().length > 0);
+  const [address, setAddress] = useState(initialAddress);
   const [invalid, setInvalid] = useState<string | null>(null);
   return (
     <FirstRunChrome
-      stage="live"
+      stage="protect"
       cluster={cluster}
       error={invalid ?? error}
       footer={
@@ -40,7 +42,7 @@ export function ProtectScreen({
               const key = canonicalAddress(address.trim());
               if (!key || key === owner || key === '11111111111111111111111111111111') {
                 setInvalid(
-                  'Paste a valid address from your other phone, different from your owner key.',
+                  "Paste a valid address from your other phone. It must be different from this phone's wallet address.",
                 );
                 return;
               }
@@ -58,7 +60,7 @@ export function ProtectScreen({
       </Text>
       <Text style={styles.body}>
         Recommended: use your second Seeker. Its key can stop a waiting withdrawal, freeze the vault
-        and move everything to your safe address, and nothing else on its own.
+        and move everything to your safe address. It cannot send money anywhere else.
       </Text>
       {choosing ? (
         <HoldInput
@@ -68,14 +70,14 @@ export function ProtectScreen({
             setAddress(value);
             setInvalid(null);
           }}
-          hint="On your second Seeker, open your wallet, choose the account you control, tap Receive for Solana and copy its public address. Paste that address here, never a recovery phrase. This is also your safe address unless you change it in setup."
+          hint="On your second Seeker, open your wallet, choose the account you want as your second key, tap Receive for Solana and copy its public address. Paste that address here, never a recovery phrase. This is also your safe address unless you change it in setup."
         />
       ) : null}
       <Text style={styles.body}>
-        A guardian on the same phone is weaker: losing that phone or access to it can put both keys
-        at risk.
+        A second key on this phone is weaker: if you lose this phone, or someone gets into it, both
+        keys are at risk.
       </Text>
-      <Text style={styles.body}>Set up later keeps Hold on Overview whenever you are ready.</Text>
+      <Text style={styles.body}>You can set up Hold later from Overview.</Text>
     </FirstRunChrome>
   );
 }

@@ -6,6 +6,7 @@ import { act, createElement, type ReactElement, type ReactNode } from 'react';
 import { create, type ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as { __DEV__?: boolean }).__DEV__ = false;
 
 function Host(type: string) {
   return function MockHost(
@@ -93,6 +94,8 @@ mock.module('react-native-svg', {
   },
 });
 
+mock.module('expo-clipboard', { namedExports: { setStringAsync: async () => undefined } });
+
 function visibleText(root: ReactTestRenderer): string {
   return root.root
     .findAll((node) => (node.type as unknown) === 'Text')
@@ -117,16 +120,16 @@ const params = {
   mode: 'seeker',
 };
 let current: ReactElement | null = null;
-let destination = '';
+let destination: unknown = '';
 mock.module('expo-router', {
   namedExports: {
     Stack: () => current,
     useLocalSearchParams: () => params,
     useRouter: () => ({
-      push: (route: string) => {
+      push: (route: unknown) => {
         destination = route;
       },
-      replace: (route: string) => {
+      replace: (route: unknown) => {
         destination = route;
       },
       back() {},
@@ -195,6 +198,7 @@ test('second Seeker address reaches the existing guardian screen and confirmed s
   assert.match(visibleText(root), /Your vault is live/);
   await act(async () => root.root.findByType(LiveScreen).props.onDone());
   assert.equal(destination, '/first-run/finish');
+  assert.equal(saved.get(`veto.onboarding.hold.${owner.toBase58()}`), '1');
   await act(async () => root.unmount());
 });
 
@@ -216,6 +220,8 @@ mock.module('./useWallet', {
 });
 
 test('skipping the rendered Hold step shows the finish and never offers the step on reopening', async () => {
+  saved.clear();
+  destination = '';
   const { default: Protect } = await import('../app/first-run/protect');
   const { ProtectScreen } = await import('../components/firstrun/ProtectScreen');
   const root = await mount(createElement(Protect));
@@ -242,4 +248,61 @@ test('finish names live protections and says when Hold is not set up yet', async
   assert.match(visibleText(live), /Agent rule live/);
   assert.match(visibleText(live), /Hold vault live/);
   await act(async () => live.unmount());
+});
+
+test('choosing a Hold setup path records nothing and the offer comes back on reopening', async () => {
+  saved.clear();
+  destination = '';
+  const { default: Protect } = await import('../app/first-run/protect');
+  const { ProtectScreen } = await import('../components/firstrun/ProtectScreen');
+  const key = `veto.onboarding.hold.${owner.toBase58()}`;
+  const root = await mount(createElement(Protect));
+  await act(async () => root.root.findByType(ProtectScreen).props.onPhone());
+  assert.deepEqual(destination, {
+    pathname: '/hold/amount',
+    params: { onboarding: '1', mode: 'phone' },
+  });
+  assert.equal(saved.get(key), undefined);
+  await act(async () => root.unmount());
+  destination = '';
+  const reopened = await mount(createElement(Protect));
+  assert.match(visibleText(reopened), /Protect the rest of your money/);
+  await act(async () =>
+    reopened.root
+      .findByType(ProtectScreen)
+      .props.onSeeker('So11111111111111111111111111111111111111112'),
+  );
+  assert.deepEqual(destination, {
+    pathname: '/hold/amount',
+    params: { onboarding: '1', guardian: 'So11111111111111111111111111111111111111112', mode: 'seeker' },
+  });
+  assert.equal(saved.get(key), undefined);
+  await act(async () => reopened.unmount());
+});
+
+test('back from the amount screen during onboarding returns to the offer with the pasted address kept', async () => {
+  saved.clear();
+  destination = '';
+  const { default: Layout } = await import('../app/hold/_layout');
+  const { default: Amount } = await import('../app/hold/amount');
+  const { AmountScreen } = await import('../components/hold/AmountScreen');
+  current = createElement(Amount);
+  const root = await mount(createElement(Layout));
+  await act(async () => root.root.findByType(AmountScreen).props.onBack());
+  assert.deepEqual(destination, {
+    pathname: '/first-run/protect',
+    params: { guardian: 'So11111111111111111111111111111111111111112' },
+  });
+  await act(async () => root.unmount());
+});
+
+test('returning to the offer shows the kept address in the input', async () => {
+  saved.clear();
+  destination = '';
+  const { default: Protect } = await import('../app/first-run/protect');
+  const root = await mount(createElement(Protect));
+  assert.match(visibleText(root), /tap Receive for Solana/);
+  const input = root.root.findByType('TextInput' as never);
+  assert.equal(input.props.value, 'So11111111111111111111111111111111111111112');
+  await act(async () => root.unmount());
 });

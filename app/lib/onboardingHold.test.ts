@@ -4,6 +4,7 @@ import {
   holdOnboardingNext,
   rememberHoldChoice,
   secondSeekerSetup,
+  protectStep,
   holdSetupDone,
 } from './onboardingHold';
 
@@ -34,4 +35,12 @@ test('second Seeker setup carries its address into the shared Hold flow', () => 
 test('finishing Hold returns to onboarding only for onboarding setup', () => {
   assert.equal(holdSetupDone(true), '/first-run/finish');
   assert.equal(holdSetupDone(false), '/hold');
+});
+
+test('leaving Hold setup during onboarding returns to the offer with the pasted address kept', () => {
+  assert.deepEqual(protectStep('  So11111111111111111111111111111111111111112  '), {
+    pathname: '/first-run/protect',
+    params: { guardian: 'So11111111111111111111111111111111111111112' },
+  });
+  assert.deepEqual(protectStep(''), { pathname: '/first-run/protect', params: {} });
 });

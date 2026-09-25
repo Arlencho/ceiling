@@ -37,7 +37,7 @@ export default function FinishRoute() {
   return (
     <Screen>
       <FirstRunChrome
-        stage="live"
+        stage="protect"
         cluster={session.wallet.cluster}
         footer={<BrassButton label="Go to overview" onPress={() => router.replace('/')} />}
       >

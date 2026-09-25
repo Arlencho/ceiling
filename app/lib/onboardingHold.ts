@@ -15,6 +15,13 @@ export function secondSeekerSetup(address: string) {
     params: { onboarding: '1', guardian: address.trim(), mode: 'seeker' },
   };
 }
+export function protectStep(guardian: string) {
+  const address = guardian.trim();
+  return {
+    pathname: '/first-run/protect' as const,
+    params: address ? { guardian: address } : {},
+  };
+}
 export function holdSetupDone(onboarding: boolean) {
   return onboarding ? '/first-run/finish' : '/hold';
 }

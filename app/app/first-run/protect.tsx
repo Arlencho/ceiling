@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator } from 'react-native';
 import { ProtectScreen } from '../../components/firstrun/ProtectScreen';
@@ -15,6 +15,7 @@ export default function ProtectRoute() {
   const router = useRouter();
   const wallet = useWallet();
   const owner = wallet.ownerPublicKey;
+  const { guardian } = useLocalSearchParams<{ guardian?: string }>();
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -40,17 +41,24 @@ export default function ProtectRoute() {
       alive = false;
     };
   }, [owner, router, wallet.ready]);
-  async function choose(address?: string, phone = false) {
+  function choose(address?: string, phone = false) {
     if (!owner) return;
-    try {
-      await rememberHoldChoice(secureStore, owner);
-      if (phone)
-        router.replace({ pathname: '/hold/amount', params: { onboarding: '1', mode: 'phone' } });
-      else if (address) router.replace(secondSeekerSetup(address));
-      else router.replace('/first-run/finish');
-    } catch {
-      setError('Your choice could not be saved. Please try again.');
+    if (phone) {
+      router.replace({ pathname: '/hold/amount', params: { onboarding: '1', mode: 'phone' } });
+      return;
     }
+    if (address) {
+      router.replace(secondSeekerSetup(address));
+      return;
+    }
+    void (async () => {
+      try {
+        await rememberHoldChoice(secureStore, owner);
+        router.replace('/first-run/finish');
+      } catch {
+        setError('Your choice could not be saved. Please try again.');
+      }
+    })();
   }
   return (
     <Screen>
@@ -59,14 +67,15 @@ export default function ProtectRoute() {
           cluster={wallet.cluster}
           owner={owner}
           error={error}
+          initialAddress={typeof guardian === 'string' ? guardian : ''}
           onSeeker={(address) => {
-            void choose(address);
+            choose(address);
           }}
           onPhone={() => {
-            void choose(undefined, true);
+            choose(undefined, true);
           }}
           onLater={() => {
-            void choose();
+            choose();
           }}
         />
       ) : (
