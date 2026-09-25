@@ -22,6 +22,7 @@ import {
   storeFromGsUri,
   type JournalObjectStore,
 } from "./journalStore.js";
+import { scanHoldVaults } from "./hold.js";
 import { logError, logLine } from "./log.js";
 import { nonceFromSlot } from "./nonce.js";
 import { isRateLimitError, redactRpcUrl } from "./rpc.js";
@@ -164,6 +165,15 @@ async function processDue(now: Date, announceIdle = false): Promise<boolean> {
   return deferred;
 }
 
+async function scanHolds(now: Date): Promise<void> {
+  try {
+    await scanHoldVaults({ now });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logError(`hold alerts: ${message}`);
+  }
+}
+
 async function cmdOnce(): Promise<void> {
   const windowFlag = flag("window");
   if (windowFlag !== undefined) {
@@ -179,6 +189,7 @@ async function cmdOnce(): Promise<void> {
       logError("once: rpc rate limited on all endpoints");
       process.exitCode = 1;
     }
+    await scanHolds(new Date());
     return;
   }
   const deferred = await processDue(new Date(), true);
@@ -186,6 +197,7 @@ async function cmdOnce(): Promise<void> {
     logError("once: rpc rate limited on all endpoints");
     process.exitCode = 1;
   }
+  await scanHolds(new Date());
 }
 
 async function cmdRun(): Promise<void> {
@@ -204,6 +216,8 @@ async function cmdRun(): Promise<void> {
   while (!stopping) {
     const now = new Date();
     await processDue(now);
+    if (stopping) break;
+    await scanHolds(now);
     if (stopping) break;
     const wait = msUntil(nextSlot(now), new Date());
     const chunk = wait < 30_000 ? wait : 30_000;

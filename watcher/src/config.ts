@@ -43,6 +43,8 @@ export type WatcherConfig = {
   cap: bigint;
   perTxMax: bigint;
   purpose: string;
+  /** Hold vault addresses from VETO_HOLD_VAULTS. Empty when the variable is unset. */
+  holdVaults: string[];
 };
 
 export type LoadConfigOpts = {
@@ -184,7 +186,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts?: LoadConf
     cap,
     perTxMax,
     purpose: env.VETO_PURPOSE ?? "SE3 home charging",
+    holdVaults: parseHoldVaultList(lookupFrom(env, files, "VETO_HOLD_VAULTS")),
   };
+}
+
+/** Comma-separated vault addresses. Blank and missing both mean no vaults. */
+export function parseHoldVaultList(raw: string | undefined): string[] {
+  if (raw === undefined || raw.trim() === "") return [];
+  const out: string[] = [];
+  for (const part of raw.split(",")) {
+    const trimmed = part.trim();
+    if (trimmed.length > 0) out.push(trimmed);
+  }
+  return out;
 }
 
 function lookupFrom(env: NodeJS.ProcessEnv, files: Map<string, string>, key: string): string | undefined {
