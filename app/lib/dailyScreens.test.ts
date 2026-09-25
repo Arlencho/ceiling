@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
 
-import { Keypair } from '@solana/web3.js';
+import { Keypair, PublicKey } from '@solana/web3.js';
 import { useEffect, type ReactElement, type ReactNode } from 'react';
 import { act, createElement } from 'react';
 import { create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
@@ -31,6 +31,8 @@ const camera: { permission: { granted: boolean; canAskAgain: boolean } | null } 
 const rulesetReady = { current: true };
 let openCalls = 0;
 let closeCalls = 0;
+let sharedWalletError: string | null = null;
+let focused = true;
 const openedUrls: string[] = [];
 const copiedText: string[] = [];
 
@@ -192,7 +194,7 @@ mock.module('expo-router', {
     usePathname: () => '/',
     useLocalSearchParams: () => route.current,
     useFocusEffect(effect: () => void | (() => void)) {
-      useEffect(() => effect(), [effect]);
+      useEffect(() => focused ? effect() : undefined, [effect, focused]);
     },
   },
 });
@@ -238,7 +240,7 @@ mock.module('./useWallet', {
     useWallet: () => ({
       ready: true,
       busy: false,
-      error: null,
+      error: sharedWalletError,
       cluster: 'devnet',
       solanaMobileInstalled: false,
       ownerPublicKey: owner,
@@ -833,3 +835,74 @@ test('a new rule shows loading, an empty payee, a failed open, and arms the hold
   assert.match(textOf(root), /cancelled/);
   await act(async () => root.unmount());
 });
+
+
+test('Overview and Rules never display the wallet error from another screen', async () => {
+  sharedWalletError = 'You cancelled the wallet request.';
+  try {
+    for (const Screen of [
+      (await import('../app/(tabs)/index')).default,
+      (await import('../app/(tabs)/rules')).default,
+    ]) {
+      const root = await mount(createElement(Screen));
+      assert.doesNotMatch(textOf(root), /You cancelled the wallet request/);
+      await act(async () => root.unmount());
+    }
+  } finally {
+    sharedWalletError = null;
+  }
+});
+
+for (const later of ['navigation', 'connect', 'sign', 'disconnect'] as const) {
+  test(`a rule cancellation disappears after later ${later}`, async () => {
+    const Screen = (await import('../app/rule/[address]')).default;
+    const row = mandate({ status: STATUS_REVOKED });
+    route.current = { address: row.address };
+    chain.mandateStatus = 'present';
+    chain.mandate = row;
+    chain.mandates = [row];
+    chain.submitHeld = false;
+    const root = await mount(createElement(Screen));
+    await act(async () => {
+      byLabel(root, 'Hold to close this rule').props.onLongPress();
+      await new Promise((resolve) => setImmediate(resolve));
+    });
+    assert.match(textOf(root), /The wallet cancelled the request/);
+    if (later === 'navigation') {
+      focused = false;
+      await act(async () => root.update(createElement(Screen)));
+      focused = true;
+      await act(async () => root.update(createElement(Screen)));
+    } else {
+      const { connect, disconnect, signAndSendTransactions } = await import('./wallet');
+      const { Transaction } = await import('@solana/web3.js');
+      const store = {
+        getItem: async () => null,
+        setItem: async () => undefined,
+        deleteItem: async () => undefined,
+      };
+      const transact: import('./wallet').TransactFn = async (callback) => callback({
+        authorize: async () => ({
+          accounts: [{ address: Buffer.from(new PublicKey(owner).toBytes()).toString('base64') }],
+          auth_token: 'test-token',
+        }),
+        deauthorize: async () => undefined,
+        signAndSendTransactions: async () => ['confirmed-signature'],
+      });
+      await act(async () => {
+        if (later === 'connect') await connect(transact, store);
+        if (later === 'disconnect') await disconnect(transact, store);
+        if (later === 'sign') await signAndSendTransactions(transact, store, [new Transaction()], {
+          lookup: async () => 'confirmed',
+        });
+      });
+    }
+    assert.doesNotMatch(textOf(root), /The wallet cancelled the request/);
+    await act(async () => {
+      byLabel(root, 'Hold to close this rule').props.onLongPress();
+      await new Promise((resolve) => setImmediate(resolve));
+    });
+    assert.match(textOf(root), /The wallet cancelled the request/, 'a new failure still appears');
+    await act(async () => root.unmount());
+  });
+}

@@ -51,6 +51,7 @@ import { PAYEE_NOT_IN_RULESET, stampAlignment, stampAlignmentLine } from '../../
 import { useChain } from '../../lib/useChain';
 import { useNotificationExplanation } from '../../lib/useNotificationExplanation';
 import { useRulesets } from '../../lib/useRulesets';
+import { useWalletActionError } from '../../lib/useWalletActionError';
 import { truncateAddress } from '../../lib/wallet';
 
 export default function RuleDetailScreen() {
@@ -59,7 +60,7 @@ export default function RuleDetailScreen() {
   const stored = useRulesets();
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formError, setFormError] = useWalletActionError();
   const [loadedFunds, setLoadedFunds] = useState<RuleFunds | null>(null);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [loadedError, setLoadedError] = useState<string | null>(null);

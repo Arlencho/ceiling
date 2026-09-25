@@ -2,6 +2,7 @@ import { createContext, createElement, useCallback, useContext, useEffect, useMe
 import type { ReactNode } from 'react';
 import { Keypair, Transaction } from '@solana/web3.js';
 
+import { onWalletActionSuccess } from './walletActionStatus';
 import { isSolanaMobileWalletInstalled, SOLANA_MOBILE_WALLET_BASE_URI } from './installedPackage';
 import { secureStore, transact } from './mwa';
 import {
@@ -46,6 +47,8 @@ function useWalletState(): WalletState {
   const [solanaMobileInstalled, setSolanaMobileInstalled] = useState(false);
   const [ownerPublicKey, setOwnerPublicKey] = useState<string | null>(null);
   const [agentPublicKey, setAgentPublicKey] = useState<string | null>(null);
+
+  useEffect(() => onWalletActionSuccess(() => setError(null)), []);
 
   useEffect(() => {
     let cancelled = false;
