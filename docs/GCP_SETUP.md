@@ -92,3 +92,66 @@ is non-zero if any check failed. On that date the script printed `passed: 30  fa
 
 A check does not pass when the command could not look. A failed gcloud call fails the claim. An
 empty list is not counted as zero resources.
+
+## Rule switch on 2026-09-25
+
+Read with `gcloud run jobs describe` before either job was updated. Both jobs carried the same environment. The api key in `VETO_RPC` is redacted below. The live value was not changed.
+
+Image before the switch: `europe-north1-docker.pkg.dev/veto-watcher-260921/veto-watcher/watcher:40a414c`.
+
+| | `veto-watcher` | `veto-watcher-stale` |
+|---|---|---|
+| Command | `node dist/index.js once` | `node dist/index.js stale` |
+| CPU / memory | 1 / 1Gi | 1 / 512Mi |
+| Task timeout | 900s | 300s |
+| Max retries | 1 | 0 |
+| Service account | `veto-watcher@veto-watcher-260921.iam.gserviceaccount.com` | same |
+| Secret | `veto-agent-keypair` `latest`, mounted at `/keys/agent.json` | same |
+
+Environment on both jobs before the switch:
+
+| Name | Value |
+|---|---|
+| `VETO_RPC` | `https://devnet.helius-rpc.com/REDACTED` |
+| `VETO_PROGRAM_ID` | `3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV` |
+| `VETO_MINT` | `2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU` |
+| `VETO_OWNER` | `GtA2Vxhomfm2WGaBcvz5oCBrqkAecKHMAL3UTn4HVFzq` |
+| `VETO_OWNER_TOKEN` | `23gnGjWJMskzuFgdGs8atieGojf9oGGkF4LSfa8MaN2g` |
+| `VETO_MERCHANT` | `6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG` |
+| `VETO_MERCHANT_TOKEN` | `2bt9HMQbNy6t2J4hnw15QF8iUesPrgJoNDvf99HNay7F` |
+| `VETO_AGENT` | `6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w` |
+| `VETO_KEYS_DIR` | `/keys` |
+| `VETO_JOURNAL` | `/tmp/veto/decisions.jsonl` |
+| `VETO_JOURNAL_GCS` | `gs://veto-watcher-260921-journal/decisions-seeker-rule.jsonl` |
+| `VETO_MANDATE_ID` | `1790290106235` |
+| `VETO_KWH_MILLI` | `6000` |
+| `VETO_MINT_DECIMALS` | `6` |
+| `VETO_PURPOSE` | `Charging top-ups at the SE3 spot rate` |
+| `VETO_CAP` | `300000000` |
+| `VETO_PER_TX_MAX` | `10000000` |
+
+`VETO_QUOTE_CURRENCY` was unset, so the watcher treated 1 token as 1 SEK.
+
+Values written by the in-place update. Every name not in this list stays as it was, including `VETO_RPC`, `VETO_PROGRAM_ID`, and the secret mount.
+
+| Name | Value |
+|---|---|
+| `VETO_MINT` | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` |
+| `VETO_MINT_DECIMALS` | `6` |
+| `VETO_OWNER` | `GtA2Vxhomfm2WGaBcvz5oCBrqkAecKHMAL3UTn4HVFzq` |
+| `VETO_OWNER_TOKEN` | `8eyjxUJNHuuqYrbqoFxacu4Qx54ystkGirewxigfJtLm` |
+| `VETO_MANDATE_ID` | `1790347056578` |
+| `VETO_MERCHANT` | `6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG` |
+| `VETO_MERCHANT_TOKEN` | `GDb2L2oQc6LP4nii8ahUX3pqDUNVUn36nPNVafhhtZ7i` |
+| `VETO_AGENT` | `6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w` |
+| `VETO_KWH_MILLI` | `6000` |
+| `VETO_QUOTE_CURRENCY` | `USD` |
+| `VETO_JOURNAL_GCS` | `gs://veto-watcher-260921-journal/decisions-usdc-rule.jsonl` |
+
+The new journal object is created empty only when it is missing. `decisions-seeker-rule.jsonl` and `decisions.jsonl` are not rewritten.
+
+Both jobs were updated to image `europe-north1-docker.pkg.dev/veto-watcher-260921/veto-watcher/watcher:033a193`. That tag and `:latest` are digest `sha256:4379c861f192b6c804507eb8ead1d5d3fe97f48b1871fe1930762edcf5dd9eed`, built from commit `033a193`. A describe after the update showed the new values on both jobs. `VETO_RPC`, `VETO_PROGRAM_ID`, the secret mount, the command, the task timeout, and the resources were unchanged.
+
+Before the update, mandate `UsRHyKtm41XMpQUcFGevYKgdWJEHQUf44QDCxLjEGWh` was read through the SDK against the job's RPC. It is the PDA for owner `GtA2Vxhomfm2WGaBcvz5oCBrqkAecKHMAL3UTn4HVFzq` and mandate id `1790347056578` under program `3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV`. Status was active (`0`), expiry `1793802976` was still in the future, agent was `6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w`, mint was USDC `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`, source was `8eyjxUJNHuuqYrbqoFxacu4Qx54ystkGirewxigfJtLm`, and merchant was `6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG`. Cap `20000000`, per-transaction max `500000`, spent `0`, last nonce `0`.
+
+Cloud Build's default service account for this project is `472736420070-compute@developer.gserviceaccount.com`. It could not read the Cloud Build source bucket, so the image build could not start. `roles/storage.objectViewer` was added on `gs://veto-watcher-260921_cloudbuild` and `roles/artifactregistry.writer` was added on repository `veto-watcher` in `europe-north1`, both for that account. No project-level role was added, and the agent secret was not read or changed.
