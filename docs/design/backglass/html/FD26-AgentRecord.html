@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent record</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,400&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+button,a{font-family:inherit;}
+button:focus-visible,a:focus-visible{outline:2px solid #C9A24D;outline-offset:3px;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes plateIn{0%{opacity:0;transform:translateY(10px) scale(0.98);}100%{opacity:1;transform:translateY(0) scale(1);}}
+@keyframes tickIn{from{opacity:0;transform:scaleY(0.2);}to{opacity:1;transform:scaleY(1);}}
+@keyframes sheen{0%{background-position:0% 50%;}100%{background-position:200% 50%;}}
+.rise{animation:rise 0.7s cubic-bezier(0.22,1,0.36,1) both;}
+.rise-1{animation-delay:0.05s;}
+.rise-2{animation-delay:0.16s;}
+.rise-3{animation-delay:0.30s;}
+.rise-4{animation-delay:0.44s;}
+.rise-5{animation-delay:0.56s;}
+.rise-6{animation-delay:0.68s;}
+.rise-7{animation-delay:0.80s;}
+.rise-8{animation-delay:1.10s;}
+.tick{transform-origin:center bottom;animation:tickIn 0.4s cubic-bezier(0.22,1,0.36,1) both;flex:1;border-radius:3px;height:20px;}
+.tick.paid{background:#9CC9A8;}
+.tick.refused{background:rgba(228,164,142,0.22);border:1px solid #E4A48E;box-sizing:border-box;}
+.grade{display:flex;flex-direction:column;gap:7px;padding:10px 14px;border-radius:16px;background:linear-gradient(180deg,#1C2C25 0%,#111D18 100%);box-shadow:inset 0 1px 0 rgba(237,230,214,0.08),0 2px 0 rgba(0,0,0,0.45);border:1px solid rgba(228,164,142,0.65);box-sizing:border-box;}
+.stat{display:flex;flex-direction:column;gap:2px;padding:6px 8px;border-radius:10px;background:#16231E;border:1px solid rgba(237,230,214,0.12);min-width:0;}
+.stat .v{font-family:'Fraunces',serif;font-size:20px;line-height:1;font-variant-numeric:tabular-nums;color:#EDE6D6;}
+.stat .l{font-size:10px;line-height:1.25;color:#93A097;}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 14px;}
+.row + .row{border-top:1px solid rgba(237,230,214,0.10);}
+.row .k{font-size:13px;color:#EDE6D6;line-height:1.3;}
+.row .n{font-family:'Fraunces',serif;font-size:18px;font-variant-numeric:tabular-nums;flex-shrink:0;}
+.plate{animation:plateIn 0.6s cubic-bezier(0.22,1,0.36,1) both;position:relative;border-radius:12px;padding:7px 12px 7px 14px;display:flex;align-items:center;gap:10px;box-sizing:border-box;background:linear-gradient(160deg,#E9D28C 0%,#C9A24D 45%,#A5822F 100%);box-shadow:0 2px 0 rgba(0,0,0,0.5),0 8px 18px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,248,230,0.55);border:1px solid #7E5E14;}
+.plate-1{animation-delay:0.86s;}
+.plate-2{animation-delay:0.96s;}
+.plate .t{font-family:'Fraunces',serif;font-weight:500;font-size:14px;line-height:1.2;color:#1A1608;text-shadow:0 1px 0 rgba(255,248,230,0.45);}
+.plate .d{font-size:10px;font-weight:700;letter-spacing:0.10em;text-transform:uppercase;color:#4A3A10;line-height:1.2;}
+.rivet{position:absolute;width:5px;height:5px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#FFF3D0 0%,#B08A32 55%,#6B4F12 100%);box-shadow:0 1px 1px rgba(0,0,0,0.45);}
+.cta-sheen{background-image:linear-gradient(110deg,#C9A24D 0%,#C9A24D 40%,#E3C77E 50%,#C9A24D 60%,#C9A24D 100%);background-size:200% 100%;animation:sheen 3.2s ease-in-out 2s infinite;}
+@media (prefers-reduced-motion: reduce){
+  .rise,.tick,.plate,.cta-sheen{animation:none;}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div aria-hidden="true" style="position: absolute; top: -140px; left: 50%; width: 460px; height: 460px; margin-left: -230px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.16) 0%, rgba(201,162,77,0.04) 45%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div class="rise rise-1" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 12px 0 12px; position: relative;">
+    <a href="#agents" aria-label="Back to your agents" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; text-decoration: none;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EDE6D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+    </a>
+    <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">Agent record</span>
+    <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 44px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #C9A24D; border: 1px solid rgba(201,162,77,0.5); border-radius: 999px; padding: 3px 8px;">Devnet</span>
+    </span>
+  </div>
+
+  <div class="rise rise-2" style="display: flex; flex-direction: column; gap: 3px; padding: 4px 24px 0 24px; position: relative;">
+    <h1 style="margin: 0; font-family: 'Fraunces', serif; font-weight: 400; font-size: 26px; line-height: 1.1; letter-spacing: -0.01em; color: #EDE6D6;">Charging agent</h1>
+    <p style="margin: 0; font-size: 12px; line-height: 1.45; color: #93A097;"><span style="font-variant-numeric: tabular-nums;">6YwqYU...GSV5w</span>, under your rule <span style="font-family: 'Fraunces', serif; font-style: italic; color: #D3CCBB;">Charging top-ups at the SE3 spot rate</span>. Day 6 of 90. Can still spend 258 of your 300.</p>
+  </div>
+
+  <div class="rise rise-3" style="padding: 6px 24px 0 24px; position: relative;">
+    <div class="grade">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">Grade so far</span>
+        <a href="#how-grades-work" style="font-size: 12px; font-weight: 700; color: #C9A24D; text-decoration: none; line-height: 16px;">How grades work</a>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span aria-hidden="true" style="display: block; width: 12px; height: 12px; border-radius: 50%; background: #E4A48E; box-shadow: 0 0 8px rgba(228,164,142,0.6); flex-shrink: 0;"></span>
+        <span style="font-family: 'Fraunces', serif; font-size: 22px; line-height: 1.1; color: #EDE6D6;">Pushed its limit often</span>
+      </div>
+      <p style="margin: 0; font-size: 12px; line-height: 1.45; color: #D3CCBB;">Its rule: more than 4 requests in 20 outside the rule. This agent: <span style="color: #EDE6D6; font-weight: 700;">12 of 18</span>, all 12 refused.</p>
+      <p style="margin: 0; padding-top: 6px; border-top: 1px solid rgba(237,230,214,0.10); font-size: 11px; line-height: 1.4; color: #93A097;">A grade describes how the agent behaved at its limits. It is not a safety guarantee.</p>
+    </div>
+  </div>
+
+  <div class="rise rise-4" style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; padding: 6px 24px 0 24px; position: relative;">
+    <div class="stat"><span class="v" style="color: #9CC9A8;">6</span><span class="l">paid, inside its rule</span></div>
+    <div class="stat"><span class="v" style="color: #E4A48E;">12</span><span class="l">asked outside</span></div>
+    <div class="stat"><span class="v">0</span><span class="l">allowed once by you</span></div>
+    <div class="stat"><span class="v">42<span style="font-family: 'Manrope', sans-serif; font-size: 10px; color: #93A097; margin-left: 3px;">of 300</span></span><span class="l">spent so far</span></div>
+  </div>
+
+  <div class="rise rise-5" style="padding: 6px 24px 0 24px; position: relative;">
+    <div style="display: flex; flex-direction: column; gap: 6px; padding: 9px 14px; border-radius: 14px; background: #16231E; border: 1px solid rgba(237,230,214,0.12);">
+      <div style="display: flex; align-items: baseline; justify-content: space-between;">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">Its last 18 requests</span>
+        <span style="font-size: 11px; color: #93A097;">oldest to newest</span>
+      </div>
+      <div role="img" aria-label="18 requests, oldest to newest: paid, paid, paid, refused, paid, refused, refused, refused, refused, refused, refused, refused, refused, refused, paid, paid, refused, refused." style="display: flex; gap: 3px;">
+        <span class="tick paid" style="animation-delay: 0.60s;"></span><span class="tick paid" style="animation-delay: 0.63s;"></span><span class="tick paid" style="animation-delay: 0.66s;"></span><span class="tick refused" style="animation-delay: 0.69s;"></span><span class="tick paid" style="animation-delay: 0.72s;"></span><span class="tick refused" style="animation-delay: 0.75s;"></span><span class="tick refused" style="animation-delay: 0.78s;"></span><span class="tick refused" style="animation-delay: 0.81s;"></span><span class="tick refused" style="animation-delay: 0.84s;"></span><span class="tick refused" style="animation-delay: 0.87s;"></span><span class="tick refused" style="animation-delay: 0.90s;"></span><span class="tick refused" style="animation-delay: 0.93s;"></span><span class="tick refused" style="animation-delay: 0.96s;"></span><span class="tick refused" style="animation-delay: 0.99s;"></span><span class="tick paid" style="animation-delay: 1.02s;"></span><span class="tick paid" style="animation-delay: 1.05s;"></span><span class="tick refused" style="animation-delay: 1.08s;"></span><span class="tick refused" style="animation-delay: 1.11s;"></span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px; font-size: 11px; color: #D3CCBB; white-space: nowrap;">
+        <span style="display: flex; align-items: center; gap: 6px;"><span aria-hidden="true" style="display: block; width: 10px; height: 10px; border-radius: 2px; background: #9CC9A8;"></span>Paid by your agent, 6</span>
+        <span style="display: flex; align-items: center; gap: 6px;"><span aria-hidden="true" style="display: block; width: 10px; height: 10px; border-radius: 2px; background: rgba(228,164,142,0.22); border: 1px solid #E4A48E; box-sizing: border-box;"></span>Refused, 12</span>
+        <a href="#decisions" style="margin-left: auto; color: #C9A24D; font-weight: 700; text-decoration: none;">See each one</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="rise rise-6" style="padding: 6px 24px 0 24px; position: relative;">
+    <div style="display: flex; flex-direction: column; border-radius: 14px; background: #16231E; border: 1px solid rgba(237,230,214,0.12); overflow: hidden;">
+      <div style="display: flex; align-items: center; justify-content: space-between; height: 26px; padding: 0 14px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097; border-bottom: 1px solid rgba(237,230,214,0.10);"><span>Why the rule refused</span><span>12 times</span></div>
+      <div class="row"><span class="k">Over your limit of 10 per payment</span><span class="n" style="color: #E4A48E;">12</span></div>
+      <div class="row"><span class="k" style="color: #D3CCBB;">Allowed once by you after a refusal</span><span class="n" style="color: #D3CCBB;">0</span></div>
+      <div class="row"><span class="k" style="color: #D3CCBB;">Its own signed declines, not in the grade</span><span class="n" style="color: #D3CCBB;">1</span></div>
+    </div>
+  </div>
+
+  <div class="rise rise-7" style="display: flex; flex-direction: column; gap: 6px; padding: 10px 24px 0 24px; position: relative;">
+    <div style="display: flex; align-items: baseline; justify-content: space-between;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">Plaques earned, 3. Latest two:</span>
+      <a href="#plaques" style="font-size: 12px; font-weight: 700; color: #C9A24D; text-decoration: none;">Open all 3 plaques</a>
+    </div>
+    <div class="plate plate-1">
+      <span class="rivet" aria-hidden="true" style="top: 5px; left: 5px;"></span><span class="rivet" aria-hidden="true" style="top: 5px; right: 5px;"></span><span class="rivet" aria-hidden="true" style="bottom: 5px; left: 5px;"></span><span class="rivet" aria-hidden="true" style="bottom: 5px; right: 5px;"></span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1A1608" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"></path><path d="M9 12l2 2 4-4"></path></svg>
+      <span style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span class="d">Day 5</span><span class="t">Ten refusals, none allowed by you</span></span>
+    </div>
+    <div class="plate plate-2">
+      <span class="rivet" aria-hidden="true" style="top: 5px; left: 5px;"></span><span class="rivet" aria-hidden="true" style="top: 5px; right: 5px;"></span><span class="rivet" aria-hidden="true" style="bottom: 5px; left: 5px;"></span><span class="rivet" aria-hidden="true" style="bottom: 5px; right: 5px;"></span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1A1608" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg>
+      <span style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span class="d">Day 2</span><span class="t">First refusal saved, reason included</span></span>
+    </div>
+  </div>
+
+  <div class="rise rise-8" style="margin-top: auto; display: flex; flex-direction: column; gap: 6px; padding: 10px 24px 20px 24px; position: relative;">
+    <a href="#track-record" class="cta-sheen" style="height: 50px; border-radius: 16px; background-color: #C9A24D; color: #0F1A16; font-size: 16px; font-weight: 700; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 10px 30px rgba(201,162,77,0.22);">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"></path></svg>
+      <span>Share this record</span>
+    </a>
+    <p style="margin: 0; text-align: center; font-size: 11px; line-height: 1.4; color: #93A097;">Anyone can check each line on the blockchain.</p>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
