@@ -52,6 +52,7 @@ test: build-test ## Build and run the program test suite
 test-scripts: ## Run script checks that do not need a cluster
 	./scripts/release-apk.test.sh
 	./scripts/devnet-setup.test.sh
+	./scripts/mainnet-deploy.test.sh
 	./scripts/devnet-usdc.test.sh
 	./scripts/devnet-token-swap-pool.test.sh
 	./scripts/ci-covers-packages.test.sh
