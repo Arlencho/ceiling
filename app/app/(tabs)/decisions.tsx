@@ -8,6 +8,7 @@ import { ConnectGate } from '../../components/ConnectGate';
 import { DecisionRow } from '../../components/DecisionRow';
 import { EmptyState } from '../../components/EmptyState';
 import { ReadState } from '../../components/ReadState';
+import { RuleReadPill } from '../../components/RuleReadPill';
 import { ClusterPill, Kicker, Rise } from '../../components/records/chrome';
 import { relativeDay } from '../../components/records/copy';
 import { Screen } from '../../components/Screen';
@@ -15,9 +16,10 @@ import { colors, fonts, radii, touchTarget } from '../../components/theme';
 import { KIND_ADVISORY_DECLINE } from '../../lib/advisory';
 import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, LEDGER_CAPACITY } from '../../lib/constants';
 import { decisionTotals, formatBaseUnits, groupByLocalDay, isListedDecision, newestFirst } from '../../lib/format';
-import { isActive, mandateRemaining } from '../../lib/mandate';
+import { mandateRemaining } from '../../lib/mandate';
+import { liveMandateCount, showRulePill, tabPillFace } from '../../lib/mandateRead';
 import type { LedgerRow } from '../../lib/ring';
-import { displayPurpose, ruleStatusLabel } from '../../lib/ruleView';
+import { displayPurpose } from '../../lib/ruleView';
 import { useChain } from '../../lib/useChain';
 import { useRefreshOnFocus } from '../../lib/useRefreshOnFocus';
 import { truncateAddress } from '../../lib/wallet';
@@ -70,58 +72,51 @@ export default function DecisionsScreen() {
     void chain.refresh();
   }, [chain]);
 
-  const clockKnown = chain.nowMs > 0;
-  const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
-  const live = Boolean(mandate && clockKnown && isActive(mandate, nowSec));
-  const lamp =
-    mandate && clockKnown
-      ? live
-        ? 'Rule live'
-        : `Rule ${ruleStatusLabel(mandate, nowSec, true)}`
-      : '';
-
   return (
-    <Screen refreshing={chain.loading} onRefresh={onRefresh}>
-      <Rise delayMs={50}>
-        <View style={styles.mast}>
-          <View style={styles.brand}>
-            <CatchMark size={20} />
-            <Text style={styles.word}>Veto</Text>
-            <ClusterPill cluster={cluster} />
+    <Screen
+      header={
+        <Rise delayMs={50}>
+          <View style={styles.mast}>
+            <View style={styles.brand}>
+              <CatchMark size={20} />
+              <Text style={styles.word}>Veto</Text>
+              <ClusterPill cluster={cluster} />
+            </View>
+            <View style={styles.mastActions}>
+              {showRulePill(chain.mandateStatus, chain.loading) ? (
+                <RuleReadPill
+                  face={tabPillFace(chain.mandateStatus, chain.nowMs)}
+                  liveCount={liveMandateCount(chain.mandates, chain.nowMs)}
+                />
+              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Help"
+                onPress={() => router.push('/help')}
+                style={styles.hit}
+              >
+                <Text style={styles.help}>Help</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Export the record"
+                onPress={() => router.push('/share')}
+                style={styles.hit}
+              >
+                <Text style={styles.help}>Export</Text>
+              </Pressable>
+            </View>
           </View>
-          <View style={styles.mastActions}>
-            {mandate && clockKnown ? (
-              <View style={[styles.live, !live && styles.liveOff]}>
-                <View style={[styles.liveDot, { backgroundColor: live ? colors.paid : colors.muted }]} />
-                <Text style={[styles.liveText, { color: live ? colors.paid : colors.muted }]}>{lamp}</Text>
-              </View>
-            ) : null}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Help"
-              onPress={() => router.push('/help')}
-              style={styles.hit}
-            >
-              <Text style={styles.help}>Help</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Export the record"
-              onPress={() => router.push('/share')}
-              style={styles.hit}
-            >
-              <Text style={styles.help}>Export</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Rise>
+        </Rise>
+      }
+      refreshing={chain.loading}
+      onRefresh={onRefresh}
+    >
       <ConnectGate>
         {chain.configError ? <EmptyState>{chain.configError}</EmptyState> : null}
-        {chain.error && chain.mandateStatus !== 'rate-limited' ? (
-          <EmptyState>{chain.error}</EmptyState>
-        ) : null}
         <ReadState
           status={chain.mandateStatus}
+          staleError={chain.error}
           empty="No rule on chain for this owner. Only decisions that actually ran appear here. This screen never invents rows."
         />
         {chain.snapshot && chain.snapshot.total > chain.snapshot.entries.length ? (
@@ -246,32 +241,6 @@ const styles = StyleSheet.create({
   mastActions: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  live: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    height: 30,
-    paddingHorizontal: 10,
-    borderRadius: radii.pill,
-    backgroundColor: colors.paidWash,
-    borderWidth: 1,
-    borderColor: 'rgba(156, 201, 168, 0.45)',
-  },
-  liveOff: {
-    backgroundColor: 'transparent',
-    borderColor: colors.line,
-  },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  liveText: {
-    fontFamily: fonts.sansBold,
-    fontSize: 11,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
   },
   hit: {
     width: touchTarget,

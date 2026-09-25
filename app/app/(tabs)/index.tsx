@@ -8,7 +8,6 @@ import { ContextBar } from '../../components/ContextBar';
 import { CatchMark } from '../../components/backglass/CatchMark';
 import { ScoreReel } from '../../components/backglass/ScoreReel';
 import { ClusterPill } from '../../components/daily/ClusterPill';
-import { LivePill } from '../../components/daily/LivePill';
 import { DayClock } from '../../components/daily/DayClock';
 import { LatestDecision } from '../../components/daily/LatestDecision';
 import { SpendBoard } from '../../components/daily/SpendBoard';
@@ -19,12 +18,14 @@ import { HomeStay } from '../../components/renewal/RenewalBanner';
 import { EmptyState } from '../../components/EmptyState';
 import { OpenFirstRule } from '../../components/OpenFirstRule';
 import { ReadState } from '../../components/ReadState';
+import { RuleReadPill } from '../../components/RuleReadPill';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts, radii, space } from '../../components/theme';
 import { KIND_REFUSED } from '../../lib/constants';
 import { formatBaseUnits, isListedDecision, timeLeftParts, todaysAgentDecisions } from '../../lib/format';
 import { isActive, mandateRemaining } from '../../lib/mandate';
+import { liveMandateCount, showRulePill, tabPillFace } from '../../lib/mandateRead';
 import { NOTIFICATIONS_OFF_LINE } from '../../lib/notificationAsk';
 import { displayPurpose, spendRatio } from '../../lib/ruleView';
 import { useChain } from '../../lib/useChain';
@@ -50,6 +51,7 @@ export default function OverviewScreen() {
   const streak = refusalStreak(chain.rows);
   const listed = today.filter((row) => isListedDecision(row.kind));
   const live = mandate ? isActive(mandate, nowSec) : false;
+  const liveCount = liveMandateCount(chain.mandates, chain.nowMs);
   const spentShare = Math.round(ratio * 100);
 
   const onRefresh = useCallback(() => {
@@ -57,27 +59,32 @@ export default function OverviewScreen() {
   }, [chain]);
 
   return (
-    <Screen refreshing={chain.loading} onRefresh={onRefresh}>
-      <TopBar
-        leading={<CatchMark size={20} />}
-        accessory={
-          <>
-            {chain.config ? <ClusterPill cluster={chain.config.explorerCluster} /> : null}
-            {mandate && live ? <LivePill label="Rule live" /> : null}
-          </>
-        }
-      />
+    <Screen
+      header={
+        <TopBar
+          leading={<CatchMark size={20} />}
+          accessory={
+            <>
+              {chain.config ? <ClusterPill cluster={chain.config.explorerCluster} /> : null}
+              {showRulePill(chain.mandateStatus, chain.loading) ? (
+                <RuleReadPill face={tabPillFace(chain.mandateStatus, chain.nowMs)} liveCount={liveCount} />
+              ) : null}
+            </>
+          }
+        />
+      }
+      refreshing={chain.loading}
+      onRefresh={onRefresh}
+    >
       <ConnectGate>
         <HoldEntry />
         {chain.configError ? <EmptyState>{chain.configError}</EmptyState> : null}
-        {chain.error && chain.mandateStatus !== 'rate-limited' ? (
-          <EmptyState>{chain.error}</EmptyState>
-        ) : null}
         {chain.mandateStatus === 'empty' ? (
           <OpenFirstRule onOpen={() => router.push('/rule/new')} />
         ) : (
           <ReadState
             status={chain.mandateStatus}
+            staleError={chain.error}
             empty="No rule on chain for this owner yet. This screen reads real history only and never invents rows."
           />
         )}

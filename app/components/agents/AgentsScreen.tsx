@@ -1,13 +1,51 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { CHAIN_BUSY, CHAIN_UNREACHABLE, type ReadFace } from '../../lib/mandateRead';
+import { agentsHeading, networkBadge, type AgentRecord } from '../../lib/grade';
+import { clusterNotice } from '../../lib/wallet';
 import { StatTile } from '../backglass/StatTile';
 import { QuietReading } from '../QuietRefresh';
+import { RuleReadPill } from '../RuleReadPill';
 import { colors, fonts, radii, space } from '../theme';
-import { agentsHeading, liveRulesLabel, networkBadge, type AgentRecord } from '../../lib/grade';
-import { clusterNotice } from '../../lib/wallet';
 import type { AgentScreenData } from './useAgentHistories';
-import { Cabinet, Chevron, GradeFace, HelpMark, LiveRules, NetworkPill, StatusLine, Wordmark } from './chrome';
+import { Cabinet, Chevron, GradeFace, HelpMark, NetworkPill, StatusLine, Wordmark } from './chrome';
+
+function agentFace(status: AgentScreenData['status']): ReadFace {
+  if (status === 'ready' || status === 'empty') {
+    return 'proven';
+  }
+  if (status === 'error') {
+    return 'unavailable';
+  }
+  return 'reading';
+}
+
+function transportText(text: string): boolean {
+  if (/missing/i.test(text)) {
+    return false;
+  }
+  return /\brpc\b|rate limit|\b429\b/i.test(text);
+}
+
+function loadingCopy(notice: string | null | undefined, error: string | null): string {
+  const raw = notice ?? error;
+  if (raw && transportText(raw)) {
+    return CHAIN_BUSY;
+  }
+  if (notice) {
+    return notice;
+  }
+  return 'Reading your agents from the blockchain.';
+}
+
+function failureCopy(notice: string | null | undefined, error: string | null): string {
+  const raw = notice ?? error;
+  if (!raw || transportText(raw)) {
+    return CHAIN_UNREACHABLE;
+  }
+  return raw;
+}
 
 export function AgentsScreen({
   data,
@@ -22,7 +60,6 @@ export function AgentsScreen({
   onNameAgent?: (agent: string, name: string) => void;
   topInset?: boolean;
 }) {
-  const rulesPending = data.status === 'loading';
   return (
     <Cabinet
       refreshing={data.refreshing}
@@ -36,11 +73,7 @@ export function AgentsScreen({
           <NetworkPill label={networkBadge(data.cluster, 'name')} />
         </View>
         <View style={styles.headerRight}>
-          <LiveRules
-            count={data.liveRules}
-            label={rulesPending ? 'Reading...' : liveRulesLabel(data.liveRules)}
-            pending={rulesPending}
-          />
+          <RuleReadPill face={agentFace(data.status)} liveCount={data.liveRules} />
           <HelpMark onPress={onHowGrades} />
         </View>
       </View>
@@ -50,8 +83,9 @@ export function AgentsScreen({
         <QuietReading busy={data.refreshing} />
       </View>
 
-      {data.status === 'loading' ? <StatusLine>Reading your agents from the blockchain.</StatusLine> : null}
-      {data.status === 'error' ? <StatusLine>{data.error ?? 'The record could not be read.'}</StatusLine> : null}
+      {data.status === 'loading' ? <StatusLine>{loadingCopy(data.notice, data.error)}</StatusLine> : null}
+      {data.status === 'error' ? <StatusLine>{failureCopy(data.notice, data.error)}</StatusLine> : null}
+      {data.status === 'ready' && data.notice ? <StatusLine>{failureCopy(data.notice, null)}</StatusLine> : null}
       {data.status === 'empty' ? (
         <StatusLine>No agent is on a rule yet. A grade appears after a rule is opened.</StatusLine>
       ) : null}

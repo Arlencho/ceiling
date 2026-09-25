@@ -1,9 +1,21 @@
+import { liveRulesLabel } from './grade';
+import { isActive, type MandateAccount } from './mandate';
+
 export type MandateReadStatus = 'not-read' | 'failed' | 'empty' | 'present' | 'rate-limited';
+
+export type ReadFace = 'reading' | 'unavailable' | 'proven';
 
 export const RATE_LIMIT_RETRY_MS = [500, 1000, 2000] as const;
 
-export const RATE_LIMIT_GAVE_UP =
-  'The RPC rate limited this read three times. Pull to retry.';
+export const CHAIN_BUSY = 'The blockchain is busy right now. Veto keeps trying.';
+
+export const CHAIN_UNREACHABLE = 'Could not reach the blockchain. Pull down to try again.';
+
+export const PILL_READING = 'Reading...';
+
+export const PILL_UNREAD = 'Could not read';
+
+export const RATE_LIMIT_GAVE_UP = CHAIN_UNREACHABLE;
 
 export function mayClaimAbsence(status: MandateReadStatus): boolean {
   return status === 'empty' || status === 'present';
@@ -34,6 +46,46 @@ export function mandateReadStatus(args: {
   return 'empty';
 }
 
+export function readFace(status: MandateReadStatus): ReadFace {
+  if (status === 'failed') {
+    return 'unavailable';
+  }
+  if (status === 'present' || status === 'empty') {
+    return 'proven';
+  }
+  return 'reading';
+}
+
+export function tabPillFace(status: MandateReadStatus, nowMs: number): ReadFace {
+  const face = readFace(status);
+  if (face === 'proven' && nowMs <= 0) {
+    return 'reading';
+  }
+  return face;
+}
+
+export function showRulePill(status: MandateReadStatus, loading: boolean): boolean {
+  return loading || status !== 'not-read';
+}
+
+export function liveMandateCount(mandates: readonly MandateAccount[], nowMs: number): number {
+  if (nowMs <= 0) {
+    return 0;
+  }
+  const nowSec = BigInt(Math.floor(nowMs / 1000));
+  return mandates.filter((row) => isActive(row, nowSec)).length;
+}
+
+export function rulePillLabel(face: ReadFace, liveCount: number): string {
+  if (face === 'reading') {
+    return PILL_READING;
+  }
+  if (face === 'unavailable') {
+    return PILL_UNREAD;
+  }
+  return liveRulesLabel(liveCount);
+}
+
 export function mandateAbsenceCopy(status: MandateReadStatus, empty: string): string | null {
   if (status === 'present') {
     return null;
@@ -42,10 +94,10 @@ export function mandateAbsenceCopy(status: MandateReadStatus, empty: string): st
     return 'Reading the chain for this owner.';
   }
   if (status === 'rate-limited') {
-    return 'The RPC is rate limiting this read. Still trying. This is not a stalled fetch.';
+    return CHAIN_BUSY;
   }
   if (status === 'failed') {
-    return 'The chain read failed. Pull to retry. This screen does not assume there is no mandate.';
+    return CHAIN_UNREACHABLE;
   }
   return empty;
 }

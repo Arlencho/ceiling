@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { loadAddressBook, saveAddressBook, withSavedName } from '../../lib/addressBook';
 import { createClient, fetchLedgerRows, fetchMintDecimals } from '../../lib/chain';
 import { STATUS_ACTIVE } from '../../lib/constants';
+import { describeAgentRead } from '../../lib/agentRead';
 import { buildAgentRecords, type AgentRecord, type GradeDecision, type RuleFacts } from '../../lib/grade';
 import { secureStore } from '../../lib/mwa';
 import type { LedgerRow } from '../../lib/ring';
@@ -13,6 +14,7 @@ import { useChain } from '../../lib/useChain';
 export type AgentScreenData = {
   status: 'loading' | 'empty' | 'error' | 'ready';
   error: string | null;
+  notice?: string | null;
   cluster: string;
   rpcUrl: string;
   nowSec: bigint;
@@ -160,31 +162,21 @@ export function useAgentHistories(): AgentScreenData {
       ? 0
       : aligned.filter((rule) => rule.status === STATUS_ACTIVE && nowSec < rule.expiresAt).length;
 
-  let status: AgentScreenData['status'] = 'ready';
-  let error: string | null = null;
-  if (chain.configError) {
-    status = 'error';
-    error = chain.configError;
-  } else if (chain.mandateStatus === 'rate-limited') {
-    status = 'error';
-    error = chain.error ?? 'The RPC rate limited this read. Pull to retry.';
-  } else if (loadError) {
-    status = 'error';
-    error = loadError;
-  } else if (chain.error && chain.mandateStatus === 'failed') {
-    status = 'error';
-    error = chain.error;
-  } else if (!chain.ready || chain.nowMs === 0 || chain.mandateStatus === 'not-read') {
-    status = 'loading';
-  } else if (chain.mandates.length > 0 && aligned == null) {
-    status = 'loading';
-  } else if (chain.mandates.length === 0 || (aligned?.length ?? 0) === 0) {
-    status = 'empty';
-  }
+  const described = describeAgentRead({
+    configError: chain.configError,
+    mandateStatus: chain.mandateStatus,
+    chainError: chain.error,
+    loadError,
+    ready: chain.ready,
+    nowMs: chain.nowMs,
+    mandateCount: chain.mandates.length,
+    historiesReady: aligned != null,
+  });
 
   return {
-    status,
-    error,
+    status: described.status,
+    error: described.error,
+    notice: described.notice,
     cluster: chain.config?.explorerCluster ?? 'devnet',
     rpcUrl: chain.config?.rpcUrl ?? '',
     nowSec,

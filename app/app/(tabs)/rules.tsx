@@ -7,15 +7,15 @@ import { CatchMark } from '../../components/backglass/CatchMark';
 import { HoldEntry } from '../../components/hold/HoldEntry';
 import { Button } from '../../components/Button';
 import { ClusterPill } from '../../components/daily/ClusterPill';
-import { LivePill } from '../../components/daily/LivePill';
 import { ConnectGate } from '../../components/ConnectGate';
 import { EmptyState } from '../../components/EmptyState';
 import { ReadState } from '../../components/ReadState';
 import { RuleListItem } from '../../components/RuleListItem';
+import { RuleReadPill } from '../../components/RuleReadPill';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts, radii, space } from '../../components/theme';
-import { isActive } from '../../lib/mandate';
+import { liveMandateCount, showRulePill, tabPillFace } from '../../lib/mandateRead';
 import { PAYEE_NOT_IN_RULESET, PAYEE_PREFILL, RULESET_ENVELOPE } from '../../lib/ruleset';
 import { TEMPLATES } from '../../lib/templates';
 import { useChain } from '../../lib/useChain';
@@ -32,7 +32,7 @@ export default function RulesScreen() {
   const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
   const selected = chain.mandate?.address ?? null;
   const count = chain.mandates.length;
-  const liveCount = chain.mandates.filter((row) => isActive(row, nowSec)).length;
+  const liveCount = liveMandateCount(chain.mandates, chain.nowMs);
 
   const onRefresh = useCallback(() => {
     void chain.refresh();
@@ -46,26 +46,29 @@ export default function RulesScreen() {
         : `${count} rules, ${count} agents.`;
 
   return (
-    <Screen refreshing={chain.loading} onRefresh={onRefresh}>
-      <TopBar
-        leading={<CatchMark size={20} />}
-        accessory={
-          <>
-            {chain.config ? <ClusterPill cluster={chain.config.explorerCluster} /> : null}
-            {liveCount > 0 ? (
-              <LivePill label={liveCount === 1 ? '1 rule live' : `${liveCount} rules live`} />
-            ) : null}
-          </>
-        }
-      />
+    <Screen
+      header={
+        <TopBar
+          leading={<CatchMark size={20} />}
+          accessory={
+            <>
+              {chain.config ? <ClusterPill cluster={chain.config.explorerCluster} /> : null}
+              {showRulePill(chain.mandateStatus, chain.loading) ? (
+                <RuleReadPill face={tabPillFace(chain.mandateStatus, chain.nowMs)} liveCount={liveCount} />
+              ) : null}
+            </>
+          }
+        />
+      }
+      refreshing={chain.loading}
+      onRefresh={onRefresh}
+    >
       <ConnectGate>
         <HoldEntry />
         {chain.configError ? <EmptyState>{chain.configError}</EmptyState> : null}
-        {chain.error && chain.mandateStatus !== 'rate-limited' ? (
-          <EmptyState>{chain.error}</EmptyState>
-        ) : null}
         <ReadState
           status={chain.mandateStatus}
+          staleError={chain.error}
           empty="Nothing on chain for this owner yet. A template is an empty starting point. This screen does not invent a rule."
         />
 

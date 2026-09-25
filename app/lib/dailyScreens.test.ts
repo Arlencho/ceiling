@@ -6,8 +6,9 @@ import { useEffect, type ReactElement, type ReactNode } from 'react';
 import { act, createElement } from 'react';
 import { create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
-import { KIND_PAID, KIND_REFUSED, STATUS_REVOKED } from './constants';
 import { barUnits, networkLabel, refusalStreak, ruleDay } from '../components/daily/facts';
+import { space } from '../components/theme';
+import { KIND_PAID, KIND_REFUSED, STATUS_REVOKED } from './constants';
 import type { MandateAccount } from './mandate';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -295,6 +296,51 @@ mock.module('./chain', {
   },
 });
 
+const UNPROVEN_CLAIM =
+  /no rule live|no rule yet|no rules yet|no decisions|no agent|nothing on chain|no rule on chain|open your first rule/i;
+
+function textLines(root: ReactTestRenderer): string[] {
+  return root.root
+    .findAll((node) => (node.type as unknown) === 'Text')
+    .map((node) => {
+      const bits: string[] = [];
+      const walk = (child: unknown) => {
+        if (typeof child === 'string' || typeof child === 'number') {
+          bits.push(String(child));
+        } else if (Array.isArray(child)) {
+          for (const item of child) {
+            walk(item);
+          }
+        }
+      };
+      walk(node.props.children);
+      return bits.join('');
+    })
+    .filter((line) => line.length > 0);
+}
+
+function flatStyle(style: unknown): Record<string, unknown> {
+  if (Array.isArray(style)) {
+    return Object.assign({}, ...style.map((item) => flatStyle(item)));
+  }
+  if (style && typeof style === 'object') {
+    return style as Record<string, unknown>;
+  }
+  return {};
+}
+
+function hasScreenInset(node: ReactTestInstance | null): boolean {
+  let current: ReactTestInstance | null = node;
+  while (current) {
+    const style = flatStyle(current.props?.style);
+    if (style.paddingHorizontal === space.screen || style.marginHorizontal === space.screen) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
 function textOf(root: ReactTestRenderer): string {
   return root.root
     .findAll((node) => (node.type as unknown) === 'Text')
@@ -384,8 +430,8 @@ test('home reads loading, empty, error, and the chain amounts', async () => {
   chain.mandateStatus = 'failed';
   chain.error = 'The RPC refused this read';
   root = await mount(createElement(Screen));
-  assert.match(textOf(root), /The RPC refused this read/);
-  assert.match(textOf(root), /The chain read failed/);
+  assert.match(textOf(root), /Could not reach the blockchain\. Pull down to try again/);
+  assert.doesNotMatch(textOf(root), /RPC/);
   await act(async () => root.unmount());
 
   const row = mandate();
@@ -436,7 +482,8 @@ test('rules reads loading, empty, error, and a live rule from the chain', async 
   chain.mandateStatus = 'failed';
   chain.error = 'Rules could not be read';
   root = await mount(createElement(Screen));
-  assert.match(textOf(root), /Rules could not be read/);
+  assert.match(textOf(root), /Could not reach the blockchain\. Pull down to try again/);
+  assert.doesNotMatch(textOf(root), /Rules could not be read/);
   await act(async () => root.unmount());
 
   const row = mandate();
@@ -452,10 +499,101 @@ test('rules reads loading, empty, error, and a live rule from the chain', async 
   await act(async () => root.unmount());
 });
 
+async function tabText(which: 'home' | 'rules'): Promise<ReactTestRenderer> {
+  const screen =
+    which === 'home'
+      ? (await import('../app/(tabs)/index')).default
+      : (await import('../app/(tabs)/rules')).default;
+  return mount(createElement(screen));
+}
+
+for (const which of ['home', 'rules'] as const) {
+  test(`${which} while the chain is rate limited says the blockchain is busy and claims nothing about rules or decisions`, async () => {
+    chain.mandateStatus = 'rate-limited';
+    chain.loading = true;
+    chain.error = 'The RPC refused this read';
+    chain.mandate = null;
+    chain.mandates = [];
+    chain.rows = [];
+    const root = await tabText(which);
+    const text = textOf(root);
+    assert.match(text, /The blockchain is busy right now\. Veto keeps trying\./);
+    assert.match(text, /Reading\.\.\./);
+    assert.doesNotMatch(text, /RPC/);
+    assert.doesNotMatch(text, UNPROVEN_CLAIM);
+    await act(async () => root.unmount());
+  });
+
+  test(`${which} after a failed read says to pull down and does not claim there is no rule or no decisions`, async () => {
+    chain.mandateStatus = 'failed';
+    chain.loading = false;
+    chain.error = 'The RPC refused this read';
+    chain.mandate = null;
+    chain.mandates = [];
+    chain.rows = [];
+    const root = await tabText(which);
+    const text = textOf(root);
+    assert.match(text, /Could not reach the blockchain\. Pull down to try again\./);
+    assert.match(text, /Could not read/);
+    assert.doesNotMatch(text, /RPC/);
+    assert.doesNotMatch(text, UNPROVEN_CLAIM);
+    await act(async () => root.unmount());
+  });
+
+  test(`${which} after a successful read shows the rule and that one rule is live`, async () => {
+    const row = mandate();
+    chain.mandateStatus = 'present';
+    chain.loading = false;
+    chain.error = null;
+    chain.mandate = row;
+    chain.mandates = [row];
+    chain.rows = [];
+    const root = await tabText(which);
+    const text = textOf(root);
+    assert.match(text, /garage charger/);
+    assert.match(text, /1 rule live/);
+    assert.doesNotMatch(text, /Could not read/);
+    assert.doesNotMatch(text, /blockchain is busy/);
+    await act(async () => root.unmount());
+  });
+
+  test(`${which} draws the reading line below the header with the screen padding`, async () => {
+    chain.mandateStatus = 'not-read';
+    chain.loading = true;
+    chain.error = null;
+    chain.mandate = null;
+    chain.mandates = [];
+    const root = await tabText(which);
+    const lines = textLines(root);
+    const veto = lines.findIndex((line) => line.includes('Veto'));
+    const reading = lines.findIndex((line) => line.includes('Reading the chain.'));
+    assert.ok(veto >= 0, lines.join(' | '));
+    assert.ok(reading > veto, lines.join(' | '));
+    const readingNode = root.root.findAll((candidate) => (candidate.type as unknown) === 'Text').find((candidate) => {
+      const bits: string[] = [];
+      const walk = (child: unknown) => {
+        if (typeof child === 'string' || typeof child === 'number') {
+          bits.push(String(child));
+        } else if (Array.isArray(child)) {
+          for (const item of child) {
+            walk(item);
+          }
+        }
+      };
+      walk(candidate.props.children);
+      return bits.join('').includes('Reading the chain.');
+    });
+    assert.ok(readingNode);
+    assert.equal(hasScreenInset(readingNode), true);
+    await act(async () => root.unmount());
+  });
+}
+
 test('a rule page reads loading, a missing rule, a failed read, and the amounts still in it', async () => {
   const Screen = (await import('../app/rule/[address]')).default;
   const row = mandate();
   route.current = { address: row.address };
+  chain.loading = false;
   chain.mandateStatus = 'not-read';
   chain.mandate = null;
   chain.mandates = [];
@@ -472,8 +610,8 @@ test('a rule page reads loading, a missing rule, a failed read, and the amounts 
   chain.mandateStatus = 'failed';
   chain.error = 'This rule could not be read';
   root = await mount(createElement(Screen));
-  assert.match(textOf(root), /The chain read failed/);
-  assert.match(textOf(root), /Pull to retry/);
+  assert.match(textOf(root), /Could not reach the blockchain/);
+  assert.match(textOf(root), /Pull down to try again/);
   await act(async () => root.unmount());
 
   chain.mandateStatus = 'present';
