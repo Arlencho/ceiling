@@ -1,7 +1,15 @@
 {
   "name": "@veto-hq/agent-sdk",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
+  "description": "TypeScript client for one charge, for reading a mandate and its decisions, and for a Hold vault.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Arlencho/veto.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://github.com/Arlencho/veto",
   "type": "module",
   "engines": {
     "node": ">=22"
