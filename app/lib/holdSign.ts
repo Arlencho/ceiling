@@ -8,6 +8,7 @@ import {
   authorizeAccounts,
   configuredCluster,
   explainWalletFailure,
+  httpsWalletBase,
   loadSession,
   persistSession,
   type MwaWallet,
@@ -81,6 +82,15 @@ export async function exposedWalletAccounts(): Promise<string[]> {
   try {
     return await transact(async (wallet) => {
       const result = await authorizeAccounts(wallet, stored?.authToken, secureStore);
+      const account = result.accounts[0];
+      if (account) {
+        const walletUriBase = httpsWalletBase(result.wallet_uri_base);
+        await persistSession(secureStore, {
+          authToken: result.auth_token,
+          ownerPublicKey: publicKeyFromAccount(account).toBase58(),
+          ...(walletUriBase ? { walletUriBase } : {}),
+        });
+      }
       return result.accounts.map((account) => publicKeyFromAccount(account).toBase58());
     }, baseUri ? { baseUri } : undefined);
   } catch (err) {

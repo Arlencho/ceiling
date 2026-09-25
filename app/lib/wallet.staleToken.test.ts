@@ -236,13 +236,43 @@ test('Hold setup account list recovers from a stale token and stops after a decl
   const accounts = await holdSign.exposedWalletAccounts();
   assert.deepEqual(accounts, [owner.publicKey.toBase58()]);
   assert.equal(calls.length, 2);
-  assert.equal(JSON.parse(secure[SESSION_STORE_KEY] ?? '{}').authToken, '');
+  assert.equal(JSON.parse(secure[SESSION_STORE_KEY] ?? '{}').authToken, 'fresh-token');
 
   Object.assign(secure, storedSession(owner));
   const declined: AuthorizeParams[] = [];
   nativeWallet = scriptedWallet(owner, [STALE(), DECLINE(), 'ok'], declined).fake;
   await assert.rejects(holdSign.exposedWalletAccounts(), (err: Error) => err.message === WALLET_REJECTED_MESSAGE);
   assert.equal(declined.length, 2);
+});
+
+test('a stale-token retry in the account list stores the new token and the next Hold sends it', async () => {
+  const owner = Keypair.generate();
+  const holdSign = await loadHoldSign();
+  for (const key of Object.keys(secure)) delete secure[key];
+  Object.assign(secure, storedSession(owner));
+  const calls: AuthorizeParams[] = [];
+  const { fake } = scriptedWallet(owner, [STALE(), 'ok', 'ok'], calls);
+  nativeWallet = fake;
+  await holdSign.exposedWalletAccounts();
+  assert.equal(calls.length, 2);
+  assert.equal(JSON.parse(secure[SESSION_STORE_KEY] ?? '{}').authToken, 'fresh-token');
+
+  const payload = await holdSign.signHoldPartial(
+    async (callback) => callback(fake),
+    {
+      getItem: async (key: string) => secure[key] ?? null,
+      setItem: async (key: string, value: string) => {
+        secure[key] = value;
+      },
+      deleteItem: async (key: string) => {
+        delete secure[key];
+      },
+    },
+    sampleTx(owner),
+  );
+  assert.ok(payload.length > 0);
+  assert.equal(calls.length, 3);
+  assert.equal(calls[2]?.auth_token, 'fresh-token');
 });
 
 test('isStaleAuthTokenError checks elapsed time, wallet code and wording', () => {
