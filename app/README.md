@@ -267,15 +267,35 @@ Test on the Seekers. Seed Vault is not available on an emulator.
 
 ## Production APK
 
-Release APK, still Android only:
+A person builds the signed Android APK with the production EAS environment,
+then downloads it. From the repository root, run these two commands in order
+(replace the example APK path with the downloaded file):
 
 ```bash
-cd app
-npx eas-cli build --profile production --platform android
+(cd app && npx eas-cli build --profile production --platform android)
+./scripts/release-apk.sh /path/to/release.apk
 ```
 
-Install that APK the same way. A production build is not a dev client, so
-it does not talk to Metro.
+Put Android SDK `aapt2` or `apkanalyzer`, plus `apksigner`, on PATH. The
+inspection also needs Node.js, `unzip` and `sha256sum` or `shasum`. It writes
+`release-notes.md` beside the APK with the targetSdk, the full permission
+list, and the URL schemes, and records the checkout `HEAD` commit at inspection
+time (not proof of the build's source commit). It refuses a package that is
+not `com.veto.app`, a targetSdk below 36, any permission blocked in
+`app.json` (read at inspection time), a missing `veto` scheme or any `exp+`
+scheme, a bundle that names `mainnet-beta` or never names devnet, a failed
+signature, or a missing program id or devnet USDC mint. A failed check is
+not a release. Run the printed install command from the APK's directory.
+
+The RPC presence check recognizes common Solana RPC providers. For a custom
+host, supply `EXPO_PUBLIC_VETO_RPC` through the environment for an exact match.
+It never prints that value. A yes is not a connectivity check. An EAS sensitive
+variable inlined during the build remains extractable from the APK.
+
+Attach the inspected APK and its notes to the GitHub release, then walk the
+[device checklist](../docs/internal/DEVICE_CHECK.md) on a wiped Seeker using
+that release link. Keep the completed checklist as release evidence. A
+production build runs without Metro.
 
 ## Entry file
 

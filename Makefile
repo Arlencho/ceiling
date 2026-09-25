@@ -49,7 +49,8 @@ build-test: require-anchor ## Build the program for LiteSVM (SBPF v0)
 test: build-test ## Build and run the program test suite
 	cargo test --manifest-path programs/veto/Cargo.toml
 
-test-scripts: ## Run deploy-script checks that do not need a cluster
+test-scripts: ## Run script checks that do not need a cluster
+	./scripts/release-apk.test.sh
 	./scripts/devnet-setup.test.sh
 	./scripts/devnet-usdc.test.sh
 	./scripts/devnet-token-swap-pool.test.sh
