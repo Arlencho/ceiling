@@ -328,6 +328,22 @@ The wait uses the chain clock only. A stolen guardian key can move money only to
 
 `@veto-hq/agent-sdk` exports `HoldVault`. The package is published from this checkout by the maintainer. The watcher raises hold alerts when `VETO_HOLD_VAULTS` is set. The app has the Hold screens, and the phone raises the same alerts. Overview and Rules each open Hold. Details are in [app/README.md](app/README.md), [sdk/README.md](sdk/README.md), and [watcher/README.md](watcher/README.md).
 
+### If someone forces you
+
+What the program guarantees, from `programs/veto/src/hold.rs`:
+
+- An instant withdrawal only goes to a destination this vault has paid before. A new address never gets money instantly.
+- Anything else waits 1, 2, or 3 days on the chain clock, whichever delay the vault was set to.
+- No single key, including the owner's, can shorten a wait. Paying a held withdrawal early (`skip`) needs both the owner key and the guardian key. Loosening any rule waits out the current delay. `recover` only goes to the safe address chosen in advance.
+- The guardian is alerted and can stop a held withdrawal, or freeze the whole vault, with one tap.
+
+What it does not do:
+
+- It does not protect a person's physical safety.
+- Someone who holds the owner for longer than the delay, or who gets both keys, can still get the money.
+- A guardian on the same phone as the owner key is not a second factor. Keep the guardian on a second device kept somewhere else.
+- The vault's settings, including the safe address, are public on chain. Anyone can read them.
+
 ## The demo
 
 An agent pays a bill repriced by a public index, unattended, against an on-chain rule. The index
