@@ -10,6 +10,8 @@ import {
   fetchOwnerMandates,
   pickMandate,
 } from './chain';
+import { fetchOwnerTradeRules, fetchTradeLedgerRows } from './tradeChain';
+import { tradeRuleAsMandate } from './tradeRule';
 import {
   KIND_OVERRIDE,
   KIND_PAID,
@@ -229,6 +231,19 @@ export function decisionCopy(
   }
   const amount = formatTokenAmount(row.amount, decimals, mint);
   const when = decisionWhen(row.ts, nowMs);
+  if (row.kind === KIND_PAID && row.family === 'trade') {
+    const bought =
+      row.amountOut != null
+        ? formatTokenAmount(row.amountOut, row.outDecimals ?? decimals, row.outMint)
+        : null;
+    const line = bought
+      ? `Last traded ${amount} for ${bought}, ${when.phrase}`
+      : `Last traded ${amount}, ${when.phrase}`;
+    const short = bought
+      ? `Last: traded ${amount} for ${bought}, ${when.day}`
+      : `Last: traded ${amount}, ${when.day}`;
+    return { line, short };
+  }
   if (row.kind === KIND_PAID) {
     return {
       line: `Last paid ${amount}, ${when.phrase}`,
@@ -493,7 +508,20 @@ export async function loadWidgetBoard(nowMs: number): Promise<WidgetBoard> {
       isRateLimitError(err) ? WIDGET_RATE_LIMIT_COPY : WIDGET_ERROR_COPY,
     );
   }
-  if (mandates.length === 0) {
+  let tradeRules: Awaited<ReturnType<typeof fetchOwnerTradeRules>> = [];
+  try {
+    tradeRules = await fetchOwnerTradeRules(client, owner);
+  } catch (err) {
+    if (mandates.length === 0) {
+      return boardWithMessage(
+        nowMs,
+        'error',
+        isRateLimitError(err) ? WIDGET_RATE_LIMIT_COPY : WIDGET_ERROR_COPY,
+      );
+    }
+  }
+  const shown = [...mandates, ...tradeRules.map((rule) => tradeRuleAsMandate(rule))];
+  if (shown.length === 0) {
     return boardWithMessage(nowMs, 'empty', WIDGET_EMPTY_COPY);
   }
   const names = await loadAddressBook(secureStore);
@@ -511,9 +539,24 @@ export async function loadWidgetBoard(nowMs: number): Promise<WidgetBoard> {
       decimals.set(mandate.mint, loaded.config.mintDecimals);
     }
   }
+  for (const rule of tradeRules) {
+    try {
+      const ledger = await fetchTradeLedgerRows(client, rule);
+      ledgers.set(rule.address, { entries: ledger.rows });
+    } catch {
+      ledgers.set(rule.address, { error: true });
+    }
+    if (!decimals.has(rule.inMint)) {
+      try {
+        decimals.set(rule.inMint, await fetchMintDecimals(client, new PublicKey(rule.inMint)));
+      } catch {
+        decimals.set(rule.inMint, loaded.config.mintDecimals);
+      }
+    }
+  }
   return assembleWidgetBoard({
     nowMs,
-    mandates,
+    mandates: shown,
     selectedAddress,
     names,
     ledgers,

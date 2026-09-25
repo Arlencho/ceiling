@@ -12,12 +12,21 @@ import { barSplit, decisionWhen, refusalBody, whyRefused } from '../../component
 import { Screen } from '../../components/Screen';
 import { colors, fonts, radii } from '../../components/theme';
 import { KIND_ADVISORY_DECLINE } from '../../lib/advisory';
-import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, REASON_OVER_PER_TX_MAX } from '../../lib/constants';
+import {
+  KIND_OVERRIDE,
+  KIND_PAID,
+  KIND_REFUSED,
+  REASON_OUTPUT_ACCOUNT_NOT_ALLOWED,
+  REASON_OVER_PER_TX_MAX,
+  REASON_POOL_NOT_ALLOWED,
+} from '../../lib/constants';
 import { findLedgerDecision, parseDecisionId } from '../../lib/exportRecord';
 import { useOverrideGrant } from '../../lib/useOverrideGrant';
 import { explorerTxUrl, formatClock, formatUnix, isListedDecision } from '../../lib/format';
 import { formatTokenAmount } from '../../lib/tokens';
 import { mandateRemaining } from '../../lib/mandate';
+import { tradeDecisionDetail, tradeDecisionTitle } from '../../lib/tradeCopy';
+import { tradeRuleAsMandate } from '../../lib/tradeRule';
 import { mayClaimAbsence } from '../../lib/mandateRead';
 import { paidDecisionBody } from '../../lib/notify';
 import { nonceSequence, overrideRowView, sequenceLine } from '../../lib/override';
@@ -34,12 +43,19 @@ export default function DecisionDetailScreen() {
   const rpcUrl = chain.config?.rpcUrl ?? '';
   const cluster = chain.config?.explorerCluster ?? 'devnet';
   const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
-  const row = findLedgerDecision(chain.rows, parsed, chain.mandate?.address);
+  const loadedAddress = chain.mandate?.address ?? chain.tradeRule?.address ?? null;
+  const row = findLedgerDecision(chain.rows, parsed, loadedAddress);
+  const trade =
+    parsed != null
+      ? (chain.tradeRules ?? []).find((item) => item.address === parsed.mandate) ??
+        (chain.tradeRule?.address === parsed.mandate ? chain.tradeRule : null)
+      : chain.tradeRule;
   const mandate =
     parsed != null
       ? chain.mandates.find((item) => item.address === parsed.mandate) ??
-        (chain.mandate?.address === parsed.mandate ? chain.mandate : null)
-      : chain.mandate;
+        (chain.mandate?.address === parsed.mandate ? chain.mandate : null) ??
+        (trade ? tradeRuleAsMandate(trade) : null)
+      : chain.mandate ?? (trade ? tradeRuleAsMandate(trade) : null);
   const grant = useOverrideGrant({
     row,
     mandate,
@@ -53,10 +69,10 @@ export default function DecisionDetailScreen() {
   }, [chain]);
 
   const wantedMandate = parsed?.mandate ?? null;
-  const loadedAddress = chain.mandate?.address ?? null;
   const { loading, mandateStatus, mandates, selectMandate } = chain;
   const wantedIsLoaded = wantedMandate
-    ? mandates.some((item) => item.address === wantedMandate)
+    ? mandates.some((item) => item.address === wantedMandate) ||
+      (chain.tradeRules ?? []).some((item) => item.address === wantedMandate)
     : false;
   const switching =
     wantedMandate != null &&
@@ -89,7 +105,7 @@ export default function DecisionDetailScreen() {
 
   const seq = row && row.kind !== KIND_ADVISORY_DECLINE ? nonceSequence(chain.rows, row.nonce) : null;
   const seqText = seq ? sequenceLine(seq, chain.decimals, mandate?.mint) : null;
-  const overrideView = row && row.kind === KIND_OVERRIDE ? overrideRowView(row, chain.decimals) : null;
+  const overrideView = row && row.kind === KIND_OVERRIDE ? overrideRowView(row, chain.decimals, mandate?.mint) : null;
   const when = row ? decisionWhen(row.ts, chain.nowMs) : '';
   const payee = payeeLabel(mandate?.merchant);
   // A charge writes the destination token account as counterparty. The payee is the rule wallet.
@@ -147,18 +163,43 @@ export default function DecisionDetailScreen() {
             ) : (
               <Rise delayMs={80}>
                 <View style={styles.stack}>
-                  <StatusPill label="Paid" tone="paid" when={when} />
-                  <Text style={styles.headline}>Paid {formatTokenAmount(row.amount, chain.decimals, mandate?.mint)}.</Text>
+                  <StatusPill label={row.family === 'trade' ? 'Traded' : 'Paid'} tone="paid" when={when} />
+                  <Text style={styles.headline}>
+                    {row.family === 'trade'
+                      ? `${tradeDecisionTitle({
+                          kind: row.kind,
+                          amountIn: row.amount,
+                          amountOut: row.amountOut ?? 0n,
+                          inDecimals: chain.decimals,
+                          outDecimals: row.outDecimals ?? chain.decimals,
+                          inMint: mandate?.mint,
+                          outMint: row.outMint,
+                          reason: row.reason,
+                          counterparty: row.counterparty,
+                          perTradeMax: mandate?.perTxMax,
+                        })}.`
+                      : `Paid ${formatTokenAmount(row.amount, chain.decimals, mandate?.mint)}.`}
+                  </Text>
                   <Text style={styles.body}>
-                    {mandate
-                      ? paidDecisionBody({
-                          amount: row.amount,
-                          decimals: chain.decimals,
-                          perTxMax: mandate.perTxMax,
-                          merchant: mandate.merchant,
-                          mint: mandate.mint,
+                    {row.family === 'trade' && mandate
+                      ? tradeDecisionDetail({
+                          amountIn: row.amount,
+                          amountOut: row.amountOut,
+                          inDecimals: chain.decimals,
+                          outDecimals: row.outDecimals ?? chain.decimals,
+                          inMint: mandate.mint,
+                          outMint: row.outMint,
+                          perTradeMax: mandate.perTxMax,
                         })
-                      : `${formatTokenAmount(row.amount, chain.decimals, undefined)}. The payee for this rule is the rule.`}
+                      : mandate
+                        ? paidDecisionBody({
+                            amount: row.amount,
+                            decimals: chain.decimals,
+                            perTxMax: mandate.perTxMax,
+                            merchant: mandate.merchant,
+                            mint: mandate.mint,
+                          })
+                        : `${formatTokenAmount(row.amount, chain.decimals, undefined)}. The payee for this rule is the rule.`}
                   </Text>
                 </View>
               </Rise>
@@ -273,6 +314,7 @@ function RefusedBody({
           reason: row.reason,
           suggestedOverride: row.suggestedOverride,
           mint,
+          unit: row.family === 'trade' ? 'trade' : 'payment',
         })}
       </Text>
       <View style={styles.compare}>
@@ -282,13 +324,24 @@ function RefusedBody({
             <Text style={[styles.figure, { color: colors.refused }]}>{asked}</Text>
           </View>
           <View style={styles.compareColEnd}>
-            <Text style={styles.kicker}>Your limit per payment</Text>
+            <Text style={styles.kicker}>{row.family === 'trade' ? 'Your limit per trade' : 'Your limit per payment'}</Text>
             <Text style={[styles.figure, { color: colors.brass }]}>{limit ?? 'on the rule'}</Text>
           </View>
         </View>
         {split ? <LimitTrack allowedPct={split.allowedPct} overPct={split.overPct} /> : null}
         <View style={styles.grid}>
-          <Fact label="To payee" value={payee} />
+          <Fact
+            label={row.family === 'trade'
+              ? (row.reason === REASON_OUTPUT_ACCOUNT_NOT_ALLOWED || row.reason === REASON_POOL_NOT_ALLOWED
+                ? 'Tried account' : 'Output account')
+              : 'To payee'}
+            value={
+              row.family === 'trade' &&
+              (row.reason === REASON_OUTPUT_ACCOUNT_NOT_ALLOWED || row.reason === REASON_POOL_NOT_ALLOWED)
+                ? truncateAddress(row.counterparty)
+                : payee
+            }
+          />
           <Fact label="Money moved" value={formatTokenAmount(0n, decimals, mint)} />
           <Fact
             label="Why it was refused"
@@ -297,6 +350,7 @@ function RefusedBody({
               decimals,
               perTxMax,
               mint,
+              unit: row.family === 'trade' ? 'trade' : 'payment',
               fallback: reason.text,
             })}
           />

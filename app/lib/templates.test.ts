@@ -54,10 +54,16 @@ test('charge the car matches the live demo rule', () => {
   assert.equal(templateById('buying-compute')?.fields.cap, '40');
 });
 
-test('trading bot is not a starting point', () => {
-  assert.equal(templateById('trading-bot'), undefined);
-  assert.equal(
-    TEMPLATES.some((row) => row.id === 'trading-bot' || row.title === 'Trading bot'),
-    false,
-  );
+test('trading bot is a trade starting point', () => {
+  const found = templateById('trading-bot');
+  assert.ok(found);
+  assert.equal(found.kind, 'trade');
+  assert.equal(found.title, 'Trading bot');
+  assert.equal(found.fields.poolId, 'devnet-sol-usdc');
+  assert.equal(found.fields.perTxMax, '0.01');
+  assert.equal(found.fields.dailyLimit, '0.05');
+  assert.equal(found.fields.cap, '0.20');
+  assert.equal(found.fields.floorPercent, '90');
+  assert.equal(found.fields.expiryDays, '7');
+  assert.equal(found.fields.merchant, '');
 });

@@ -406,7 +406,7 @@ export const signatureWatch = {
     }),
 };
 
-async function confirmSignature(
+export async function confirmSignature(
   client: ChainClient,
   signature: string,
   blockhash: string,
@@ -1159,4 +1159,48 @@ export async function listSignatures(
 
 export async function fetchGenesisHash(client: ChainClient): Promise<string> {
   return client.connection.getGenesisHash();
+}
+
+/** Confirmed decisions on an account, used for a trade ledger as well as a payment ledger. */
+export async function decisionsForAddress(
+  client: ChainClient,
+  address: PublicKey,
+): Promise<DecodedTxDecision[]> {
+  let signatures: ConfirmedSignatureInfo[];
+  try {
+    signatures = await listSignatures(client, address, 4);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to list ledger signatures: ${detail}`);
+  }
+  const ok = signatures.filter((info) => !info.err);
+  const cache = signaturesForLedger(address.toBase58());
+  const decodedByIndex: DecodedTxDecision[][] = ok.map(() => []);
+  const missing: number[] = [];
+  for (let i = 0; i < ok.length; i += 1) {
+    const info = ok[i];
+    const hit = info ? cache.get(info.signature) : undefined;
+    if (hit) {
+      decodedByIndex[i] = hit;
+    } else {
+      missing.push(i);
+    }
+  }
+  await mapLimited(missing, ledgerBodyFetch.concurrency, async (index) => {
+    const info = ok[index];
+    if (!info) {
+      return;
+    }
+    try {
+      const decisions = await loadDecoded(client, info);
+      if (!decisions) {
+        return;
+      }
+      cache.set(info.signature, decisions);
+      decodedByIndex[index] = decisions;
+    } catch {
+      // A missing body leaves the row without a signature. The next read tries again.
+    }
+  });
+  return decodedByIndex.flat();
 }

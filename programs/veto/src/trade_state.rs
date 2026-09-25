@@ -10,8 +10,16 @@ use crate::state::PURPOSE_MAX_LEN;
 /// Decisions kept on the trade ledger. Older ones fall out of the ring.
 pub const TRADE_LEDGER_CAPACITY: usize = 32;
 
-/// Fixed window, same length Hold uses for its daily total.
+/// Every rolling interval of this length must stay within the daily limit.
 pub const TRADE_WINDOW_SECS: i64 = 24 * 60 * 60;
+pub const TRADE_BUCKET_SECS: i64 = 60 * 60;
+pub const TRADE_BUCKET_COUNT: usize = 25;
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
+pub struct TradeBucket {
+    pub hour: i64,
+    pub amount: u64,
+}
 
 /// `exchange_kind` for the SPL token-swap program at `SPL_TOKEN_SWAP_ID`.
 pub const EXCHANGE_KIND_SPL_TOKEN_SWAP: u8 = 0;
@@ -30,7 +38,7 @@ pub const TRADE_KIND_REVOKED: u8 = 4;
 pub const REASON_DESTINATION_NOT_ALLOWED: u8 = 11;
 /// The agent named a pool account other than the one pinned at open.
 pub const REASON_POOL_NOT_ALLOWED: u8 = 12;
-/// The trade would push the current 24 hour window over `daily_limit`.
+/// The trade would push the conservative rolling daily total over `daily_limit`.
 pub const REASON_OVER_DAILY: u8 = 13;
 /// The spot quote is already under the price floor.
 pub const REASON_BELOW_FLOOR: u8 = 14;
@@ -68,10 +76,11 @@ pub struct TradeRule {
     pub spent: u64,
     /// Largest single trade allowed, in base units, before a one-shot override.
     pub per_trade_max: u64,
-    /// Most input that may be sold in the current 24 hour window.
+    /// Most input that may be sold in any rolling 24 hour interval.
     pub daily_limit: u64,
-    pub window_spent: u64,
-    pub window_start: i64,
+    /// Current hour plus the preceding 24 hours. This retains a partial oldest
+    /// hour conservatively, so allowance may take up to 25 hours to recover.
+    pub daily_buckets: [TradeBucket; TRADE_BUCKET_COUNT],
     /// Minimum output per unit of input, as `floor_num / floor_den`.
     pub floor_num: u64,
     pub floor_den: u64,

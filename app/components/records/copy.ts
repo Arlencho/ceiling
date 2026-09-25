@@ -5,6 +5,7 @@ import { formatTokenAmount } from '../../lib/tokens';
 import { overrideRowView } from '../../lib/override';
 import { refusalWhyLine } from '../../lib/reasons';
 import type { LedgerRow } from '../../lib/ring';
+import { tradeDecisionTitle } from '../../lib/tradeCopy';
 import { payeeLabel } from '../../lib/wallet';
 
 export type RowTone = 'paid' | 'refused' | 'allowed' | 'advisory';
@@ -144,6 +145,32 @@ export function decisionFace(
       when,
       chainLink: chain.chainLink,
     };
+  } else if (row.kind === KIND_REFUSED && row.family === 'trade') {
+    const chain = chainCopy(
+      row.signature ? 'No money moved. Reason saved on the blockchain.' : 'No money moved.',
+      row.signature,
+    );
+    const outDecimals = row.outDecimals ?? decimals;
+    face = {
+      tone: 'refused',
+      badge: null,
+      title: tradeDecisionTitle({
+        kind: row.kind,
+        amountIn: row.amount,
+        amountOut: row.amountOut ?? 0n,
+        inDecimals: decimals,
+        outDecimals,
+        inMint: mint,
+        outMint: row.outMint,
+        reason: row.reason,
+        counterparty: row.counterparty,
+        perTradeMax: perTxMax,
+      }),
+      detail: chain.detail,
+      figure: formatTokenAmount(0n, decimals, mint),
+      when,
+      chainLink: chain.chainLink,
+    };
   } else if (row.kind === KIND_REFUSED) {
     const chain = chainCopy(
       row.signature ? 'No money moved. Reason saved on the blockchain.' : 'No money moved.',
@@ -174,6 +201,32 @@ export function decisionFace(
       title: `Allowed once: this payment of ${view.amount}`,
       detail: chain.detail,
       figure: view.amount,
+      when,
+      chainLink: chain.chainLink,
+    };
+  } else if (row.kind === KIND_PAID && row.family === 'trade') {
+    const outDecimals = row.outDecimals ?? decimals;
+    const title = tradeDecisionTitle({
+      kind: row.kind,
+      amountIn: row.amount,
+      amountOut: row.amountOut ?? 0n,
+      inDecimals: decimals,
+      outDecimals,
+      inMint: mint,
+      outMint: row.outMint,
+      reason: row.reason,
+      counterparty: row.counterparty,
+      perTradeMax: perTxMax,
+    });
+    const limit = perTxMax != null ? formatTokenAmount(perTxMax, decimals, mint) : null;
+    const inside = limit != null ? `Inside your limit of ${limit} per trade.` : 'Inside the rule.';
+    const chain = chainCopy(inside, row.signature);
+    face = {
+      tone: 'paid',
+      badge: null,
+      title,
+      detail: chain.detail,
+      figure: `-${formatTokenAmount(row.amount, decimals, mint)}`,
       when,
       chainLink: chain.chainLink,
     };
@@ -221,11 +274,14 @@ export function refusalBody(args: {
   reason: number;
   suggestedOverride: bigint;
   mint?: string | null;
+  unit?: 'payment' | 'trade';
 }): string {
   if (args.reason === REASON_OVER_PER_TX_MAX && args.perTxMax != null) {
     const asked = formatTokenAmount(args.amount, args.decimals, args.mint);
     const limit = formatTokenAmount(args.perTxMax, args.decimals, args.mint);
-    return `Your agent asked to pay ${asked}. Your rule allows ${limit} per payment, so the program refused.`;
+    const verb = args.unit === 'trade' ? 'trade' : 'pay';
+    const noun = args.unit === 'trade' ? 'trade' : 'payment';
+    return `Your agent asked to ${verb} ${asked}. Your rule allows ${limit} per ${noun}, so the program refused.`;
   }
   return refusalWhyLine({
     reason: args.reason,
@@ -234,6 +290,7 @@ export function refusalBody(args: {
     decimals: args.decimals,
     perTxMax: args.perTxMax,
     mint: args.mint,
+    unit: args.unit,
   });
 }
 
@@ -243,9 +300,11 @@ export function whyRefused(args: {
   perTxMax?: bigint;
   fallback: string;
   mint?: string | null;
+  unit?: 'payment' | 'trade';
 }): string {
   if (args.reason === REASON_OVER_PER_TX_MAX && args.perTxMax != null) {
-    return `Over your per-payment limit of ${formatTokenAmount(args.perTxMax, args.decimals, args.mint)}`;
+    const noun = args.unit === 'trade' ? 'per-trade' : 'per-payment';
+    return `Over your ${noun} limit of ${formatTokenAmount(args.perTxMax, args.decimals, args.mint)}`;
   }
   return args.fallback.replace(/\.$/, '');
 }

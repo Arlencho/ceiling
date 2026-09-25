@@ -4,12 +4,16 @@ export type MandateFields = {
   expiryDays: string;
   merchant: string;
   purpose: string;
+  dailyLimit?: string;
+  floorPercent?: string;
+  poolId?: string;
 };
 
 export type MandateTemplate = {
   id: string;
   title: string;
   summary: string;
+  kind?: 'payment' | 'trade';
   fields: MandateFields;
 };
 
@@ -96,6 +100,22 @@ export const TEMPLATES: MandateTemplate[] = [
       purpose: 'charge the car under a price',
     },
   },
+  {
+    id: 'trading-bot',
+    kind: 'trade',
+    title: 'Trading bot',
+    summary: 'Starting limits for one pool. Choosing this does not place a trade.',
+    fields: {
+      cap: '0.20',
+      perTxMax: '0.01',
+      dailyLimit: '0.05',
+      floorPercent: '90',
+      expiryDays: '7',
+      poolId: 'devnet-sol-usdc',
+      merchant: '',
+      purpose: 'trading bot',
+    },
+  },
 ];
 
 export function templateById(id: string): MandateTemplate | undefined {
@@ -109,7 +129,14 @@ export function applyTemplate(template: MandateTemplate): MandateFields {
     expiryDays: template.fields.expiryDays,
     merchant: template.fields.merchant,
     purpose: template.fields.purpose,
+    dailyLimit: template.fields.dailyLimit,
+    floorPercent: template.fields.floorPercent,
+    poolId: template.fields.poolId,
   };
+}
+
+export function isTradeTemplate(template: MandateTemplate | undefined): boolean {
+  return template?.kind === 'trade';
 }
 
 export function assertTemplateIsEmptyStart(template: MandateTemplate): void {
