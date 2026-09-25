@@ -6,24 +6,27 @@ import {
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
-import type { AgentConfig } from "./config.js";
+import { isTradeAgentConfig, type AgentConfig, type TradeAgentConfig } from "./config.js";
 import {
   advisoryMemoInstruction,
   advisoryMemoText,
   type PurposeCheck,
   type PurposeCheckContext,
 } from "./advisory.js";
-import { decisionsFromTx, viewFromRpc, type RpcTransaction } from "./events.js";
-import { CHARGE_DISCRIMINATOR, PROGRAM_ID } from "./idl.js";
+import { decisionsFromTx, tradeDecisionsFromTx, viewFromRpc, type RpcTransaction } from "./events.js";
+import { CHARGE_DISCRIMINATOR, PROGRAM_ID, TRADE_DISCRIMINATOR } from "./idl.js";
 import {
+  TRADE_WINDOW_SECS,
   asU64,
   decodeMandate,
   ledgerPda,
   mandatePda,
   toPublicKey,
+  tradeLedgerPda,
   type MandateAccount,
+  type TradeRuleAccount,
 } from "./layout.js";
-import { fetchMandate } from "./read.js";
+import { fetchMandate, fetchTradeRule } from "./read.js";
 
 /** Twenty charges at the 5000 lamport base fee. status() warns under this. */
 export const BASE_FEE_LAMPORTS = 5_000n;
@@ -49,6 +52,39 @@ export type ChargeResult = {
   suggestedOverride: bigint;
   signature: string;
   slot: number;
+};
+
+export type TradeArgs = {
+  amountIn: bigint | number;
+  minOut: bigint | number;
+  nonce: bigint | number;
+};
+
+export type TradeResult = {
+  kind: "traded" | "refused";
+  amountIn: bigint;
+  amountOut: bigint;
+  reasonCode: number;
+  reasonText: string;
+  suggestedOverride: bigint;
+  signature: string;
+  slot: number;
+};
+
+export type TradeStatus = {
+  cap: bigint;
+  spent: bigint;
+  remaining: bigint;
+  perTradeMax: bigint;
+  dailyLimit: bigint;
+  remainingToday: bigint;
+  floor: { num: bigint; den: bigint };
+  expiresAt: bigint;
+  status: number;
+  overrideAmount: bigint;
+  overrideNonce: bigint;
+  lastNonce: bigint;
+  destination: string;
 };
 
 /** The agent declined before submit. This is not a program refusal. */
@@ -90,6 +126,8 @@ export type VetoAgentArgs = {
   mandate?: PublicKey | string;
   owner?: PublicKey | string;
   mandateId?: bigint | number;
+  /** Trade rule account. Payment methods are not available when this is the only binding. */
+  rule?: PublicKey | string;
   programId?: PublicKey | string;
   /**
    * Optional check run by chargeWithPurposeCheck. charge() does not call it.
@@ -117,9 +155,18 @@ const MINT_DECIMALS_OFFSET = 44;
 export class VetoAgent {
   readonly connection: Connection;
   readonly agent: Keypair;
-  readonly mandate: PublicKey;
+  readonly tradeRule: PublicKey | undefined;
   readonly programId: PublicKey;
+  private readonly paymentMandate: PublicKey | undefined;
   private readonly purposeCheck: PurposeCheck | undefined;
+
+  /** The payment mandate. A trade-only agent has none. */
+  get mandate(): PublicKey {
+    if (!this.paymentMandate) {
+      throw new Error("VetoAgent.mandate: this agent is bound to a trade rule");
+    }
+    return this.paymentMandate;
+  }
 
   constructor(args: VetoAgentArgs) {
     if (!(args.agent instanceof Keypair)) {
@@ -128,7 +175,13 @@ export class VetoAgent {
     this.connection = args.connection;
     this.agent = args.agent;
     this.programId = args.programId ? toPublicKey(args.programId, "VetoAgent programId") : PROGRAM_ID;
-    this.mandate = resolveMandate(args, this.programId);
+    const hasPayment = args.mandate !== undefined || args.owner !== undefined || args.mandateId !== undefined;
+    const hasRule = args.rule !== undefined;
+    if (!hasPayment && !hasRule) {
+      throw new Error("VetoAgent: pass a mandate address, or an owner and a mandate id");
+    }
+    this.paymentMandate = hasPayment ? resolveMandate(args, this.programId) : undefined;
+    this.tradeRule = args.rule !== undefined ? toPublicKey(args.rule, "VetoAgent rule") : undefined;
     this.purposeCheck = args.purposeCheck;
   }
 
@@ -141,13 +194,16 @@ export class VetoAgent {
    * The mint account, owned by the source token program, must show config.mintDecimals.
    */
   static async fromConfig(
-    config: AgentConfig,
+    config: AgentConfig | TradeAgentConfig,
     agentKeypair: Keypair,
     connection?: Connection,
     options?: FromConfigOptions,
   ): Promise<VetoAgent> {
     if (!(agentKeypair instanceof Keypair)) {
       throw new Error("VetoAgent.fromConfig: agent must be a Keypair");
+    }
+    if (isTradeAgentConfig(config)) {
+      throw new Error("VetoAgent.fromConfig: this block is a trade rule. Use fromTradeConfig.");
     }
     if (config.agent !== agentKeypair.publicKey.toBase58()) {
       throw new Error(
@@ -276,6 +332,123 @@ export class VetoAgent {
       connection,
       agent: agentKeypair,
       mandate: mandateKey,
+      programId,
+    });
+  }
+
+  /**
+   * Builds an agent from a trade-rule block.
+   * Checks the program id, the agent, both mints and their decimals, the source,
+   * the pinned destination, and the cluster against the chain.
+   */
+  static async fromTradeConfig(
+    config: TradeAgentConfig,
+    agentKeypair: Keypair,
+    connection?: Connection,
+    options?: FromConfigOptions,
+  ): Promise<VetoAgent> {
+    if (!(agentKeypair instanceof Keypair)) {
+      throw new Error("VetoAgent.fromTradeConfig: agent must be a Keypair");
+    }
+    if (config.agent !== agentKeypair.publicKey.toBase58()) {
+      throw new Error(
+        `VetoAgent.fromTradeConfig: config agent ${config.agent} does not equal the agent key ${agentKeypair.publicKey.toBase58()}`,
+      );
+    }
+    const programId = pinnedProgramId(options);
+    const blockProgram = toPublicKey(config.programId, "VetoAgent.fromTradeConfig config programId");
+    if (!blockProgram.equals(programId)) {
+      throw new Error(
+        `VetoAgent.fromTradeConfig: config program ${blockProgram.toBase58()} does not equal the Veto program ${programId.toBase58()}`,
+      );
+    }
+    const rpc = connection ?? new Connection(config.rpcUrl, "confirmed");
+    await assertCluster(rpc, config.cluster, "VetoAgent.fromTradeConfig");
+    const ruleKey = toPublicKey(config.rule, "VetoAgent.fromTradeConfig rule");
+    let rule: TradeRuleAccount;
+    try {
+      rule = await fetchTradeRule(rpc, ruleKey, programId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("is not owned by the Veto program")) {
+        throw new Error(
+          `VetoAgent.fromTradeConfig: rule ${config.rule} is not owned by program ${programId.toBase58()}`,
+          { cause: err },
+        );
+      }
+      throw new Error(`VetoAgent.fromTradeConfig: ${message}`, { cause: err });
+    }
+    if (!rule.agent.equals(agentKeypair.publicKey)) {
+      throw new Error(
+        `VetoAgent.fromTradeConfig: rule agent ${rule.agent.toBase58()} does not equal the agent key ${agentKeypair.publicKey.toBase58()}`,
+      );
+    }
+    if (!rule.inMint.equals(new PublicKey(config.inMint))) {
+      throw new Error(
+        `VetoAgent.fromTradeConfig: in mint ${rule.inMint.toBase58()} does not equal the config in mint ${config.inMint}`,
+      );
+    }
+    if (!rule.outMint.equals(new PublicKey(config.outMint))) {
+      throw new Error(
+        `VetoAgent.fromTradeConfig: out mint ${rule.outMint.toBase58()} does not equal the config out mint ${config.outMint}`,
+      );
+    }
+    if (!rule.source.equals(new PublicKey(config.sourceTokenAccount))) {
+      throw new Error(
+        `VetoAgent.fromTradeConfig: source token account ${rule.source.toBase58()} does not equal the config source ${config.sourceTokenAccount}`,
+      );
+    }
+    if (!rule.destination.equals(new PublicKey(config.destinationTokenAccount))) {
+      throw new Error(
+        `VetoAgent.fromTradeConfig: destination token account ${rule.destination.toBase58()} does not equal the config destination ${config.destinationTokenAccount}`,
+      );
+    }
+    const sourceInfo = await rpc.getAccountInfo(rule.source, "confirmed");
+    if (!sourceInfo) {
+      throw new Error(`VetoAgent.fromTradeConfig: source token account ${rule.source.toBase58()} not found`);
+    }
+    await assertMintDecimals(
+      rpc,
+      rule.inMint,
+      sourceInfo.owner,
+      config.inMintDecimals,
+      "VetoAgent.fromTradeConfig",
+      "in mint",
+      "inMintDecimals",
+      "source token program",
+    );
+    const destinationInfo = await rpc.getAccountInfo(rule.destination, "confirmed");
+    if (!destinationInfo) {
+      throw new Error(
+        `VetoAgent.fromTradeConfig: destination token account ${rule.destination.toBase58()} not found`,
+      );
+    }
+    const destinationData = destinationInfo.data;
+    if (!(destinationData instanceof Uint8Array) || destinationData.length < 32) {
+      throw new Error(
+        `VetoAgent.fromTradeConfig: destination token account ${rule.destination.toBase58()} is too short to read its mint`,
+      );
+    }
+    const destinationMint = new PublicKey(destinationData.subarray(0, 32));
+    if (!destinationMint.equals(rule.outMint)) {
+      throw new Error(
+        `VetoAgent.fromTradeConfig: destination mint ${destinationMint.toBase58()} does not equal the out mint ${rule.outMint.toBase58()}`,
+      );
+    }
+    await assertMintDecimals(
+      rpc,
+      rule.outMint,
+      destinationInfo.owner,
+      config.outMintDecimals,
+      "VetoAgent.fromTradeConfig",
+      "out mint",
+      "outMintDecimals",
+      "destination token program",
+    );
+    return new VetoAgent({
+      connection: rpc,
+      agent: agentKeypair,
+      rule: ruleKey,
       programId,
     });
   }
@@ -515,6 +688,133 @@ export class VetoAgent {
     }
     return signature;
   }
+
+  /**
+   * Submits trade and reads the one Veto trade decision in that transaction.
+   * Every account except the token program comes from the rule account.
+   * The caller cannot name a pool, a vault, or a destination.
+   */
+  async trade(args: TradeArgs): Promise<TradeResult> {
+    const amountIn = asU64(args.amountIn, "VetoAgent.trade amountIn");
+    const minOut = asU64(args.minOut, "VetoAgent.trade minOut");
+    const nonce = asU64(args.nonce, "VetoAgent.trade nonce");
+    const ruleKey = this.requireTradeRule("VetoAgent.trade");
+    const rule = await this.loadTradeRule("VetoAgent.trade");
+    if (!rule.agent.equals(this.agent.publicKey)) {
+      throw new Error("VetoAgent.trade: signer is not the agent named in the rule");
+    }
+    const data = Buffer.alloc(32);
+    TRADE_DISCRIMINATOR.copy(data, 0);
+    data.writeBigUInt64LE(amountIn, 8);
+    data.writeBigUInt64LE(minOut, 16);
+    data.writeBigUInt64LE(nonce, 24);
+    const ix = new TransactionInstruction({
+      programId: this.programId,
+      keys: [
+        { pubkey: this.agent.publicKey, isSigner: true, isWritable: false },
+        { pubkey: ruleKey, isSigner: false, isWritable: true },
+        { pubkey: tradeLedgerPda(this.programId, ruleKey), isSigner: false, isWritable: true },
+        { pubkey: rule.source, isSigner: false, isWritable: true },
+        { pubkey: rule.destination, isSigner: false, isWritable: true },
+        { pubkey: rule.exchangeProgram, isSigner: false, isWritable: false },
+        { pubkey: rule.pool, isSigner: false, isWritable: false },
+        { pubkey: rule.poolAuthority, isSigner: false, isWritable: false },
+        { pubkey: rule.poolInVault, isSigner: false, isWritable: true },
+        { pubkey: rule.poolOutVault, isSigner: false, isWritable: true },
+        { pubkey: rule.poolMint, isSigner: false, isWritable: true },
+        { pubkey: rule.poolFeeAccount, isSigner: false, isWritable: true },
+        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      ],
+      data,
+    });
+    const signature = await this.submit(ix, "VetoAgent.trade");
+    const tx = await confirmedTransaction(this.connection, signature);
+    if (!tx || typeof tx.slot !== "number") {
+      throw new Error(`VetoAgent.trade: transaction ${signature} carries no attributable Veto trade decision`);
+    }
+    const view = viewFromRpc(tx, { signature, slot: tx.slot });
+    const matches = tradeDecisionsFromTx(view, this.programId.toBase58(), ruleKey.toBase58()).filter(
+      (decision) => decision.amountIn === amountIn && decision.nonce === nonce,
+    );
+    if (matches.length !== 1) {
+      const detail =
+        matches.length === 0
+          ? "no attributable Veto trade decision"
+          : `${matches.length} Veto trade decisions for nonce ${nonce.toString()}`;
+      throw new Error(`VetoAgent.trade: transaction ${signature} carries ${detail}`);
+    }
+    const decision = matches[0];
+    if (!decision || (decision.kind !== "traded" && decision.kind !== "refused")) {
+      throw new Error(`VetoAgent.trade: transaction ${signature} carries no attributable Veto trade decision`);
+    }
+    return {
+      kind: decision.kind,
+      amountIn: decision.amountIn,
+      amountOut: decision.amountOut,
+      reasonCode: decision.reason,
+      reasonText: decision.reasonText,
+      suggestedOverride: decision.suggestedOverride,
+      signature,
+      slot: view.slot,
+    };
+  }
+
+  /**
+   * Nonce for the next trade.
+   * A pending override is override_nonce above last_nonce, and that is the nonce
+   * the retry must use. Otherwise this is last_nonce plus one.
+   * A refused trade does not advance last_nonce.
+   */
+  async nextTradeNonce(): Promise<bigint> {
+    const rule = await this.loadTradeRule("VetoAgent.nextTradeNonce");
+    if (rule.overrideNonce > rule.lastNonce) {
+      return rule.overrideNonce;
+    }
+    if (rule.lastNonce >= U64_MAX) {
+      throw new Error("VetoAgent.nextTradeNonce: last_nonce is the maximum u64");
+    }
+    return rule.lastNonce + 1n;
+  }
+
+  /** What the rule still allows. A finished 24 hour window counts as unused. */
+  async tradeStatus(): Promise<TradeStatus> {
+    const rule = await this.loadTradeRule("VetoAgent.tradeStatus");
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const windowEnd = rule.windowStart + BigInt(TRADE_WINDOW_SECS);
+    const spentToday = now >= windowEnd ? 0n : rule.windowSpent;
+    return {
+      cap: rule.cap,
+      spent: rule.spent,
+      remaining: rule.cap > rule.spent ? rule.cap - rule.spent : 0n,
+      perTradeMax: rule.perTradeMax,
+      dailyLimit: rule.dailyLimit,
+      remainingToday: rule.dailyLimit > spentToday ? rule.dailyLimit - spentToday : 0n,
+      floor: { num: rule.floorNum, den: rule.floorDen },
+      expiresAt: rule.expiresAt,
+      status: rule.status,
+      overrideAmount: rule.overrideAmount,
+      overrideNonce: rule.overrideNonce,
+      lastNonce: rule.lastNonce,
+      destination: rule.destination.toBase58(),
+    };
+  }
+
+  private requireTradeRule(label: string): PublicKey {
+    if (!this.tradeRule) {
+      throw new Error(`${label}: this agent has no trade rule`);
+    }
+    return this.tradeRule;
+  }
+
+  private async loadTradeRule(label: string): Promise<TradeRuleAccount> {
+    const address = this.requireTradeRule(label);
+    try {
+      return await fetchTradeRule(this.connection, address, this.programId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`${label}: ${message}`, { cause: err });
+    }
+  }
 }
 
 export function feeWarning(lamports: bigint): string | null {
@@ -527,11 +827,11 @@ function pinnedProgramId(options: FromConfigOptions | undefined): PublicKey {
   return toPublicKey(options.programId, "VetoAgent.fromConfig programId");
 }
 
-async function assertCluster(connection: Connection, cluster: string): Promise<void> {
+async function assertCluster(connection: Connection, cluster: string, label = "VetoAgent.fromConfig"): Promise<void> {
   const expected = CLUSTER_GENESIS[cluster];
   if (expected === undefined) {
     throw new Error(
-      `VetoAgent.fromConfig: cluster ${JSON.stringify(cluster)} must be devnet, testnet, or mainnet-beta`,
+      `${label}: cluster ${JSON.stringify(cluster)} must be devnet, testnet, or mainnet-beta`,
     );
   }
   let genesis: string;
@@ -540,13 +840,13 @@ async function assertCluster(connection: Connection, cluster: string): Promise<v
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new Error(
-      `VetoAgent.fromConfig: cluster ${JSON.stringify(cluster)} genesis hash could not be read: ${JSON.stringify(message)}`,
+      `${label}: cluster ${JSON.stringify(cluster)} genesis hash could not be read: ${JSON.stringify(message)}`,
       { cause: err },
     );
   }
   if (genesis !== expected) {
     throw new Error(
-      `VetoAgent.fromConfig: cluster ${JSON.stringify(cluster)} does not match genesis hash ${JSON.stringify(genesis)}`,
+      `${label}: cluster ${JSON.stringify(cluster)} does not match genesis hash ${JSON.stringify(genesis)}`,
     );
   }
 }
@@ -631,24 +931,28 @@ async function assertMintDecimals(
   mint: PublicKey,
   tokenProgram: PublicKey,
   decimals: number,
+  label = "VetoAgent.fromConfig",
+  accountNoun = "mint",
+  decimalsField = "mintDecimals",
+  tokenProgramNoun = "source token program",
 ): Promise<void> {
   const info = await connection.getAccountInfo(mint, "confirmed");
   if (!info) {
-    throw new Error(`VetoAgent.fromConfig: mint account ${mint.toBase58()} not found`);
+    throw new Error(`${label}: ${accountNoun} account ${mint.toBase58()} not found`);
   }
   if (!info.owner.equals(tokenProgram)) {
     throw new Error(
-      `VetoAgent.fromConfig: mint account ${mint.toBase58()} is not owned by the source token program ${tokenProgram.toBase58()}`,
+      `${label}: ${accountNoun} account ${mint.toBase58()} is not owned by the ${tokenProgramNoun} ${tokenProgram.toBase58()}`,
     );
   }
   const data = info.data;
   if (!(data instanceof Uint8Array) || data.length < MINT_DECIMALS_OFFSET + 1) {
-    throw new Error(`VetoAgent.fromConfig: mint account ${mint.toBase58()} is too short to read decimals`);
+    throw new Error(`${label}: ${accountNoun} account ${mint.toBase58()} is too short to read decimals`);
   }
   const onChain = data[MINT_DECIMALS_OFFSET];
   if (onChain !== decimals) {
     throw new Error(
-      `VetoAgent.fromConfig: mint decimals ${String(onChain)} do not equal config mintDecimals ${String(decimals)}`,
+      `${label}: ${accountNoun} decimals ${String(onChain)} do not equal config ${decimalsField} ${String(decimals)}`,
     );
   }
 }
