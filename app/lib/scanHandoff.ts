@@ -1,16 +1,33 @@
 export type AddressScanTarget = 'agent' | 'payee';
 
-let pending: { target: AddressScanTarget; value: string } | null = null;
+type Pending =
+  | { kind: 'field'; target: AddressScanTarget; value: string }
+  | { kind: 'write'; agent: string };
+
+let pending: Pending | null = null;
 
 export function stageAddressScan(target: AddressScanTarget, value: string): void {
-  pending = { target, value };
+  pending = { kind: 'field', target, value };
 }
 
 export function takeAddressScan(target: AddressScanTarget): string | null {
-  if (!pending || pending.target !== target) {
+  if (!pending || pending.kind !== 'field' || pending.target !== target) {
     return null;
   }
   const value = pending.value;
   pending = null;
   return value;
+}
+
+export function stageWriteRule(agent: string): void {
+  pending = { kind: 'write', agent };
+}
+
+export function takeWriteRule(): string | null {
+  if (!pending || pending.kind !== 'write') {
+    return null;
+  }
+  const agent = pending.agent;
+  pending = null;
+  return agent;
 }

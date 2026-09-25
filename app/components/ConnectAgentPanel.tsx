@@ -35,6 +35,9 @@ export function ConnectAgentPanel({
               </Text>
             </View>
           ))}
+          <Text style={styles.body}>
+            If your agent runs the Veto companion, it finds this rule by itself. This setup text is for developers.
+          </Text>
           <Button
             label="Copy setup text"
             accessibilityLabel="Copy setup text"

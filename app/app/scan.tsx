@@ -11,7 +11,7 @@ import { RuleScreen } from '../components/RuleScreen';
 import { TopBar } from '../components/TopBar';
 import { colors, fonts, radii, space } from '../components/theme';
 import { readScannedText, ruleRequestHref } from '../lib/ruleRequest';
-import { stageAddressScan, type AddressScanTarget } from '../lib/scanHandoff';
+import { stageAddressScan, stageWriteRule, type AddressScanTarget } from '../lib/scanHandoff';
 import { useWallet } from '../lib/useWallet';
 
 export default function ScanScreen() {
@@ -111,7 +111,12 @@ export default function ScanScreen() {
                   return;
                 }
               }
-              if (target !== 'request' && read.kind === 'address') {
+              if (read.kind === 'address') {
+                if (target === 'request') {
+                  stageWriteRule(read.address);
+                  router.replace('/rule/new' as Href);
+                  return;
+                }
                 stageAddressScan(target, read.address);
                 router.back();
                 return;

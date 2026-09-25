@@ -31,7 +31,7 @@ import { secureStore } from '../lib/mwa';
 import { evaluatePresign, type PresignObservation } from '../lib/presign';
 import { observePresign } from '../lib/presignRead';
 import { canonicalAddress, type RuleRequestV1 } from '../lib/ruleRequest';
-import { takeAddressScan } from '../lib/scanHandoff';
+import { takeAddressScan, takeWriteRule } from '../lib/scanHandoff';
 import { BUILD_YOUR_OWN_IDS, templateById, type MandateTemplate } from '../lib/templates';
 import { useChain } from '../lib/useChain';
 import { useWallet } from '../lib/useWallet';
@@ -113,6 +113,7 @@ function ApprovalCard({
   const initialTemplate = templateById(templateId) ?? templateById('charging-agent');
   const [template, setTemplate] = useState<MandateTemplate | null>(initialTemplate ?? null);
   const [agentText, setAgentText] = useState(request?.agent ?? initialAgent ?? '');
+  const [selfWrite, setSelfWrite] = useState(false);
   const [holdReset, setHoldReset] = useState(0);
   const [payeeText, setPayeeText] = useState(request?.payee ?? '');
   const [purpose, setPurpose] = useState(request?.purpose ?? initialTemplate?.fields.purpose ?? '');
@@ -151,6 +152,11 @@ function ApprovalCard({
     useCallback(() => {
       if (request) {
         return;
+      }
+      const written = takeWriteRule();
+      if (written) {
+        setAgentText(written);
+        setSelfWrite(true);
       }
       const agent = takeAddressScan('agent');
       if (agent) {
@@ -476,7 +482,9 @@ function ApprovalCard({
       )}
       <ConnectGate>
         <Text style={styles.kicker}>New rule to approve</Text>
-        <Text style={styles.h2}>{template?.title ?? (request ? 'Approve this request' : 'Build a rule')}</Text>
+        <Text style={styles.h2}>
+          {selfWrite ? 'Write the rule yourself' : (template?.title ?? (request ? 'Approve this request' : 'Build a rule'))}
+        </Text>
         <Text style={styles.body}>
           {agentParty.shortAddress
             ? `Your agent, ${agentParty.shortAddress}, asks you for this rule`
