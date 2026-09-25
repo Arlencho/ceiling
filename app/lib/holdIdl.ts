@@ -1,27 +1,14 @@
 import { Buffer } from 'buffer';
 
-import idl from '../../sdk/idl/veto.json';
-
-type Named = { name: string; discriminator: number[] };
-
-function disc(list: readonly Named[], name: string): Buffer {
-  const found = list.find((item) => item.name === name);
-  if (!found) {
-    throw new Error(`The program description has no ${name} instruction.`);
-  }
-  return Buffer.from(found.discriminator);
-}
-
-const instructions = idl.instructions as Named[];
-const accounts = idl.accounts as Named[];
-
-export const INIT_VAULT_DISC = disc(instructions, 'init_vault');
-export const DEPOSIT_DISC = disc(instructions, 'deposit');
-export const WITHDRAW_DISC = disc(instructions, 'withdraw');
-export const STOP_DISC = disc(instructions, 'stop');
-export const FREEZE_DISC = disc(instructions, 'freeze');
-export const UNFREEZE_DISC = disc(instructions, 'unfreeze');
-export const SKIP_DISC = disc(instructions, 'skip');
-export const RECOVER_DISC = disc(instructions, 'recover');
-export const HOLD_VAULT_DISC = disc(accounts, 'HoldVault');
-export const HOLD_LEDGER_DISC = disc(accounts, 'HoldLedger');
+// Eight-byte markers for the Hold instructions and accounts.
+// The parity test checks them against the vault client.
+export const INIT_VAULT_DISC = Buffer.from([77, 79, 85, 150, 33, 217, 52, 106]);
+export const DEPOSIT_DISC = Buffer.from([242, 35, 198, 137, 82, 225, 242, 182]);
+export const WITHDRAW_DISC = Buffer.from([183, 18, 70, 156, 148, 109, 161, 34]);
+export const STOP_DISC = Buffer.from([42, 133, 32, 60, 171, 253, 184, 155]);
+export const FREEZE_DISC = Buffer.from([255, 91, 207, 84, 251, 194, 254, 63]);
+export const UNFREEZE_DISC = Buffer.from([133, 160, 68, 253, 80, 232, 218, 247]);
+export const SKIP_DISC = Buffer.from([154, 63, 181, 53, 19, 26, 117, 45]);
+export const RECOVER_DISC = Buffer.from([108, 216, 38, 58, 109, 146, 116, 17]);
+export const HOLD_VAULT_DISC = Buffer.from([225, 219, 122, 198, 245, 163, 91, 55]);
+export const HOLD_LEDGER_DISC = Buffer.from([195, 103, 143, 50, 70, 255, 84, 161]);
