@@ -23,6 +23,7 @@ import {
   writeU64Le,
 } from './constants';
 import type { MandateAccount } from './mandate';
+import { signatureNotYetVisibleMessage } from './wallet';
 
 mock.module('expo-constants', { defaultExport: { expoConfig: { extra: {} } } });
 const chainModule = import('./chain');
@@ -107,7 +108,56 @@ function mandateFromOpen(tx: Transaction, programId: PublicKey): MandateAccount 
   };
 }
 
-type StatusBranch = 'clean' | 'failed' | 'missing';
+type StatusName = 'missing' | 'processed' | 'confirmed' | 'failed';
+type StatusBranch = 'clean' | 'failed' | 'absent' | StatusName[];
+
+type SignatureWatch = {
+  pollMs: number;
+  windowMs: number;
+  now: () => number;
+  sleep: (ms: number) => Promise<void>;
+};
+
+function statusRow(name: StatusName): { err: unknown; confirmationStatus: string } | null {
+  if (name === 'missing') {
+    return null;
+  }
+  if (name === 'failed') {
+    return { err: { InstructionError: [0, 'Custom'] }, confirmationStatus: 'confirmed' };
+  }
+  if (name === 'processed') {
+    return { err: null, confirmationStatus: 'processed' };
+  }
+  return { err: null, confirmationStatus: 'finalized' };
+}
+
+function stubClock(watch: SignatureWatch | undefined): { sleeps: number[]; restore: () => void } {
+  if (!watch) {
+    return { sleeps: [], restore() {} };
+  }
+  const saved = {
+    pollMs: watch.pollMs,
+    windowMs: watch.windowMs,
+    now: watch.now,
+    sleep: watch.sleep,
+  };
+  let now = 0;
+  const sleeps: number[] = [];
+  watch.now = () => now;
+  watch.sleep = async (ms: number) => {
+    sleeps.push(ms);
+    now += ms;
+  };
+  return {
+    sleeps,
+    restore() {
+      watch.pollMs = saved.pollMs;
+      watch.windowMs = saved.windowMs;
+      watch.now = saved.now;
+      watch.sleep = saved.sleep;
+    },
+  };
+}
 
 function openConnection(args: {
   programId: PublicKey;
@@ -119,6 +169,14 @@ function openConnection(args: {
   const ata = getAssociatedTokenAddressSync(args.mint, args.owner, false, TOKEN_PROGRAM_ID);
   let landed: MandateAccount | null = null;
   const lookedUp: { signature: string; history: boolean }[] = [];
+  const script: StatusName[] | null = Array.isArray(args.branch)
+    ? args.branch
+    : args.branch === 'clean'
+      ? ['confirmed']
+      : args.branch === 'failed'
+        ? ['failed']
+        : null;
+  let step = 0;
   const connection = {
     getAccountInfo: async (address: PublicKey) => {
       if (address.equals(args.mint)) {
@@ -161,13 +219,9 @@ function openConnection(args: {
       if (config?.searchTransactionHistory !== true || signatures.length !== 1 || signatures[0] !== SIG) {
         throw new Error('status lookup must be getSignatureStatuses([signature], { searchTransactionHistory: true })');
       }
-      if (args.branch === 'missing') {
-        return { value: [null] };
-      }
-      if (args.branch === 'failed') {
-        return { value: [{ err: { InstructionError: [0, 'Custom'] }, confirmationStatus: 'confirmed' }] };
-      }
-      return { value: [{ err: null, confirmationStatus: 'finalized' }] };
+      const name = script == null ? 'missing' : script[Math.min(step, script.length - 1)]!;
+      step += 1;
+      return { value: [statusRow(name)] };
     },
   };
   return {
@@ -240,11 +294,55 @@ test('a confirmation timeout reports the landed error when the signature is on c
   });
 });
 
-test('a block-height expiry says the transaction did not land and nothing moved when the signature is absent', async () => {
-  const { run } = await open('missing', 'blockheight');
-  await assert.rejects(run, (err: unknown) => {
-    assert.ok(err instanceof Error);
-    assert.equal(err.message, `transaction ${SIG} did not land and nothing moved`);
-    return true;
-  });
+test('a signature that lands later in the ninety second window is read back as the opened rule', async () => {
+  const { signatureWatch } = (await chainModule) as { signatureWatch?: SignatureWatch };
+  const clock = stubClock(signatureWatch);
+  try {
+    const { run, lookedUp } = await open(['missing', 'missing', 'confirmed'], 'blockheight');
+    const result = await run;
+    assert.equal(result.signature, SIG);
+    assert.equal(result.mandate.purpose, 'night charging');
+    assert.equal(result.mandate.cap, 200n);
+    assert.deepEqual(clock.sleeps, [2_000, 2_000]);
+    assert.equal(lookedUp.length, 3);
+    assert.ok(lookedUp.every((row) => row.history));
+  } finally {
+    clock.restore();
+  }
+});
+
+test('a signature seen as processed is polled again until it is confirmed', async () => {
+  const { signatureWatch } = (await chainModule) as { signatureWatch?: SignatureWatch };
+  const clock = stubClock(signatureWatch);
+  try {
+    const { run, lookedUp } = await open(['processed', 'processed', 'confirmed'], 'timeout');
+    const result = await run;
+    assert.equal(result.signature, SIG);
+    assert.equal(result.mandate.purpose, 'night charging');
+    assert.deepEqual(clock.sleeps, [2_000, 2_000]);
+    assert.equal(lookedUp.length, 3);
+  } finally {
+    clock.restore();
+  }
+});
+
+test('a signature still absent when the ninety second window ends says it has not appeared and may still land', async () => {
+  const { signatureWatch } = (await chainModule) as { signatureWatch?: SignatureWatch };
+  const clock = stubClock(signatureWatch);
+  try {
+    const { run, lookedUp } = await open('absent', 'blockheight');
+    await assert.rejects(run, (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.equal(err.message, signatureNotYetVisibleMessage('devnet'));
+      assert.equal(err.message.includes('nothing moved'), false);
+      return true;
+    });
+    assert.ok(lookedUp.length > 1, `status was read ${lookedUp.length} time(s)`);
+    assert.ok(clock.sleeps.length > 0 && clock.sleeps.every((ms) => ms === 2_000));
+    const waited = clock.sleeps.reduce((sum, ms) => sum + ms, 0);
+    assert.ok(waited >= 88_000 && waited <= 90_000, `waited ${waited} ms`);
+    assert.ok(lookedUp.every((row) => row.history));
+  } finally {
+    clock.restore();
+  }
 });

@@ -1,8 +1,11 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
-import * as Notifications from 'expo-notifications';
 
-import { scanDecisionsIfAllowed } from './decisionNotifyTask';
+// Loaded when the offer reads or asks. A static import pulls the Expo runtime
+// into tests that render Home and never ask for notification permission.
+async function loadNotifications() {
+  return import('expo-notifications');
+}
 
 export function useNotificationOffer(ruleExists: boolean): {
   show: boolean;
@@ -16,11 +19,13 @@ export function useNotificationOffer(ruleExists: boolean): {
         return;
       }
       let cancelled = false;
-      void Notifications.getPermissionsAsync().then((current) => {
-        if (!cancelled) {
-          setGranted(current.granted === true);
-        }
-      });
+      void loadNotifications().then((Notifications) =>
+        Notifications.getPermissionsAsync().then((current) => {
+          if (!cancelled) {
+            setGranted(current.granted === true);
+          }
+        }),
+      );
       return () => {
         cancelled = true;
       };
@@ -28,11 +33,13 @@ export function useNotificationOffer(ruleExists: boolean): {
   );
 
   const turnOn = useCallback(async () => {
+    const Notifications = await loadNotifications();
     const next = await Notifications.requestPermissionsAsync();
     const ok = next.granted === true;
     setGranted(ok);
     if (ok) {
-      await scanDecisionsIfAllowed();
+      const task = await import('./decisionNotifyTask');
+      await task.scanDecisionsIfAllowed();
     }
   }, []);
 

@@ -32,6 +32,7 @@ import {
 import type { MandateAccount } from './mandate';
 import type { LedgerRow } from './ring';
 import { ledgerPda } from './ring';
+import { signatureNotYetVisibleMessage } from './wallet';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -71,7 +72,13 @@ let api: {
   close: () => Promise<unknown>;
   revoke: () => Promise<unknown>;
   grantOverride: (address: string, row: LedgerRow) => Promise<unknown>;
+  refresh: () => Promise<void>;
 } | null = null;
+let signCalls = 0;
+let signatureRow: { err: null; confirmationStatus: string } | null = {
+  err: null,
+  confirmationStatus: 'finalized',
+};
 
 type Mode = 'overview' | 'rules' | 'decisions' | 'new' | 'rule';
 let mode: Mode = 'overview';
@@ -222,6 +229,7 @@ mock.module('./useWallet', {
       connect: async () => undefined,
       disconnect: async () => undefined,
       signAndSend: async (txs: Transaction[]) => {
+        signCalls += 1;
         afterSign(txs);
         return [SIG];
       },
@@ -457,7 +465,7 @@ const connection = {
     if (config?.searchTransactionHistory !== true || signatures[0] !== SIG) {
       throw new Error('status lookup must search transaction history for the sent signature');
     }
-    return { value: [{ err: null, confirmationStatus: 'finalized' }] };
+    return { value: [signatureRow] };
   },
 };
 
@@ -508,6 +516,8 @@ function reset(): void {
   permissionGranted = false;
   alreadyAsked = false;
   askCalls = 0;
+  signCalls = 0;
+  signatureRow = { err: null, confirmationStatus: 'finalized' };
   held = [];
   ledgerEntry = null;
   afterSign = () => undefined;
@@ -808,6 +818,52 @@ test.describe('landed open', { concurrency: 1 }, () => {
       assert.equal(after.includes('Turn notifications on'), false);
       assert.match(after, /garage charger/);
     } finally {
+      root.unmount();
+    }
+  });
+
+  test('after the signature is still absent, Open this rule stays disabled until the rules list is refreshed', async () => {
+    await loadApp();
+    reset();
+    signatureRow = null;
+    const chain = await import('./chain');
+    const watch = (chain as { signatureWatch?: { windowMs: number } }).signatureWatch;
+    const savedWindow = watch?.windowMs;
+    if (watch) {
+      watch.windowMs = 0;
+    }
+    const root = await show('new');
+    try {
+      await settle(root, () => labelsOf(root).includes('Open this rule') && api?.config != null);
+      const payee = root.root
+        .findAll((node) => isHost(node, 'TextInput'))
+        .find((node) => node.props.accessibilityLabel === 'Payee');
+      assert.ok(payee, 'payee field missing');
+      await act(async () => {
+        payee.props.onChangeText(MERCHANT.toBase58());
+      });
+      await act(async () => {
+        button(root, 'Open this rule').props.onPress();
+      });
+      const absent = signatureNotYetVisibleMessage('devnet');
+      const text = await settle(root, (value) => value.includes(absent));
+      assert.equal(text.includes('nothing moved'), false);
+      assert.equal(button(root, 'Open this rule').props.disabled, true);
+      const signed = signCalls;
+      await act(async () => {
+        button(root, 'Open this rule').props.onPress();
+        await new Promise((resolve) => setImmediate(resolve));
+      });
+      assert.equal(signCalls, signed);
+      await act(async () => {
+        await api!.refresh();
+      });
+      await settle(root, () => button(root, 'Open this rule').props.disabled !== true);
+      assert.equal(button(root, 'Open this rule').props.disabled, false);
+    } finally {
+      if (watch && savedWindow != null) {
+        watch.windowMs = savedWindow;
+      }
       root.unmount();
     }
   });

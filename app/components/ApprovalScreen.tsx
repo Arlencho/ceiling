@@ -321,7 +321,15 @@ function ApprovalCard({
   };
 
   const onApprove = async () => {
-    if (openingRef.current || openedAddress || !ready || cap == null || maxPay == null || expiresAt == null) {
+    if (
+      openingRef.current ||
+      openedAddress ||
+      chain.submitHeld ||
+      !ready ||
+      cap == null ||
+      maxPay == null ||
+      expiresAt == null
+    ) {
       return;
     }
     openingRef.current = true;
@@ -361,7 +369,7 @@ function ApprovalCard({
           label={wallet.busy ? 'Waiting on Seed Vault...' : 'Approve with Seed Vault'}
           accessibilityLabel="Approve with Seed Vault"
           busy={wallet.busy}
-          disabled={!ready}
+          disabled={!ready || chain.submitHeld}
           onPress={() => {
             void onApprove();
           }}

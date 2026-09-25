@@ -270,6 +270,9 @@ export default function RuleDetailScreen() {
   };
 
   const onClose = async () => {
+    if (chain.submitHeld) {
+      return;
+    }
     setFormError(null);
     setMessage(null);
     setClosing(true);
@@ -288,6 +291,9 @@ export default function RuleDetailScreen() {
   };
 
   const onRevoke = async () => {
+    if (chain.submitHeld) {
+      return;
+    }
     setFormError(null);
     setMessage(null);
     try {
@@ -458,6 +464,7 @@ export default function RuleDetailScreen() {
                   quiet
                   invert={false}
                   busy={chain.loading}
+                  disabled={chain.submitHeld}
                   onPress={() => {
                     void onRevoke();
                   }}
@@ -483,6 +490,7 @@ export default function RuleDetailScreen() {
                   quiet
                   invert={false}
                   busy={closing || chain.loading}
+                  disabled={chain.submitHeld}
                   onPress={() => {
                     void onClose();
                   }}

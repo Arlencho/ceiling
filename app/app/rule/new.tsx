@@ -201,7 +201,7 @@ function RuleCompose({
   };
 
   const onOpen = async () => {
-    if (openingRef.current || openedAddress) {
+    if (openingRef.current || openedAddress || chain.submitHeld) {
       return;
     }
     openingRef.current = true;
@@ -264,6 +264,7 @@ function RuleCompose({
           label={wallet.busy ? 'Waiting on Seed Vault...' : 'Apply to a new agent'}
           accessibilityLabel="Apply to a new agent"
           busy={wallet.busy}
+          disabled={chain.submitHeld}
           onPress={() => {
             void onOpen();
           }}
@@ -283,6 +284,7 @@ function RuleCompose({
             label={wallet.busy ? 'Waiting on Seed Vault...' : 'Open this rule'}
             accessibilityLabel="Open this rule"
             busy={wallet.busy}
+            disabled={chain.submitHeld}
             onPress={() => {
               void onOpen();
             }}
