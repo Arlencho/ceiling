@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Turn on alerts</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+button,a{font-family:inherit;}
+button:focus-visible,a:focus-visible{outline:2px solid #C9A24D;outline-offset:3px;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes stripLamp{0%,100%{box-shadow:0 0 0 4px rgba(227,199,126,0.14),0 0 6px rgba(227,199,126,0.5);}50%{box-shadow:0 0 0 4px rgba(227,199,126,0.22),0 0 14px rgba(227,199,126,0.95);}}
+@keyframes bellSwing{0%,100%{transform:rotate(0deg);}10%{transform:rotate(-14deg);}25%{transform:rotate(12deg);}40%{transform:rotate(-8deg);}55%{transform:rotate(5deg);}70%{transform:rotate(-2deg);}80%{transform:rotate(0deg);}}
+@keyframes ringOut{0%{transform:scale(0.55);opacity:0.9;}100%{transform:scale(1.6);opacity:0;}}
+@keyframes discIn{0%{transform:scale(0.6);opacity:0;}60%{transform:scale(1.06);opacity:1;}100%{transform:scale(1);opacity:1;}}
+@keyframes bannerIn{from{opacity:0;transform:translateY(-18px);}to{opacity:1;transform:translateY(0);}}
+@keyframes lampPing{0%{transform:scale(1);opacity:0.7;}100%{transform:scale(3);opacity:0;}}
+@keyframes sheen{0%{background-position:0% 50%;}100%{background-position:200% 50%;}}
+.rise{animation:rise 0.7s cubic-bezier(0.22,1,0.36,1) both;}
+.rise-1{animation-delay:0.05s;}
+.rise-2{animation-delay:0.18s;}
+.rise-3{animation-delay:0.30s;}
+.rise-4{animation-delay:1.00s;}
+.rise-5{animation-delay:1.15s;}
+.strip-lamp{animation:stripLamp 3s ease-in-out infinite;}
+.bell{transform-origin:50% 8%;animation:bellSwing 2.6s cubic-bezier(0.22,1,0.36,1) 1.0s both;}
+.ring{transform-origin:center;animation:ringOut 1.8s cubic-bezier(0.22,1,0.36,1) both;}
+.ring-1{animation-delay:1.0s;}
+.ring-2{animation-delay:1.35s;}
+.disc{animation:discIn 0.7s cubic-bezier(0.34,1.4,0.64,1) 0.4s both;}
+.banner{animation:bannerIn 0.7s cubic-bezier(0.22,1,0.36,1) 1.4s both;}
+.banner-back{animation:bannerIn 0.7s cubic-bezier(0.22,1,0.36,1) 1.3s both;}
+.ping{transform-origin:center;animation:lampPing 2.4s ease-out 2s infinite;}
+.cta-sheen{background-image:linear-gradient(110deg,#C9A24D 0%,#C9A24D 40%,#E3C77E 50%,#C9A24D 60%,#C9A24D 100%);background-size:200% 100%;animation:sheen 3.2s ease-in-out 2.4s infinite;}
+@media (prefers-reduced-motion: reduce){
+  .rise,.strip-lamp,.bell,.ring,.disc,.banner,.banner-back,.ping,.cta-sheen{animation:none;}
+  .ring{opacity:0;}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div style="position: absolute; top: -140px; left: 50%; width: 460px; height: 460px; margin-left: -230px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.16) 0%, rgba(201,162,77,0.04) 45%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div class="rise rise-1" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 24px 0 24px; position: relative;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <svg width="20" height="20" viewBox="0 0 100 100" aria-hidden="true"><path d="M16 14L50 80L84 14" fill="none" stroke="#C9A24D" stroke-width="9" stroke-linecap="butt" stroke-linejoin="miter"></path><circle cx="50" cy="37.4" r="12" fill="#E3C77E" stroke="#7E5E14" stroke-width="2"></circle></svg>
+      <span style="font-family: 'Fraunces', serif; font-size: 20px; font-weight: 500; letter-spacing: 0.02em;">Veto</span>
+    </div>
+    <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #C9A24D; border: 1px solid rgba(201,162,77,0.5); border-radius: 999px; padding: 3px 8px;">Devnet</span>
+  </div>
+
+  <ol class="rise rise-2" aria-label="First run, step 5 of 5: Live" style="list-style: none; margin: 14px 24px 0 24px; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); position: relative;">
+    <span aria-hidden="true" style="position: absolute; top: 7px; left: 10%; right: 10%; height: 2px; background: rgba(201,162,77,0.22);"></span>
+    <span aria-hidden="true" style="position: absolute; top: 7px; left: 10%; width: 80%; height: 2px; background: #C9A24D;"></span>
+    <li style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; position: relative;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: #C9A24D; box-sizing: border-box;">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>
+      </span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; color: #D3CCBB;">Learn</span>
+    </li>
+    <li style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; position: relative;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: #C9A24D; box-sizing: border-box;">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>
+      </span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; color: #D3CCBB;">Connect wallet</span>
+    </li>
+    <li style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; position: relative;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: #C9A24D; box-sizing: border-box;">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>
+      </span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; color: #D3CCBB;">Add your agent</span>
+    </li>
+    <li style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; position: relative;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: #C9A24D; box-sizing: border-box;">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>
+      </span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; color: #D3CCBB;">Approve the rule</span>
+    </li>
+    <li aria-current="step" style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; position: relative;">
+      <span class="strip-lamp" style="display: block; width: 16px; height: 16px; border-radius: 50%; background: #E3C77E; box-sizing: border-box;"></span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; color: #E3C77E;">Live</span>
+    </li>
+  </ol>
+
+  <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 24px; position: relative; gap: 18px;">
+
+    <div class="rise rise-3" style="display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;">
+      <div style="position: relative; width: 112px; height: 112px;">
+        <svg width="112" height="112" viewBox="0 0 112 112" fill="none" aria-hidden="true" style="position: absolute; top: 0; left: 0; overflow: visible;">
+          <circle class="ring ring-1" cx="56" cy="56" r="50" stroke="#E3C77E" stroke-width="1.5"></circle>
+          <circle class="ring ring-2" cx="56" cy="56" r="50" stroke="#C9A24D" stroke-width="1.5"></circle>
+        </svg>
+        <div class="disc" style="position: absolute; inset: 8px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #E3C77E 0%, #C9A24D 45%, #7E5E14 100%); box-shadow: 0 8px 24px rgba(201,162,77,0.35); display: flex; align-items: center; justify-content: center;">
+          <svg class="bell" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"></path><path d="M10 20a2 2 0 0 0 4 0"></path><path d="M12 3v2"></path></svg>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <p style="margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: #C9A24D;">Turn on alerts</p>
+        <h1 style="margin: 0; font-family: 'Fraunces', serif; font-weight: 400; font-size: 34px; line-height: 1.08; letter-spacing: -0.01em; color: #EDE6D6;">Know the moment it happens.</h1>
+        <p style="margin: 0; font-size: 15px; line-height: 1.5; color: #D3CCBB;">Your phone tells you each time your agent is paid or refused. You never have to go and check.</p>
+      </div>
+    </div>
+
+    <div style="position: relative; padding-top: 10px;">
+      <div class="banner-back" aria-hidden="true" style="position: absolute; top: 0; left: 14px; right: 14px; height: 40px; border-radius: 18px; background: #16231E; border: 1px solid rgba(237,230,214,0.10);"></div>
+      <div class="banner" role="img" aria-label="Example notice: Refused: your agent asked for 14, the limit is 10. No money moved." style="position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-radius: 18px; background: linear-gradient(180deg, #1C2C25 0%, #16231E 100%); border: 1px solid rgba(201,162,77,0.45); box-shadow: 0 14px 34px rgba(0,0,0,0.35);">
+        <span style="position: relative; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: #0F1A16; border: 1px solid rgba(201,162,77,0.55); flex-shrink: 0;">
+          <svg width="20" height="20" viewBox="0 0 100 100" aria-hidden="true"><path d="M16 14L50 80L84 14" fill="none" stroke="#C9A24D" stroke-width="9" stroke-linecap="butt" stroke-linejoin="miter"></path><circle cx="50" cy="37.4" r="12" fill="#E3C77E" stroke="#7E5E14" stroke-width="2"></circle></svg>
+          <span class="ping" aria-hidden="true" style="position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #E4A48E; top: -3px; right: -3px;"></span>
+          <span aria-hidden="true" style="position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #E4A48E; top: -3px; right: -3px;"></span>
+        </span>
+        <span style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0;">
+          <span style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px;">
+            <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #93A097;">Veto</span>
+            <span style="font-size: 11px; color: #93A097;">now</span>
+          </span>
+          <span style="font-size: 14px; font-weight: 700; color: #EDE6D6; line-height: 1.3;">Refused: your agent asked for 14, the limit is 10.</span>
+          <span style="font-size: 13px; color: #D3CCBB; line-height: 1.35;">No money moved.</span>
+        </span>
+      </div>
+      <p style="margin: 10px 0 0 0; text-align: center; font-size: 12px; color: #93A097;">Example of what an alert looks like</p>
+    </div>
+
+  </div>
+
+  <div class="rise rise-4" style="display: flex; flex-direction: column; gap: 6px; padding: 0 24px 30px 24px; position: relative;">
+    <button type="button" class="cta-sheen" style="height: 56px; border: 0; border-radius: 16px; background-color: #C9A24D; color: #0F1A16; font-size: 17px; font-weight: 700; letter-spacing: 0.01em; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 10px 30px rgba(201,162,77,0.22);">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"></path><path d="M10 20a2 2 0 0 0 4 0"></path></svg>
+      <span>Turn on alerts</span>
+    </button>
+    <button type="button" style="height: 48px; border: 0; border-radius: 14px; background: transparent; color: #93A097; font-size: 15px; font-weight: 600; cursor: pointer;">Not now</button>
+    <p class="rise rise-5" style="margin: 0; display: flex; align-items: center; justify-content: center; height: 28px; text-align: center; font-size: 12px; color: #93A097;">Alerts only tell you what happened. They never move money.</p>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Overview</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+button,a{font-family:inherit;}
+button:focus-visible,a:focus-visible{outline:2px solid #C9A24D;outline-offset:3px;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes reveal{from{transform:scaleX(1);}to{transform:scaleX(0);}}
+@keyframes reelIn{from{transform:translateY(56px);}to{transform:translateY(0);}}
+@keyframes dayRing{from{stroke-dashoffset:163.4;}to{stroke-dashoffset:152.5;}}
+@keyframes liveLamp{0%,100%{box-shadow:0 0 4px rgba(156,201,168,0.5);}50%{box-shadow:0 0 10px rgba(156,201,168,0.95);}}
+@keyframes reelGlow{0%,100%{box-shadow:inset 0 1px 0 rgba(237,230,214,0.08),0 2px 0 rgba(0,0,0,0.45),0 0 0 rgba(201,162,77,0);}50%{box-shadow:inset 0 1px 0 rgba(237,230,214,0.08),0 2px 0 rgba(0,0,0,0.45),0 0 14px rgba(201,162,77,0.45);}}
+@keyframes rowIn{from{opacity:0;transform:translateX(-8px);}to{opacity:1;transform:translateX(0);}}
+@keyframes dotPing{0%{transform:scale(1);opacity:0.7;}100%{transform:scale(3);opacity:0;}}
+.rise{animation:rise 0.7s cubic-bezier(0.22,1,0.36,1) both;}
+.rise-1{animation-delay:0.05s;}
+.rise-2{animation-delay:0.18s;}
+.rise-3{animation-delay:0.34s;}
+.rise-4{animation-delay:0.48s;}
+.rise-5{animation-delay:0.62s;}
+.rise-6{animation-delay:0.76s;}
+.cover{transform-origin:right center;animation:reveal 1.3s cubic-bezier(0.65,0,0.35,1) 0.6s both;}
+.reel-in{display:block;animation:reelIn 0.6s cubic-bezier(0.34,1.4,0.64,1) both;}
+.reel-in-1{animation-delay:0.75s;}
+.reel-in-2{animation-delay:0.85s;}
+.reel-in-3{animation-delay:0.95s;}
+.day-ring{stroke-dasharray:163.4;stroke-dashoffset:163.4;animation:dayRing 1.2s ease-out 0.7s both;}
+.live-lamp{animation:liveLamp 3s ease-in-out infinite;}
+.reel-glow{animation:reelGlow 4s ease-in-out 1.5s infinite;}
+.row{animation:rowIn 0.5s cubic-bezier(0.22,1,0.36,1) both;transition:background-color 0.2s ease;}
+.row:hover{background-color:rgba(237,230,214,0.04);}
+.row-1{animation-delay:0.85s;}
+.row-2{animation-delay:0.95s;}
+.row-3{animation-delay:1.05s;}
+.ping{transform-origin:center;animation:dotPing 2.4s ease-out infinite;}
+.tab{transition:color 0.2s ease;}
+.tab:hover{color:#EDE6D6;}
+@media (prefers-reduced-motion: reduce){
+  .rise,.cover,.reel-in,.day-ring,.live-lamp,.reel-glow,.row,.ping{animation:none;}
+  .cover{transform:scaleX(0);}
+  .day-ring{stroke-dashoffset:152.5;}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div style="position: absolute; top: -140px; left: 50%; width: 460px; height: 460px; margin-left: -230px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.16) 0%, rgba(201,162,77,0.04) 45%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div class="rise rise-1" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 12px 0 24px; position: relative;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <svg width="20" height="20" viewBox="0 0 100 100" aria-hidden="true"><path d="M16 14L50 80L84 14" fill="none" stroke="#C9A24D" stroke-width="9" stroke-linecap="butt" stroke-linejoin="miter"></path><circle cx="50" cy="37.4" r="12" fill="#E3C77E" stroke="#7E5E14" stroke-width="2"></circle></svg>
+      <span style="font-family: 'Fraunces', serif; font-size: 20px; font-weight: 500; letter-spacing: 0.02em;">Veto</span>
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #C9A24D; border: 1px solid rgba(201,162,77,0.5); border-radius: 999px; padding: 3px 8px; margin-left: 2px;">Test tokens</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 4px;">
+      <span style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 999px; background: rgba(156,201,168,0.10); border: 1px solid rgba(156,201,168,0.45); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #9CC9A8;">
+        <span class="live-lamp" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #9CC9A8;"></span>
+        <span>Rule live</span>
+      </span>
+      <button type="button" aria-label="Settings" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: 22px; background: transparent; cursor: pointer;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#D3CCBB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="rise rise-2" style="padding: 12px 24px 0 24px; position: relative;">
+    <div style="border-radius: 22px; padding: 2px; background: linear-gradient(160deg, #E3C77E 0%, #C9A24D 35%, #7E5E14 100%); box-shadow: 0 14px 34px rgba(0,0,0,0.35);">
+      <div style="border-radius: 20px; background: linear-gradient(180deg, #1C2C25 0%, #16231E 100%); padding: 14px 16px 14px 16px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">Your agent can still spend</span>
+          <span style="font-size: 12px; color: #93A097; text-align: right; line-height: 1.3;">Charging agent<br>pays only 6i99...PdCG</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 10px;">
+          <span style="font-family: 'Fraunces', serif; font-size: 64px; font-weight: 300; line-height: 1; color: #EDE6D6; font-variant-numeric: tabular-nums; letter-spacing: -0.02em;">258</span>
+          <span style="font-family: 'Fraunces', serif; font-size: 22px; font-weight: 300; color: #93A097;">of 300</span>
+          <span style="margin-left: auto; font-size: 13px; color: #D3CCBB;"><span style="font-family: 'Fraunces', serif; font-size: 18px; color: #EDE6D6;">42</span> spent so far</span>
+        </div>
+        <div style="position: relative; display: flex; gap: 3px; height: 14px;">
+          <span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: #C9A24D;"></span><span style="flex: 1; border-radius: 2px; background: linear-gradient(90deg, #C9A24D 0%, #C9A24D 80%, rgba(201,162,77,0.18) 80%, rgba(201,162,77,0.18) 100%);"></span><span style="flex: 1; border-radius: 2px; background: rgba(201,162,77,0.18);"></span><span style="flex: 1; border-radius: 2px; background: rgba(201,162,77,0.18);"></span><span style="flex: 1; border-radius: 2px; background: rgba(201,162,77,0.18);"></span><span style="flex: 1; border-radius: 2px; background: rgba(201,162,77,0.18);"></span>
+          <span class="cover" aria-hidden="true" style="position: absolute; inset: 0; background: #16231E;"></span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #93A097;">
+          <span>1 block = 1 payment of 10</span>
+          <span>Most per payment: 10</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rise rise-3" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 24px 0 24px; position: relative;">
+    <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: #16231E; border: 1px solid rgba(237,230,214,0.16);">
+      <svg width="56" height="56" viewBox="0 0 64 64" aria-hidden="true" style="flex-shrink: 0;">
+        <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(237,230,214,0.12)" stroke-width="6"></circle>
+        <circle class="day-ring" cx="32" cy="32" r="26" fill="none" stroke="#C9A24D" stroke-width="6" stroke-linecap="round" transform="rotate(-90 32 32)"></circle>
+        <text x="32" y="31" text-anchor="middle" font-family="Fraunces, serif" font-size="20" font-weight="400" fill="#EDE6D6">6</text>
+        <text x="32" y="44" text-anchor="middle" font-family="Manrope, sans-serif" font-weight="700" font-size="9" letter-spacing="1" fill="#93A097">OF 90</text>
+      </svg>
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">Day of rule</span>
+        <span style="font-size: 15px; font-weight: 600; color: #EDE6D6;">84 days left</span>
+        <span style="font-size: 12px; color: #93A097;">then the rule ends</span>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: #16231E; border: 1px solid rgba(237,230,214,0.16);">
+      <span aria-label="6 payments paid by your agent" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 56px; border-radius: 10px; background: linear-gradient(180deg, #1C2C25 0%, #111D18 100%); border: 1px solid rgba(156,201,168,0.5); box-shadow: inset 0 1px 0 rgba(237,230,214,0.08), 0 2px 0 rgba(0,0,0,0.45); font-family: 'Fraunces', serif; font-size: 32px; font-weight: 400; color: #9CC9A8; font-variant-numeric: tabular-nums; position: relative; overflow: hidden; flex-shrink: 0;">
+        <span class="reel-in reel-in-1">6</span>
+        <span aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(0,0,0,0.55);"></span>
+      </span>
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">Paid</span>
+        <span style="font-size: 15px; font-weight: 600; color: #EDE6D6;">by your agent</span>
+        <span style="font-size: 12px; color: #93A097;">all within the rule</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="rise rise-4" style="padding: 10px 24px 0 24px; position: relative;">
+    <div style="display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 16px; background: linear-gradient(90deg, rgba(201,162,77,0.14) 0%, #16231E 60%); border: 1px solid rgba(201,162,77,0.45);">
+      <div style="display: flex; gap: 4px;" aria-label="11 refusals in a row">
+        <span class="reel-glow" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 56px; border-radius: 10px; background: linear-gradient(180deg, #1C2C25 0%, #111D18 100%); border: 1px solid rgba(201,162,77,0.6); box-shadow: inset 0 1px 0 rgba(237,230,214,0.08), 0 2px 0 rgba(0,0,0,0.45); font-family: 'Fraunces', serif; font-size: 34px; font-weight: 400; color: #E3C77E; font-variant-numeric: tabular-nums; position: relative; overflow: hidden;">
+          <span class="reel-in reel-in-2" aria-hidden="true">1</span>
+          <span aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(0,0,0,0.55);"></span>
+        </span>
+        <span class="reel-glow" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 56px; border-radius: 10px; background: linear-gradient(180deg, #1C2C25 0%, #111D18 100%); border: 1px solid rgba(201,162,77,0.6); box-shadow: inset 0 1px 0 rgba(237,230,214,0.08), 0 2px 0 rgba(0,0,0,0.45); font-family: 'Fraunces', serif; font-size: 34px; font-weight: 400; color: #E3C77E; font-variant-numeric: tabular-nums; position: relative; overflow: hidden;">
+          <span class="reel-in reel-in-3" aria-hidden="true">1</span>
+          <span aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(0,0,0,0.55);"></span>
+        </span>
+      </div>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #C9A24D;">Refusals in a row</span>
+        <span style="font-size: 15px; font-weight: 600; color: #EDE6D6;">Every one refused, no money moved</span>
+        <span style="font-size: 12px; color: #93A097;">each one saved on the blockchain</span>
+      </div>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"></path><path d="M9 12l2 2 4-4"></path></svg>
+    </div>
+  </div>
+
+  <div class="rise rise-5" style="flex: 1; display: flex; flex-direction: column; padding: 14px 24px 0 24px; position: relative; min-height: 0;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+      <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: #93A097;">Latest decisions</span>
+      <a href="#decisions" style="display: flex; align-items: center; height: 44px; padding: 0 4px; color: #C9A24D; font-size: 14px; font-weight: 600; text-decoration: none;">See all</a>
+    </div>
+    <div style="display: flex; flex-direction: column; border-radius: 18px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); overflow: hidden;">
+      <a href="#refusal" class="row row-1" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 14px; min-height: 44px; text-decoration: none; color: inherit; border-bottom: 1px solid rgba(237,230,214,0.16);">
+        <span style="position: relative; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 18px; background: rgba(228,164,142,0.12); flex-shrink: 0;">
+          <span class="ping" style="position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #E4A48E; top: -2px; right: -2px;"></span>
+          <span style="position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #E4A48E; top: -2px; right: -2px;"></span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg>
+        </span>
+        <span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0;">
+          <span style="font-size: 14px; font-weight: 600; color: #EDE6D6;">Refused: agent asked 14, limit is 10</span>
+          <span style="font-size: 12px; color: #93A097;">No money moved. Reason saved.</span>
+        </span>
+        <span style="font-family: 'Fraunces', serif; font-size: 18px; color: #E4A48E; font-variant-numeric: tabular-nums;">0 paid</span>
+      </a>
+      <a href="#refusal-2" class="row row-2" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 14px; min-height: 44px; text-decoration: none; color: inherit; border-bottom: 1px solid rgba(237,230,214,0.16);">
+        <span style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 18px; background: rgba(228,164,142,0.12); flex-shrink: 0;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg>
+        </span>
+        <span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0;">
+          <span style="font-size: 14px; font-weight: 600; color: #EDE6D6;">Refused: agent asked 12, limit is 10</span>
+          <span style="font-size: 12px; color: #93A097;">No money moved. Reason saved.</span>
+        </span>
+        <span style="font-family: 'Fraunces', serif; font-size: 18px; color: #E4A48E; font-variant-numeric: tabular-nums;">0 paid</span>
+      </a>
+      <a href="#payment" class="row row-3" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 14px; min-height: 44px; text-decoration: none; color: inherit;">
+        <span style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 18px; background: rgba(156,201,168,0.12); flex-shrink: 0;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9CC9A8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.6 2.5L16 9.5"></path></svg>
+        </span>
+        <span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0;">
+          <span style="font-size: 14px; font-weight: 600; color: #EDE6D6;">Paid 8 to 6i99...PdCG</span>
+          <span style="font-size: 12px; color: #93A097;">Within the limit of 10. 258 left.</span>
+        </span>
+        <span style="font-family: 'Fraunces', serif; font-size: 18px; color: #9CC9A8; font-variant-numeric: tabular-nums;">8 paid</span>
+      </a>
+    </div>
+  </div>
+
+  <nav class="rise rise-6" aria-label="Main" style="display: grid; grid-template-columns: 1fr 1fr 1fr; padding: 8px 12px 22px 12px; border-top: 1px solid rgba(237,230,214,0.16); background: #0F1A16; position: relative;">
+    <a href="#overview" aria-current="page" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; height: 56px; text-decoration: none; color: #C9A24D; font-size: 12px; font-weight: 700;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"></path></svg>
+      <span>Home</span>
+    </a>
+    <a href="#rules" class="tab" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; height: 56px; text-decoration: none; color: #93A097; font-size: 12px; font-weight: 600;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"></path><path d="M9 12l2 2 4-4"></path></svg>
+      <span>Rules</span>
+    </a>
+    <a href="#decisions" class="tab" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; height: 56px; text-decoration: none; color: #93A097; font-size: 12px; font-weight: 600;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6h14"></path><path d="M5 12h14"></path><path d="M5 18h9"></path></svg>
+      <span>Decisions</span>
+    </a>
+  </nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
