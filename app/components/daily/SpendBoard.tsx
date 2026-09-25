@@ -47,7 +47,9 @@ export function SpendBoard({
         {aside ? <Text style={styles.aside}>{aside}</Text> : null}
       </View>
       <View style={styles.figures}>
-        <Text style={styles.remaining}>{remainingLine}</Text>
+        <Text style={styles.remaining} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
+          {remainingLine}
+        </Text>
         <Text style={styles.of}>{ofLine}</Text>
         <Text style={styles.spent}>
           <Text style={styles.spentFigure}>{spentLine}</Text>
@@ -89,8 +91,8 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   figures: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
+    flexDirection: 'column',
+    alignItems: 'stretch',
     gap: space.lg,
   },
   remaining: {
@@ -101,13 +103,14 @@ const styles = StyleSheet.create({
     color: colors.bone,
   },
   of: {
+    flexShrink: 1,
     fontFamily: fonts.serifLight,
     fontSize: 22,
     lineHeight: 26,
     color: colors.muted,
   },
   spent: {
-    marginLeft: 'auto',
+    flexShrink: 1,
     fontFamily: fonts.sans,
     fontSize: 13,
     lineHeight: 18,
@@ -124,10 +127,12 @@ const styles = StyleSheet.create({
   },
   captions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     gap: space.md,
   },
   caption: {
+    flexShrink: 1,
     fontFamily: fonts.sans,
     fontSize: 12,
     lineHeight: 16,
