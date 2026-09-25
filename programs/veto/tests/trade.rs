@@ -425,6 +425,10 @@ fn rule_pdas(owner: &Pubkey, rule_id: u64) -> (Pubkey, Pubkey) {
 }
 
 fn open_world(rules: Rules) -> World {
+    open_world_with_reserves(rules, LIQUIDITY_IN, LIQUIDITY_OUT)
+}
+
+fn open_world_with_reserves(rules: Rules, liquidity_in: u64, liquidity_out: u64) -> World {
     let (mut svm, owner, agent) = boot();
     let exchange_program = token_swap_id();
     let in_mint = create_mint(&mut svm, &owner, IN_DECIMALS, &owner.pubkey());
@@ -435,8 +439,8 @@ fn open_world(rules: Rules) -> World {
     let (pool_authority, bump) = Pubkey::find_program_address(&[pool.as_ref()], &exchange_program);
     let vault_in = create_token_account(&mut svm, &owner, &in_mint, &pool_authority);
     let vault_out = create_token_account(&mut svm, &owner, &out_mint, &pool_authority);
-    mint_to(&mut svm, &owner, &in_mint, &vault_in, LIQUIDITY_IN);
-    mint_to(&mut svm, &owner, &out_mint, &vault_out, LIQUIDITY_OUT);
+    mint_to(&mut svm, &owner, &in_mint, &vault_in, liquidity_in);
+    mint_to(&mut svm, &owner, &out_mint, &vault_out, liquidity_out);
 
     let pool_mint_kp = Keypair::new();
     let pool_mint = pool_mint_kp.pubkey();
@@ -1261,4 +1265,114 @@ fn existing_mandate_and_hold_layouts_match_the_values_shipped_today() {
     );
     assert_eq!(std::mem::size_of::<TradeEntry>(), 88);
     assert_eq!(std::mem::size_of::<TradeLedger>(), 2856);
+}
+
+#[test]
+fn small_fee_trade_settles_or_records_reason_14_at_the_program_quote() {
+    for amount in [1999u64, 399] {
+        let net = u128::from(veto::trade::input_after_fees(amount));
+        let quote = (net * u128::from(LIQUIDITY_OUT) / (u128::from(LIQUIDITY_IN) + net)) as u64;
+        let mut w = open_world(Rules {
+            floor_num: quote,
+            floor_den: amount,
+            ..Rules::default()
+        });
+        let before = snap(&w);
+        let meta = trade(&mut w, amount, 0, 1)
+            .expect("small fee trade must settle or record a floor refusal");
+        let entry = last_entry(&w.svm, &w.ledger);
+        if entry.kind == TRADE_KIND_REFUSED {
+            assert_refused(&w, &meta.logs, &before, REASON_BELOW_FLOOR, w.pool);
+        } else {
+            assert_eq!(entry.kind, TRADE_KIND_TRADED);
+            assert!(entry.amount_out >= quote);
+            assert_eq!(entry.amount_in, before.source - snap(&w).source);
+        }
+    }
+    assert_eq!(veto::trade::input_after_fees(0), 0);
+    assert_eq!(veto::trade::input_after_fees(1), 0);
+    assert_eq!(veto::trade::input_after_fees(399), 397);
+    assert_eq!(veto::trade::input_after_fees(1999), 1994);
+}
+
+#[test]
+fn close_after_expiry_with_a_frozen_delegate_returns_both_rents() {
+    let mut w = open_world(Rules::default());
+    let owner = w.owner.insecure_clone();
+    send(
+        &mut w.svm,
+        &owner,
+        &[&owner],
+        &[spl_token::instruction::freeze_account(
+            &spl_token::ID,
+            &w.source,
+            &w.in_mint,
+            &owner.pubkey(),
+            &[],
+        )
+        .unwrap()],
+    )
+    .expect("freeze delegated source");
+    assert_eq!(
+        token_account(&w.svm, &w.source).delegate,
+        COption::Some(w.rule)
+    );
+    warp(&mut w.svm, FAR_FUTURE);
+    let rents = lamports(&w.svm, &w.rule) + lamports(&w.svm, &w.ledger);
+    let before = lamports(&w.svm, &owner.pubkey());
+    let meta = close_rule(&mut w).expect("close frozen source at expiry");
+    assert_eq!(lamports(&w.svm, &owner.pubkey()) + meta.fee, before + rents);
+    assert_eq!(lamports(&w.svm, &w.rule), 0);
+    assert_eq!(lamports(&w.svm, &w.ledger), 0);
+    assert!(token_account(&w.svm, &w.source).is_frozen());
+}
+
+#[test]
+fn unequal_reserves_settle_and_charge_observed_input_to_ledger_caps_window_and_event() {
+    let amount = 10 * IN_ONE;
+    let mut w = open_world_with_reserves(
+        Rules {
+            floor_num: 1,
+            floor_den: 2000,
+            cap: amount,
+            daily_limit: amount,
+            per_trade_max: amount,
+            ..Rules::default()
+        },
+        1_000_000_000_000_000,
+        1_000_000_000_000,
+    );
+    let before = snap(&w);
+    let meta = trade(&mut w, amount, 1, 1).expect("unequal reserves settle");
+    let after = snap(&w);
+    let observed = before.source - after.source;
+    assert!(observed > 0 && observed < amount);
+    assert_eq!(after.vault_in - before.vault_in, observed);
+    assert_eq!(before.delegated - after.delegated, observed);
+    let entry = last_entry(&w.svm, &w.ledger);
+    assert_eq!(entry.kind, TRADE_KIND_TRADED);
+    assert_eq!(entry.amount_in, observed);
+    assert_eq!(entry.amount_out, after.destination - before.destination);
+    assert!(entry.amount_out >= amount / 2000);
+    let rule = read_rule(&w.svm, &w.rule);
+    assert_eq!(rule.spent, observed);
+    assert_eq!(rule.window_spent, observed);
+    assert_eq!(rule.remaining(), amount - observed);
+    assert_eq!(rule.status, STATUS_ACTIVE);
+    let line = format!("Program log: VETO TRADED amount_in={observed} amount_out={} spent={observed} of cap={amount} remaining_today={}", entry.amount_out, amount - observed);
+    assert!(meta.logs.contains(&line));
+    let event = meta
+        .logs
+        .iter()
+        .filter_map(|line| decode_b64(line.strip_prefix("Program data: ")?))
+        .find(|raw| raw.starts_with(Traded::DISCRIMINATOR))
+        .expect("traded event");
+    assert_eq!(
+        u64::from_le_bytes(event[40..48].try_into().unwrap()),
+        observed
+    );
+    assert_eq!(
+        u64::from_le_bytes(event[64..72].try_into().unwrap()),
+        observed
+    );
 }
