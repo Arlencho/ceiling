@@ -13,6 +13,12 @@ function extra(): Record<string, unknown> {
   return {};
 }
 
+export function appScheme(): string {
+  const scheme = Constants.expoConfig?.scheme;
+  const first = Array.isArray(scheme) ? scheme[0] : scheme;
+  return typeof first === 'string' && first.length > 0 ? first : 'veto';
+}
+
 export function loadConfig(): AppConfig {
   return configFromExtra(extra(), process.env as Record<string, string | undefined>);
 }
