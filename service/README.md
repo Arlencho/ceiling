@@ -47,13 +47,16 @@ direct SQL writes. UTC month partitions are created transactionally on demand,
 including backfills. The migration runner is transactional, serialized and checks
 migration checksums; the compiled build includes the SQL files.
 
-Ingestion writers serialize on one transaction advisory lock. For now each write
-reclassifies the rule's stored contributions, then applies only their differences
-to rule and agent stats. This favors correctness over high throughput; ingestion
-cost grows with rule history. A future nonce-scoped implementation can retain the
-same transaction and delta contract. Only use these functions for decision writes
-so deltas and statistics remain consistent. Rule addresses identify immutable
-on-chain ownership and agent associations.
+Ingestion writers serialize on one transaction advisory lock. Each write
+reclassifies only the decisions that share its rule and nonce, found through
+the `decisions_rule_nonce` index, then applies only their differences to rule
+and agent stats. Timestamp and slot extrema move incrementally: an insert
+raises or lowers them in place, and a reversal rescans an extreme only when
+the removed row held it. Insert cost stays flat as rule history grows; the
+performance test inserts 5,000 decisions into one rule and checks the last
+500 against the first 500 and both against a clean replay. Only use these
+functions for decision writes so deltas and statistics remain consistent.
+Rule addresses identify immutable on-chain ownership and agent associations.
 
 An allowance suppresses every payment with its nonce in the same rule. Every
 refusal counts outside; allowances count outside only if that nonce has no refusal.
@@ -68,6 +71,25 @@ in addition to `first_open_ts` for the app's fallback day-count rule.
 The caller populates `rules` from decoded rule account state. Ingesting a decision
 does not invent missing mint, cap or lifecycle account state. Cursors are likewise
 advanced by the caller after the corresponding batch has been persisted.
+
+## Integration seams with the decoder
+
+`src/boundary.ts` converts a decoded `Location` into the ingest row's identity
+fields. Three representations differ between the decoder and the index:
+
+- `block_time`: `getTransaction` can return a null `blockTime`, but
+  `block_time` is the partition column and cannot be null. The caller resolves
+  the slot's block time (`getBlockTime` or a block header) and passes it to
+  `ingestLocation` as `slotTime`; a record with neither timestamp is refused
+  rather than stored under a fabricated time. A separate unpartitioned table
+  was rejected: an untimed row would still need counters and extrema
+  participation, duplicating the delta and reversal machinery for a case the
+  slot's own time answers exactly.
+- `inner_index`: the decoder uses `null` for a top-level instruction; the
+  index stores `-1` (the `inner_index` column is a non-null integer with a
+  `>= -1` check). `ingestLocation` converts at the boundary.
+- `slot`: the decoder reports a number; the index stores the string form so
+  `bigint` round-trips stay exact. `ingestLocation` stringifies it.
 
 ## Instruction decoding
 
