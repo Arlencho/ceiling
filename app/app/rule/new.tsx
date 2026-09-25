@@ -5,8 +5,14 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { AddressActions } from '../../components/AddressActions';
 import { ApprovalScreen } from '../../components/ApprovalScreen';
+import { HoldToApprove } from '../../components/backglass/HoldToApprove';
+import { ClusterPill } from '../../components/daily/ClusterPill';
+import { ProgressStrip } from '../../components/backglass/ProgressStrip';
 import { Button } from '../../components/Button';
 import { ConnectGate } from '../../components/ConnectGate';
+import { SpendBoard } from '../../components/daily/SpendBoard';
+import { StepPair } from '../../components/daily/StepPair';
+import { barUnits, wholePayments } from '../../components/daily/facts';
 import { EmptyState } from '../../components/EmptyState';
 import { Field } from '../../components/Field';
 import { RuleScreen } from '../../components/RuleScreen';
@@ -76,7 +82,13 @@ export default function NewRuleScreen() {
   if (waitingRuleset || waitingFrom) {
     return (
       <Screen>
-        <TopBar back="Rules" />
+        <TopBar
+          back="Rules"
+          center="New rule"
+          accessory={
+            chain.config ? <ClusterPill cluster={chain.config.explorerCluster} /> : null
+          }
+        />
         <EmptyState>Reading this phone and the chain.</EmptyState>
       </Screen>
     );
@@ -147,11 +159,47 @@ function RuleCompose({
   const [formError, setFormError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [openedAddress, setOpenedAddress] = useState<string | null>(null);
+  const [holdReset, setHoldReset] = useState(0);
   const openingRef = useRef(false);
 
   const setField = useCallback((key: keyof MandateFields, value: string) => {
     setFields((prev) => ({ ...prev, [key]: value }));
   }, []);
+
+  const stepAmount = (key: 'cap' | 'perTxMax', delta: number) => {
+    const unit = 10n ** BigInt(Math.max(0, chain.decimals));
+    try {
+      const value = parseBaseUnits(fields[key].trim() || '0', chain.decimals);
+      const next = value + BigInt(delta) * unit;
+      setField(key, formatBaseUnits(next < 0n ? 0n : next, chain.decimals));
+    } catch {
+      setField(key, delta > 0 ? '1' : '0');
+    }
+  };
+
+  const stepDays = (delta: number) => {
+    const days = Number.parseInt(fields.expiryDays.trim(), 10);
+    const base = Number.isFinite(days) ? days : 0;
+    setField('expiryDays', String(Math.max(1, base + delta)));
+  };
+
+  let board: { payments: string; per: string; cap: string; bars: { remaining: number; cap: number } } | null =
+    null;
+  try {
+    const cap = parseBaseUnits(fields.cap, chain.decimals);
+    const per = parseBaseUnits(fields.perTxMax, chain.decimals);
+    const count = wholePayments(cap, per);
+    if (count != null && per > 0n) {
+      board = {
+        payments: count.toString(),
+        per: formatBaseUnits(per, chain.decimals),
+        cap: formatBaseUnits(cap, chain.decimals),
+        bars: barUnits(cap, cap),
+      };
+    }
+  } catch {
+    board = null;
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -202,6 +250,7 @@ function RuleCompose({
 
   const onOpen = async () => {
     if (openingRef.current || openedAddress || chain.submitHeld) {
+      setHoldReset((value) => value + 1);
       return;
     }
     openingRef.current = true;
@@ -215,6 +264,7 @@ function RuleCompose({
       setMessage(`Opened on chain. Rule ${result.mandate.address}.`);
       router.replace(`/rule/${result.mandate.address}`);
     } catch (err) {
+      setHoldReset((value) => value + 1);
       setFormError(err instanceof Error ? err.message : 'Open failed');
     } finally {
       openingRef.current = false;
@@ -260,12 +310,12 @@ function RuleCompose({
       {formError ? <Text style={styles.msg}>{formError}</Text> : null}
       {message ? <Text style={styles.msg}>{message}</Text> : null}
       {openedAddress ? null : applying ? (
-        <Button
-          label={wallet.busy ? 'Waiting on Seed Vault...' : 'Apply to a new agent'}
-          accessibilityLabel="Apply to a new agent"
-          busy={wallet.busy}
-          disabled={chain.submitHeld}
-          onPress={() => {
+        <HoldToApprove
+          label="Hold to apply to a new agent"
+          hint="Signed inside Seed Vault. Veto never sees your key."
+          disabled={chain.submitHeld || wallet.busy}
+          resetKey={holdReset}
+          onConfirm={() => {
             void onOpen();
           }}
         />
@@ -280,12 +330,12 @@ function RuleCompose({
               }}
             />
           ) : null}
-          <Button
-            label={wallet.busy ? 'Waiting on Seed Vault...' : 'Open this rule'}
-            accessibilityLabel="Open this rule"
-            busy={wallet.busy}
-            disabled={chain.submitHeld}
-            onPress={() => {
+          <HoldToApprove
+            label="Hold to approve rule"
+            hint="Signed inside Seed Vault. Veto never sees your key."
+            disabled={chain.submitHeld || wallet.busy}
+            resetKey={holdReset}
+            onConfirm={() => {
               void onOpen();
             }}
           />
@@ -296,8 +346,21 @@ function RuleCompose({
 
   return (
     <RuleScreen footer={footer}>
-      <TopBar back="Rules" />
+      <TopBar
+        back="Rules"
+        center="New rule"
+        accessory={chain.config ? <ClusterPill cluster={chain.config.explorerCluster} /> : null}
+      />
       <ConnectGate>
+        {!authoring && !applying ? (
+          <ProgressStrip current="approve" done={['learn', 'connect', 'agent']} />
+        ) : null}
+        {!authoring && !applying ? (
+          <View style={styles.kickerRow}>
+            <Text style={styles.kicker}>Write the rule yourself</Text>
+            <Text style={styles.meta}>No agent request yet</Text>
+          </View>
+        ) : null}
         <Text style={styles.h2}>{title}</Text>
         {sourceMandate ? (
           <EmptyState>
@@ -327,30 +390,63 @@ function RuleCompose({
             placeholder="Mint budget"
           />
         ) : null}
-        <Field
-          label="Cap"
-          value={fields.cap}
-          onChangeText={(text) => setField('cap', text)}
-          placeholder="total, in tokens"
-          editable={!applying}
-          hint={TOTAL_CAP_GUIDANCE}
-        />
-        <Field
-          label="Per-payment maximum"
-          value={fields.perTxMax}
-          onChangeText={(text) => setField('perTxMax', text)}
-          placeholder="largest single payment"
-          editable={!applying}
-          hint={LARGEST_PAYMENT_GUIDANCE}
-        />
-        <Field
-          label="Expiry (days from now)"
-          value={fields.expiryDays}
-          onChangeText={(text) => setField('expiryDays', text)}
-          placeholder="7"
-          editable={!applying}
-          hint={EXPIRY_GUIDANCE}
-        />
+        <View style={styles.dial}>
+          <View style={styles.dialField}>
+            <Field
+              label="Cap"
+              value={fields.cap}
+              onChangeText={(text) => setField('cap', text)}
+              placeholder="total, in tokens"
+              editable={!applying}
+              hint={TOTAL_CAP_GUIDANCE}
+            />
+          </View>
+          <StepPair
+            downLabel="Lower total"
+            upLabel="Raise total"
+            disabled={applying}
+            onDown={() => stepAmount('cap', -1)}
+            onUp={() => stepAmount('cap', 1)}
+          />
+        </View>
+        <View style={styles.dial}>
+          <View style={styles.dialField}>
+            <Field
+              label="Per-payment maximum"
+              value={fields.perTxMax}
+              onChangeText={(text) => setField('perTxMax', text)}
+              placeholder="largest single payment"
+              editable={!applying}
+              hint={LARGEST_PAYMENT_GUIDANCE}
+            />
+          </View>
+          <StepPair
+            downLabel="Lower most per payment"
+            upLabel="Raise most per payment"
+            disabled={applying}
+            onDown={() => stepAmount('perTxMax', -1)}
+            onUp={() => stepAmount('perTxMax', 1)}
+          />
+        </View>
+        <View style={styles.dial}>
+          <View style={styles.dialField}>
+            <Field
+              label="Expiry (days from now)"
+              value={fields.expiryDays}
+              onChangeText={(text) => setField('expiryDays', text)}
+              placeholder="7"
+              editable={!applying}
+              hint={EXPIRY_GUIDANCE}
+            />
+          </View>
+          <StepPair
+            downLabel="Shorten the rule"
+            upLabel="Extend the rule"
+            disabled={applying}
+            onDown={() => stepDays(-1)}
+            onUp={() => stepDays(1)}
+          />
+        </View>
         <Field
           label="Payee"
           value={fields.merchant}
@@ -383,6 +479,20 @@ function RuleCompose({
           multiline
           editable={!applying}
         />
+        {board ? (
+          <SpendBoard
+            kicker="Your agent's board"
+            remainingText={board.cap}
+            ofText="set aside"
+            spentText={board.payments}
+            spentCaption={`payments of ${board.per} at most`}
+            remaining={board.bars.remaining}
+            cap={board.bars.cap}
+            accessibilityLabel={`${board.payments} payments of ${board.per} at most, ${board.cap} set aside`}
+            leftCaption={`1 block = one payment of ${board.per}`}
+            rightCaption="Leftover comes back"
+          />
+        ) : null}
       </ConnectGate>
     </RuleScreen>
   );
@@ -390,9 +500,35 @@ function RuleCompose({
 
 const styles = StyleSheet.create({
   h2: {
-    color: colors.text,
+    color: colors.bone,
     fontSize: 32,
     fontFamily: fonts.serif,
+  },
+  kickerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  kicker: {
+    color: colors.muted,
+    fontFamily: fonts.sansBold,
+    fontSize: 12,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
+  meta: {
+    color: colors.muted,
+    fontFamily: fonts.sans,
+    fontSize: 12,
+  },
+  dial: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  dialField: {
+    flex: 1,
   },
   actions: {
     gap: 10,

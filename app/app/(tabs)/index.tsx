@@ -1,18 +1,28 @@
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../../components/Button';
 import { ConnectGate } from '../../components/ConnectGate';
 import { ContextBar } from '../../components/ContextBar';
-import { DecisionRow } from '../../components/DecisionRow';
+import { CatchMark } from '../../components/backglass/CatchMark';
+import { ScoreReel } from '../../components/backglass/ScoreReel';
+import { ClusterPill } from '../../components/daily/ClusterPill';
+import { LivePill } from '../../components/daily/LivePill';
+import { DayClock } from '../../components/daily/DayClock';
+import { LatestDecision } from '../../components/daily/LatestDecision';
+import { SpendBoard } from '../../components/daily/SpendBoard';
+import { StreakCall } from '../../components/daily/StreakCall';
+import { barUnits, openedAtSec, refusalStreak, ruleDay } from '../../components/daily/facts';
 import { EmptyState } from '../../components/EmptyState';
 import { OpenFirstRule } from '../../components/OpenFirstRule';
 import { ReadState } from '../../components/ReadState';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
-import { colors, fonts } from '../../components/theme';
+import { colors, fonts, radii, space } from '../../components/theme';
+import { KIND_REFUSED } from '../../lib/constants';
 import { formatBaseUnits, isListedDecision, timeLeftParts, todaysAgentDecisions } from '../../lib/format';
+import { isActive, mandateRemaining } from '../../lib/mandate';
 import { NOTIFICATIONS_OFF_LINE } from '../../lib/notificationAsk';
 import { displayPurpose, spendRatio } from '../../lib/ruleView';
 import { useChain } from '../../lib/useChain';
@@ -27,13 +37,18 @@ export default function OverviewScreen() {
   const notifications = useNotificationOffer(chain.mandate != null);
   const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
   const today = todaysAgentDecisions(chain.rows, chain.nowMs);
-  const rpcUrl = chain.config?.rpcUrl ?? '';
-  const cluster = chain.config?.explorerCluster ?? 'devnet';
   const mandate = chain.mandate;
   const index =
     mandate != null ? chain.mandates.findIndex((row) => row.address === mandate.address) : -1;
   const ratio = mandate ? spendRatio(mandate.spent, mandate.cap) : 0;
   const left = mandate ? timeLeftParts(mandate.expiresAt, nowSec) : null;
+  const remaining = mandate ? mandateRemaining(mandate) : 0n;
+  const bars = mandate ? barUnits(remaining, mandate.cap) : { remaining: 0, cap: 1 };
+  const clock = mandate ? ruleDay(openedAtSec(chain.rows), mandate.expiresAt, nowSec) : null;
+  const streak = refusalStreak(chain.rows);
+  const listed = today.filter((row) => isListedDecision(row.kind));
+  const live = mandate ? isActive(mandate, nowSec) : false;
+  const spentShare = Math.round(ratio * 100);
 
   const onRefresh = useCallback(() => {
     void chain.refresh();
@@ -41,7 +56,15 @@ export default function OverviewScreen() {
 
   return (
     <Screen refreshing={chain.loading} onRefresh={onRefresh}>
-      <TopBar />
+      <TopBar
+        leading={<CatchMark size={20} />}
+        accessory={
+          <>
+            {chain.config ? <ClusterPill cluster={chain.config.explorerCluster} /> : null}
+            {mandate && live ? <LivePill label="Rule live" /> : null}
+          </>
+        }
+      />
       <ConnectGate>
         {chain.configError ? <EmptyState>{chain.configError}</EmptyState> : null}
         {chain.error && chain.mandateStatus !== 'rate-limited' ? (
@@ -55,7 +78,7 @@ export default function OverviewScreen() {
             empty="No rule on chain for this owner yet. This screen reads real history only and never invents rows."
           />
         )}
-        {chain.mandateStatus === 'present' && mandate ? (
+        {chain.mandateStatus === 'present' && mandate && left ? (
           <View style={styles.block}>
             {notifications.show ? (
               <View style={styles.block}>
@@ -75,69 +98,74 @@ export default function OverviewScreen() {
               subtitle={`rule ${index + 1} of ${chain.mandates.length} · agent ${truncateAddress(mandate.agent)}`}
               onSwitch={() => router.push('/(tabs)/rules')}
             />
-
-            <View style={styles.state}>
-              <Text style={styles.eyebrow}>Spent under this rule</Text>
-              <View style={styles.bigRow}>
-                <Text style={styles.big}>{formatBaseUnits(mandate.spent, chain.decimals)}</Text>
-                <Text style={styles.of}>
-                  of <Text style={styles.ofCap}>{formatBaseUnits(mandate.cap, chain.decimals)}</Text>
-                </Text>
-              </View>
-              <View style={styles.bar}>
-                <View style={[styles.barFill, { width: `${Math.max(ratio * 100, mandate.spent > 0n ? 1 : 0)}%` }]} />
-              </View>
-              <View style={styles.barLabels}>
-                <Text style={styles.tick}>0</Text>
-                <Text style={styles.tick}>cap {formatBaseUnits(mandate.cap, chain.decimals)}</Text>
+            <SpendBoard
+              kicker="Your agent can still spend"
+              aside={`Pays only ${truncateAddress(mandate.merchant)}`}
+              remainingText={formatBaseUnits(remaining, chain.decimals)}
+              ofText={`of ${formatBaseUnits(mandate.cap, chain.decimals)}`}
+              spentText={formatBaseUnits(mandate.spent, chain.decimals)}
+              spentCaption="spent so far"
+              remaining={bars.remaining}
+              cap={bars.cap}
+              accessibilityLabel={`${formatBaseUnits(remaining, chain.decimals)} left of ${formatBaseUnits(mandate.cap, chain.decimals)}. ${spentShare} percent of the total is spent.`}
+              leftCaption={`1 block is one share of ${formatBaseUnits(mandate.cap, chain.decimals)}`}
+              rightCaption={`Most per payment: ${formatBaseUnits(mandate.perTxMax, chain.decimals)}`}
+            />
+            <View style={styles.pair}>
+              <DayClock
+                day={clock?.day ?? null}
+                total={clock?.total ?? null}
+                leftValue={left.value}
+                leftLabel={left.label}
+                ended={left.label === 'expired'}
+              />
+              <View style={styles.paid}>
+                <ScoreReel
+                  value={mandate.spendCount}
+                  tone="paid"
+                  height={48}
+                  accessibilityLabel={`${mandate.spendCount} payments paid by your agent`}
+                />
+                <View style={styles.paidCopy}>
+                  <Text style={styles.kicker}>Paid</Text>
+                  <Text style={styles.paidTitle}>by your agent</Text>
+                  <Text style={styles.hint}>all within the rule</Text>
+                </View>
               </View>
             </View>
-
-            <View style={styles.stats}>
-              <View style={styles.stat}>
-                <Text style={styles.statV}>{String(mandate.spendCount)}</Text>
-                <Text style={styles.statK}>paid</Text>
-              </View>
-              <View style={[styles.stat, styles.statRefused]}>
-                <Text style={[styles.statV, styles.statRefusedText]}>{String(mandate.refusalCount)}</Text>
-                <Text style={[styles.statK, styles.statRefusedText]}>refused, recorded</Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.statV}>{left?.value ?? '0'}</Text>
-                <Text style={styles.statK}>{left?.label ?? 'expired'}</Text>
-              </View>
-            </View>
-
+            <StreakCall count={streak} />
             <View style={styles.section}>
-              <Text style={styles.eyebrow}>Today</Text>
-              <Text
-                style={styles.link}
-                onPress={() => router.push('/(tabs)/decisions')}
+              <Text style={styles.sectionLabel}>Latest decisions</Text>
+              <Pressable
                 accessibilityRole="link"
+                accessibilityLabel="See all"
+                onPress={() => router.push('/(tabs)/decisions')}
+                style={styles.seeAll}
               >
-                all decisions
-              </Text>
+                <Text style={styles.seeAllText}>See all</Text>
+              </Pressable>
             </View>
-            {today.length === 0 ? (
+            {listed.length === 0 ? (
               <EmptyState>
                 No payments, refusals, or overrides on this rule today. This screen never invents
                 rows.
               </EmptyState>
             ) : (
-              today
-                .filter((row) => isListedDecision(row.kind))
-                .map((row, i) => (
-                  <DecisionRow
+              <View style={styles.list}>
+                {listed.map((row, i) => (
+                  <LatestDecision
                     key={`${row.nonce.toString()}-${row.kind}-${i}`}
                     row={row}
                     decimals={chain.decimals}
-                    cluster={cluster}
-                    rpcUrl={rpcUrl}
-                    mandateAddress={mandate.address}
                     perTxMax={mandate.perTxMax}
-                    variant="today"
+                    mandateAddress={mandate.address}
+                    payee={mandate.merchant}
+                    remainingText={`${formatBaseUnits(remaining, chain.decimals)} left`}
+                    fresh={i === 0 && row.kind === KIND_REFUSED}
+                    last={i === listed.length - 1}
                   />
-                ))
+                ))}
+              </View>
             )}
           </View>
         ) : null}
@@ -148,108 +176,78 @@ export default function OverviewScreen() {
 
 const styles = StyleSheet.create({
   block: {
-    gap: 12,
+    gap: space.xl,
     alignSelf: 'stretch',
   },
-  state: {
-    marginTop: 4,
-  },
-  eyebrow: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    fontFamily: fonts.mono,
-  },
-  bigRow: {
+  pair: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    marginTop: 8,
+    gap: space.lg,
   },
-  big: {
-    color: colors.text,
-    fontSize: 64,
-    lineHeight: 64,
-    fontFamily: fonts.serif,
-    letterSpacing: -1.5,
-  },
-  of: {
-    color: colors.muted,
-    fontSize: 26,
-    fontFamily: fonts.serif,
-    marginLeft: 8,
-  },
-  ofCap: {
-    color: colors.text,
-  },
-  bar: {
-    height: 2,
-    backgroundColor: colors.line,
-    marginTop: 16,
-  },
-  barFill: {
-    height: 2,
-    backgroundColor: colors.text,
-  },
-  barLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 6,
-  },
-  tick: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '500',
-    fontFamily: fonts.mono,
-  },
-  stats: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    marginTop: 8,
-  },
-  stat: {
+  paid: {
     flex: 1,
-    paddingVertical: 12,
-    paddingLeft: 12,
-    borderRightWidth: 1,
-    borderRightColor: colors.line,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.lg,
+    paddingVertical: space.xl,
+    paddingHorizontal: space.xxl,
+    borderRadius: radii.card,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
   },
-  statRefused: {
-    backgroundColor: colors.invert,
-    marginTop: -1,
-    paddingLeft: 12,
-    borderRightWidth: 0,
-    borderTopLeftRadius: 3,
-    borderTopRightRadius: 3,
+  paidCopy: {
+    flex: 1,
+    gap: 2,
   },
-  statV: {
-    color: colors.text,
-    fontSize: 34,
-    fontFamily: fonts.serif,
-    lineHeight: 36,
+  paidTitle: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 15,
+    lineHeight: 18,
+    color: colors.bone,
   },
-  statK: {
-    marginTop: 6,
-    fontSize: 13,
-    fontWeight: '500',
+  kicker: {
+    fontFamily: fonts.sansBold,
+    fontSize: 11,
+    lineHeight: 14,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
     color: colors.muted,
   },
-  statRefusedText: {
-    color: colors.invertText,
+  hint: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.muted,
   },
   section: {
-    marginTop: 8,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
   },
-  link: {
-    color: colors.text,
+  sectionLabel: {
+    fontFamily: fonts.sansBold,
     fontSize: 12,
-    fontWeight: '500',
-    fontFamily: fonts.mono,
-    textDecorationLine: 'underline',
+    lineHeight: 16,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    color: colors.muted,
+  },
+  seeAll: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: space.xs,
+  },
+  seeAllText: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 14,
+    lineHeight: 18,
+    color: colors.brass,
+  },
+  list: {
+    borderRadius: radii.row,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    overflow: 'hidden',
   },
 });

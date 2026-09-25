@@ -9,8 +9,8 @@ export function EmptyState({ children }: { children: string }) {
 const styles = StyleSheet.create({
   text: {
     color: colors.body,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
     fontFamily: fonts.sans,
   },
 });

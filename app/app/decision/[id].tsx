@@ -3,24 +3,25 @@ import { useCallback, useEffect } from 'react';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 
 import { AdvisoryDeclineDetail } from '../../components/AdvisoryDecline';
-import { Button } from '../../components/Button';
 import { ConnectGate } from '../../components/ConnectGate';
 import { EmptyState } from '../../components/EmptyState';
 import { ReadState } from '../../components/ReadState';
-import { RefusalCard } from '../../components/RefusalCard';
+import { AllowOnce } from '../../components/records/AllowOnce';
+import { GhostButton, Glow, Rise, ScreenHeader, SealNote } from '../../components/records/chrome';
+import { barSplit, decisionWhen, refusalBody, whyRefused } from '../../components/records/copy';
 import { Screen } from '../../components/Screen';
-import { TopBar } from '../../components/TopBar';
-import { colors, fonts } from '../../components/theme';
+import { colors, fonts, radii } from '../../components/theme';
 import { KIND_ADVISORY_DECLINE } from '../../lib/advisory';
-import { KIND_OVERRIDE, KIND_REFUSED } from '../../lib/constants';
+import { KIND_OVERRIDE, KIND_REFUSED, REASON_OVER_PER_TX_MAX } from '../../lib/constants';
 import { findLedgerDecision, parseDecisionId } from '../../lib/exportRecord';
+import { useOverrideGrant } from '../../lib/useOverrideGrant';
 import { explorerTxUrl, formatBaseUnits, formatClock, formatUnix, isListedDecision } from '../../lib/format';
+import { mandateRemaining } from '../../lib/mandate';
 import { mayClaimAbsence } from '../../lib/mandateRead';
 import { paidDecisionBody } from '../../lib/notify';
 import { nonceSequence, overrideRowView, sequenceLine } from '../../lib/override';
-import { displayPurpose } from '../../lib/ruleView';
+import { renderReason } from '../../lib/reasons';
 import { useChain } from '../../lib/useChain';
-import { useOverrideGrant, type OverrideGrantView } from '../../lib/useOverrideGrant';
 import { truncateAddress } from '../../lib/wallet';
 
 export default function DecisionDetailScreen() {
@@ -88,10 +89,18 @@ export default function DecisionDetailScreen() {
   const seq = row && row.kind !== KIND_ADVISORY_DECLINE ? nonceSequence(chain.rows, row.nonce) : null;
   const seqText = seq ? sequenceLine(seq, chain.decimals) : null;
   const overrideView = row && row.kind === KIND_OVERRIDE ? overrideRowView(row, chain.decimals) : null;
+  const when = row ? decisionWhen(row.ts, chain.nowMs) : '';
 
   return (
     <Screen refreshing={chain.loading} onRefresh={onRefresh}>
-      <TopBar back="Decisions" meta={mandate ? displayPurpose(mandate.purpose) : undefined} />
+      <Glow />
+      <ScreenHeader
+        title="Decision"
+        cluster={cluster}
+        backLabel="Decisions"
+        onBack={() => router.back()}
+        onHelp={() => router.push('/help')}
+      />
       <ConnectGate>
         {switching || !mayClaimAbsence(chain.mandateStatus) ? (
           <ReadState
@@ -111,63 +120,60 @@ export default function DecisionDetailScreen() {
                 amount={formatBaseUnits(row.amount, chain.decimals)}
               />
             ) : row.kind === KIND_REFUSED ? (
-              <RefusalCard
-                row={row}
-                decimals={chain.decimals}
-                perTxMax={mandate?.perTxMax}
-                proof={
-                  row.signature
-                    ? `transaction ${truncateAddress(row.signature, 4)}${row.slot != null ? ` · slot ${row.slot}` : ''}`
-                    : undefined
-                }
-              />
+              <Rise delayMs={80}>
+                <RefusedBody
+                  row={row}
+                  decimals={chain.decimals}
+                  perTxMax={mandate?.perTxMax}
+                  when={when}
+                />
+              </Rise>
             ) : row.kind === KIND_OVERRIDE && overrideView ? (
-              <View style={styles.paid}>
-                <Text style={styles.eyebrow}>
-                  {formatUnix(row.ts)} · {formatClock(row.ts)}
-                </Text>
-                <Text style={styles.say}>
-                  {overrideView.say} <Text style={styles.italic}>{overrideView.italic}</Text>
-                </Text>
-                <Text style={styles.body}>{overrideView.why}</Text>
-              </View>
+              <Rise delayMs={80}>
+                <View style={styles.stack}>
+                  <StatusPill label="Allowed once" tone="allowed" when={when} />
+                  <Text style={styles.headline}>Allowed once.</Text>
+                  <Text style={styles.body}>
+                    {overrideView.say} {overrideView.italic}. {overrideView.why}
+                  </Text>
+                </View>
+              </Rise>
             ) : (
-              <View style={styles.paid}>
-                <Text style={styles.eyebrow}>
-                  {formatUnix(row.ts)} · {formatClock(row.ts)}
-                </Text>
-                <Text style={styles.say}>
-                  Paid <Text style={styles.italic}>within rule</Text>
-                </Text>
-                <Text style={styles.body}>
-                  {mandate
-                    ? paidDecisionBody({
-                        amount: row.amount,
-                        decimals: chain.decimals,
-                        perTxMax: mandate.perTxMax,
-                        merchant: mandate.merchant,
-                      })
-                    : `${formatBaseUnits(row.amount, chain.decimals)}. The payee for this rule is the rule.`}
-                </Text>
-              </View>
+              <Rise delayMs={80}>
+                <View style={styles.stack}>
+                  <StatusPill label="Paid" tone="paid" when={when} />
+                  <Text style={styles.headline}>Paid {formatBaseUnits(row.amount, chain.decimals)}.</Text>
+                  <Text style={styles.body}>
+                    {mandate
+                      ? paidDecisionBody({
+                          amount: row.amount,
+                          decimals: chain.decimals,
+                          perTxMax: mandate.perTxMax,
+                          merchant: mandate.merchant,
+                        })
+                      : `${formatBaseUnits(row.amount, chain.decimals)}. The payee for this rule is the rule.`}
+                  </Text>
+                </View>
+              </Rise>
             )}
 
             {seqText ? (
               <View style={styles.sequence}>
-                <Text style={styles.eyebrow}>The record of this nonce</Text>
-                <Text style={styles.seqBody}>{seqText}</Text>
+                <Text style={styles.kicker}>The record of this nonce</Text>
+                <Text style={styles.body}>{seqText}</Text>
               </View>
             ) : null}
 
-            {row.kind === KIND_REFUSED ? (
-              <OverrideGrant view={grant} decimals={chain.decimals} submitHeld={chain.submitHeld} />
-            ) : null}
+            <SealNote
+              linkLabel="See it on the blockchain"
+              onPress={onExplorer}
+              linkDisabled={!row.signature}
+            >
+              Saved on the blockchain with the reason and the time. Anyone can check it.
+            </SealNote>
 
             <View style={styles.proofs}>
-              <View style={styles.proofH}>
-                <Text style={styles.eyebrow}>Proof</Text>
-                <Text style={styles.hint}>anyone can check this against the chain</Text>
-              </View>
+              <Text style={styles.kicker}>Proof</Text>
               {row.kind === KIND_ADVISORY_DECLINE ? null : (
                 <ProofRow
                   label="program"
@@ -186,22 +192,21 @@ export default function DecisionDetailScreen() {
               )}
             </View>
 
-            <View style={styles.actions}>
-              {row.kind === KIND_ADVISORY_DECLINE ? null : (
-                <Button
-                  label="Share this decision"
-                  accessibilityLabel="Share this decision"
-                  onPress={onShare}
-                />
-              )}
-              <Button
-                label="Open in explorer"
-                invert={false}
-                quiet
-                disabled={!row.signature}
-                onPress={onExplorer}
+            {row.kind === KIND_REFUSED ? (
+              <AllowOnce
+                view={grant}
+                decimals={chain.decimals}
+                submitHeld={chain.submitHeld}
+                payee={truncateAddress(row.counterparty)}
+                perTxMax={mandate?.perTxMax ?? 0n}
+                remaining={mandate ? mandateRemaining(mandate) : 0n}
               />
-            </View>
+            ) : null}
+
+            {row.kind === KIND_ADVISORY_DECLINE ? null : (
+              <GhostButton label="Share this decision" onPress={onShare} />
+            )}
+            <Text style={styles.foot}>Allowing signs in Seed Vault. Veto never sees your key.</Text>
           </View>
         )}
       </ConnectGate>
@@ -209,95 +214,108 @@ export default function DecisionDetailScreen() {
   );
 }
 
-function OverrideGrant({
-  view,
+function RefusedBody({
+  row,
   decimals,
-  submitHeld,
+  perTxMax,
+  when,
 }: {
-  view: OverrideGrantView;
+  row: NonNullable<ReturnType<typeof findLedgerDecision>>;
   decimals: number;
-  submitHeld: boolean;
+  perTxMax?: bigint;
+  when: string;
 }) {
-  const { assessment, confirming, signing, error, confirmed, onOffer, onCancel, onSign } = view;
-  if (confirmed) {
-    return (
-      <View style={styles.grant}>
-        <Text style={styles.eyebrow}>Read back from chain</Text>
-        <Text style={styles.seqBody}>
-          Override of {formatBaseUnits(confirmed.amount, decimals)} for nonce{' '}
-          {confirmed.nonce.toString()} is on the ledger as a recorded decision. The agent can retry
-          this nonce.
-        </Text>
-      </View>
-    );
-  }
-  if (!assessment) {
-    return null;
-  }
-  if (assessment.status === 'checking') {
-    return (
-      <View style={styles.grant}>
-        <EmptyState>
-          Checking this rule and nonce on chain before offering an override.
-        </EmptyState>
-      </View>
-    );
-  }
-  if (assessment.status === 'none' || assessment.status === 'blocked' || assessment.status === 'already') {
-    return (
-      <View style={styles.grant}>
-        <Text style={styles.eyebrow}>Override</Text>
-        <Text style={styles.seqBody}>{assessment.why}</Text>
-      </View>
-    );
-  }
-  if (confirming) {
-    return (
-      <View style={styles.grant}>
-        <Text style={styles.eyebrow}>What you are about to sign</Text>
-        {assessment.commit.paragraphs.map((paragraph) => (
-          <Text key={paragraph} style={styles.seqBody}>
-            {paragraph}
-          </Text>
-        ))}
-        <View style={styles.actions}>
-          <Button
-            label="Sign and record this override"
-            accessibilityLabel="Sign and record this override"
-            busy={signing}
-            disabled={submitHeld}
-            onPress={() => {
-              if (submitHeld) {
-                return;
-              }
-              onSign();
-            }}
-          />
-          <Button
-            label="Cancel"
-            invert={false}
-            quiet
-            disabled={signing}
-            onPress={onCancel}
-          />
-        </View>
-        {error ? <Text style={styles.seqBody}>{error}</Text> : null}
-      </View>
-    );
-  }
+  const asked = formatBaseUnits(row.amount, decimals);
+  const limit = perTxMax != null ? formatBaseUnits(perTxMax, decimals) : null;
+  const reason = renderReason(row.reason, row.suggestedOverride, decimals);
+  const split = perTxMax != null ? barSplit(row.amount, perTxMax) : null;
+  const needed =
+    row.reason === REASON_OVER_PER_TX_MAX && row.suggestedOverride > 0n
+      ? formatBaseUnits(row.suggestedOverride, decimals)
+      : 'No override would have cleared this.';
   return (
-    <View style={styles.grant}>
-      <Text style={styles.eyebrow}>Override</Text>
-      <Text style={styles.seqBody}>
-        {assessment.commit.paragraphs[0]} The owner signs once. This is recorded as an override, not
-        a settings change.
+    <View style={styles.stack}>
+      <StatusPill label="Refused" tone="refused" when={when} />
+      <Text style={styles.headline}>No money moved.</Text>
+      <Text style={styles.body}>
+        {refusalBody({
+          amount: row.amount,
+          decimals,
+          perTxMax,
+          reason: row.reason,
+          suggestedOverride: row.suggestedOverride,
+        })}
       </Text>
-      <Button
-        label="Grant this override"
-        accessibilityLabel="Grant this override"
-        onPress={onOffer}
-      />
-      {error ? <Text style={styles.seqBody}>{error}</Text> : null}
+      <View style={styles.compare}>
+        <View style={styles.compareTop}>
+          <View style={styles.compareCol}>
+            <Text style={styles.kicker}>Your agent asked</Text>
+            <Text style={[styles.figure, { color: colors.refused }]}>{asked}</Text>
+          </View>
+          <View style={styles.compareColEnd}>
+            <Text style={styles.kicker}>Your limit per payment</Text>
+            <Text style={[styles.figure, { color: colors.brass }]}>{limit ?? 'on the rule'}</Text>
+          </View>
+        </View>
+        {split ? <LimitTrack allowedPct={split.allowedPct} overPct={split.overPct} /> : null}
+        <View style={styles.grid}>
+          <Fact label="To payee" value={truncateAddress(row.counterparty)} />
+          <Fact label="Money moved" value={formatBaseUnits(0n, decimals)} />
+          <Fact
+            label="Why it was refused"
+            value={whyRefused({
+              reason: row.reason,
+              decimals,
+              perTxMax,
+              fallback: reason.text,
+            })}
+          />
+          <Fact label="Needed to allow it" value={needed} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function LimitTrack({ allowedPct, overPct }: { allowedPct: number; overPct: number }) {
+  return (
+    <View style={styles.trackWrap}>
+      <View style={styles.track}>
+        <View style={[styles.allowed, { width: `${allowedPct}%` }]} />
+        {overPct > 0 ? <View style={[styles.over, { width: `${overPct}%` }]} /> : null}
+      </View>
+      <View style={[styles.marker, { left: `${allowedPct}%` }]} />
+      <Text style={[styles.limitLabel, { left: `${allowedPct}%` }]}>LIMIT</Text>
+    </View>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.fact}>
+      <Text style={styles.factLabel}>{label}</Text>
+      <Text style={styles.factValue}>{value}</Text>
+    </View>
+  );
+}
+
+function StatusPill({
+  label,
+  tone,
+  when,
+}: {
+  label: string;
+  tone: 'refused' | 'paid' | 'allowed';
+  when: string;
+}) {
+  const color = tone === 'paid' ? colors.paid : tone === 'allowed' ? colors.amber : colors.refused;
+  return (
+    <View style={styles.statusRow}>
+      <View style={[styles.pill, { borderColor: color, backgroundColor: `${color}22` }]}>
+        <View style={[styles.pillDot, { backgroundColor: color }]} />
+        <Text style={[styles.pillText, { color }]}>{label}</Text>
+      </View>
+      <Text style={styles.when}>{when}</Text>
     </View>
   );
 }
@@ -307,7 +325,7 @@ function ProofRow({ label, value, ok }: { label: string; value: string; ok?: boo
     <View style={styles.prow}>
       <Text style={styles.pk}>{label}</Text>
       <Text selectable style={styles.pv}>
-        {ok ? `\u2713 ${value}` : value}
+        {ok ? `✓ ${value}` : value}
       </Text>
     </View>
   );
@@ -315,60 +333,157 @@ function ProofRow({ label, value, ok }: { label: string; value: string; ok?: boo
 
 const styles = StyleSheet.create({
   block: {
-    gap: 16,
+    gap: 12,
     alignSelf: 'stretch',
   },
-  paid: {
+  stack: {
     gap: 8,
   },
-  eyebrow: {
-    color: colors.muted,
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    height: 26,
+    paddingHorizontal: 10,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+  },
+  pillDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  pillText: {
+    fontFamily: fonts.sansBold,
     fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
-    fontFamily: fonts.mono,
   },
-  say: {
-    color: colors.text,
-    fontSize: 34,
-    fontFamily: fonts.serif,
-    lineHeight: 36,
-  },
-  italic: {
-    fontStyle: 'italic',
+  when: {
     color: colors.muted,
+    fontFamily: fonts.sans,
+    fontSize: 12,
+  },
+  headline: {
+    fontFamily: fonts.serif,
+    fontSize: 28,
+    lineHeight: 32,
+    color: colors.bone,
   },
   body: {
     color: colors.body,
-    fontSize: 15,
+    fontFamily: fonts.sans,
+    fontSize: 14,
     lineHeight: 21,
+  },
+  compare: {
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
+    borderRadius: radii.row,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  compareTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  compareCol: {
+    gap: 2,
+    flex: 1,
+  },
+  compareColEnd: {
+    gap: 2,
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  kicker: {
+    color: colors.muted,
+    fontFamily: fonts.sansBold,
+    fontSize: 11,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+  },
+  figure: {
+    fontFamily: fonts.serifLight,
+    fontSize: 36,
+    lineHeight: 40,
+  },
+  trackWrap: {
+    height: 30,
+    justifyContent: 'center',
+  },
+  track: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(237, 230, 214, 0.10)',
+    flexDirection: 'row',
+    overflow: 'hidden',
+  },
+  allowed: {
+    height: '100%',
+    backgroundColor: colors.brass,
+  },
+  over: {
+    height: '100%',
+    backgroundColor: colors.refused,
+  },
+  marker: {
+    position: 'absolute',
+    top: 4,
+    width: 2,
+    height: 24,
+    marginLeft: -1,
+    backgroundColor: colors.bone,
+  },
+  limitLabel: {
+    position: 'absolute',
+    top: -2,
+    marginLeft: -18,
+    width: 36,
+    textAlign: 'center',
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 0.8,
+    color: colors.bone,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.boneLine,
+    paddingTop: 8,
+  },
+  fact: {
+    width: '47%',
+    gap: 2,
+  },
+  factLabel: {
+    color: colors.muted,
+    fontFamily: fonts.sans,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  factValue: {
+    color: colors.bone,
+    fontFamily: fonts.sansSemibold,
+    fontSize: 13,
+    lineHeight: 18,
   },
   sequence: {
     gap: 6,
   },
-  seqBody: {
-    color: colors.body,
-    fontSize: 15,
-    lineHeight: 21,
-  },
-  grant: {
-    gap: 10,
-  },
   proofs: {
     gap: 0,
-  },
-  proofH: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 4,
-    gap: 12,
-  },
-  hint: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '500',
   },
   prow: {
     flexDirection: 'row',
@@ -380,18 +495,20 @@ const styles = StyleSheet.create({
   pk: {
     width: 96,
     color: colors.muted,
+    fontFamily: fonts.sans,
     fontSize: 13,
-    fontWeight: '500',
-    fontFamily: fonts.mono,
   },
   pv: {
     flex: 1,
-    color: colors.text,
+    color: colors.bone,
+    fontFamily: fonts.sansSemibold,
     fontSize: 13,
-    fontWeight: '500',
-    fontFamily: fonts.mono,
   },
-  actions: {
-    gap: 10,
+  foot: {
+    textAlign: 'center',
+    color: colors.muted,
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
   },
 });

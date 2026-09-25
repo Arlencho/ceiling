@@ -24,8 +24,12 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program_option::COption;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface};
+use hold::InitVaultArgs;
 
+pub mod hold;
+pub mod hold_state;
 pub mod state;
+pub use hold_state::*;
 pub use state::*;
 
 declare_id!("3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV");
@@ -353,6 +357,66 @@ pub mod veto {
         msg!("VETO CLOSED");
         Ok(())
     }
+
+    /// Open a Hold vault. The vault PDA is the authority of its token account.
+    pub fn init_vault(ctx: Context<InitVault>, args: hold::InitVaultArgs) -> Result<()> {
+        hold::init_vault(ctx, args)
+    }
+
+    /// Move tokens into the vault token account.
+    pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
+        hold::deposit(ctx, amount)
+    }
+
+    /// Pay `amount` now when the rules allow it. Otherwise record a hold.
+    pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+        hold::withdraw(ctx, amount)
+    }
+
+    /// Pay a held withdrawal once the chain clock reaches its unlock time.
+    pub fn execute(ctx: Context<Execute>, id: u64) -> Result<()> {
+        hold::execute(ctx, id)
+    }
+
+    /// Cancel one held withdrawal. Owner or guardian, with no wait.
+    pub fn stop(ctx: Context<Stop>, id: u64) -> Result<()> {
+        hold::stop(ctx, id)
+    }
+
+    /// Block every outflow except `recover`. Owner or guardian.
+    pub fn freeze(ctx: Context<Freeze>) -> Result<()> {
+        hold::freeze(ctx)
+    }
+
+    /// Clear a freeze. Both keys, or the owner alone after the delay when no guardian is set.
+    pub fn unfreeze(ctx: Context<Unfreeze>) -> Result<()> {
+        hold::unfreeze(ctx)
+    }
+
+    /// Pay a held withdrawal before its unlock time. Both keys, and not while frozen.
+    pub fn skip(ctx: Context<Skip>, id: u64) -> Result<()> {
+        hold::skip(ctx, id)
+    }
+
+    /// Send the whole vault balance to the safe address. Works while frozen.
+    pub fn recover(ctx: Context<Recover>) -> Result<()> {
+        hold::recover(ctx)
+    }
+
+    /// Tighten a rule now. A looser rule waits out the current delay.
+    pub fn propose_change(ctx: Context<ProposeChange>, values: HoldChange) -> Result<()> {
+        hold::propose_change(ctx, values)
+    }
+
+    /// Apply a loosening change once the chain clock reaches `effective_at`.
+    pub fn apply_change(ctx: Context<ApplyChange>) -> Result<()> {
+        hold::apply_change(ctx)
+    }
+
+    /// Drop a loosening change. Owner or guardian.
+    pub fn cancel_change(ctx: Context<CancelChange>) -> Result<()> {
+        hold::cancel_change(ctx)
+    }
 }
 
 /// Pure policy evaluation. No writes, no CPI, so it reads as a single list of
@@ -622,4 +686,419 @@ pub enum VetoError {
     MathOverflow,
     #[msg("override nonce is at or below the last paid nonce")]
     NonceAlreadySettled,
+    #[msg("delay must be 1, 2, or 3 days")]
+    DelayNotAllowed,
+    #[msg("share must be between 0 and 10000 basis points")]
+    ShareOutOfRange,
+    #[msg("safe address is required")]
+    SafeAddressRequired,
+    #[msg("the guardian must be a different key from the owner")]
+    GuardianIsOwner,
+    #[msg("amount must be greater than zero")]
+    PositiveAmountRequired,
+    #[msg("arithmetic overflow")]
+    HoldMathOverflow,
+    #[msg("signer is not the owner of this vault")]
+    NotTheVaultOwner,
+    #[msg("signer is not the owner or the guardian")]
+    NotOwnerOrGuardian,
+    #[msg("signer is not the guardian")]
+    NotTheGuardian,
+    #[msg("both the owner and the guardian must sign")]
+    BothKeysRequired,
+    #[msg("vault address does not match its stored fields")]
+    InvalidVaultPda,
+    #[msg("vault token account does not match the vault")]
+    VaultTokenMismatch,
+    #[msg("token mint does not match the vault")]
+    HoldMintMismatch,
+    #[msg("source token account is not owned by the vault owner")]
+    HoldSourceNotOwned,
+    #[msg("destination is the vault token account")]
+    DestinationIsVault,
+    #[msg("destination does not match the pending withdrawal")]
+    DestinationMismatch,
+    #[msg("destination is not the safe address")]
+    NotTheSafeAddress,
+    #[msg("withdrawal is not pending")]
+    WithdrawalNotPending,
+    #[msg("the chain clock has not reached the unlock time")]
+    TooEarly,
+    #[msg("the vault is frozen")]
+    VaultFrozen,
+    #[msg("the vault is not frozen")]
+    NotFrozen,
+    #[msg("unfreeze is still waiting on the chain clock")]
+    UnfreezeNotReady,
+    #[msg("a loosening change is already pending")]
+    ChangeAlreadyPending,
+    #[msg("there is no pending change")]
+    NoPendingChange,
+    #[msg("the chain clock has not reached the change")]
+    ChangeNotReady,
+    #[msg("the proposed values match the current rules")]
+    ChangeUnchanged,
+    #[msg("the vault token account is empty")]
+    NothingToRecover,
+    #[msg("the vault cannot cover this withdrawal")]
+    HoldInsufficientFunds,
+    #[msg("token account authority is not the vault")]
+    BadVaultAuthority,
+}
+
+#[derive(Accounts)]
+#[instruction(args: InitVaultArgs)]
+pub struct InitVault<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + HoldVault::INIT_SPACE,
+        seeds = [b"hold", owner.key().as_ref(), &args.vault_id.to_le_bytes()],
+        bump
+    )]
+    pub vault: Box<Account<'info, HoldVault>>,
+
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + std::mem::size_of::<HoldLedger>(),
+        seeds = [b"hold-ledger", vault.key().as_ref()],
+        bump
+    )]
+    pub ledger: AccountLoader<'info, HoldLedger>,
+
+    #[account(
+        init,
+        payer = owner,
+        seeds = [b"hold-token", vault.key().as_ref()],
+        bump,
+        token::mint = mint,
+        token::authority = vault,
+        token::token_program = token_program
+    )]
+    pub vault_token: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    pub mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct Deposit<'info> {
+    pub owner: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = owner @ VetoError::NotTheVaultOwner,
+        has_one = mint @ VetoError::HoldMintMismatch,
+        has_one = vault_token @ VetoError::VaultTokenMismatch,
+        seeds = [b"hold", owner.key().as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump
+    )]
+    pub vault: Box<Account<'info, HoldVault>>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-ledger", vault.key().as_ref()],
+        bump = vault.ledger_bump
+    )]
+    pub ledger: AccountLoader<'info, HoldLedger>,
+
+    #[account(
+        mut,
+        constraint = source.mint == vault.mint @ VetoError::HoldMintMismatch,
+        constraint = source.owner == owner.key() @ VetoError::HoldSourceNotOwned
+    )]
+    pub source: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-token", vault.key().as_ref()],
+        bump = vault.token_bump
+    )]
+    pub vault_token: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    pub mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct Withdraw<'info> {
+    pub owner: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = owner @ VetoError::NotTheVaultOwner,
+        has_one = mint @ VetoError::HoldMintMismatch,
+        has_one = vault_token @ VetoError::VaultTokenMismatch,
+        seeds = [b"hold", owner.key().as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump
+    )]
+    pub vault: Box<Account<'info, HoldVault>>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-ledger", vault.key().as_ref()],
+        bump = vault.ledger_bump
+    )]
+    pub ledger: AccountLoader<'info, HoldLedger>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-token", vault.key().as_ref()],
+        bump = vault.token_bump,
+        constraint = vault_token.owner == vault.key() @ VetoError::BadVaultAuthority
+    )]
+    pub vault_token: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        constraint = destination.mint == vault.mint @ VetoError::HoldMintMismatch,
+        constraint = destination.owner != vault.key() @ VetoError::DestinationIsVault,
+        constraint = destination.key() != vault_token.key() @ VetoError::DestinationIsVault
+    )]
+    pub destination: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    pub mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct Execute<'info> {
+    #[account(
+        mut,
+        has_one = mint @ VetoError::HoldMintMismatch,
+        has_one = vault_token @ VetoError::VaultTokenMismatch,
+        seeds = [b"hold", vault.owner.as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump
+    )]
+    pub vault: Box<Account<'info, HoldVault>>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-ledger", vault.key().as_ref()],
+        bump = vault.ledger_bump
+    )]
+    pub ledger: AccountLoader<'info, HoldLedger>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-token", vault.key().as_ref()],
+        bump = vault.token_bump,
+        constraint = vault_token.owner == vault.key() @ VetoError::BadVaultAuthority
+    )]
+    pub vault_token: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        constraint = destination.mint == vault.mint @ VetoError::HoldMintMismatch,
+        constraint = destination.owner != vault.key() @ VetoError::DestinationIsVault
+    )]
+    pub destination: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    pub mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct Stop<'info> {
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        constraint = authority.key() == vault.owner || authority.key() == vault.guardian @ VetoError::NotOwnerOrGuardian,
+        seeds = [b"hold", vault.owner.as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump
+    )]
+    pub vault: Box<Account<'info, HoldVault>>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-ledger", vault.key().as_ref()],
+        bump = vault.ledger_bump
+    )]
+    pub ledger: AccountLoader<'info, HoldLedger>,
+}
+
+#[derive(Accounts)]
+pub struct Freeze<'info> {
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        constraint = authority.key() == vault.owner || authority.key() == vault.guardian @ VetoError::NotOwnerOrGuardian,
+        seeds = [b"hold", vault.owner.as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump
+    )]
+    pub vault: Box<Account<'info, HoldVault>>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-ledger", vault.key().as_ref()],
+        bump = vault.ledger_bump
+    )]
+    pub ledger: AccountLoader<'info, HoldLedger>,
+}
+
+#[derive(Accounts)]
+pub struct Unfreeze<'info> {
+    pub owner: Signer<'info>,
+    pub guardian: Option<Signer<'info>>,
+
+    #[account(
+        mut,
+        has_one = owner @ VetoError::NotTheVaultOwner,
+        seeds = [b"hold", owner.key().as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump
+    )]
+    pub vault: Box<Account<'info, HoldVault>>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-ledger", vault.key().as_ref()],
+        bump = vault.ledger_bump
+    )]
+    pub ledger: AccountLoader<'info, HoldLedger>,
+}
+
+#[derive(Accounts)]
+pub struct Skip<'info> {
+    pub owner: Signer<'info>,
+    pub guardian: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = owner @ VetoError::NotTheVaultOwner,
+        has_one = mint @ VetoError::HoldMintMismatch,
+        has_one = vault_token @ VetoError::VaultTokenMismatch,
+        seeds = [b"hold", owner.key().as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump
+    )]
+    pub vault: Box<Account<'info, HoldVault>>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-ledger", vault.key().as_ref()],
+        bump = vault.ledger_bump
+    )]
+    pub ledger: AccountLoader<'info, HoldLedger>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-token", vault.key().as_ref()],
+        bump = vault.token_bump,
+        constraint = vault_token.owner == vault.key() @ VetoError::BadVaultAuthority
+    )]
+    pub vault_token: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        constraint = destination.mint == vault.mint @ VetoError::HoldMintMismatch,
+        constraint = destination.owner != vault.key() @ VetoError::DestinationIsVault
+    )]
+    pub destination: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    pub mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct Recover<'info> {
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = mint @ VetoError::HoldMintMismatch,
+        has_one = vault_token @ VetoError::VaultTokenMismatch,
+        constraint = authority.key() == vault.owner || authority.key() == vault.guardian @ VetoError::NotOwnerOrGuardian,
+        seeds = [b"hold", vault.owner.as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump
+    )]
+    pub vault: Box<Account<'info, HoldVault>>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-ledger", vault.key().as_ref()],
+        bump = vault.ledger_bump
+    )]
+    pub ledger: AccountLoader<'info, HoldLedger>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-token", vault.key().as_ref()],
+        bump = vault.token_bump,
+        constraint = vault_token.owner == vault.key() @ VetoError::BadVaultAuthority
+    )]
+    pub vault_token: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        constraint = destination.mint == vault.mint @ VetoError::HoldMintMismatch,
+        constraint = destination.owner == vault.safe_address @ VetoError::NotTheSafeAddress,
+        constraint = destination.owner != vault.key() @ VetoError::DestinationIsVault
+    )]
+    pub destination: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    pub mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct ProposeChange<'info> {
+    pub owner: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = owner @ VetoError::NotTheVaultOwner,
+        seeds = [b"hold", owner.key().as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump
+    )]
+    pub vault: Box<Account<'info, HoldVault>>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-ledger", vault.key().as_ref()],
+        bump = vault.ledger_bump
+    )]
+    pub ledger: AccountLoader<'info, HoldLedger>,
+}
+
+#[derive(Accounts)]
+pub struct ApplyChange<'info> {
+    #[account(
+        mut,
+        seeds = [b"hold", vault.owner.as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump
+    )]
+    pub vault: Box<Account<'info, HoldVault>>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-ledger", vault.key().as_ref()],
+        bump = vault.ledger_bump
+    )]
+    pub ledger: AccountLoader<'info, HoldLedger>,
+}
+
+#[derive(Accounts)]
+pub struct CancelChange<'info> {
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        constraint = authority.key() == vault.owner || authority.key() == vault.guardian @ VetoError::NotOwnerOrGuardian,
+        seeds = [b"hold", vault.owner.as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump
+    )]
+    pub vault: Box<Account<'info, HoldVault>>,
+
+    #[account(
+        mut,
+        seeds = [b"hold-ledger", vault.key().as_ref()],
+        bump = vault.ledger_bump
+    )]
+    pub ledger: AccountLoader<'info, HoldLedger>,
 }

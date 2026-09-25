@@ -2,11 +2,12 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { OPEN_FIRST_RULE_LABEL, OPEN_FIRST_RULE_NEXT } from '../lib/onboarding';
 import { Button } from './Button';
-import { colors, fonts } from './theme';
+import { colors, fonts, space } from './theme';
 
 export function OpenFirstRule({ onOpen }: { onOpen: () => void }) {
   return (
     <View style={styles.block}>
+      <Text style={styles.kicker}>No rule yet</Text>
       <Text style={styles.next}>{OPEN_FIRST_RULE_NEXT}</Text>
       <Button
         label={OPEN_FIRST_RULE_LABEL}
@@ -19,8 +20,16 @@ export function OpenFirstRule({ onOpen }: { onOpen: () => void }) {
 
 const styles = StyleSheet.create({
   block: {
-    gap: 16,
+    gap: space.xxxl,
     alignSelf: 'stretch',
+  },
+  kicker: {
+    fontFamily: fonts.sansBold,
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    color: colors.brass,
   },
   next: {
     color: colors.body,

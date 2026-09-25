@@ -1,6 +1,6 @@
 import { StyleSheet, Text } from 'react-native';
 
-import { colors, fonts } from './theme';
+import { type } from './theme';
 
 export function ScreenTitle({ children }: { children: string }) {
   return <Text style={styles.title}>{children}</Text>;
@@ -16,23 +16,13 @@ export function Eyebrow({ children }: { children: string }) {
 
 const styles = StyleSheet.create({
   title: {
-    color: colors.text,
+    ...type.display,
     fontSize: 32,
-    fontFamily: fonts.serif,
-    fontWeight: '400',
-    letterSpacing: -0.3,
+    lineHeight: 36,
   },
-  section: {
-    color: colors.text,
-    fontSize: 18,
-    fontFamily: fonts.serif,
-  },
+  section: type.title,
   eyebrow: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 1,
+    ...type.kicker,
     textTransform: 'uppercase',
-    fontFamily: fonts.mono,
   },
 });

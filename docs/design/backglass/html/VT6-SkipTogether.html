@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Skip together</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+button,a{font-family:inherit;}
+button:focus-visible,a:focus-visible{outline:2px solid #C9A24D;outline-offset:3px;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes sealIn{from{opacity:0;transform:scale(0.7) rotate(-8deg);}to{opacity:1;transform:scale(1) rotate(0deg);}}
+@keyframes sealCheck{from{stroke-dashoffset:30;}to{stroke-dashoffset:0;}}
+@keyframes lampGlow{0%,100%{box-shadow:0 0 4px rgba(242,185,75,0.5);}50%{box-shadow:0 0 12px rgba(242,185,75,0.95);}}
+@keyframes ringOut{0%{transform:scale(0.7);opacity:0.9;}100%{transform:scale(1.5);opacity:0;}}
+@keyframes bridge{from{transform:scaleX(0);}to{transform:scaleX(1);}}
+.rise{animation:rise 0.7s cubic-bezier(0.22,1,0.36,1) both;}
+.rise-1{animation-delay:0.05s;}
+.rise-2{animation-delay:0.18s;}
+.rise-3{animation-delay:0.34s;}
+.rise-4{animation-delay:0.70s;}
+.rise-5{animation-delay:0.95s;}
+.rise-6{animation-delay:1.15s;}
+.seal{animation:sealIn 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.6s both;}
+.seal-check{stroke-dasharray:30;stroke-dashoffset:30;animation:sealCheck 0.5s ease-out 1.0s forwards;}
+.lamp{animation:lampGlow 2.2s ease-in-out 1s infinite;}
+.ring{transform-origin:center;animation:ringOut 2s cubic-bezier(0.22,1,0.36,1) 1.2s infinite;}
+.bridge{transform-origin:left center;animation:bridge 0.8s cubic-bezier(0.65,0,0.35,1) 1.0s both;}
+.ghost{transition:border-color 0.2s ease,background-color 0.2s ease;}
+.ghost:hover{border-color:#C9A24D;background-color:rgba(201,162,77,0.08);}
+@media (prefers-reduced-motion: reduce){
+  .rise,.seal,.seal-check,.lamp,.ring,.bridge{animation:none;}
+  .seal-check{stroke-dashoffset:0;}
+  .ring{opacity:0;}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div style="position: absolute; top: -140px; left: 50%; width: 460px; height: 460px; margin-left: -230px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.16) 0%, rgba(201,162,77,0.04) 45%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div class="rise rise-1" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 12px 0 12px; position: relative;">
+    <a href="#held" aria-label="Back" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; color: #EDE6D6; text-decoration: none;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EDE6D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">Let it go now</span>
+    <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 44px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #C9A24D; border: 1px solid rgba(201,162,77,0.5); border-radius: 999px; padding: 3px 8px;">Test tokens</span>
+    </span>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-direction: column; padding: 12px 24px 0 24px; position: relative; gap: 10px; min-height: 0;">
+
+    <div class="rise rise-2" style="display: flex; flex-direction: column; gap: 6px;">
+      <h1 style="margin: 0; font-family: 'Fraunces', serif; font-weight: 400; font-size: 32px; line-height: 1.1; letter-spacing: -0.01em; color: #EDE6D6;">Two keys, two fingerprints.</h1>
+      <p style="margin: 0; font-size: 14px; line-height: 1.45; color: #D3CCBB;">To pay 1,000 test USDC to 8xQf...Tz9A before Sunday 14:12, both keys must sign. One key alone can never skip the wait.</p>
+    </div>
+
+    <div class="rise rise-3" style="position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+      <span class="bridge" aria-hidden="true" style="position: absolute; left: 50%; top: 40px; width: 12px; height: 2px; margin-left: -6px; background: #C9A24D;"></span>
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 12px 12px 12px; border-radius: 18px; background: #16231E; border: 1px solid rgba(156,201,168,0.55); text-align: center;">
+        <span class="seal" style="display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 26px; background: rgba(156,201,168,0.12); border: 1px solid rgba(156,201,168,0.55);">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#9CC9A8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="seal-check" d="M20 6L9 17l-5-5"></path></svg>
+        </span>
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #9CC9A8;">Your key</span>
+        <span style="font-size: 14px; font-weight: 700; color: #EDE6D6;">Signed on this phone</span>
+        <span style="font-size: 12px; line-height: 1.4; color: #93A097;">Fingerprint, 14:20. Key 6YwqYU...GSV5w.</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 12px 12px 12px; border-radius: 18px; background: #16231E; border: 1px solid rgba(242,185,75,0.6); text-align: center; box-shadow: 0 0 0 3px rgba(242,185,75,0.08);">
+        <span style="position: relative; display: flex; align-items: center; justify-content: center; width: 52px; height: 52px;">
+          <svg width="52" height="52" viewBox="0 0 52 52" fill="none" aria-hidden="true" style="position: absolute; inset: 0; overflow: visible;"><circle class="ring" cx="26" cy="26" r="24" stroke="#F2B94B" stroke-width="1.5"></circle></svg>
+          <span style="display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 26px; background: rgba(242,185,75,0.10); border: 1px solid rgba(242,185,75,0.6);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#F2B94B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"></rect><path d="M11 18h2"></path></svg>
+          </span>
+          <span class="lamp" aria-hidden="true" style="position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; border-radius: 50%; background: #F2B94B; border: 1px solid #7E5E14;"></span>
+        </span>
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #F2B94B;">Guardian key</span>
+        <span style="font-size: 14px; font-weight: 700; color: #EDE6D6;">Waiting for Seeker 2</span>
+        <span style="font-size: 12px; line-height: 1.4; color: #93A097;">Open Veto there and confirm with your fingerprint. Key 4mKp...R2vd.</span>
+      </div>
+    </div>
+
+    <div class="rise rise-4" style="display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 16px; background: #16231E; border: 1px solid rgba(237,230,214,0.16);">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">When both have signed</span>
+      <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; font-size: 13px; line-height: 1.4; color: #D3CCBB;">
+        <li style="display: flex; gap: 8px;"><span style="color: #C9A24D;">1</span><span>1,000 test USDC goes to 8xQf...Tz9A at once. Your vault is left with 0.</span></li>
+        <li style="display: flex; gap: 8px;"><span style="color: #C9A24D;">2</span><span>The record says "released early by both keys". 8xQf...Tz9A becomes a known address.</span></li>
+      </ul>
+    </div>
+
+    <div class="rise rise-5" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 16px; background: linear-gradient(90deg, rgba(201,162,77,0.14) 0%, #16231E 60%); border: 1px solid rgba(201,162,77,0.45);">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"></path><path d="M9 12l2 2 4-4"></path></svg>
+      <span style="flex: 1; font-size: 13px; line-height: 1.4; color: #D3CCBB;">Only one phone? The guardian key can also be a second key in Seed Vault on this phone. This request stays open 30 minutes.</span>
+    </div>
+
+  </div>
+
+  <div class="rise rise-6" style="display: flex; flex-direction: column; gap: 8px; padding: 12px 24px 26px 24px; position: relative;">
+    <div role="status" aria-live="polite" style="height: 56px; border-radius: 16px; background: #16231E; border: 1px solid rgba(242,185,75,0.5); color: #EDE6D6; font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px;">
+      <span class="lamp" aria-hidden="true" style="display: block; width: 10px; height: 10px; border-radius: 50%; background: #F2B94B; border: 1px solid #7E5E14;"></span>
+      <span>1 of 2 signed. Waiting for Seeker 2.</span>
+    </div>
+    <a href="#held" class="ghost" style="height: 48px; border: 1px solid rgba(237,230,214,0.16); border-radius: 14px; background: #16231E; color: #EDE6D6; text-decoration: none; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;">Cancel, keep waiting until Sunday</a>
+    <p style="margin: 0; text-align: center; font-size: 12px; line-height: 1.45; color: #93A097;">Nothing moves until the second fingerprint. If it never comes, the hold simply runs its course.</p>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
