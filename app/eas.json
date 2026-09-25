@@ -17,12 +17,12 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_VETO_RPC": "https://api.devnet.solana.com",
         "EXPO_PUBLIC_VETO_PROGRAM_ID": "3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV",
         "EXPO_PUBLIC_VETO_MINT": "2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU",
         "EXPO_PUBLIC_VETO_MINT_DECIMALS": "6",
         "EXPO_PUBLIC_VETO_EXPLORER_CLUSTER": "devnet"
-      }
+      },
+      "environment": "production"
     }
   }
 }
