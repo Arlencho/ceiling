@@ -14,6 +14,7 @@ import { LatestDecision } from '../../components/daily/LatestDecision';
 import { SpendBoard } from '../../components/daily/SpendBoard';
 import { StreakCall } from '../../components/daily/StreakCall';
 import { barUnits, openedAtSec, refusalStreak, ruleDay } from '../../components/daily/facts';
+import { HoldEntry } from '../../components/hold/HoldEntry';
 import { HomeStay } from '../../components/renewal/RenewalBanner';
 import { EmptyState } from '../../components/EmptyState';
 import { OpenFirstRule } from '../../components/OpenFirstRule';
@@ -67,6 +68,7 @@ export default function OverviewScreen() {
         }
       />
       <ConnectGate>
+        <HoldEntry />
         {chain.configError ? <EmptyState>{chain.configError}</EmptyState> : null}
         {chain.error && chain.mandateStatus !== 'rate-limited' ? (
           <EmptyState>{chain.error}</EmptyState>
