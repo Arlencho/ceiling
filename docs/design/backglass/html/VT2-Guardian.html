@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Guardian key</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+button,a{font-family:inherit;}
+button:focus-visible,a:focus-visible{outline:2px solid #C9A24D;outline-offset:3px;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes lampBreathe{0%,100%{box-shadow:0 0 4px rgba(156,201,168,0.4);}50%{box-shadow:0 0 12px rgba(156,201,168,0.95);}}
+@keyframes sheen{0%{background-position:0% 50%;}100%{background-position:200% 50%;}}
+.rise{animation:rise 0.7s cubic-bezier(0.22,1,0.36,1) both;}
+.rise-1{animation-delay:0.05s;}
+.rise-2{animation-delay:0.15s;}
+.rise-3{animation-delay:0.28s;}
+.rise-4{animation-delay:0.40s;}
+.rise-5{animation-delay:0.52s;}
+.rise-6{animation-delay:0.64s;}
+.rise-7{animation-delay:0.76s;}
+.lamp{animation:lampBreathe 3s ease-in-out infinite;}
+.opt{transition:border-color 0.2s ease,background-color 0.2s ease;}
+.opt:hover{border-color:#C9A24D;}
+.cta-sheen{background-image:linear-gradient(110deg,#C9A24D 0%,#C9A24D 40%,#E3C77E 50%,#C9A24D 60%,#C9A24D 100%);background-size:200% 100%;animation:sheen 3.2s ease-in-out 2s infinite;}
+@media (prefers-reduced-motion: reduce){
+  .rise,.lamp,.cta-sheen{animation:none;}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div style="position: absolute; top: -140px; left: 50%; width: 460px; height: 460px; margin-left: -230px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.16) 0%, rgba(201,162,77,0.04) 45%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div class="rise rise-1" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 12px 0 12px; position: relative;">
+    <a href="#rules" aria-label="Back" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; color: #EDE6D6; text-decoration: none;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EDE6D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #93A097;">New Hold vault</span>
+    <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 44px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #C9A24D; border: 1px solid rgba(201,162,77,0.5); border-radius: 999px; padding: 3px 8px;">Test tokens</span>
+    </span>
+  </div>
+
+  <div class="rise rise-2" role="list" aria-label="Vault setup: step 3 of 4, Guardian key" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 8px 24px 0 24px; position: relative;">
+    <div role="listitem" style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+      <span style="display: block; width: 100%; height: 4px; border-radius: 2px; background: rgba(201,162,77,0.55);"></span>
+      <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #93A097; text-align: center; line-height: 1.2;">Move money in</span>
+    </div>
+    <div role="listitem" style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+      <span style="display: block; width: 100%; height: 4px; border-radius: 2px; background: rgba(201,162,77,0.55);"></span>
+      <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #93A097; text-align: center; line-height: 1.2;">Set the rules</span>
+    </div>
+    <div role="listitem" aria-current="step" style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+      <span style="display: block; width: 100%; height: 4px; border-radius: 2px; background: #C9A24D; box-shadow: 0 0 8px rgba(201,162,77,0.6);"></span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #EDE6D6; text-align: center; line-height: 1.2;">Guardian key</span>
+    </div>
+    <div role="listitem" style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+      <span style="display: block; width: 100%; height: 4px; border-radius: 2px; background: rgba(237,230,214,0.14);"></span>
+      <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #93A097; text-align: center; line-height: 1.2;">Live</span>
+    </div>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-direction: column; padding: 12px 24px 0 24px; position: relative; gap: 8px; min-height: 0;">
+
+    <div class="rise rise-3" style="display: flex; flex-direction: column; gap: 6px;">
+      <h1 style="margin: 0; font-family: 'Fraunces', serif; font-weight: 400; font-size: 30px; line-height: 1.1; letter-spacing: -0.01em; color: #EDE6D6;">Add a key that can only say no.</h1>
+      <p style="margin: 0; font-size: 14px; line-height: 1.45; color: #D3CCBB;">It can stop a waiting withdrawal, freeze the vault, and send everything to your safe address. It can never send money anywhere else.</p>
+    </div>
+
+    <div role="radiogroup" aria-label="Where the guardian key lives" style="display: flex; flex-direction: column; gap: 8px;">
+      <button type="button" role="radio" aria-checked="true" class="rise rise-4 opt" style="text-align: left; display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-radius: 16px; background: rgba(201,162,77,0.10); border: 1px solid #C9A24D; color: #EDE6D6; cursor: pointer; box-shadow: 0 0 0 3px rgba(201,162,77,0.12);">
+        <span style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: #0F1A16; border: 1px solid rgba(201,162,77,0.55); flex-shrink: 0;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"></rect><path d="M11 18h2"></path></svg>
+        </span>
+        <span style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0;">
+          <span style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 15px; font-weight: 700; color: #EDE6D6;">Your second Seeker</span>
+            <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #0F1A16; background: #C9A24D; border-radius: 999px; padding: 2px 7px;">Recommended</span>
+          </span>
+          <span style="font-size: 12.5px; line-height: 1.4; color: #D3CCBB;">A different phone with its own Seed Vault. Also protects you if someone has your seed phrase.</span>
+          <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9CC9A8; margin-top: 2px;">
+            <span class="lamp" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #9CC9A8;"></span>
+            <span>Found nearby: Seeker 2, key 4mKp...R2vd</span>
+          </span>
+        </span>
+        <span aria-hidden="true" style="display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #C9A24D; flex-shrink: 0; margin-top: 8px;"><span style="display: block; width: 12px; height: 12px; border-radius: 50%; background: #C9A24D;"></span></span>
+      </button>
+
+      <button type="button" role="radio" aria-checked="false" class="rise rise-5 opt" style="text-align: left; display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-radius: 16px; background: #16231E; border: 1px solid rgba(237,230,214,0.16); color: #EDE6D6; cursor: pointer;">
+        <span style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: #0F1A16; border: 1px solid rgba(237,230,214,0.2); flex-shrink: 0;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D3CCBB" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="14" r="4"></circle><path d="M11 11l9-9"></path><path d="M17 5l2 2"></path><path d="M14 8l2 2"></path></svg>
+        </span>
+        <span style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0;">
+          <span style="font-size: 15px; font-weight: 700; color: #EDE6D6;">A second key in Seed Vault on this phone</span>
+          <span style="font-size: 12.5px; line-height: 1.4; color: #D3CCBB;">Quick. Stops a stolen everyday key or a scam signed by mistake. Not a stolen seed phrase.</span>
+        </span>
+        <span aria-hidden="true" style="display: block; width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(237,230,214,0.35); flex-shrink: 0; margin-top: 8px;"></span>
+      </button>
+    </div>
+
+    <div class="rise rise-6" style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: #16231E; border: 1px solid rgba(156,201,168,0.45);">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9CC9A8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"></path></svg>
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #9CC9A8;">Safe address</span>
+        <span style="font-size: 15px; font-weight: 600; color: #EDE6D6; font-variant-numeric: tabular-nums;">4mKp...R2vd, Seeker 2</span>
+        <span style="font-size: 12px; line-height: 1.4; color: #93A097;">Where Recover sends everything, at once. Changing it later waits 2 days.</span>
+      </div>
+      <button type="button" style="height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid rgba(201,162,77,0.55); background: transparent; color: #C9A24D; font-size: 13px; font-weight: 700; cursor: pointer; flex-shrink: 0;">Change</button>
+    </div>
+
+  </div>
+
+  <div class="rise rise-7" style="display: flex; flex-direction: column; gap: 8px; padding: 10px 24px 28px 24px; position: relative;">
+    <button type="button" class="cta-sheen" style="height: 56px; border: 0; border-radius: 16px; background-color: #C9A24D; color: #0F1A16; font-size: 17px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 10px 30px rgba(201,162,77,0.22);">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F1A16" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 11a4 4 0 0 1 4 4v2"></path><path d="M8 15a4 4 0 0 1 8 0"></path><path d="M6 13a6 6 0 0 1 12 0v4"></path><path d="M12 17v2"></path><path d="M9 20a3 3 0 0 0 6 0"></path></svg>
+      <span>Sign here, then confirm on Seeker 2</span>
+    </button>
+    <p style="margin: 0; text-align: center; font-size: 12px; line-height: 1.45; color: #93A097;">One fingerprint on each phone. Removing the guardian key later waits 2 days, so a thief cannot remove it first.</p>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

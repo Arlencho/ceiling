@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 
+import { AgentsIcon } from '../../components/agents/AgentsIcon';
 import { DecisionsIcon, OverviewIcon, RulesIcon } from '../../components/Icons';
 import { colors, fonts } from '../../components/theme';
 import { introductionHidesTabBar } from '../../lib/approval';
@@ -59,6 +60,15 @@ export default function TabsLayout() {
           tabBarLabel: 'Rules',
           tabBarIcon: ({ color }) => <RulesIcon color={String(color)} />,
           tabBarAccessibilityLabel: 'Rules',
+        }}
+      />
+      <Tabs.Screen
+        name="agents"
+        options={{
+          title: 'Agents',
+          tabBarLabel: 'Agents',
+          tabBarIcon: ({ color }) => <AgentsIcon color={String(color)} />,
+          tabBarAccessibilityLabel: 'Agents',
         }}
       />
       <Tabs.Screen

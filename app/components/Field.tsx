@@ -1,6 +1,6 @@
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { colors, fonts } from './theme';
+import { colors, fonts, radii, space } from './theme';
 import { useScrollFocusedField } from './RuleScreen';
 
 export function Field({
@@ -42,7 +42,7 @@ export function Field({
             scrollFocused(target);
           }
         }}
-        style={[styles.input, multiline && styles.multiline]}
+        style={[styles.input, multiline && styles.multiline, !editable && styles.locked]}
       />
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
     </View>
@@ -51,36 +51,39 @@ export function Field({
 
 const styles = StyleSheet.create({
   wrap: {
-    gap: 6,
+    gap: space.sm,
     alignSelf: 'stretch',
   },
   label: {
     color: colors.muted,
     fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 1,
+    fontFamily: fonts.sansBold,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
-    fontFamily: fonts.mono,
   },
   input: {
-    backgroundColor: 'transparent',
+    backgroundColor: colors.surface,
     borderColor: colors.line,
     borderWidth: 1,
-    borderRadius: 6,
-    color: colors.text,
+    borderRadius: radii.control,
+    color: colors.bone,
     fontSize: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontFamily: fonts.sans,
+    lineHeight: 22,
+    paddingHorizontal: space.xl,
+    paddingVertical: space.xl,
+    fontFamily: fonts.sansSemibold,
+    minHeight: 48,
   },
   multiline: {
     minHeight: 72,
     textAlignVertical: 'top',
   },
+  locked: {
+    opacity: 0.7,
+  },
   hint: {
     color: colors.muted,
-    fontSize: 12.5,
-    fontWeight: '500',
+    fontSize: 12,
     lineHeight: 17,
     fontFamily: fonts.sans,
   },

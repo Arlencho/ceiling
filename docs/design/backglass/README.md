@@ -23,3 +23,4 @@ Screen map (flow order):
 | Records and help | FD14 Decisions, FD15 Decision detail, FD16 Share, FD17 Help, FD18 Rule stopped |
 | Staying with Veto | ST1 Widget, ST2 Week in review, ST3 Plaques, ST4 Track record card, ST5 Renewal, ST6 Quiet note |
 | Agents and grades | FD25 Agents (new fourth tab), FD26 Agent record, FD27 How grades work |
+| Hold (vault) | VT0 proposal board, VT1 Set up vault, VT2 Guardian, VT3 Held withdrawal, VT4 Alert plan, VT5 Frozen, VT6 Skip with both keys |

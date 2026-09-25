@@ -5,14 +5,19 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../../components/Button';
+import { HoldToApprove } from '../../components/backglass/HoldToApprove';
+import { ClusterPill } from '../../components/daily/ClusterPill';
 import { DecisionRow } from '../../components/DecisionRow';
 import { ConnectAgentPanel } from '../../components/ConnectAgentPanel';
 import { ConnectGate } from '../../components/ConnectGate';
+import { SpendBoard } from '../../components/daily/SpendBoard';
+import { barUnits, openedAtSec, ruleDay } from '../../components/daily/facts';
+import { LivePill } from '../../components/daily/LivePill';
 import { EmptyState } from '../../components/EmptyState';
 import { ReadState } from '../../components/ReadState';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
-import { colors, fonts } from '../../components/theme';
+import { colors, fonts, radii, space } from '../../components/theme';
 import { copyAgentAddress } from '../../lib/agentAddress';
 import {
   agentChargeConfig,
@@ -26,9 +31,9 @@ import {
 import { ADVISORY_DECLINE_LABEL, KIND_ADVISORY_DECLINE } from '../../lib/advisory';
 import { createClient, fetchAdvisoryDeclines, readRuleFunds, type RuleFunds } from '../../lib/chain';
 import { STATUS_REVOKED } from '../../lib/constants';
-import { formatBaseUnits, formatTimeLeft, newestFirst } from '../../lib/format';
+import { formatBaseUnits, formatTimeLeft, newestFirst, timeLeftParts } from '../../lib/format';
 import type { LedgerRow } from '../../lib/ring';
-import { isActive } from '../../lib/mandate';
+import { isActive, mandateRemaining } from '../../lib/mandate';
 import { mayClaimAbsence } from '../../lib/mandateRead';
 import { notActiveHint } from '../../lib/reasons';
 import {
@@ -58,6 +63,7 @@ export default function RuleDetailScreen() {
   const [loadedError, setLoadedError] = useState<string | null>(null);
   const [errorFor, setErrorFor] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
+  const [closeReset, setCloseReset] = useState(0);
   const [closedNote, setClosedNote] = useState<string | null>(null);
   const [payeeAccount, setPayeeAccount] = useState<string | null>(null);
   const [payeeFor, setPayeeFor] = useState<string | null>(null);
@@ -230,6 +236,14 @@ export default function RuleDetailScreen() {
     });
   }
   const configJson = chargeConfig ? agentChargeConfigJson(chargeConfig) : null;
+  const remaining = mandate ? mandateRemaining(mandate) : 0n;
+  const bars = barUnits(remaining, mandate?.cap ?? 0n);
+  const sameLedger = mandate != null && chain.mandate?.address === mandate.address;
+  const clock = mandate
+    ? ruleDay(sameLedger ? openedAtSec(chain.rows) : null, mandate.expiresAt, nowSec)
+    : null;
+  const left = mandate ? timeLeftParts(mandate.expiresAt, nowSec) : null;
+  const remainingText = formatBaseUnits(remaining, amountDecimals);
   const connectStatus = mandate
     ? agentConnectStatus({
         active,
@@ -271,22 +285,29 @@ export default function RuleDetailScreen() {
 
   const onClose = async () => {
     if (chain.submitHeld) {
+      setCloseReset((value) => value + 1);
       return;
     }
     setFormError(null);
     setMessage(null);
     setClosing(true);
+    let reopenHold = false;
     try {
       const gate = await gateSignature();
+      reopenHold = !gate.sign;
       if (!gate.sign) {
         return;
       }
       await chain.close(address);
       setClosedNote(closedLine(gate.kind));
     } catch (err) {
+      reopenHold = true;
       setFormError(err instanceof Error ? err.message : 'Close failed');
     } finally {
       setClosing(false);
+      if (reopenHold) {
+        setCloseReset((value) => value + 1);
+      }
     }
   };
 
@@ -314,6 +335,8 @@ export default function RuleDetailScreen() {
     <Screen refreshing={chain.loading} onRefresh={onRefresh}>
       <TopBar
         back="Rules"
+        center="Your rule"
+        accessory={chain.config ? <ClusterPill cluster={chain.config.explorerCluster} /> : null}
         meta={mandate ? `${index + 1} of ${chain.mandates.length}` : undefined}
       />
       <ConnectGate>
@@ -341,6 +364,61 @@ export default function RuleDetailScreen() {
               </View>
             ) : notify.statusLine ? (
               <Text style={styles.explainCopy}>{notify.statusLine}</Text>
+            ) : null}
+            <View style={styles.identity}>
+              <View style={styles.identityText}>
+                <Text style={styles.agentName}>{truncateAddress(mandate.agent)}</Text>
+                <Text style={styles.purposeLine}>{displayPurpose(mandate.purpose)}</Text>
+              </View>
+              <LivePill
+                label={active ? 'Active' : mandate.status === STATUS_REVOKED ? 'Stopped' : 'Ended'}
+                tone={active ? 'live' : 'stopped'}
+              />
+            </View>
+            <SpendBoard
+              kicker={active ? 'Your agent can still spend' : 'Still in the rule'}
+              remainingText={remainingText}
+              ofText={active ? `of ${formatBaseUnits(mandate.cap, amountDecimals)}` : 'still in the rule, yours to take back'}
+              spentText={formatBaseUnits(mandate.spent, amountDecimals)}
+              spentCaption={active ? 'spent so far' : `of ${formatBaseUnits(mandate.cap, amountDecimals)} spent`}
+              remaining={bars.remaining}
+              cap={bars.cap}
+              accessibilityLabel={`${remainingText} left of ${formatBaseUnits(mandate.cap, amountDecimals)}`}
+              leftCaption={`1 block = one payment of ${formatBaseUnits(mandate.perTxMax, amountDecimals)}`}
+              rightCaption={funds ? 'Kept in its own account' : 'Reading where this rule keeps its budget.'}
+              dimmed={!active}
+            />
+            <View style={styles.stats}>
+              <View style={styles.stat}>
+                <Text style={styles.statK}>Most per payment</Text>
+                <Text style={styles.statV}>{`${formatBaseUnits(mandate.perTxMax, amountDecimals)} at a time`}</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statK}>The rule ends</Text>
+                <Text style={styles.statV}>{left ? `${left.value} ${left.label}` : formatTimeLeft(mandate.expiresAt, nowSec)}</Text>
+                <Text style={styles.statHint}>{clock ? `day ${clock.day} of ${clock.total}` : formatExpiryDate(mandate.expiresAt)}</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statK}>Only payee</Text>
+                <Text style={styles.statV}>{truncateAddress(mandate.merchant)}</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statK}>Your agent</Text>
+                <Text style={styles.statV}>{truncateAddress(mandate.agent)}</Text>
+              </View>
+            </View>
+            {!active ? (
+              <View style={styles.stoppedCopy}>
+                <Text style={styles.h2}>
+                  {mandate.status === STATUS_REVOKED ? 'You stopped this rule.' : 'This rule has ended.'}
+                </Text>
+                <Text style={styles.explainCopy}>
+                  Your agent can still ask, but the program refuses every request now. The reason it gives: rule not active.
+                </Text>
+                <Text style={styles.explainCopy}>
+                  The next request from your agent will be refused. No money can leave the rule.
+                </Text>
+              </View>
             ) : null}
             <Text style={styles.h2}>The rule</Text>
             <Text style={styles.sentence}>{ruleSentence(mandate, amountDecimals)}</Text>
@@ -460,7 +538,8 @@ export default function RuleDetailScreen() {
                 </EmptyState>
               ) : (
                 <Button
-                  label="Revoke this rule"
+                  label="Stop the rule"
+                  accessibilityLabel="Revoke this rule"
                   quiet
                   invert={false}
                   busy={chain.loading}
@@ -485,13 +564,12 @@ export default function RuleDetailScreen() {
                     signature.
                   </Text>
                 )}
-                <Button
-                  label="Close this rule"
-                  quiet
-                  invert={false}
-                  busy={closing || chain.loading}
-                  disabled={chain.submitHeld}
-                  onPress={() => {
+                <HoldToApprove
+                  label={`Close this rule and get ${remainingText} back to your wallet`}
+                  hint="Hold to sign in Seed Vault. Veto never sees your key."
+                  disabled={closing || chain.loading || chain.submitHeld}
+                  resetKey={closeReset}
+                  onConfirm={() => {
                     void onClose();
                   }}
                 />
@@ -647,5 +725,64 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 15,
     lineHeight: 22,
+  },
+  identity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space.xl,
+  },
+  identityText: {
+    flex: 1,
+    gap: 2,
+  },
+  agentName: {
+    fontFamily: fonts.serif,
+    fontSize: 24,
+    lineHeight: 28,
+    color: colors.bone,
+  },
+  purposeLine: {
+    fontFamily: fonts.serifItalic,
+    fontSize: 14,
+    lineHeight: 18,
+    color: colors.body,
+  },
+  stats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.md,
+  },
+  stat: {
+    width: '48%',
+    gap: 2,
+    padding: space.xl,
+    borderRadius: radii.plaque,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  statK: {
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    lineHeight: 14,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: colors.muted,
+  },
+  statV: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: colors.bone,
+  },
+  statHint: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.muted,
+  },
+  stoppedCopy: {
+    gap: space.md,
   },
 });
