@@ -56,7 +56,46 @@
           "barcodeScannerEnabled": true
         }
       ],
-      "./plugins/withRuleRequestCamera.js"
+      "./plugins/withRuleRequestCamera.js",
+      [
+        "react-native-android-widget",
+        {
+          "fonts": [
+            "./node_modules/@expo-google-fonts/fraunces/300Light/Fraunces_300Light.ttf",
+            "./node_modules/@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.ttf",
+            "./node_modules/@expo-google-fonts/manrope/400Regular/Manrope_400Regular.ttf",
+            "./node_modules/@expo-google-fonts/manrope/600SemiBold/Manrope_600SemiBold.ttf",
+            "./node_modules/@expo-google-fonts/manrope/700Bold/Manrope_700Bold.ttf"
+          ],
+          "widgets": [
+            {
+              "name": "Spend",
+              "label": "What this agent can still spend",
+              "description": "What the selected agent can still spend, the last decision, and the days left.",
+              "minWidth": "250dp",
+              "minHeight": "180dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 3,
+              "previewImage": "./assets/brand/splash-mark-512.png",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "Rule",
+              "label": "One rule",
+              "description": "What one rule can still spend. Tap it to open that rule.",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "previewImage": "./assets/brand/splash-mark-512.png",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000,
+              "widgetFeatures": "reconfigurable"
+            }
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

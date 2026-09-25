@@ -19,6 +19,7 @@ import {
   type NotifyMandateLedger,
 } from './notify';
 import { loadSession } from './wallet';
+import { refreshHomeWidgets } from '../widgets/register';
 
 export const DECISION_NOTIFY_TASK = 'veto-decision-notify';
 export const DECISION_CHANNEL_ID = 'decisions';
@@ -39,6 +40,10 @@ Notifications.setNotificationHandler({
 TaskManager.defineTask(DECISION_NOTIFY_TASK, async () => {
   try {
     await runDecisionNotifyScan();
+    // Static on purpose. A dynamic import still evaluates the real widget
+    // module, which pulls in react-native and fails this scan. One refresh
+    // after the rules are read.
+    await refreshHomeWidgets();
     return BackgroundTask.BackgroundTaskResult.Success;
   } catch {
     return BackgroundTask.BackgroundTaskResult.Failed;

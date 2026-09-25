@@ -16,4 +16,7 @@ import './polyfills';
 // Do not move this above ./polyfills, and do not drop it: the router import
 // below is what starts the UI, and the task has to exist before that.
 import './lib/decisionNotifyTask';
+import { registerHomeWidgets } from './widgets/register';
 import 'expo-router/entry';
+
+registerHomeWidgets();
