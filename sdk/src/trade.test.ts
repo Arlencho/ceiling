@@ -228,7 +228,9 @@ test("tradeStatus reports the cap, the floor, and the pinned destination", async
       spent: 250n,
       perTradeMax: 40n,
       dailyLimit: 100n,
-      windowSpent: 25n,
+      dailyBuckets: Array.from({ length: 25 }, (_, i) => ({
+        hour: BigInt(Math.floor(Date.now() / 3_600_000)) - BigInt(i), amount: 1n,
+      })),
       floorNum: 9_500n,
       floorDen: 10_000n,
       expiresAt: 1_900_000_000n,
@@ -258,8 +260,7 @@ test("tradeStatus treats a finished window as unused", async () => {
   const { veto } = agentFor(
     tradeWorld({
       dailyLimit: 100n,
-      windowSpent: 100n,
-      windowStart: 1n,
+      dailyBuckets: Array.from({ length: 25 }, () => ({ hour: 0n, amount: 4n })),
     }),
   );
   const status = await veto.tradeStatus();

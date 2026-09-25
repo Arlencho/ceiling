@@ -2,6 +2,8 @@ import { redactRpc } from './rpcPrivacy';
 import { Buffer } from 'buffer';
 import { Connection, Keypair, PublicKey, Transaction } from '@solana/web3.js';
 
+import { walletActionSucceeded } from './walletActionStatus';
+
 import { walletChainForCluster } from './appConfig';
 
 export const APP_IDENTITY = {
@@ -598,6 +600,7 @@ export async function connect(
   }
   await persistSession(store, session);
   const agentPublicKey = await loadOrCreateAgentPublicKey(store, generate);
+  walletActionSucceeded();
   return {
     authToken: session.authToken,
     ownerPublicKey: session.ownerPublicKey,
@@ -617,6 +620,7 @@ export async function disconnect(transact: TransactFn, store: WalletStore): Prom
   } finally {
     await clearSession(store);
   }
+  walletActionSucceeded();
 }
 
 export async function restore(
@@ -664,6 +668,7 @@ export async function signAndSendTransactions(
       return signaturesFromWallet(signed, transactions.length);
     }, associationConfig(stored?.walletUriBase));
     await confirmSignatures(signatures, cluster, options);
+    walletActionSucceeded();
     return signatures;
   } catch (err) {
     throw new Error(explainWalletFailure(err, cluster));

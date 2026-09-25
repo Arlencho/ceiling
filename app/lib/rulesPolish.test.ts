@@ -240,3 +240,35 @@ test('a card with long 6 decimal amounts and a 5 letter symbol keeps every figur
   }
   act(() => root.unmount());
 });
+
+
+test('Overview stacks its cap below the amount and fits six decimal amounts with five letter symbols', async () => {
+  const { SpendBoard } = await import('../components/daily/SpendBoard');
+  let root!: ReactTestRenderer;
+  await act(async () => {
+    root = create(createElement(SpendBoard, {
+      kicker: 'Your agent can still spend',
+      remainingText: '987654303.873456 VTEST',
+      ofText: 'of 987654321.123456 VTEST',
+      spentText: '17.25 VTEST', spentCaption: 'spent so far',
+      remaining: 9, cap: 10, accessibilityLabel: 'Remaining budget',
+      leftCaption: '1 block is one share of 987654321.123456 VTEST',
+      rightCaption: 'Most per payment: 1234.567891 VTEST',
+    }));
+  });
+  const texts = root.root.findAll((node) => isHost(node, 'Text'));
+  const amount = texts.find((node) => textOf(node) === '987654303.87 VTEST')!;
+  const cap = texts.find((node) => textOf(node) === 'of 987654321.12 VTEST')!;
+  assert.ok(amount);
+  assert.ok(cap);
+  assert.equal(flatStyle(hostParent(amount)!.props.style).flexDirection, 'column');
+  assert.equal(amount.props.numberOfLines, 1);
+  assert.equal(amount.props.adjustsFontSizeToFit, true);
+  assert.ok(amount.props.minimumFontScale <= 0.4);
+  assert.equal(flatStyle(cap.props.style).flexShrink, 1);
+  assert.equal(cap.props.numberOfLines, undefined, 'the cap can wrap');
+  for (const node of texts) {
+    assert.equal(flatStyle(node.props.style).width, undefined);
+  }
+  act(() => root.unmount());
+});

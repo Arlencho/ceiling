@@ -742,3 +742,17 @@ test('help home, the refusal page, and the export page say what a rule, a refusa
   assert.match(exportText, /CSV opens in a spreadsheet/);
   assert.match(exportText, /complete over payments, never over attempts/);
 });
+
+for (const reason of [11, 12, 13, 14]) {
+  test(`trade refusal ${reason} labels the account according to what the ledger records`, async () => {
+    const rule = mandate();
+    const row = refusedRow({ family: 'trade', reason });
+    params = { id: `${rule.address}:1700:2:2` };
+    chainState = baseChain({ mandate: rule, mandates: [rule], rows: [row] });
+    const { default: Detail } = await import('../app/decision/[id]');
+    const root = await mount(createElement(Detail));
+    const text = visibleText(root);
+    assert.match(text, reason <= 12 ? /Tried account/ : /Output account/);
+    assert.doesNotMatch(text, reason <= 12 ? /Output account/ : /Tried account/);
+  });
+}

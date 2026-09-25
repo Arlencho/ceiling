@@ -16,10 +16,12 @@ import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
 import { colors, fonts, radii, space } from '../../components/theme';
 import { liveMandateCount, showRulePill, tabPillFace } from '../../lib/mandateRead';
-import { rulesHeading } from '../../lib/ruleView';
+import { displayPurpose, rulesHeading } from '../../lib/ruleView';
 import { PAYEE_NOT_IN_RULESET, PAYEE_PREFILL, RULESET_ENVELOPE } from '../../lib/ruleset';
 import { TEMPLATES } from '../../lib/templates';
-import { rulesTokenSummary, tokenSymbol } from '../../lib/tokens';
+import { poolByAddress } from '../../lib/pools';
+import { formatTokenAmount, rulesTokenSummary, tokenSymbol } from '../../lib/tokens';
+import { isTradeActive, tradePairLabel } from '../../lib/tradeRule';
 import { useChain } from '../../lib/useChain';
 import { useRefreshOnFocus } from '../../lib/useRefreshOnFocus';
 import { useRulesets } from '../../lib/useRulesets';
@@ -32,16 +34,21 @@ export default function RulesScreen() {
   const rulesets = useRulesets();
   const router = useRouter();
   const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
-  const selected = chain.mandate?.address ?? null;
-  const count = chain.mandates.length;
-  const liveCount = liveMandateCount(chain.mandates, chain.nowMs);
+  const tradeRules = chain.tradeRules ?? [];
+  const selected = chain.mandate?.address ?? chain.tradeRule?.address ?? null;
+  const liveCount =
+    liveMandateCount(chain.mandates, chain.nowMs) +
+    tradeRules.filter((rule) => isTradeActive(rule, nowSec)).length;
 
   const onRefresh = useCallback(() => {
     void chain.refresh();
   }, [chain]);
 
-  const heading = rulesHeading(chain.mandates);
-  const tokenLine = rulesTokenSummary(chain.mandates.map((row) => row.mint));
+  const heading = rulesHeading([...chain.mandates, ...tradeRules]);
+  const tokenLine = rulesTokenSummary([
+    ...chain.mandates.map((row) => row.mint),
+    ...tradeRules.map((rule) => rule.inMint),
+  ]);
   const rulesetUnit = chain.config?.mint ? ` ${tokenSymbol(chain.config.mint)}` : '';
 
   return (
@@ -75,7 +82,7 @@ export default function RulesScreen() {
           <View style={styles.block}>
             <View style={styles.section}>
               <Text style={styles.kicker}>Your rules</Text>
-              <Text style={styles.meta}>{count === 1 ? '1 active' : `${liveCount} active`}</Text>
+              <Text style={styles.meta}>{`${liveCount} active`}</Text>
             </View>
             <Text style={styles.h2}>{heading}</Text>
             {tokenLine ? <Text style={styles.tokenLine}>{tokenLine}</Text> : null}
@@ -98,6 +105,29 @@ export default function RulesScreen() {
                   }}
                 />
               ))}
+              {tradeRules.map((rule) => {
+                const known = poolByAddress(rule.pool);
+                const decimals = known?.inputDecimals ?? chain.decimals;
+                return (
+                  <Pressable
+                    key={rule.address}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${displayPurpose(rule.purpose)}, ${tradePairLabel(rule)}`}
+                    onPress={() => {
+                      void chain.selectMandate(rule.address);
+                      router.push(`/rule/${rule.address}`);
+                    }}
+                    style={styles.tpl}
+                  >
+                    <View style={styles.tplText}>
+                      <Text style={styles.tplName}>{displayPurpose(rule.purpose)}</Text>
+                      <Text style={styles.tplSum}>
+                        {`${tradePairLabel(rule)}. ${formatTokenAmount(rule.spent, decimals, rule.inMint)} of ${formatTokenAmount(rule.cap, decimals, rule.inMint)} sent.`}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
             </View>
 
             <View style={styles.actions}>

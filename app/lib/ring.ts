@@ -30,6 +30,12 @@ export type RingEntry = {
   kindName: string;
   reason: number;
   reasonText: string;
+  /** Set on a trade ledger row. Payment rows leave these unset. */
+  amountOut?: bigint;
+  minOut?: bigint;
+  outMint?: string;
+  outDecimals?: number;
+  family?: 'payment' | 'trade';
 };
 
 export type LedgerSnapshot = {

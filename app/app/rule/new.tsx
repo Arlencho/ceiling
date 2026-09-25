@@ -6,6 +6,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { AddressActions } from '../../components/AddressActions';
 import { ApprovalScreen } from '../../components/ApprovalScreen';
+import { RuleKindSwitch } from '../../components/RuleKindSwitch';
+import { TradeRuleForm } from '../../components/TradeRuleForm';
 import { HoldToApprove } from '../../components/backglass/HoldToApprove';
 import { ClusterPill } from '../../components/daily/ClusterPill';
 import { ProgressStrip } from '../../components/backglass/ProgressStrip';
@@ -46,7 +48,7 @@ import {
   type Ruleset,
 } from '../../lib/ruleset';
 import { takeAddressScan } from '../../lib/scanHandoff';
-import { applyTemplate, templateById, TEMPLATES, type MandateFields } from '../../lib/templates';
+import { applyTemplate, isTradeTemplate, templateById, TEMPLATES, type MandateFields } from '../../lib/templates';
 import { useChain } from '../../lib/useChain';
 import { useRulesets } from '../../lib/useRulesets';
 import { useWallet } from '../../lib/useWallet';
@@ -86,7 +88,7 @@ export default function NewRuleScreen() {
   if (!rulesetMode) {
     const requested = params.template ?? '';
     const id = templateById(requested) ? requested : 'charging-agent';
-    return <ApprovalScreen mode="template" request={null} invalidReason={null} templateId={id} />;
+    return <NewRuleFlow templateId={id} />;
   }
 
   const waitingRuleset = Boolean(params.ruleset && params.ruleset !== 'new' && !stored.ready);
@@ -166,6 +168,26 @@ export default function NewRuleScreen() {
       applying={selectedRuleset != null}
       renewing={renewing}
       initialAgent={renewing ? params.agent?.trim() || sourceMandate.agent : ''}
+    />
+  );
+}
+
+function NewRuleFlow({ templateId }: { templateId: string }) {
+  const initial = templateById(templateId);
+  const [kind, setKind] = useState<'payment' | 'trade'>(isTradeTemplate(initial) ? 'trade' : 'payment');
+  const paymentId = initial && !isTradeTemplate(initial) ? templateId : 'charging-agent';
+  const tradeId = initial && isTradeTemplate(initial) ? templateId : 'trading-bot';
+  const leading = <RuleKindSwitch kind={kind} onChange={setKind} />;
+  if (kind === 'trade') {
+    return <TradeRuleForm templateId={tradeId} leading={leading} />;
+  }
+  return (
+    <ApprovalScreen
+      mode="template"
+      request={null}
+      invalidReason={null}
+      templateId={paymentId}
+      leading={leading}
     />
   );
 }

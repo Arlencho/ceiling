@@ -36,7 +36,7 @@ test('authorize names the chain from app config when the env still says devnet',
         return null;
       },
     });
-    assert.equal(chains[0], 'solana:mainnet-beta');
+    assert.equal(chains[0], 'solana:mainnet');
   } finally {
     if (previous === undefined) {
       delete process.env.EXPO_PUBLIC_VETO_EXPLORER_CLUSTER;

@@ -487,8 +487,7 @@ export type TradeRuleFields = {
   spent: bigint;
   perTradeMax: bigint;
   dailyLimit: bigint;
-  windowSpent: bigint;
-  windowStart: bigint;
+  dailyBuckets: { hour: bigint; amount: bigint }[];
   floorNum: bigint;
   floorDen: bigint;
   expiresAt: bigint;
@@ -505,7 +504,7 @@ export type TradeRuleFields = {
 /** Writes a trade rule at the on-chain offsets. Tests treat this as the spec. */
 export function tradeRuleBytes(fields: TradeRuleFields): Buffer {
   const purpose = Buffer.from(fields.purpose, "utf8");
-  const data = Buffer.alloc(8 + 224 + 1 + 192 + 13 * 8 + 4 + purpose.length + 1 + 4 + 4 + 1);
+  const data = Buffer.alloc(8 + 224 + 1 + 192 + 11 * 8 + 25 * 16 + 4 + purpose.length + 1 + 4 + 4 + 1);
   data.set(TRADE_RULE_DISCRIMINATOR, 0);
   let o = 8;
   const putKey = (key: PublicKey): void => {
@@ -536,9 +535,12 @@ export function tradeRuleBytes(fields: TradeRuleFields): Buffer {
   putU64(fields.spent);
   putU64(fields.perTradeMax);
   putU64(fields.dailyLimit);
-  putU64(fields.windowSpent);
-  data.writeBigInt64LE(fields.windowStart, o);
-  o += 8;
+  if (fields.dailyBuckets.length !== 25) throw new Error("expected 25 daily buckets");
+  for (const bucket of fields.dailyBuckets) {
+    data.writeBigInt64LE(bucket.hour, o);
+    o += 8;
+    putU64(bucket.amount);
+  }
   putU64(fields.floorNum);
   putU64(fields.floorDen);
   data.writeBigInt64LE(fields.expiresAt, o);
@@ -705,8 +707,7 @@ export function tradeWorld(
     spent: 0n,
     perTradeMax: 10_000_000n,
     dailyLimit: 100_000_000n,
-    windowSpent: 0n,
-    windowStart: BigInt(Math.floor(Date.now() / 1000)),
+    dailyBuckets: Array.from({ length: 25 }, () => ({ hour: 0n, amount: 0n })),
     floorNum: 9_500n,
     floorDen: 10_000n,
     expiresAt: 1_900_000_000n,

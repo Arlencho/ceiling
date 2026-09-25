@@ -4,7 +4,8 @@ import test from 'node:test';
 import { Keypair } from '@solana/web3.js';
 
 import { KIND_ADVISORY_DECLINE } from './advisory';
-import { KIND_OPENED, KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, REASON_OVER_PER_TX_MAX, STATUS_ACTIVE } from './constants';
+import { KIND_OPENED, KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, REASON_OUTPUT_ACCOUNT_NOT_ALLOWED, REASON_OVER_PER_TX_MAX, STATUS_ACTIVE } from './constants';
+import { DEVNET_USDC_MINT, VTEST_MINT } from './tokens';
 import {
   GRADE_LABEL,
   GRADE_RULE,
@@ -72,6 +73,41 @@ function rule(rows: GradeDecision[], agent = 'agent'): RuleFacts {
     rows,
   };
 }
+
+test('a refused trade is outside the rule and a traded one is inside, on the same agent as a payment rule', () => {
+  const agent = 'same-agent';
+  const payment = rule([opened(), ...paid(1), ...refused(1)], agent);
+  payment.mint = VTEST_MINT;
+  payment.cap = 111n;
+  payment.decimals = 0;
+  const trade = rule(
+    [
+      decision({ kind: KIND_PAID, nonce: 1n, ts: START + 2n, amount: 2n }),
+      decision({
+        kind: KIND_REFUSED,
+        nonce: 2n,
+        ts: START + 3n,
+        amount: 3n,
+        reason: REASON_OUTPUT_ACCOUNT_NOT_ALLOWED,
+      }),
+    ],
+    agent,
+  );
+  trade.mint = DEVNET_USDC_MINT;
+  trade.cap = 222n;
+  trade.decimals = 0;
+  trade.purpose = 'trading bot';
+  const records = buildAgentRecords([payment, trade], {}, NOW);
+  assert.equal(records.length, 1);
+  assert.equal(records[0]?.grade.paid, 2);
+  assert.equal(records[0]?.grade.outside, 2);
+  assert.equal(records[0]?.grade.requests, 4);
+  assert.equal(records[0]?.spend, null);
+  const labels = records[0]?.rules.map((row) => row.capLabel) ?? [];
+  assert.ok(labels.some((label) => label.includes('111') && label.includes('VTEST')));
+  assert.ok(labels.some((label) => label.includes('222') && label.includes('USDC')));
+  assert.equal(labels.some((label) => label.includes('333')), false);
+});
 
 test('fewer than 1 request in 20 is stayed inside its rule', () => {
   const grade = gradeRules([rule([opened(), ...paid(20)])], NOW);

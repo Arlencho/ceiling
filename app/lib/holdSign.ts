@@ -2,6 +2,7 @@ import { Buffer } from 'buffer';
 import { Transaction } from '@solana/web3.js';
 
 import { secureStore, transact } from './mwa';
+import { walletActionSucceeded } from './walletActionStatus';
 import {
   associationBaseUri,
   authorize,
@@ -52,7 +53,7 @@ export async function signHoldPartial(
   const stored = await loadSession(store);
   const baseUri = associationBaseUri({ storedBaseUri: stored?.walletUriBase });
   try {
-    return await transactFn(async (wallet) => {
+    const payload = await transactFn(async (wallet) => {
       const session = await authorize(wallet, stored?.authToken, store);
       await persistSession(store, session);
       const signTransactions = (wallet as SigningWallet).signTransactions;
@@ -66,6 +67,8 @@ export async function signHoldPartial(
       const tx = asTransaction(first, transaction);
       return holdRequestPayload(tx);
     }, baseUri ? { baseUri } : undefined);
+    walletActionSucceeded();
+    return payload;
   } catch (err) {
     throw new Error(explainWalletFailure(err, await configuredCluster()));
   }
@@ -80,7 +83,7 @@ export async function exposedWalletAccounts(): Promise<string[]> {
   const stored = await loadSession(secureStore);
   const baseUri = associationBaseUri({ storedBaseUri: stored?.walletUriBase });
   try {
-    return await transact(async (wallet) => {
+    const accounts = await transact(async (wallet) => {
       const result = await authorizeAccounts(wallet, stored?.authToken, secureStore);
       const account = result.accounts[0];
       if (account) {
@@ -93,6 +96,8 @@ export async function exposedWalletAccounts(): Promise<string[]> {
       }
       return result.accounts.map((account) => publicKeyFromAccount(account).toBase58());
     }, baseUri ? { baseUri } : undefined);
+    walletActionSucceeded();
+    return accounts;
   } catch (err) {
     throw new Error(explainWalletFailure(err, await configuredCluster()));
   }

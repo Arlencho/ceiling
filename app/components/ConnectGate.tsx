@@ -131,7 +131,6 @@ export function ConnectGate({
   const body = (
     <View style={styles.block}>
       {showNetwork && networkLine ? <Text style={styles.thesis}>{networkLine}</Text> : null}
-      {wallet.error ? <Text style={styles.error}>{wallet.error}</Text> : null}
       {children}
     </View>
   );
@@ -161,10 +160,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     fontFamily: fonts.sans,
-  },
-  error: {
-    color: colors.body,
-    fontSize: 14,
-    lineHeight: 20,
   },
 });

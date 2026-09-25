@@ -33,6 +33,18 @@ import {
   type OpenMandateResult,
   type RevokeResult,
 } from './chain';
+import {
+  closeTradeRule,
+  fetchOwnerTradeRules,
+  fetchTradeLedgerRows,
+  grantTradeOverride,
+  openTradeRule,
+  probeTradeOverride,
+  revokeTradeRule,
+  type OpenTradeInput,
+  type OpenTradeResult,
+} from './tradeChain';
+import { tradeRuleAsMandate, type TradeRuleAccount } from './tradeRule';
 import type { OverrideAssessment } from './override';
 import {
   mandateReadStatus,
@@ -66,6 +78,8 @@ export type ChainState = {
   configError: string | null;
   mandate: MandateAccount | null;
   mandates: MandateAccount[];
+  tradeRule: TradeRuleAccount | null;
+  tradeRules: TradeRuleAccount[];
   snapshot: LedgerSnapshot | null;
   rows: LedgerRow[];
   decimals: number;
@@ -75,6 +89,7 @@ export type ChainState = {
   refresh: () => Promise<void>;
   selectMandate: (address: string) => Promise<void>;
   open: (input: Omit<OpenMandateInput, 'owner' | 'agent'> & { agent?: PublicKey }) => Promise<OpenMandateResult>;
+  openTrade: (input: Omit<OpenTradeInput, 'owner' | 'agent' | 'cluster'> & { agent?: PublicKey }) => Promise<OpenTradeResult>;
   revoke: (address?: string) => Promise<RevokeResult>;
   close: (address?: string) => Promise<CloseResult>;
   probeOverride: (mandateAddress: string, row: LedgerRow) => Promise<OverrideAssessment>;
@@ -110,6 +125,8 @@ function useChainState(): ChainState {
   const [configError, setConfigError] = useState<string | null>(null);
   const [mandate, setMandate] = useState<MandateAccount | null>(null);
   const [mandates, setMandates] = useState<MandateAccount[]>([]);
+  const [tradeRule, setTradeRule] = useState<TradeRuleAccount | null>(null);
+  const [tradeRules, setTradeRules] = useState<TradeRuleAccount[]>([]);
   const [snapshot, setSnapshot] = useState<LedgerSnapshot | null>(null);
   const [rows, setRows] = useState<LedgerRow[]>([]);
   const [decimals, setDecimals] = useState(6);
@@ -148,6 +165,8 @@ function useChainState(): ChainState {
       setConfigError(loaded.error);
       setMandate(null);
       setMandates([]);
+      setTradeRule(null);
+      setTradeRules([]);
       setSnapshot(null);
       setRows([]);
       setError(null);
@@ -163,6 +182,8 @@ function useChainState(): ChainState {
     if (!wallet.ownerPublicKey) {
       setMandate(null);
       setMandates([]);
+      setTradeRule(null);
+      setTradeRules([]);
       setSnapshot(null);
       setRows([]);
       setError(null);
@@ -182,26 +203,59 @@ function useChainState(): ChainState {
       const owner = new PublicKey(ownerKey);
       const preferred = await loadChosen(secureStore);
       const found = await fetchOwnerMandates(client, owner);
+      const trades = await fetchOwnerTradeRules(client, owner);
       setMandates(found);
+      setTradeRules(trades);
       releaseIfCurrent();
-      const selected = pickMandate(found, preferred);
-      if (!selected) {
+      const showTrade = async (rule: TradeRuleAccount) => {
+        await saveSelected(secureStore, rule.address);
+        const ledger = await fetchTradeLedgerRows(client, rule);
+        let mintDecimals = loaded.config.mintDecimals;
+        try {
+          mintDecimals = await fetchMintDecimals(client, new PublicKey(rule.inMint));
+        } catch {
+          // Keep the configured fallback rather than inventing an amount.
+        }
         setMandate(null);
-        setSnapshot(null);
-        setRows([]);
-        return;
-      }
-      await saveSelected(secureStore, selected.address);
-      const ledger = await fetchLedgerRows(
-        client,
-        new PublicKey(selected.address),
-        new PublicKey(selected.agent),
-      );
-      let mintDecimals = loaded.config.mintDecimals;
-      try {
-        mintDecimals = await fetchMintDecimals(client, new PublicKey(selected.mint));
-      } catch {
-        // Keep the configured fallback rather than inventing an amount.
+        setTradeRule(rule);
+        setSnapshot(ledger.snapshot);
+        setRows(ledger.rows);
+        setDecimals(mintDecimals);
+      };
+      const tradeHit = preferred ? trades.find((rule) => rule.address === preferred) : null;
+      if (tradeHit) {
+        await showTrade(tradeHit);
+      } else {
+        const selected = pickMandate(found, preferred);
+        if (!selected) {
+          const fallback = trades[0];
+          if (!fallback) {
+            setMandate(null);
+            setTradeRule(null);
+            setSnapshot(null);
+            setRows([]);
+            return;
+          }
+          await showTrade(fallback);
+        } else {
+          setTradeRule(null);
+          await saveSelected(secureStore, selected.address);
+          const ledger = await fetchLedgerRows(
+            client,
+            new PublicKey(selected.address),
+            new PublicKey(selected.agent),
+          );
+          let mintDecimals = loaded.config.mintDecimals;
+          try {
+            mintDecimals = await fetchMintDecimals(client, new PublicKey(selected.mint));
+          } catch {
+            // Keep the configured fallback rather than inventing an amount.
+          }
+          setMandate(selected);
+          setSnapshot(ledger.snapshot);
+          setRows(ledger.rows);
+          setDecimals(mintDecimals);
+        }
       }
       let genesis: string | null = null;
       try {
@@ -211,10 +265,6 @@ function useChainState(): ChainState {
           throw err;
         }
       }
-      setMandate(selected);
-      setSnapshot(ledger.snapshot);
-      setRows(ledger.rows);
-      setDecimals(mintDecimals);
       if (genesis) {
         setGenesisHash(genesis);
       }
@@ -307,6 +357,44 @@ function useChainState(): ChainState {
     [holdIfPending, refresh, wallet],
   );
 
+  const openTrade = useCallback(
+    async (input: Omit<OpenTradeInput, 'owner' | 'agent' | 'cluster'> & { agent?: PublicKey }) => {
+      const loaded = tryLoadConfig();
+      if (!loaded.ok) {
+        throw new Error(loaded.error);
+      }
+      if (!wallet.ownerPublicKey) {
+        throw new Error('Connect with Seed Vault first');
+      }
+      if (submitHeldRef.current) {
+        throw new Error(signatureNotYetVisibleMessage(loaded.config.explorerCluster));
+      }
+      const agentKey = await agentKeyForOpen(input.agent, () => wallet.createAgentKeypair());
+      const client: ChainClient = createClient(loaded.config);
+      try {
+        const result = await openTradeRule(client, wallet.signAndSend, {
+          owner: new PublicKey(wallet.ownerPublicKey),
+          agent: agentKey,
+          cluster: loaded.config.explorerCluster,
+          poolId: input.poolId,
+          cap: input.cap,
+          perTradeMax: input.perTradeMax,
+          dailyLimit: input.dailyLimit,
+          floorPercent: input.floorPercent,
+          expiresAt: input.expiresAt,
+          purpose: input.purpose,
+        });
+        await saveSelected(secureStore, result.rule.address);
+        await refresh();
+        return result;
+      } catch (err) {
+        holdIfPending(err);
+        throw err;
+      }
+    },
+    [holdIfPending, refresh, wallet],
+  );
+
   const revoke = useCallback(
     async (address?: string) => {
       const loaded = tryLoadConfig();
@@ -315,6 +403,28 @@ function useChainState(): ChainState {
       }
       if (!wallet.ownerPublicKey) {
         throw new Error('Connect with Seed Vault first');
+      }
+      const tradeTarget =
+        (address ? tradeRules.find((row) => row.address === address) : null) ??
+        (address ? null : tradeRule);
+      if (tradeTarget) {
+        if (submitHeldRef.current) {
+          throw new Error(signatureNotYetVisibleMessage(loaded.config.explorerCluster));
+        }
+        const client = createClient(loaded.config);
+        try {
+          const result = await revokeTradeRule(
+            client,
+            wallet.signAndSend,
+            new PublicKey(wallet.ownerPublicKey),
+            tradeTarget,
+          );
+          await refresh();
+          return { signature: result.signature, mandate: tradeRuleAsMandate(result.rule) };
+        } catch (err) {
+          holdIfPending(err);
+          throw err;
+        }
       }
       const target =
         (address ? mandates.find((row) => row.address === address) : null) ?? mandate;
@@ -339,7 +449,7 @@ function useChainState(): ChainState {
         throw err;
       }
     },
-    [holdIfPending, mandate, mandates, refresh, wallet],
+    [holdIfPending, mandate, mandates, refresh, tradeRule, tradeRules, wallet],
   );
 
   const close = useCallback(
@@ -350,6 +460,28 @@ function useChainState(): ChainState {
       }
       if (!wallet.ownerPublicKey) {
         throw new Error('Connect with Seed Vault first');
+      }
+      const tradeTarget =
+        (address ? tradeRules.find((row) => row.address === address) : null) ??
+        (address ? null : tradeRule);
+      if (tradeTarget) {
+        if (submitHeldRef.current) {
+          throw new Error(signatureNotYetVisibleMessage(loaded.config.explorerCluster));
+        }
+        const client = createClient(loaded.config);
+        try {
+          const result = await closeTradeRule(
+            client,
+            wallet.signAndSend,
+            new PublicKey(wallet.ownerPublicKey),
+            tradeTarget,
+          );
+          await refresh();
+          return result;
+        } catch (err) {
+          holdIfPending(err);
+          throw err;
+        }
       }
       const target =
         (address ? mandates.find((row) => row.address === address) : null) ?? mandate;
@@ -374,7 +506,7 @@ function useChainState(): ChainState {
         throw err;
       }
     },
-    [holdIfPending, mandate, mandates, refresh, wallet],
+    [holdIfPending, mandate, mandates, refresh, tradeRule, tradeRules, wallet],
   );
 
   const probeLiveOverride = useCallback(
@@ -384,9 +516,13 @@ function useChainState(): ChainState {
         throw new Error(loaded.error);
       }
       const client = createClient(loaded.config);
+      const trade = tradeRules.find((item) => item.address === mandateAddress);
+      if (trade) {
+        return probeTradeOverride(client, new PublicKey(mandateAddress), row, decimals);
+      }
       return probeOverride(client, new PublicKey(mandateAddress), row, decimals);
     },
-    [decimals],
+    [decimals, tradeRules],
   );
 
   const grantLiveOverride = useCallback(
@@ -397,6 +533,30 @@ function useChainState(): ChainState {
       }
       if (!wallet.ownerPublicKey) {
         throw new Error('Connect with Seed Vault first');
+      }
+      const tradeTarget =
+        tradeRules.find((item) => item.address === mandateAddress) ??
+        (tradeRule?.address === mandateAddress ? tradeRule : null);
+      if (tradeTarget) {
+        if (submitHeldRef.current) {
+          throw new Error(signatureNotYetVisibleMessage(loaded.config.explorerCluster));
+        }
+        const client = createClient(loaded.config);
+        try {
+          const result = await grantTradeOverride(
+            client,
+            wallet.signAndSend,
+            new PublicKey(wallet.ownerPublicKey),
+            tradeTarget,
+            row,
+            decimals,
+          );
+          await refresh();
+          return { signature: result.signature, mandate: tradeRuleAsMandate(result.rule), row: result.row };
+        } catch (err) {
+          holdIfPending(err);
+          throw err;
+        }
       }
       const target =
         mandates.find((item) => item.address === mandateAddress) ??
@@ -424,7 +584,7 @@ function useChainState(): ChainState {
         throw err;
       }
     },
-    [decimals, holdIfPending, mandate, mandates, refresh, wallet],
+    [decimals, holdIfPending, mandate, mandates, refresh, tradeRule, tradeRules, wallet],
   );
 
   const mandateStatus = mandateReadStatus({
@@ -432,7 +592,7 @@ function useChainState(): ChainState {
     ownerPublicKey: wallet.ownerPublicKey,
     loading,
     error,
-    hasMandate: mandate != null,
+    hasMandate: mandate != null || tradeRule != null,
     rateLimited,
   });
 
@@ -448,6 +608,8 @@ function useChainState(): ChainState {
       configError,
       mandate,
       mandates,
+      tradeRule,
+      tradeRules,
       snapshot,
       rows,
       decimals,
@@ -457,6 +619,7 @@ function useChainState(): ChainState {
       refresh,
       selectMandate,
       open,
+      openTrade,
       revoke,
       close,
       probeOverride: probeLiveOverride,
@@ -473,6 +636,8 @@ function useChainState(): ChainState {
       configError,
       mandate,
       mandates,
+      tradeRule,
+      tradeRules,
       snapshot,
       rows,
       decimals,
@@ -482,6 +647,7 @@ function useChainState(): ChainState {
       refresh,
       selectMandate,
       open,
+      openTrade,
       revoke,
       close,
       probeLiveOverride,

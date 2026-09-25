@@ -2,6 +2,7 @@ import { KIND_PAID, KIND_REFUSED } from './constants';
 import { encodeDecisionId, parseDecisionId } from './exportRecord';
 import { formatTokenAmount } from './tokens';
 import { refusalWhyLine } from './reasons';
+import { tradeDecisionDetail } from './tradeCopy';
 import { truncateAddress } from './wallet';
 
 /**
@@ -21,6 +22,9 @@ export type NotifyLedgerRow = {
   reason: number;
   amount: bigint;
   suggestedOverride: bigint;
+  amountOut?: bigint;
+  outMint?: string | null;
+  outDecimals?: number;
 };
 
 export type NotifyMandateLedger = {
@@ -29,6 +33,7 @@ export type NotifyMandateLedger = {
   perTxMax: bigint;
   decimals: number;
   mint?: string | null;
+  family?: 'payment' | 'trade';
   rows: readonly NotifyLedgerRow[];
 };
 
@@ -65,6 +70,18 @@ function isNotifiable(kind: number): boolean {
   return kind === KIND_PAID || kind === KIND_REFUSED;
 }
 
+function tradePaidBody(ledger: NotifyMandateLedger, row: NotifyLedgerRow): string {
+  return tradeDecisionDetail({
+    amountIn: row.amount,
+    amountOut: row.amountOut,
+    inDecimals: ledger.decimals,
+    outDecimals: row.outDecimals ?? ledger.decimals,
+    inMint: ledger.mint,
+    outMint: row.outMint,
+    perTradeMax: ledger.perTxMax,
+  });
+}
+
 function noticeFor(ledger: NotifyMandateLedger, row: NotifyLedgerRow, id: string): DecisionNotice {
   const refused = row.kind === KIND_REFUSED;
   const body = refused
@@ -75,14 +92,17 @@ function noticeFor(ledger: NotifyMandateLedger, row: NotifyLedgerRow, id: string
         decimals: ledger.decimals,
         perTxMax: ledger.perTxMax,
         mint: ledger.mint,
+        unit: ledger.family === 'trade' ? 'trade' : 'payment',
       })
-    : paidDecisionBody({
-        amount: row.amount,
-        decimals: ledger.decimals,
-        perTxMax: ledger.perTxMax,
-        merchant: ledger.merchant,
-        mint: ledger.mint,
-      });
+    : ledger.family === 'trade'
+      ? tradePaidBody(ledger, row)
+      : paidDecisionBody({
+          amount: row.amount,
+          decimals: ledger.decimals,
+          perTxMax: ledger.perTxMax,
+          merchant: ledger.merchant,
+          mint: ledger.mint,
+        });
   return {
     id,
     path: `/decision/${encodeURIComponent(id)}`,

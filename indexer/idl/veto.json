@@ -3795,6 +3795,22 @@
       }
     },
     {
+      "name": "TradeBucket",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "hour",
+            "type": "i64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "TradeEntry",
       "docs": [
         "One trade decision. `repr(C)` with explicit padding, because the ledger is",
@@ -4059,17 +4075,26 @@
           {
             "name": "daily_limit",
             "docs": [
-              "Most input that may be sold in the current 24 hour window."
+              "Most input that may be sold in any rolling 24 hour interval."
             ],
             "type": "u64"
           },
           {
-            "name": "window_spent",
-            "type": "u64"
-          },
-          {
-            "name": "window_start",
-            "type": "i64"
+            "name": "daily_buckets",
+            "docs": [
+              "Current hour plus the preceding 24 hours. This retains a partial oldest",
+              "hour conservatively, so allowance may take up to 25 hours to recover."
+            ],
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "TradeBucket"
+                  }
+                },
+                25
+              ]
+            }
           },
           {
             "name": "floor_num",
