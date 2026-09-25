@@ -137,8 +137,8 @@ it rather than a copy of the key.
 
 The program does not escrow a spending rule into a vault. `open_mandate` approves the mandate PDA as an SPL
 delegate on the source token account for the cap. `charge` moves tokens only within that
-delegation. Hold, below, is a separate vault in the same program. The devnet upgrade that
-includes it is pending, so Hold is not live on devnet yet.
+delegation. Hold, below, is a separate vault in the same program. Hold is live on devnet.
+The app screens exist, and a device check with a real vault follows.
 
 A rule opened in the app gets its own token account. The address is `createAccountWithSeed`
 from the owner, seed `veto-rule-<mandate id>`. One owner signature creates that account, moves
@@ -295,7 +295,7 @@ Every amount comes from the same chain reads as the app. If there is no signed-i
 
 Hold is a vault in the same program as a spending rule. A rule still does not escrow: the mandate is a delegate. Hold is for a balance the owner deposits and cannot move with a raw transfer. The vault PDA (`["hold", owner, vault_id]`, `vault_id` as a little-endian u64) is the authority of its token account. It holds SPL tokens. Native SOL goes in as wrapped SOL.
 
-Hold is merged and tested. The devnet program upgrade is pending, so Hold is not live on devnet yet. The program recorded in [docs/DEVNET.md](docs/DEVNET.md) does not include it.
+Hold is merged and tested, and live on devnet. The 2026-09-25 upgrade is recorded in [docs/DEVNET.md](docs/DEVNET.md). The app screens exist, and a device check with a real vault follows.
 
 An everyday withdrawal pays at once only when the vault is not frozen, the destination token account has already been paid by this vault, and the running 24 hour total stays inside both the daily limit and `big_share_bps` of the current balance. The app sets that share at 2500, a quarter of the vault. The delay is 1, 2, or 3 days. Anything else is held until `execute` after `unlock_at` on the chain clock. It is not refused, except when the vault cannot cover the amount, or the pending list is full (8). Those two write a refusal and pay nothing. A full known-destination list (16) still pays, and does not grow.
 
@@ -365,7 +365,7 @@ docs/PROBLEM.md           the problem, who has it, what they do today, what Veto
 docs/PLAN.md              build plan, milestones, and prior art
 docs/PITCH.md             the pitch: position and the sixty seconds
 docs/DECK.md              the deck, slide by slide
-docs/DEVNET.md            public devnet addresses; Hold is not in that deploy yet
+docs/DEVNET.md            public devnet addresses, and the 2026-09-25 Hold upgrade
 docs/VIDEO.md             the three-minute shot list
 docs/SECURITY_REVIEW.md   review of the mandate program at an earlier commit; Hold is out of scope
 docs/GCP_SETUP.md         the watcher GCP project, checked by scripts/gcp-verify.sh
@@ -446,7 +446,10 @@ What a key can do under a mandate.
   charge at all; only the named agent signs `charge`.
 - **A forged mandate account cannot be substituted.** `charge` re-derives the mandate address from
   the fields stored inside it and rejects a mismatch, and the CPI signs as that PDA.
-- **Hold is not on devnet yet.** The vault instructions are in this repository and tested. The devnet program upgrade is pending, so Hold is not live on devnet yet. The bounds in the bullets above are the spending rule, which is what the program in [docs/DEVNET.md](docs/DEVNET.md) runs.
+- **Hold is live on devnet.** The vault instructions are in this repository and tested. The
+  2026-09-25 upgrade is recorded in [docs/DEVNET.md](docs/DEVNET.md). The app screens exist,
+  and a device check with a real vault follows. The bounds in the bullets above are the
+  spending rule on the program that file records.
 - **Devnet upgrade authority.** The devnet program is owned by the upgradeable loader. Its
   upgrade authority is the deployer key listed in [docs/DEVNET.md](docs/DEVNET.md), confirmed
   on chain. Whoever holds that key can replace the program logic and, through it, move anything

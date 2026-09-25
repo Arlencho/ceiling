@@ -43,7 +43,7 @@ The `PriceFeed` interface exists because the feed may be revisited
 
 For each hold the watcher records an alert when the hold is created, at 1 hour, at 12 hours, every 12 hours after that, at 6 hours and 1 hour before unlock, and when the hold ends (paid, stopped, recovered, or skipped). Each alert is written once to `hold-alerts.jsonl` next to the decision journal, and printed on the watcher's log line. When `VETO_JOURNAL_GCS` is set, that file is stored beside the decision object, so a restart does not raise the same alert again.
 
-Hold is merged and tested. The devnet program upgrade is pending, so Hold is not live on devnet yet. These alerts have no vault to read on the deployed program until that upgrade.
+Hold is merged and tested, and live on devnet. The app screens exist, and a device check with a real vault follows. Vault `2Tk8Qfd23udSkHZAQvx8x1TXU166n26HtjzCjaSeoqaU` is on the deployed program, recorded in [docs/DEVNET.md](../docs/DEVNET.md).
 
 ## Setup
 

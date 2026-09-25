@@ -142,7 +142,7 @@ The 15 minute local check also raises hold alerts: at creation, at 1 hour, at 12
 
 The phone builds Hold instructions itself. It does not import `@veto-hq/agent-sdk`. That package is not yet published to npm. The program instructions are in the root [README](../README.md).
 
-Hold is merged and tested. The devnet program upgrade is pending, so Hold is not live on devnet yet.
+Hold is merged and tested, and live on devnet. The app screens exist, and a device check with a real vault follows.
 
 Export offers three scopes (this decision, a date range, everything under
 this rule) and two shapes (CSV with the documented columns, JSON as in
