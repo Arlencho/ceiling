@@ -183,4 +183,4 @@ Do not pass `limit` on this walk. `limit` can stop before the end of the listing
 
 The vault PDA is `["hold", owner, vault_id]` with `vault_id` as a little-endian u64. The known-destination list holds 16 addresses. The hold ledger is a 32-entry ring. The instructions and the account fields are in `programs/veto/src/hold.rs`.
 
-Hold is merged and tested. The devnet program upgrade is pending, so Hold is not live on devnet yet. Calling these methods against the program in [docs/DEVNET.md](../docs/DEVNET.md) will fail until that upgrade runs. The package that exports `HoldVault` is still not published to npm.
+Hold is merged and tested, and live on devnet. These methods target the program recorded in [docs/DEVNET.md](../docs/DEVNET.md). The app screens exist, and a device check with a real vault follows. The package that exports `HoldVault` is still not published to npm.

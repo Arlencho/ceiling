@@ -184,8 +184,8 @@ The phone is the Backglass app. A fresh install walks five stages: Learn, Connec
 
 The agent package is `@veto-hq/agent-sdk`. It is not yet published to npm. `private` remains true.
 
-Hold is a vault in the same program (`programs/veto/src/hold.rs`). It does not replace the spending rule. A rule is still a delegate, not an escrow. The SDK exports `HoldVault`. The watcher alerts on `VETO_HOLD_VAULTS`. The app has the Hold screens. Hold is merged and tested. The devnet program upgrade is pending, so Hold is not live on devnet yet.
+Hold is a vault in the same program (`programs/veto/src/hold.rs`). It does not replace the spending rule. A rule is still a delegate, not an escrow. The SDK exports `HoldVault`. The watcher alerts on `VETO_HOLD_VAULTS`. The app has the Hold screens. Hold is merged and tested, and live on devnet as of the 2026-09-25 upgrade recorded in [DEVNET.md](../DEVNET.md). A device check with a real vault follows.
 
 The 2026-09-24 introduction entry described four cards before Connect. Those steps are now the Learn stage. The 2026-09-24 custody entry still describes a spending rule.
 
-Reversed by: nothing in this entry. It records what shipped. Removing Hold before the devnet upgrade would delete the vault path and leave the spending rule as it was.
+Reversed by: nothing in this entry. It records what shipped. Removing Hold would delete the vault path and leave the spending rule as it was.
