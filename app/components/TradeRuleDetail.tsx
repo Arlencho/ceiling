@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, STATUS_REVOKED } from '../lib/constants';
@@ -29,6 +29,7 @@ import { colors, fonts, space } from './theme';
 export function TradeRuleDetail({ rule }: { rule: TradeRuleAccount }) {
   const chain = useChain();
   const router = useRouter();
+  const requestedAddress = useRef<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
@@ -50,9 +51,10 @@ export function TradeRuleDetail({ rule }: { rule: TradeRuleAccount }) {
   const pair = tradePairLabel(rule);
 
   useEffect(() => {
-    if (chain.tradeRule?.address === rule.address || chain.loading) {
+    if (chain.tradeRule?.address === rule.address || chain.loading || requestedAddress.current === rule.address) {
       return;
     }
+    requestedAddress.current = rule.address;
     void chain.selectMandate(rule.address);
   }, [chain, rule.address]);
 
