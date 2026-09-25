@@ -5,6 +5,8 @@ export const LEDGER_CAPACITY = 32;
 export const ENTRY_SIZE = 72;
 /** Bytes of the ledger body before the first entry, after the 8-byte discriminator. */
 export const LEDGER_HEADER_SIZE = 40;
+/** Byte offset of the agent pubkey: the 8-byte discriminator, then the owner pubkey. */
+export const MANDATE_AGENT_OFFSET = 8 + 32;
 
 export type MandateAccount = {
   owner: PublicKey;

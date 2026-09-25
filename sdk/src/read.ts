@@ -1,8 +1,9 @@
 import { Connection, PublicKey, type ConnectionConfig } from "@solana/web3.js";
 import { advisoryDecisionsFromTx, MEMO_PROGRAM_ID } from "./advisory.js";
 import { compareDecisions, decisionsFromTx, viewFromRpc, type Decision, type RpcTransaction, type TxView } from "./events.js";
-import { PROGRAM_ID } from "./idl.js";
+import { MANDATE_DISCRIMINATOR, PROGRAM_ID } from "./idl.js";
 import {
+  MANDATE_AGENT_OFFSET,
   decodeLedger,
   decodeMandate,
   toPublicKey,
@@ -388,4 +389,52 @@ async function listPage(
     pageFull: batch.length === pageSize,
     oldestSignature: oldest ? oldest.signature : null,
   };
+}
+
+/** A decoded mandate plus the account address it was read from. */
+export type AgentMandate = MandateAccount & {
+  address: PublicKey;
+};
+
+/**
+ * Mandate accounts whose agent field equals `agent`, newest mandate id first.
+ * The chain filters are the mandate discriminator and a memcmp at MANDATE_AGENT_OFFSET.
+ */
+export async function mandatesForAgent(
+  connection: Connection,
+  agent: PublicKey | string,
+): Promise<AgentMandate[]> {
+  const agentKey = toPublicKey(agent, "mandatesForAgent agent");
+  const rows = await connection.getProgramAccounts(PROGRAM_ID, {
+    commitment: "confirmed",
+    filters: [
+      {
+        memcmp: {
+          offset: 0,
+          bytes: MANDATE_DISCRIMINATOR.toString("base64"),
+          encoding: "base64",
+        },
+      },
+      {
+        memcmp: {
+          offset: MANDATE_AGENT_OFFSET,
+          bytes: agentKey.toBase58(),
+        },
+      },
+    ],
+  });
+  const found: AgentMandate[] = [];
+  for (const row of rows) {
+    const data = row.account.data;
+    if (!(data instanceof Uint8Array)) {
+      throw new Error(`mandatesForAgent: account ${row.pubkey.toBase58()} data was not bytes`);
+    }
+    const mandate = decodeMandate(Buffer.from(data));
+    found.push({ ...mandate, address: row.pubkey });
+  }
+  found.sort((a, b) => {
+    if (a.mandateId === b.mandateId) return 0;
+    return a.mandateId > b.mandateId ? -1 : 1;
+  });
+  return found;
 }

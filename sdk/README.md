@@ -101,6 +101,33 @@ The checks, in order:
 
 `charge` uses `nextNonce()` when the example asks for the next nonce. That is `last_nonce` plus one, or `overrideNonce` when an override is pending above `last_nonce`. It submits one `charge` and reads the decision in that transaction.
 
+## Finding the rules for an agent key
+
+`mandatesForAgent(connection, agent)` reads the mandate accounts whose agent field is that key. `agent` is a public key or a base58 string. The call is `getProgramAccounts` on the Veto program with two filters: the mandate discriminator, and a memcmp at `MANDATE_AGENT_OFFSET` from `sdk/src/layout.ts` (the agent pubkey, after the 8-byte discriminator and the owner pubkey). The decoded mandates come back newest first. Newest is the largest `mandateId`, and a revoked rule is included.
+
+```ts
+import { mandatesForAgent, VetoAgent } from "@veto-hq/agent-sdk";
+
+const rules = await mandatesForAgent(connection, agentKeypair.publicKey);
+const newest = rules[0];
+if (newest) {
+  const veto = await VetoAgent.fromMandate(connection, newest.address, agentKeypair);
+}
+```
+
+In this repo the import is from `../sdk/src/index.js` until the package is built and linked.
+
+`VetoAgent.fromMandate(connection, mandate, keypair)` performs the same checks as `fromConfig`. It reads the program id, the mint and its decimals, the source, the payee token account, the agent, and the cluster from the chain:
+
+1. The connection's genesis hash is the one published for devnet, testnet, or mainnet-beta. That match is the cluster.
+2. The mandate account exists. Its owner is the Veto program id bundled in `sdk/idl/veto.json` (`3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV`). A mandate owned by another program is refused.
+3. The account decodes as a mandate. The agent field equals the keypair.
+4. The source token account named by the mandate exists.
+5. The mint account is owned by the same token program as that source account, and its decimals byte can be read.
+6. The payee token account is the payee's associated token account for this mint when that account exists, otherwise the payee's only token account for the mint.
+
+`fromConfig` still checks a copied block against the chain.
+
 ## Retrying after the owner grants an override
 
 A charge above the per-payment maximum is refused with reason code 5. `last_nonce` does not advance, so that charge can be retried. The owner grants an override for one nonce and one amount. The mandate stores those as `override_nonce` and `override_amount`.
