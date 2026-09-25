@@ -11,6 +11,7 @@ type Args = {
   rpc?: string;
   program?: string;
   mandate?: string;
+  rule?: string;
   format: "table" | "json";
   pageSize?: number;
   compare: boolean;
@@ -42,6 +43,7 @@ function parseArgs(argv: string[]): Args {
     }
     else if (arg === "--program") out.program = next();
     else if (arg === "--mandate") out.mandate = next();
+    else if (arg === "--rule") out.rule = next();
     else if (arg === "--page-size") out.pageSize = Number(next());
     else if (arg === "--format") {
       const value = next();
@@ -59,15 +61,15 @@ function parseArgs(argv: string[]): Args {
 }
 
 function usage(): string {
-  return `veto-history: rebuild Paid and Refused decisions from program logs
+  return `veto-history: rebuild payment and trade decisions from program logs
 
 Usage:
-  veto-history [--rpc URL[,URL...]] [--program ID] [--mandate PDA] [--format table|json]
+  veto-history [--rpc URL[,URL...]] [--program ID] [--mandate PDA | --rule PDA] [--format table|json]
                [--page-size N] [--compare]
 
 The on-chain ledger is a 32-entry ring. This command walks program signatures
 (and falls back to block scan when the RPC has no signature index) and decodes
-Anchor Paid and Refused events. It does not invent rows for gaps.
+Anchor Paid, Refused, Traded, and TradeRefused events. It does not invent rows for gaps.
 
 --compare reads the ring for --mandate and checks that every paid/refused
 entry still in the ring matches an indexer row on amount, nonce, counterparty,
@@ -85,10 +87,11 @@ async function main(): Promise<void> {
   const rpc = args.rpc && args.rpc.length > 0 ? args.rpc : requiredIdentity("VETO_RPC");
   const program = args.program && args.program.length > 0 ? args.program : requiredIdentity("VETO_PROGRAM_ID");
 
+  if (args.rule && (args.mandate || args.compare)) throw new Error("--rule cannot be combined with --mandate or payment --compare");
   const result = await fetchDecisionHistory({
     rpcUrl: rpc,
     programId: program,
-    mandate: args.mandate,
+    mandate: args.rule ?? args.mandate,
     pageSize: args.pageSize,
   });
 
@@ -96,7 +99,7 @@ async function main(): Promise<void> {
     const body: Record<string, unknown> = {
       rpc,
       program,
-      mandate: args.mandate ?? null,
+      ...(args.rule ? { rule: args.rule } : { mandate: args.mandate ?? null }),
       signature_pages: result.signaturePages,
       signature_count: result.signatureCount,
       used_block_scan: result.usedBlockScan,
@@ -147,7 +150,7 @@ async function main(): Promise<void> {
     `rpc ${redactRpcUrls(rpc.split(",").map((part) => part.trim()).filter((part) => part.length > 0))}\nprogram ${program}\n` +
       `signatures ${result.signatureCount} across ${result.signaturePages} page(s)` +
       `${result.usedBlockScan ? ` (signature index empty, scanned ${result.slotsScanned} slots)` : ""}\n` +
-      `${result.decisions.length} Paid/Refused event(s)\n\n`,
+      `${result.decisions.length} decision event(s)\n\n`,
   );
   process.stdout.write(`${formatTable(result.decisions)}\n`);
 

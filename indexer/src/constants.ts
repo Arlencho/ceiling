@@ -51,6 +51,10 @@ export const REASON_TEXT: Record<number, string> = {
   [REASON_INSUFFICIENT_FUNDS]: "insufficient funds",
   [REASON_ZERO_AMOUNT]: "zero amount",
   [REASON_ACCOUNT_FROZEN]: "account frozen",
+  11: "destination not allowed",
+  12: "pool account not allowed",
+  13: "over daily limit",
+  14: "below price floor",
 };
 
 export function kindName(kind: number): string {
@@ -82,3 +86,9 @@ export function buffersEqual(a: Uint8Array, b: Uint8Array): boolean {
   }
   return true;
 }
+
+export const TRADED_EVENT_DISC = Buffer.from([225, 202, 73, 175, 147, 43, 160, 150]);
+
+export const TRADE_REFUSED_EVENT_DISC = Buffer.from([97, 219, 5, 169, 115, 219, 109, 235]);
+
+export const TRADE_IX_DISC = Buffer.from([178, 144, 26, 216, 241, 187, 206, 130]);

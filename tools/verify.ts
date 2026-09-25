@@ -1,3 +1,4 @@
+import { assessTradeRecord, parseTradeRecord, type TradeDecisionRecord } from "./trade.js";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { Connection, PublicKey } from "@solana/web3.js";
@@ -1121,7 +1122,10 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
   for (const [signature, fetched] of history.transactions) {
     cache.txs.set(signature, fetched);
   }
-  const indexed = filterIndexed(history.decisions, {
+  const payments = history.decisions.filter(
+    (d): d is typeof d & { kind: "paid" | "refused" } => !d.rule && d.kind !== "traded",
+  );
+  const indexed = filterIndexed(payments, {
     mandate: bundle.scope.mandate ?? undefined,
     from: bundle.scope.from,
     to: bundle.scope.to,
@@ -1175,11 +1179,12 @@ async function dateRangePopulationFailures(bundle: DecisionBundle, cache: CheckC
 }
 
 export async function assessRecord(
-  record: DecisionRecord,
+  record: DecisionRecord | TradeDecisionRecord,
   rpc: string,
   conn: Connection,
   opts?: AssessOpts,
 ): Promise<Verdict> {
+  if ("rule" in record) return assessTradeRecord(record, conn, programChoice(opts).programId);
   const cache = makeCache(conn, rpc, opts);
   const { failures, notes } = await checkRecord(record, rpc, cache);
   if (failures.length > 0) {
@@ -1399,7 +1404,10 @@ async function main(): Promise<void> {
   }
   let parsed;
   try {
-    parsed = parseExportText(text);
+    const json = text.trimStart().startsWith("{") ? JSON.parse(text.trim()) : null;
+    parsed = json && ("rule" in json || json.kind === "traded")
+      ? { kind: "single" as const, record: parseTradeRecord(json) }
+      : parseExportText(text);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     fail([`record is not valid schema version 1 JSON or CSV: ${message}`]);

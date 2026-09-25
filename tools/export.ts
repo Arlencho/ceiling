@@ -1,3 +1,4 @@
+import { tradeRecordFromSignature, tradeRecordToJson } from "./trade.js";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -28,6 +29,7 @@ import {
   ledgerPda,
   parseArgs,
   parseChargeFromTx,
+  parseTradeFromTx,
   parseChargeLogs,
   recordToJson,
   resolveClusterName,
@@ -47,10 +49,12 @@ function usage(): never {
 
 Usage:
   npx tsx export.ts --signature <tx> [--out file] [--rpc url[,url...]]
+  npx tsx export.ts --rule <addr> [--signature <tx>] [--nonce N] [--amount-in N] [--out file]
   npx tsx export.ts --mandate <addr> [--kind paid|refused] [--format json|csv] [--out file] [--rpc url[,url...]]
   npx tsx export.ts --from <when> --to <when> [--mandate <addr>] [--format json|csv] [--out file] [--rpc url[,url...]]
 
 --signature writes one version-1 record (the demo beat).
+--rule writes the latest trade decision, or selects a trade with --signature.
 A transaction with more than one charge also needs --mandate, --nonce, and --amount.
 --mandate writes everything under that rule.
 --from / --to writes the date range (UTC calendar day or unix seconds). Combine with
@@ -100,6 +104,18 @@ async function ledgerForCurrentTenure(
     if (message.startsWith("ledger account not found")) throw err;
     throw err;
   }
+}
+
+export async function decisionFromSignature(
+  conn: Connection, signature: string, programId: PublicKey, cluster: string,
+  genesisHash: string, want?: DecisionTriple,
+) {
+  const tx = await getTx(conn, signature);
+  if (!want && parseTradeFromTx(tx, programId).length > 0) {
+    if (parseChargeFromTx(tx, programId).length) throw new Error("mixed payment and trade transaction requires a selector");
+    return tradeRecordFromSignature(conn, signature, programId, cluster, genesisHash);
+  }
+  return recordFromSignature(conn, signature, programId, cluster, genesisHash, want);
 }
 
 export async function recordFromSignature(
@@ -281,7 +297,7 @@ async function recordsFromIndexer(args: {
     pageSize: args.pageSize,
     allowBlockScan: args.allowBlockScan,
   });
-  const filtered = filterIndexed(history.decisions as IndexedDecision[], {
+  const filtered = filterIndexed(history.decisions.filter(d => !d.rule) as IndexedDecision[], {
     mandate: args.mandate,
     from: args.from,
     to: args.to,
@@ -317,6 +333,40 @@ async function main(): Promise<void> {
   const genesisHash = await conn.getGenesisHash();
 
   const signature = flagString(cli, "signature");
+  const ruleStr = flagString(cli, "rule");
+  if (ruleStr) {
+    const out = flagString(cli, "out");
+    if (inferFormat(out, flagString(cli, "format")) !== "json") throw new Error("trade records use JSON");
+    if (flagString(cli, "mandate") || flagString(cli, "from") || flagString(cli, "to") || flagString(cli, "kind")) {
+      throw new Error("--rule selects a single trade; payment population filters do not apply");
+    }
+    const nonce = flagString(cli, "nonce");
+    const amount = flagString(cli, "amount-in");
+    const want = {
+      rule: ruleStr,
+      nonce: nonce === undefined ? undefined : BigInt(nonce),
+      amountIn: amount === undefined ? undefined : BigInt(amount),
+    };
+    let sig = signature;
+    if (!sig) {
+      const history = await fetchDecisionHistory({
+        rpcUrl: rpc, connection: conn, programId: String(programId),
+        mandate: ruleStr, allowBlockScan: false,
+      });
+      if (history.truncated.length) throw new Error("trade history contains truncated logs");
+      const candidates = history.decisions.filter(d => d.rule === ruleStr &&
+        (want.nonce === undefined || d.nonce === want.nonce) &&
+        (want.amountIn === undefined || d.amountIn === want.amountIn));
+      const latest = candidates[candidates.length - 1];
+      if (!latest) throw new Error("no trade decisions for rule");
+      sig = latest.signature;
+      want.nonce = latest.nonce;
+      want.amountIn = latest.amountIn;
+    }
+    const record = await tradeRecordFromSignature(conn, sig, programId, cluster, genesisHash, want);
+    writeOutput(tradeRecordToJson(record), out);
+    return;
+  }
   const mandateStr = flagString(cli, "mandate");
   const kindStr = flagString(cli, "kind");
   const nonceStr = flagString(cli, "nonce");
@@ -346,7 +396,12 @@ async function main(): Promise<void> {
       }
       want = { mandate: mandateStr, nonce, amount: BigInt(amountStr) };
     }
-    const record = await recordFromSignature(conn, signature, programId, cluster, genesisHash, want);
+    const record = await decisionFromSignature(conn, signature, programId, cluster, genesisHash, want);
+    if ("rule" in record) {
+      if (format === "csv") throw new Error("trade records use JSON");
+      writeOutput(tradeRecordToJson(record), out);
+      return;
+    }
     if (format === "csv") {
       const bundle = makeBundle({
         cluster,

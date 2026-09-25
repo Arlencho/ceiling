@@ -14,6 +14,51 @@ The chain is the verifier. `tools/verify.ts` is a client of that chain.
 Schema version 1 is the stable export. Field names are snake_case. Amounts,
 timestamps and nonces are integers (mint base units, unix seconds). No floats.
 
+## Trade records
+
+Trade decisions use schema version `1` and the same snake_case fields and chain
+identity as payment decisions. `tools/export.ts --signature <tx>` detects a trade.
+`--rule <pubkey>` exports the latest trade decision visible in transaction history;
+add `--signature <tx>` to select an older transaction, and `--nonce N --amount-in N`
+to disambiguate multiple trades in that transaction. Trade export produces one
+JSON record, not a payment bulk envelope or CSV.
+
+| Field or behavior | Payment record | Trade record |
+|---|---|---|
+| Account key | `mandate` | `rule`, with no `mandate` key |
+| `kind` | `paid` or `refused` | `traded` or `refused` |
+| Amount fields | `amount` | `amount_in`, `amount_out`, `min_out`; refusal output is zero |
+| `limits` | `cap`, `per_tx_max`, `expires_at`, `merchant`, `purpose` | `cap`, `per_trade_max`, `daily_limit`, `floor_num`, `floor_den`, `expires_at`, `pool`, `destination`, `in_mint`, `out_mint`, `purpose` |
+| `counterparty` | Destination token account | Pinned pool, or the attempted destination for reason 11, or the first mismatching pool account for reason 12 |
+| Shared fields | `schema_version`, `cluster`, `genesis_hash`, `program_id`, `timestamp`, `nonce`, `reason_code`, `reason_text`, `suggested_override`, `signature` | Same names and meanings, bound to a trade instruction and trade ledger |
+| Verification | Existing payment checks | Rule limits, owned rule and ledger PDAs, live ledger entry, successful trade instruction, and attributed `Traded` or `TradeRefused` event |
+| Available history | Payment reconstruction supports older decisions | Trade confirmation requires the rule and matching live ledger entry; missing, overwritten, or ambiguous entries are rejected |
+
+The trade limits come from `TradeRule`. Input limits and `amount_in` use input
+mint base units. `amount_out` and `min_out` use output mint base units. The price
+floor is the exact ratio `floor_num / floor_den`. `timestamp` comes from the
+ledger clock and must be within two seconds of transaction block time. A missing
+block time cannot confirm a trade. The verifier independently chooses its trusted
+program and checks the RPC genesis hash and cluster label.
+
+Reasons 11 through 14 are `destination not allowed`, `pool account not allowed`,
+`over daily limit`, and `below price floor`. For trades, reason 1 says `rule not
+active` and reason 5 says `over per-trade maximum`. Payment reason texts stay
+unchanged. A successful trade has reason 0, `ok`. Refusals retain their nonce and
+suggested override; an override does not raise the cap, daily limit, or price floor.
+
+Trade integers are emitted as JSON numbers when exactly representable, otherwise
+as decimal strings to preserve the full u64 or i64 value. The trade parser accepts
+both forms, rejects unsafe numeric values, and checks the on-chain integer ranges.
+This is an additive version-1 variant; payment serialization and verification stay
+unchanged. An older verifier rejects `kind: "traded"`; a refused trade also fails
+its required `mandate` check. Neither trade variant can be read as a payment.
+
+On success the verifier prints `CONFIRMED` and
+`Trade rule limits, ledger entry, and trade transaction agree.` Otherwise it prints
+`REJECTED` and the differing fields, including changes to either amount. RPC
+transport failures are reported as not checked with exit code 3.
+
 ## Record
 
 ```json
