@@ -16,6 +16,7 @@ import { barUnits, openedAtSec, refusalStreak, ruleDay } from '../../components/
 import { HoldEntry } from '../../components/hold/HoldEntry';
 import { HomeStay } from '../../components/renewal/RenewalBanner';
 import { EmptyState } from '../../components/EmptyState';
+import { GetDevnetUsdc } from '../../components/GetDevnetUsdc';
 import { OpenFirstRule } from '../../components/OpenFirstRule';
 import { ReadState } from '../../components/ReadState';
 import { RuleReadPill } from '../../components/RuleReadPill';
@@ -24,7 +25,9 @@ import { TopBar } from '../../components/TopBar';
 import { colors, fonts, radii, space } from '../../components/theme';
 import { KIND_REFUSED } from '../../lib/constants';
 import { isListedDecision, timeLeftParts, todaysAgentDecisions } from '../../lib/format';
+import { showDevnetUsdcFaucet } from '../../lib/faucet';
 import { devnetTestTokenNote, formatTokenAmount } from '../../lib/tokens';
+import { useWallet } from '../../lib/useWallet';
 import { isActive, mandateRemaining } from '../../lib/mandate';
 import { liveMandateCount, showRulePill, tabPillFace } from '../../lib/mandateRead';
 import { NOTIFICATIONS_OFF_LINE } from '../../lib/notificationAsk';
@@ -36,6 +39,7 @@ import { truncateAddress } from '../../lib/wallet';
 
 export default function OverviewScreen() {
   const chain = useChain();
+  const wallet = useWallet();
   const router = useRouter();
   useRefreshOnFocus(chain.refresh);
   const notifications = useNotificationOffer(chain.mandate != null);
@@ -60,6 +64,13 @@ export default function OverviewScreen() {
   const spentText = formatTokenAmount(mandate?.spent ?? 0n, chain.decimals, mint);
   const perText = formatTokenAmount(mandate?.perTxMax ?? 0n, chain.decimals, mint);
   const tokenNote = devnetTestTokenNote(mint, chain.config?.explorerCluster ?? null);
+  const offerFaucet =
+    chain.mandateStatus === 'empty' &&
+    wallet.ownerPublicKey != null &&
+    showDevnetUsdcFaucet({
+      cluster: chain.config?.explorerCluster,
+      mint: chain.config?.mint,
+    });
 
   const onRefresh = useCallback(() => {
     void chain.refresh();
@@ -87,7 +98,10 @@ export default function OverviewScreen() {
         <HoldEntry />
         {chain.configError ? <EmptyState>{chain.configError}</EmptyState> : null}
         {chain.mandateStatus === 'empty' ? (
-          <OpenFirstRule onOpen={() => router.push('/rule/new')} />
+          <View style={styles.block}>
+            <OpenFirstRule onOpen={() => router.push('/rule/new')} />
+            {offerFaucet && wallet.ownerPublicKey ? <GetDevnetUsdc owner={wallet.ownerPublicKey} /> : null}
+          </View>
         ) : (
           <ReadState
             status={chain.mandateStatus}

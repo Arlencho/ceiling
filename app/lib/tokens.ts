@@ -21,6 +21,7 @@ export const MAINNET_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 export const SKR_MINT = 'SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3';
 
 export const VTEST_DEVNET_NOTE = 'VTEST is a devnet test token with no value.';
+export const USDC_DEVNET_NOTE = "USDC on devnet is Circle's test token. It has no value.";
 
 export type KnownToken = {
   mint: string;
@@ -89,7 +90,7 @@ export function formatTokenDisplay(
   return withToken(formatDisplayAmount(amount, decimals), mint);
 }
 
-/** One plain line, only when this rule's token is VTEST and the cluster is devnet. */
+/** One plain line on devnet, for VTEST or Circle's devnet USDC. Null for every other mint and cluster. */
 export function devnetTestTokenNote(
   mint: string | null | undefined,
   cluster: string | null | undefined,
@@ -97,10 +98,14 @@ export function devnetTestTokenNote(
   if ((cluster ?? '').trim() !== 'devnet') {
     return null;
   }
-  if ((mint ?? '').trim() !== VTEST_MINT) {
-    return null;
+  const key = (mint ?? '').trim();
+  if (key === VTEST_MINT) {
+    return VTEST_DEVNET_NOTE;
   }
-  return VTEST_DEVNET_NOTE;
+  if (key === DEVNET_USDC_MINT) {
+    return USDC_DEVNET_NOTE;
+  }
+  return null;
 }
 
 /** How many rules use each token. Amounts stay on each rule. */

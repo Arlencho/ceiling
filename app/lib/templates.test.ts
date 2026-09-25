@@ -41,6 +41,19 @@ test('templateById returns the mint bot starting point', () => {
   assert.equal(found.fields.purpose, 'cap a mint bot');
 });
 
+test('charge the car matches the live demo rule', () => {
+  const found = templateById('charge-car');
+  assert.ok(found);
+  assert.equal(found.fields.cap, '20');
+  assert.equal(found.fields.perTxMax, '0.50');
+  assert.equal(found.fields.expiryDays, '40');
+  assert.equal(found.fields.purpose, 'charge the car under a price');
+  const charging = templateById('charging-agent');
+  assert.equal(charging?.fields.cap, '80');
+  assert.equal(charging?.fields.perTxMax, '12');
+  assert.equal(templateById('buying-compute')?.fields.cap, '40');
+});
+
 test('trading bot is not a starting point', () => {
   assert.equal(templateById('trading-bot'), undefined);
   assert.equal(

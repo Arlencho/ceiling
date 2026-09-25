@@ -160,6 +160,13 @@ const secureStore = {
   },
 };
 
+mock.module('expo-clipboard', {
+  namedExports: {
+    getStringAsync: async () => '',
+    setStringAsync: async () => undefined,
+  },
+});
+
 mock.module('expo-secure-store', {
   namedExports: {
     getItemAsync: (key: string) => secureStore.getItem(key),

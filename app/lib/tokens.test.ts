@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { STATUS_ACTIVE } from './constants';
+import { buildAgentRecords } from './grade';
 import { truncateAddress } from './wallet';
 import {
   DEVNET_USDC_MINT,
   MAINNET_USDC_MINT,
   SECOND_DEVNET_MINT,
   SKR_MINT,
+  USDC_DEVNET_NOTE,
   VTEST_DEVNET_NOTE,
   VTEST_MINT,
   devnetTestTokenNote,
@@ -50,13 +53,17 @@ test('an unknown mint is the shortened address, and a missing mint is not a gues
   assert.equal(formatTokenAmount(16_660_000n, 6, VTEST_MINT), '16.66 VTEST');
 });
 
-test('the devnet test line is only for VTEST on devnet', () => {
+test('the devnet test line follows the rule mint', () => {
   assert.equal(devnetTestTokenNote(VTEST_MINT, 'devnet'), VTEST_DEVNET_NOTE);
   assert.equal(VTEST_DEVNET_NOTE, 'VTEST is a devnet test token with no value.');
+  assert.equal(devnetTestTokenNote(DEVNET_USDC_MINT, 'devnet'), USDC_DEVNET_NOTE);
+  assert.equal(USDC_DEVNET_NOTE, "USDC on devnet is Circle's test token. It has no value.");
   assert.equal(devnetTestTokenNote(VTEST_MINT, 'mainnet-beta'), null);
+  assert.equal(devnetTestTokenNote(DEVNET_USDC_MINT, 'mainnet-beta'), null);
+  assert.equal(devnetTestTokenNote(DEVNET_USDC_MINT, 'testnet'), null);
   assert.equal(devnetTestTokenNote(VTEST_MINT, 'testnet'), null);
-  assert.equal(devnetTestTokenNote(DEVNET_USDC_MINT, 'devnet'), null);
   assert.equal(devnetTestTokenNote(SECOND_DEVNET_MINT, 'devnet'), null);
+  assert.equal(devnetTestTokenNote(MAINNET_USDC_MINT, 'devnet'), null);
   assert.equal(devnetTestTokenNote(null, 'devnet'), null);
 });
 
@@ -69,4 +76,53 @@ test('a rules header groups by token and does not add different tokens together'
     '2 rules in VTEST. 1 rule in USDC.',
   );
   assert.equal(rulesTokenSummary([SECOND_DEVNET_MINT, SKR_MINT]), '1 rule in Dcbb...K3Kq. 1 rule in SKR.');
+});
+
+test('no screen adds amounts across rules with different mints', () => {
+  const now = 1_700_000_000n;
+  const agent = 'agent';
+  const records = buildAgentRecords(
+    [
+      {
+        address: 'rule-vtest',
+        agent,
+        purpose: 'old rule',
+        cap: 111n,
+        spent: 0n,
+        perTxMax: 1n,
+        expiresAt: now + 86_400n,
+        status: STATUS_ACTIVE,
+        decimals: 0,
+        mint: VTEST_MINT,
+        rows: [],
+      },
+      {
+        address: 'rule-usdc',
+        agent,
+        purpose: 'new rule',
+        cap: 222n,
+        spent: 0n,
+        perTxMax: 1n,
+        expiresAt: now + 86_400n,
+        status: STATUS_ACTIVE,
+        decimals: 0,
+        mint: DEVNET_USDC_MINT,
+        rows: [],
+      },
+    ],
+    {},
+    now,
+  );
+  assert.equal(records.length, 1);
+  assert.equal(records[0]?.spend, null);
+  assert.deepEqual(
+    records[0]?.rules.map((rule) => rule.capLabel).sort(),
+    ['111 VTEST', '222 USDC'],
+  );
+  const named = records[0]?.rules.map((rule) => `${rule.remainingLabel} ${rule.spentLabel}`).join(' ');
+  assert.equal(named?.includes('333'), false);
+  assert.equal(
+    rulesTokenSummary([VTEST_MINT, DEVNET_USDC_MINT]),
+    '1 rule in VTEST. 1 rule in USDC.',
+  );
 });

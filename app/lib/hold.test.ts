@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test, { mock } from 'node:test';
 
 import { Buffer } from 'buffer';
@@ -17,13 +18,20 @@ import {
   formatChainInstant,
   formatHoldAmount,
   heldReasonChips,
+  holdNetworkPill,
   holdRecordLines,
+  holdTokenName,
   HOLD_KIND_FROZEN,
+  HOLD_SHARE_BPS,
+  HOLD_SUGGESTED_DAILY,
+  HOLD_SUGGESTED_DAYS,
+  HOLD_SUGGESTED_DEPOSIT,
   phoneKeyCopy,
   secondSeedVaultAccount,
   stepWhole,
   vaultShareText,
 } from './hold';
+import { DEVNET_USDC_MINT, MAINNET_USDC_MINT, VTEST_MINT } from './tokens';
 import {
   decodeHoldVault,
   holdLedgerPda,
@@ -82,6 +90,28 @@ mock.module('@solana-mobile/mobile-wallet-adapter-protocol-web3js', {
 
 const DAY = 86_400n;
 const CREATED = 1_700_000_000n;
+
+test('hold names the token from the table and the pill says the cluster is a test network', () => {
+  assert.equal(holdTokenName('devnet', DEVNET_USDC_MINT), 'USDC');
+  assert.equal(holdTokenName('devnet', VTEST_MINT), 'VTEST');
+  assert.equal(holdTokenName('mainnet-beta', MAINNET_USDC_MINT), 'USDC');
+  assert.equal(holdTokenName('devnet', null), 'tokens');
+  assert.equal(holdTokenName('devnet', ''), 'tokens');
+  assert.equal(holdNetworkPill('devnet'), 'Devnet, a test network');
+  assert.equal(holdNetworkPill('testnet'), 'Testnet, a test network');
+  assert.equal(holdNetworkPill('mainnet-beta'), 'Mainnet');
+});
+
+test('a new vault suggests a deposit of 5, a daily limit of 1, a 1 day wait, and a quarter share', () => {
+  assert.equal(HOLD_SUGGESTED_DEPOSIT, '5');
+  assert.equal(HOLD_SUGGESTED_DAILY, '1');
+  assert.equal(HOLD_SUGGESTED_DAYS, 1);
+  assert.equal(HOLD_SHARE_BPS, 2500);
+  const layout = readFileSync(new URL('../app/hold/_layout.tsx', import.meta.url), 'utf8');
+  assert.match(layout, /useState\(HOLD_SUGGESTED_DEPOSIT\)/);
+  assert.match(layout, /useState\(HOLD_SUGGESTED_DAILY\)/);
+  assert.match(layout, /useState<HoldDays>\(HOLD_SUGGESTED_DAYS\)/);
+});
 
 test('a Hold wait is 1, 2 or 3 days on the blockchain clock', () => {
   assert.equal(delaySecsForDays(1), DAY);
