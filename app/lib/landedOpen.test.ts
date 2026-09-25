@@ -493,6 +493,18 @@ function Shell() {
 }
 
 async function loadApp(): Promise<void> {
+  const offer = await import('./useNotificationOffer');
+  // Node 22 still evaluates the real package on a dynamic import, mock or not.
+  // expo-notifications and the decision scan both pull the Expo runtime, which
+  // throws __DEV__ is not defined. These fakes answer the offer instead.
+  offer.notificationPermissions.reader = {
+    getPermissionsAsync: async () => ({ granted: permissionGranted }),
+    requestPermissionsAsync: async () => {
+      permissionGranted = true;
+      return { granted: true };
+    },
+  };
+  offer.notificationPermissions.scanDecisions = async () => undefined;
   if (restoreConnection) return;
   const chain = await import('./chain');
   const hook = await import('./useChain');
