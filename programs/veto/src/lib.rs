@@ -20,17 +20,26 @@
 //!
 //! The transaction confirms. The balance is unchanged. The refusal is a
 //! durable artifact with a signature you can open in an explorer.
+//!
+//! A trade rule is the same idea for one pool. The agent may sell the owner's
+//! input token for one pinned output token, inside a cap, a daily limit, a
+//! per-trade ceiling, and a price floor. A trade that breaks a rule confirms,
+//! moves nothing, and leaves the refusal on the trade ledger.
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program_option::COption;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface};
 use hold::InitVaultArgs;
+use trade::OpenTradeRuleArgs;
 
 pub mod hold;
 pub mod hold_state;
 pub mod state;
+pub mod trade;
+pub mod trade_state;
 pub use hold_state::*;
 pub use state::*;
+pub use trade_state::*;
 
 declare_id!("3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV");
 
@@ -417,6 +426,37 @@ pub mod veto {
     pub fn cancel_change(ctx: Context<CancelChange>) -> Result<()> {
         hold::cancel_change(ctx)
     }
+
+    /// Open a trade rule and delegate `cap` of the input token account to it.
+    pub fn open_trade_rule(ctx: Context<OpenTradeRule>, args: OpenTradeRuleArgs) -> Result<()> {
+        trade::open_trade_rule(ctx, args)
+    }
+
+    /// Sell `amount_in` of the pinned input through the pinned pool.
+    ///
+    /// Returns Ok whether the trade is filled or refused.
+    pub fn trade(ctx: Context<Trade>, amount_in: u64, min_out: u64, nonce: u64) -> Result<()> {
+        super::trade::trade(ctx, amount_in, min_out, nonce)
+    }
+
+    /// Raise the per-trade ceiling for one nonce. The daily limit and the cap stay put.
+    pub fn grant_trade_override(
+        ctx: Context<GrantTradeOverride>,
+        amount_in: u64,
+        nonce: u64,
+    ) -> Result<()> {
+        trade::grant_trade_override(ctx, amount_in, nonce)
+    }
+
+    /// Withdraw the agent's authority. Allowed from any status except revoked.
+    pub fn revoke_trade_rule(ctx: Context<RevokeTradeRule>) -> Result<()> {
+        trade::revoke_trade_rule(ctx)
+    }
+
+    /// Reclaim rent once a trade rule is finished. Never while it is active.
+    pub fn close_trade_rule(ctx: Context<CloseTradeRule>) -> Result<()> {
+        trade::close_trade_rule(ctx)
+    }
 }
 
 /// Pure policy evaluation. No writes, no CPI, so it reads as a single list of
@@ -744,6 +784,26 @@ pub enum VetoError {
     HoldInsufficientFunds,
     #[msg("token account authority is not the vault")]
     BadVaultAuthority,
+    #[msg("trade rule address does not match its stored fields")]
+    InvalidTradeRulePda,
+    #[msg("the swap moved a different amount than the rule allowed")]
+    TradeDeltaMismatch,
+    #[msg("pool accounts do not match the trade rule")]
+    PoolAccountMismatch,
+    #[msg("per-trade maximum, daily limit, and cap are out of order")]
+    TradeLimitsOutOfOrder,
+    #[msg("floor denominator must be greater than zero")]
+    FloorDenominatorRequired,
+    #[msg("this exchange is not supported")]
+    ExchangeNotSupported,
+    #[msg("destination token account is not owned by the rule owner")]
+    DestinationNotOwnedByOwner,
+    #[msg("an extra account was passed to trade")]
+    UnexpectedTradeAccount,
+    #[msg("trade rule is not active")]
+    TradeRuleNotActive,
+    #[msg("trade rule is still active")]
+    TradeRuleStillActive,
 }
 
 #[derive(Accounts)]
@@ -1107,4 +1167,179 @@ pub struct CancelChange<'info> {
         bump = vault.ledger_bump
     )]
     pub ledger: AccountLoader<'info, HoldLedger>,
+}
+
+#[derive(Accounts)]
+#[instruction(args: OpenTradeRuleArgs)]
+pub struct OpenTradeRule<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + TradeRule::INIT_SPACE,
+        seeds = [b"trade", owner.key().as_ref(), &args.rule_id.to_le_bytes()],
+        bump
+    )]
+    pub rule: Box<Account<'info, TradeRule>>,
+
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + std::mem::size_of::<TradeLedger>(),
+        seeds = [b"trade-ledger", rule.key().as_ref()],
+        bump
+    )]
+    pub ledger: AccountLoader<'info, TradeLedger>,
+
+    #[account(mut)]
+    pub source: Box<Account<'info, anchor_spl::token::TokenAccount>>,
+
+    pub destination: Box<Account<'info, anchor_spl::token::TokenAccount>>,
+    pub in_mint: Box<Account<'info, anchor_spl::token::Mint>>,
+    pub out_mint: Box<Account<'info, anchor_spl::token::Mint>>,
+
+    /// CHECK: Kind 0 requires this account to be the SPL token-swap program.
+    pub exchange_program: UncheckedAccount<'info>,
+
+    /// CHECK: Pool state account. Its owner must be `exchange_program`.
+    pub pool: UncheckedAccount<'info>,
+
+    /// CHECK: Must own both pool vaults.
+    pub pool_authority: UncheckedAccount<'info>,
+
+    /// CHECK: Input vault. Token account of `in_mint`, owned by `pool_authority`.
+    pub pool_in_vault: UncheckedAccount<'info>,
+
+    /// CHECK: Output vault. Token account of `out_mint`, owned by `pool_authority`.
+    pub pool_out_vault: UncheckedAccount<'info>,
+
+    /// CHECK: Pool LP mint. The fee account must be a token account of this mint.
+    pub pool_mint: UncheckedAccount<'info>,
+
+    /// CHECK: Fee token account of `pool_mint`. The key is stored and compared later.
+    pub pool_fee_account: UncheckedAccount<'info>,
+
+    #[account(address = anchor_spl::token::ID)]
+    pub token_program: Program<'info, anchor_spl::token::Token>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct Trade<'info> {
+    pub agent: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = agent @ VetoError::NotTheAgent,
+        has_one = source @ VetoError::SourceMismatch,
+    )]
+    pub rule: Box<Account<'info, TradeRule>>,
+
+    #[account(
+        mut,
+        seeds = [b"trade-ledger", rule.key().as_ref()],
+        bump
+    )]
+    pub ledger: AccountLoader<'info, TradeLedger>,
+
+    #[account(mut)]
+    pub source: Box<Account<'info, anchor_spl::token::TokenAccount>>,
+
+    /// CHECK: Pinned output account. A different key is refusal 11.
+    #[account(mut)]
+    pub destination: UncheckedAccount<'info>,
+
+    /// CHECK: Compared with the stored program. A different key is refusal 12.
+    pub exchange_program: UncheckedAccount<'info>,
+
+    /// CHECK: Compared with the stored pool. A different key is refusal 12.
+    pub pool: UncheckedAccount<'info>,
+
+    /// CHECK: Compared with the stored authority. A different key is refusal 12.
+    pub pool_authority: UncheckedAccount<'info>,
+
+    /// CHECK: Compared with the stored input vault. A different key is refusal 12.
+    #[account(mut)]
+    pub pool_in_vault: UncheckedAccount<'info>,
+
+    /// CHECK: Compared with the stored output vault. A different key is refusal 12.
+    #[account(mut)]
+    pub pool_out_vault: UncheckedAccount<'info>,
+
+    /// CHECK: Compared with the stored pool mint. A different key is refusal 12.
+    #[account(mut)]
+    pub pool_mint: UncheckedAccount<'info>,
+
+    /// CHECK: Compared with the stored fee account. A different key is refusal 12.
+    #[account(mut)]
+    pub pool_fee_account: UncheckedAccount<'info>,
+
+    #[account(address = anchor_spl::token::ID)]
+    pub token_program: Program<'info, anchor_spl::token::Token>,
+}
+
+#[derive(Accounts)]
+pub struct GrantTradeOverride<'info> {
+    pub owner: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = owner @ VetoError::NotTheOwner,
+    )]
+    pub rule: Box<Account<'info, TradeRule>>,
+
+    #[account(
+        mut,
+        seeds = [b"trade-ledger", rule.key().as_ref()],
+        bump
+    )]
+    pub ledger: AccountLoader<'info, TradeLedger>,
+}
+
+#[derive(Accounts)]
+pub struct RevokeTradeRule<'info> {
+    pub owner: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = owner @ VetoError::NotTheOwner,
+        has_one = source @ VetoError::SourceMismatch,
+    )]
+    pub rule: Box<Account<'info, TradeRule>>,
+
+    #[account(
+        mut,
+        seeds = [b"trade-ledger", rule.key().as_ref()],
+        bump
+    )]
+    pub ledger: AccountLoader<'info, TradeLedger>,
+
+    #[account(mut)]
+    pub source: Box<Account<'info, anchor_spl::token::TokenAccount>>,
+
+    #[account(address = anchor_spl::token::ID)]
+    pub token_program: Program<'info, anchor_spl::token::Token>,
+}
+
+#[derive(Accounts)]
+pub struct CloseTradeRule<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(
+        mut,
+        close = owner,
+        has_one = owner @ VetoError::NotTheOwner,
+    )]
+    pub rule: Box<Account<'info, TradeRule>>,
+
+    #[account(
+        mut,
+        close = owner,
+        seeds = [b"trade-ledger", rule.key().as_ref()],
+        bump
+    )]
+    pub ledger: AccountLoader<'info, TradeLedger>,
 }
