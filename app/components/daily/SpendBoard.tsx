@@ -1,9 +1,11 @@
 import { StyleSheet, Text, View } from 'react-native';
 
+import { roundShownAmounts } from '../../lib/format';
 import { BlockBar } from '../backglass/BlockBar';
 import { BrassFrame } from '../backglass/BrassFrame';
 import { colors, fonts, space } from '../theme';
 import { DimLamps } from './DimLamps';
+import { homeBlockCaption } from './facts';
 
 export function SpendBoard({
   kicker,
@@ -32,18 +34,23 @@ export function SpendBoard({
   aside?: string;
   dimmed?: boolean;
 }) {
+  const blockLine = roundShownAmounts(homeBlockCaption(leftCaption, rightCaption) ?? leftCaption);
+  const perLine = roundShownAmounts(rightCaption);
+  const remainingLine = roundShownAmounts(remainingText);
+  const ofLine = roundShownAmounts(ofText);
+  const spentLine = roundShownAmounts(spentText);
   return (
-    <BrassFrame accessibilityLabel={accessibilityLabel} padding={16}>
+    <BrassFrame accessibilityLabel={roundShownAmounts(accessibilityLabel)} padding={16}>
       {dimmed ? <DimLamps /> : null}
       <View style={styles.head}>
         <Text style={styles.kicker}>{kicker}</Text>
         {aside ? <Text style={styles.aside}>{aside}</Text> : null}
       </View>
       <View style={styles.figures}>
-        <Text style={styles.remaining}>{remainingText}</Text>
-        <Text style={styles.of}>{ofText}</Text>
+        <Text style={styles.remaining}>{remainingLine}</Text>
+        <Text style={styles.of}>{ofLine}</Text>
         <Text style={styles.spent}>
-          <Text style={styles.spentFigure}>{spentText}</Text>
+          <Text style={styles.spentFigure}>{spentLine}</Text>
           {` ${spentCaption}`}
         </Text>
       </View>
@@ -51,8 +58,8 @@ export function SpendBoard({
         <BlockBar remaining={remaining} cap={cap} accessibilityLabel={accessibilityLabel} />
       </View>
       <View style={styles.captions}>
-        <Text style={styles.caption}>{leftCaption}</Text>
-        <Text style={styles.caption}>{rightCaption}</Text>
+        <Text style={styles.caption}>{blockLine}</Text>
+        <Text style={styles.caption}>{perLine}</Text>
       </View>
     </BrassFrame>
   );

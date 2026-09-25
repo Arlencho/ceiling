@@ -27,6 +27,7 @@ export function DecisionRow({
   perTxMax,
   variant = 'list',
   nowMs,
+  payee,
   fresh = false,
   bare = false,
   divider = false,
@@ -39,18 +40,16 @@ export function DecisionRow({
   perTxMax?: bigint;
   variant?: 'list' | 'today';
   nowMs?: number;
+  payee?: string;
   fresh?: boolean;
   bare?: boolean;
   divider?: boolean;
 }) {
   const router = useRouter();
-  const face = decisionFace(row, decimals, perTxMax, nowMs);
+  const face = decisionFace(row, decimals, perTxMax, nowMs, { payee });
   const tone = TONE[face.tone];
   const id = encodeDecisionId(mandateAddress, row);
   const amount = formatBaseUnits(row.amount, decimals);
-  const txLabel = row.signature
-    ? `transaction ${row.signature.slice(0, 4)}...${row.signature.slice(-4)}`
-    : null;
 
   const openDetail = () => {
     router.push(`/decision/${encodeURIComponent(id)}`);
@@ -91,9 +90,9 @@ export function DecisionRow({
         {face.badge ? <RN.Text style={styles.badge}>{face.badge}</RN.Text> : null}
         <RN.Text style={styles.title}>{face.title}</RN.Text>
         <RN.Text style={styles.detail}>{face.detail}</RN.Text>
-        {txLabel ? (
-          <RN.Pressable accessibilityRole="link" accessibilityLabel={txLabel} onPress={openTx} hitSlop={6}>
-            <RN.Text style={styles.tx}>{txLabel}</RN.Text>
+        {face.chainLink ? (
+          <RN.Pressable accessibilityRole="link" accessibilityLabel={face.chainLink} onPress={openTx} hitSlop={6}>
+            <RN.Text style={styles.tx}>{face.chainLink}</RN.Text>
           </RN.Pressable>
         ) : null}
       </RN.View>

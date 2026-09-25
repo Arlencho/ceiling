@@ -8,7 +8,7 @@ import { ConnectGate } from '../../components/ConnectGate';
 import { DecisionRow } from '../../components/DecisionRow';
 import { EmptyState } from '../../components/EmptyState';
 import { ReadState } from '../../components/ReadState';
-import { ClusterPill, Glow, Kicker, Rise } from '../../components/records/chrome';
+import { ClusterPill, Kicker, Rise } from '../../components/records/chrome';
 import { relativeDay } from '../../components/records/copy';
 import { Screen } from '../../components/Screen';
 import { colors, fonts, radii, touchTarget } from '../../components/theme';
@@ -82,7 +82,6 @@ export default function DecisionsScreen() {
 
   return (
     <Screen refreshing={chain.loading} onRefresh={onRefresh}>
-      <Glow />
       <Rise delayMs={50}>
         <View style={styles.mast}>
           <View style={styles.brand}>
@@ -111,7 +110,7 @@ export default function DecisionsScreen() {
               onPress={() => router.push('/share')}
               style={styles.hit}
             >
-              <Text style={styles.exportMark}>↑</Text>
+              <Text style={styles.help}>Export</Text>
             </Pressable>
           </View>
         </View>
@@ -197,6 +196,7 @@ export default function DecisionsScreen() {
                         rpcUrl={rpcUrl}
                         mandateAddress={mandate.address}
                         perTxMax={mandate.perTxMax}
+                        payee={mandate.merchant}
                         nowMs={chain.nowMs}
                         bare
                         divider={index > 0}
@@ -283,10 +283,6 @@ const styles = StyleSheet.create({
     color: colors.body,
     fontFamily: fonts.sansSemibold,
     fontSize: 12,
-  },
-  exportMark: {
-    color: colors.body,
-    fontSize: 18,
   },
   block: {
     gap: 10,

@@ -1,7 +1,7 @@
 import { PublicKey } from '@solana/web3.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { loadAddressBook } from '../../lib/addressBook';
+import { loadAddressBook, saveAddressBook, withSavedName } from '../../lib/addressBook';
 import { createClient, fetchLedgerRows, fetchMintDecimals } from '../../lib/chain';
 import { STATUS_ACTIVE } from '../../lib/constants';
 import { buildAgentRecords, type AgentRecord, type GradeDecision, type RuleFacts } from '../../lib/grade';
@@ -20,6 +20,7 @@ export type AgentScreenData = {
   agents: AgentRecord[];
   refreshing: boolean;
   refresh: () => void;
+  saveName: (agent: string, name: string) => Promise<void>;
 };
 
 function toDecision(row: LedgerRow): GradeDecision {
@@ -43,6 +44,13 @@ export function useAgentHistories(): AgentScreenData {
   const refresh = useCallback(() => {
     void chain.refresh();
   }, [chain]);
+
+  const saveName = useCallback(async (agent: string, name: string) => {
+    const book = await loadAddressBook(secureStore);
+    const next = withSavedName(book, agent, name);
+    await saveAddressBook(secureStore, next);
+    setNames(next);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -184,5 +192,6 @@ export function useAgentHistories(): AgentScreenData {
     agents,
     refreshing: chain.loading || fetching,
     refresh,
+    saveName,
   };
 }

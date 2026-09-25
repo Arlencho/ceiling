@@ -110,20 +110,17 @@ export type DecodedTxDecision = {
   counterparty?: string | null;
 };
 
-function sameDecision(tx: DecodedTxDecision, entry: RingEntry): boolean {
+// The program clock and the RPC block time are the same second on a healthy
+// cluster, but a second or two of skew is common. A match farther away than
+// this is a different charge still sitting in the signature window.
+const SIGNATURE_SKEW_SEC = 120;
+
+function decisionKeyMatches(tx: DecodedTxDecision, entry: RingEntry): boolean {
   if (tx.kind !== entry.kind) {
     return false;
   }
   if (entry.kind === KIND_PAID || entry.kind === KIND_REFUSED || entry.kind === KIND_OVERRIDE) {
-    if (tx.amount !== entry.amount || tx.nonce !== entry.nonce) {
-      return false;
-    }
-  }
-  // When the RPC gives a time, require it. Two refusals of the same charge
-  // share kind, nonce and amount; after the ring wraps, an evicted decision
-  // can still sit in the 50-signature window with that same key.
-  if (tx.blockTime != null && tx.blockTime !== Number(entry.ts)) {
-    return false;
+    return tx.amount === entry.amount && tx.nonce === entry.nonce;
   }
   return true;
 }
@@ -134,15 +131,34 @@ export function attachSignatures(
 ): LedgerRow[] {
   const used = new Set<number>();
   return entries.map((entry) => {
-    const index = txs.findIndex((tx, i) => {
-      if (used.has(i)) {
-        return false;
+    let best = -1;
+    let bestSkew = Number.POSITIVE_INFINITY;
+    let untimed = -1;
+    for (let index = 0; index < txs.length; index += 1) {
+      if (used.has(index)) {
+        continue;
       }
-      return sameDecision(tx, entry);
-    });
-    if (index >= 0) {
-      used.add(index);
       const tx = txs[index];
+      if (!tx || !decisionKeyMatches(tx, entry)) {
+        continue;
+      }
+      if (tx.blockTime == null) {
+        if (untimed < 0) {
+          untimed = index;
+        }
+        continue;
+      }
+      const skew = Math.abs(tx.blockTime - Number(entry.ts));
+      if (skew > SIGNATURE_SKEW_SEC || skew >= bestSkew) {
+        continue;
+      }
+      best = index;
+      bestSkew = skew;
+    }
+    const chosen = best >= 0 ? best : untimed;
+    if (chosen >= 0) {
+      used.add(chosen);
+      const tx = txs[chosen];
       return { ...entry, signature: tx?.signature ?? null, slot: tx?.slot ?? null };
     }
     return { ...entry, signature: null, slot: null };

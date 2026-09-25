@@ -8,11 +8,15 @@ export default function AgentsTab() {
   const data = useAgentHistories();
   const router = useRouter();
   return (
-    <ConnectGate>
+    <ConnectGate padNetwork>
       <AgentsScreen
         data={data}
+        topInset={false}
         onOpenAgent={(agent) => router.push(`/agents/${agent}`)}
         onHowGrades={() => router.push('/agents/grades')}
+        onNameAgent={(agent, name) => {
+          void data.saveName(agent, name);
+        }}
       />
     </ConnectGate>
   );

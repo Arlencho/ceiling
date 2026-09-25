@@ -1,6 +1,6 @@
 import { KIND_ADVISORY_DECLINE } from '../../lib/advisory';
 import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, REASON_OVER_PER_TX_MAX } from '../../lib/constants';
-import { formatBaseUnits, formatClock, formatDayHeading, formatUnix } from '../../lib/format';
+import { formatBaseUnits, formatClock, formatDayHeading, formatUnix, roundShownAmounts } from '../../lib/format';
 import { overrideRowView } from '../../lib/override';
 import { refusalWhyLine } from '../../lib/reasons';
 import type { LedgerRow } from '../../lib/ring';
@@ -15,7 +15,16 @@ export type DecisionFace = {
   detail: string;
   figure: string;
   when: string;
+  chainLink: string | null;
 };
+
+export type DecisionFaceOptions = {
+  payee?: string;
+  amounts?: 'screen' | 'exact';
+};
+
+const CHAIN_LINK = 'See it on the blockchain';
+const CHAIN_SAVED = 'Saved on the blockchain.';
 
 const DAY_MS = 86_400_000;
 
@@ -96,30 +105,54 @@ export function refusedTitle(args: {
   return `Refused: ${why}`;
 }
 
-const MISSING_SIGNATURE =
-  'This RPC did not return a transaction signature for this row. The row itself is from the on-chain ledger, not invented.';
+function chainCopy(lead: string, signature: string | null | undefined): { detail: string; chainLink: string | null } {
+  if (signature) {
+    return { detail: lead, chainLink: CHAIN_LINK };
+  }
+  if (lead.includes('Saved on the blockchain')) {
+    return { detail: lead, chainLink: null };
+  }
+  const detail = lead.length > 0 ? `${lead} ${CHAIN_SAVED}` : CHAIN_SAVED;
+  return { detail, chainLink: null };
+}
+
+function shownPayee(counterparty: string, payee: string | undefined): string {
+  const owner = payee?.trim();
+  if (owner) {
+    return truncateAddress(owner);
+  }
+  return truncateAddress(counterparty);
+}
 
 export function decisionFace(
   row: LedgerRow,
   decimals: number,
   perTxMax: bigint | undefined,
   nowMs: number | undefined,
+  options?: DecisionFaceOptions,
 ): DecisionFace {
   const when = rowWhen(row.ts, nowMs);
+  const screen = options?.amounts !== 'exact';
+  let face: DecisionFace;
   if (row.kind === KIND_ADVISORY_DECLINE) {
     const amount = formatBaseUnits(row.amount, decimals);
     const reason = row.reasonText.trim();
-    return {
+    const chain = chainCopy('Not a refusal by the rule. Your agent signed this note itself.', row.signature);
+    face = {
       tone: 'advisory',
       badge: "Your agent's own note",
       title: reason.length > 0 ? `Your agent declined on its own: ${reason}` : 'Your agent declined on its own',
-      detail: 'Not a refusal by the rule. Your agent signed this note itself.',
+      detail: chain.detail,
       figure: amount,
       when,
+      chainLink: chain.chainLink,
     };
-  }
-  if (row.kind === KIND_REFUSED) {
-    return {
+  } else if (row.kind === KIND_REFUSED) {
+    const chain = chainCopy(
+      row.signature ? 'No money moved. Reason saved on the blockchain.' : 'No money moved.',
+      row.signature,
+    );
+    face = {
       tone: 'refused',
       badge: null,
       title: refusedTitle({
@@ -129,45 +162,57 @@ export function decisionFace(
         reason: row.reason,
         suggestedOverride: row.suggestedOverride,
       }),
-      detail: row.signature
-        ? 'No money moved. Reason saved on the blockchain.'
-        : `No money moved. ${MISSING_SIGNATURE}`,
+      detail: chain.detail,
       figure: formatBaseUnits(0n, decimals),
       when,
+      chainLink: chain.chainLink,
     };
-  }
-  if (row.kind === KIND_OVERRIDE) {
+  } else if (row.kind === KIND_OVERRIDE) {
     const view = overrideRowView(row, decimals);
-    return {
+    const chain = chainCopy(view.why, row.signature);
+    face = {
       tone: 'allowed',
       badge: null,
       title: `Allowed once: this payment of ${view.amount}`,
-      detail: row.signature ? view.why : `${view.why} ${MISSING_SIGNATURE}`,
+      detail: chain.detail,
       figure: view.amount,
       when,
+      chainLink: chain.chainLink,
     };
-  }
-  if (row.kind === KIND_PAID) {
+  } else if (row.kind === KIND_PAID) {
     const amount = formatBaseUnits(row.amount, decimals);
-    const payee = truncateAddress(row.counterparty);
+    const payee = shownPayee(row.counterparty, options?.payee);
     const limit = perTxMax != null ? formatBaseUnits(perTxMax, decimals) : null;
     const inside = limit != null ? `Inside your limit of ${limit} per payment.` : 'Inside the rule.';
-    return {
+    const chain = chainCopy(inside, row.signature);
+    face = {
       tone: 'paid',
       badge: null,
       title: `Paid ${amount} to ${payee}`,
-      detail: row.signature ? inside : `${inside} ${MISSING_SIGNATURE}`,
+      detail: chain.detail,
       figure: `-${amount}`,
       when,
+      chainLink: chain.chainLink,
+    };
+  } else {
+    face = {
+      tone: 'paid',
+      badge: null,
+      title: 'Decision',
+      detail: '',
+      figure: '',
+      when,
+      chainLink: null,
     };
   }
+  if (!screen) {
+    return face;
+  }
   return {
-    tone: 'paid',
-    badge: null,
-    title: 'Decision',
-    detail: '',
-    figure: '',
-    when,
+    ...face,
+    title: roundShownAmounts(face.title),
+    detail: roundShownAmounts(face.detail),
+    figure: roundShownAmounts(face.figure),
   };
 }
 
