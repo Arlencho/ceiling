@@ -19,3 +19,7 @@ loadtest-cu: ## Measure per-decision compute units at scale (LiteSVM, single-thr
 	$(MAKE) -C .. build-test
 	VETO_LOADTEST_MANDATES=$(VETO_LOADTEST_MANDATES) VETO_LOADTEST_CHARGES=$(VETO_LOADTEST_CHARGES) \
 	  cargo run --release --manifest-path onchain/Cargo.toml
+
+.PHONY: validator
+validator: ## Run the local validator benchmark (ARGS=--smoke for ten rules and ten seconds)
+	cd onchain/validator && npm ci && npm run start -- $(ARGS)
