@@ -19,3 +19,4 @@ sdk node 36
 cli node 50
 program cargo 26
 scripts shell 288
+service node 9
