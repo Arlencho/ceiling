@@ -1,12 +1,12 @@
 // Deliberately hostile agent for the demo. Real attempts against our own devnet pool.
 // Uses only the agent and a separate demo trader. Never loads the owner key.
 import { PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, createAccount, getAccount } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID, getOrCreateAssociatedTokenAccount, getAccount } from "@solana/spl-token";
 import { fetchTradeRule, tradeLedgerPda, type TradeResult, type TradeRuleAccount, type VetoAgent } from "../src/index.js";
 import { TRADE_DISCRIMINATOR } from "../src/idl.js";
 import { tradeDecisionsFromTx, viewFromRpc } from "../src/events.js";
 import { assertExpected, formatTrade, loadDemo, loadKey, mainIfDirect, parseTradeArgs } from "./trade-demo.js";
-import { clearsFloor, createBadPool, swapOutsideRule, type Pool } from "./trade-demo-pool.js";
+import { clearsFloor, createBadPool, setupConnection, swapOutsideRule, type Pool } from "./trade-demo-pool.js";
 
 // The regular SDK deliberately pins these accounts. Compose raw instructions
 // here so the destination and pool attacks actually reach the program.
@@ -56,8 +56,14 @@ export function assertPoolEnvironment(rule: TradeRuleAccount, env = process.env)
 
 export async function assertDevnet(veto: VetoAgent): Promise<void> {
   if (await veto.connection.getGenesisHash() !== "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG") {
-    throw new Error("hostile demo requires devnet");
+    throw new Error("trade demo requires devnet");
   }
+}
+
+export async function prepareStolenDestination(veto: VetoAgent, rule: TradeRuleAccount) {
+  return (await getOrCreateAssociatedTokenAccount(
+    setupConnection(veto.connection, "stolen_destination"), veto.agent, rule.outMint, veto.agent.publicKey,
+  )).address;
 }
 
 mainIfDirect(import.meta.url, async () => {
@@ -78,9 +84,9 @@ mainIfDirect(import.meta.url, async () => {
   const small = args.amount;
   if (status.status !== 0 || status.expiresAt <= BigInt(Math.floor(Date.now() / 1000)) ||
       status.overrideAmount !== 0n || status.perTradeMax < 2n * small ||
-      status.remainingToday <= status.perTradeMax || status.remaining < status.remainingToday ||
+      status.remainingToday < 2n * small || status.remaining < status.remainingToday ||
       status.perTradeMax === 0xffffffffffffffffn) {
-    throw new Error("requires an active rule without override, 2 * amount <= per-trade max < remaining today, and cap covering today's allowance");
+    throw new Error("requires an active rule without override, 2 * amount <= both per-trade max and remaining today, and cap covering today's allowance");
   }
   if (!await clearsFloor(veto.connection, rule, small)) throw new Error("initial pool quote is already below the floor");
   // Increment even after refusals to avoid resubmitting an identical signed transaction.
@@ -92,25 +98,15 @@ mainIfDirect(import.meta.url, async () => {
     assertExpected(result, reason, override);
     return result;
   };
-  const stolenDestination = await createAccount(veto.connection, veto.agent, rule.outMint, veto.agent.publicKey);
+  const stolenDestination = await prepareStolenDestination(veto, rule);
+  console.log(`stolen_destination=${stolenDestination.toBase58()}`);
   await check("a.destination", small, 11, { destination: stolenDestination });
-  const evilPool = await createBadPool(veto.connection, veto.agent, rule, small);
+  const evilPool = await createBadPool(setupConnection(veto.connection, "bad_pool"), veto.agent, rule, small);
+  console.log(`bad_pool=${evilPool.pool.toBase58()}`);
   await check("b.pool", small, 12, evilPool);
-  await check("c.per_trade", status.perTradeMax + 1n, 5, {}, status.perTradeMax + 1n);
-
-  // Leave 'small' available for e/f. The daily refusal requests max, not the
-  // remaining allowance. Re-read actual settled input, including curve rounding.
-  for (let count = 0; ; count++) {
-    if (count >= 1000) throw new Error("daily attempt safety bound reached; use a larger per-trade maximum");
-    const today = (await veto.tradeStatus()).remainingToday;
-    if (today < small) throw new Error("daily allowance changed during demo");
-    if (today < status.perTradeMax) {
-      await check("d.daily", status.perTradeMax, 13);
-      break;
-    }
-    const amount = today - small < status.perTradeMax ? today - small : status.perTradeMax;
-    await check("d.fill", amount, 0);
-  }
+  const overMax = status.perTradeMax + 1n;
+  // An override cannot lift the daily limit, including at the relaxed precondition.
+  await check("c.per_trade", overMax, 5, {}, overMax <= status.remainingToday ? overMax : 0n);
 
   // Move the pinned pool using a second signer and its own input funds.
   // Reverse only the output received by these swaps before the honest trade.
@@ -122,8 +118,21 @@ mainIfDirect(import.meta.url, async () => {
     shift *= 2n;
   }
   if (received === 0n) throw new Error("pool changed before third-party swap");
-  await check("e.floor", small, 14);
+  await check("d.floor", small, 14);
   await swapOutsideRule(veto.connection, second, rule, received, true);
   if (!await clearsFloor(veto.connection, rule, small)) throw new Error("restored pool still below floor");
-  await check("f.honest", small, 0);
+  await check("e.honest", small, 0);
+
+  // Exhaust the daily allowance last, after the floor check and honest trade.
+  // Re-read actual settled input, including curve rounding.
+  for (let count = 0; ; count++) {
+    if (count >= 1000) throw new Error("daily attempt safety bound reached; use a larger per-trade maximum");
+    const today = (await veto.tradeStatus()).remainingToday;
+    if (today < status.perTradeMax) {
+      await check("f.daily", status.perTradeMax, 13);
+      break;
+    }
+    const amount = today - small < status.perTradeMax ? today - small : status.perTradeMax;
+    await check("f.fill", amount, 0);
+  }
 });

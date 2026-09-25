@@ -284,7 +284,9 @@ The refusals are real attempts by a script we wrote against our own pool on devn
 `tradeStatus()`, computes the next nonce and submits one trade with `min_out` zero.
 The program applies the owner's floor. The output includes kind, input and output
 amounts, reason code and text, suggested override, signature and slot. All amounts
-are integer input base units, not decimal token amounts.
+are integer input base units, not decimal token amounts. Both forms always refuse
+non-devnet connections. A refused honest trade exits non-zero, stopping the Make
+target before the hostile script.
 
 ```sh
 cd sdk
@@ -296,11 +298,15 @@ npx tsx examples/trade-once.ts ../keys/agent.json --rule <rule-address> 1000000
 `hacked-agent.ts` identifies itself as a deliberately hostile agent in its header
 and first output line. It submits, in order: an agent-owned output account (11),
 a freshly initialized bad-rate pool of the same mints (12), an amount over the
-per-trade maximum (5, with its override figure), trades until a daily-limit refusal
-(13), a trade after a separate signer pushes the pinned pool below the floor (14),
-and an honest trade after that signer reverses its swaps (traded). Every attempt
+per-trade maximum (5, with its override figure), a trade after a separate signer
+pushes the pinned pool below the floor (14), an honest trade after that signer
+reverses its swaps (traded), then trades until a daily-limit refusal (13). Every attempt
 prints its signature and recorded reason. An unexpected kind, reason or override
-exits non-zero immediately. It does not load or use the owner key or print secrets.
+exits non-zero immediately. Setup prints `stolen_destination=<pubkey>`,
+`bad_pool=<pubkey>` and each submitted setup signature, allowing the destination
+and pool substitutions to be checked against the reason 11 and 12 transactions.
+Reusing an existing associated token account needs no setup transaction.
+It does not load or use the owner key or print secrets.
 
 ```sh
 # From the repository root, export the addresses written by the pool setup script:
@@ -316,11 +322,11 @@ Prepare an active trade rule for the WSOL to USDC pool recorded by
 `scripts/devnet-token-swap-pool.ts`. Keep its source funded and delegated, with no
 pending override, enough lifetime cap to cover the remaining daily allowance,
 and enough time before expiry. After `trade-once`, the remaining daily allowance
-must exceed the per-trade maximum; that maximum must be at least twice the demo
-amount. The pool must have enough liquidity and floor headroom for the daily
-trades. The script leaves the demo amount unspent when it provokes reason 13,
-so the smaller floor attempt and final honest trade fit the same daily window.
-No clock manipulation, owner override or 24 hour wait is involved.
+and the per-trade maximum must each be at least twice the demo amount. The pool
+must have enough liquidity and floor headroom for the daily trades. The floor
+attempt, restore and honest trade happen before the daily-limit attempts.
+A full re-run needs a fresh daily window or a new rule, plus replenished signer
+funds as needed. No clock manipulation or owner override is involved.
 
 Both demo signers need SOL for fees and account rent. The agent also needs input
 funds and at least one output base unit in its own associated token accounts to
@@ -338,8 +344,9 @@ From the repository root, `make trade-demo-devnet` runs `trade-once` followed by
 `keys/trade-config.json`, `keys/devnet-addresses.env`, installed SDK dependencies,
 explicit `VETO_RPC`, `TRADE_DEMO_AMOUNT`, and all six `TOKEN_SWAP_*` addresses in
 that env file. It refuses missing inputs before invoking either script. The
-hostile script verifies the devnet genesis hash and matches the addresses to the
-live rule.
+scripts verify the devnet genesis hash and match the addresses to the live rule.
+`VETO_TRADE_DEMO_DEVNET=1` enables the pool environment check in `trade-once`;
+the devnet check is unconditional.
 
 ```sh
 VETO_RPC=https://api.devnet.solana.com TRADE_DEMO_AMOUNT=1000000 make trade-demo-devnet

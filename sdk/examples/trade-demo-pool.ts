@@ -13,6 +13,24 @@ export type Pool = Pick<TradeRuleAccount, "pool" | "poolAuthority" | "poolInVaul
 export const FEE_OWNER = new PublicKey("HfoTxFR1Tm6kGmWgYWD6J7YHVy1UwqSULUGVLXkJqaKN");
 const meta = (pubkey: PublicKey, isWritable = false, isSigner = false) => ({ pubkey, isWritable, isSigner });
 
+// SPL setup helpers return addresses, so capture their submitted signatures here.
+// Use a separate connection view to avoid changing the caller's connection.
+export function setupConnection(connection: Connection, label: string, print = console.log): Connection {
+  return new Proxy(connection, {
+    get(target, property) {
+      if (property === "sendTransaction") {
+        return async (...args: Parameters<Connection["sendTransaction"]>) => {
+          const signature = await target.sendTransaction(...args);
+          print(`setup=${label} signature=${signature}`);
+          return signature;
+        };
+      }
+      const value = Reflect.get(target, property);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
 export function initializeData(bump: number): Buffer {
   if (!Number.isInteger(bump) || bump < 0 || bump > 255) throw new Error("invalid bump");
   const data = Buffer.alloc(99);
@@ -76,8 +94,9 @@ export async function clearsFloor(connection: Connection, rule: TradeRuleAccount
 }
 
 export async function swapOutsideRule(connection: Connection, signer: Keypair, rule: TradeRuleAccount, amount: bigint, reverse = false) {
-  const source = await fundedAccount(connection, signer, reverse ? rule.outMint : rule.inMint, amount);
-  const dest = await fundedAccount(connection, signer, reverse ? rule.inMint : rule.outMint, 0n);
+  const setup = setupConnection(connection, reverse ? "restore" : "lower");
+  const source = await fundedAccount(setup, signer, reverse ? rule.outMint : rule.inMint, amount);
+  const dest = await fundedAccount(setup, signer, reverse ? rule.inMint : rule.outMint, 0n);
   const before = (await getAccount(connection, dest)).amount;
   const data = Buffer.alloc(17);
   data[0] = 1;
