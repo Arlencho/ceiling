@@ -232,7 +232,7 @@ test('a share deep link whose decision belongs to another rule names the mismatc
   const mismatchGate = shareSource.search(
     /<EmptyState>\{SHARE_RULE_MISMATCH\}<\/EmptyState>/,
   );
-  const chooser = shareSource.search(/What do you want to prove\?/);
+  const chooser = shareSource.search(/Export the record\./);
   assert.notEqual(mismatchGate, -1);
   assert.notEqual(chooser, -1);
   assert.ok(

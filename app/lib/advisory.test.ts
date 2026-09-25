@@ -282,7 +282,7 @@ test('v1 memo text is veto-advisory:v1 plus compact JSON with the description ha
   assert.equal(parseAdvisoryMemo(EXACT.replace('veto-advisory:v1', 'veto-advisory:v2')), null);
 });
 
-test('an agent-signed v1 memo is shown as Agent declined (advisory) with the reason and amount', async () => {
+test('an agent-signed v1 memo is shown as the agent\'s own note, with the reason and the amount', async () => {
   const { KIND_ADVISORY_DECLINE } = await advisoryModule;
   const { isListedDecision, formatBaseUnits } = await formatModule;
   const { DecisionRow } = await import('../components/DecisionRow');
@@ -326,8 +326,9 @@ test('an agent-signed v1 memo is shown as Agent declined (advisory) with the rea
   });
   assert.ok(list);
   const listText = visibleText(list);
-  assert.match(listText, /Agent declined \(advisory\)/);
-  assert.match(listText, /bar tab, not transport/);
+  assert.match(listText, /Your agent's own note/);
+  assert.match(listText, /Your agent declined on its own: bar tab, not transport/);
+  assert.match(listText, /Not a refusal by the rule\. Your agent signed this note itself\./);
   assert.match(listText, /0\.00018/);
   assert.equal(amount, '0.00018');
   assert.doesNotMatch(listText, /Your rule held/);
@@ -345,7 +346,9 @@ test('an agent-signed v1 memo is shown as Agent declined (advisory) with the rea
   });
   assert.ok(detail);
   const detailText = visibleText(detail);
-  assert.match(detailText, /Agent declined \(advisory\)/);
+  assert.match(detailText, /Your agent's own note/);
+  assert.match(detailText, /Your agent declined on its own: bar tab, not transport/);
+  assert.match(detailText, /Not a refusal by the rule\. Your agent signed this note itself\./);
   assert.match(detailText, /bar tab, not transport/);
   assert.match(detailText, /0\.00018/);
   assert.match(

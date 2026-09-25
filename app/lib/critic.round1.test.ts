@@ -106,8 +106,8 @@ test('issue 63: every surface describes the same ruleset envelope and none puts 
 test('issue 64: the mismatch empty state is rendered before the chooser, and export is guarded before formatExport', () => {
   const src = read('../app/share.tsx');
   const rendered = src.indexOf('<EmptyState>{SHARE_RULE_MISMATCH}</EmptyState>');
-  const chooser = src.indexOf('What do you want to prove?');
-  const exportButton = src.search(/label=\{\s*shape === 'csv'\s*\? `Export /);
+  const chooser = src.indexOf('Export the record.');
+  const exportButton = src.search(/label=\{\s*shape === 'csv'\s*\? `Save /);
   assert.notEqual(rendered, -1, 'share.tsx must render SHARE_RULE_MISMATCH as an EmptyState');
   assert.notEqual(chooser, -1);
   assert.notEqual(exportButton, -1);

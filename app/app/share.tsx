@@ -1,18 +1,29 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { Share, StyleSheet, Text, View } from 'react-native';
 
-import { Button } from '../components/Button';
 import { ConnectGate } from '../components/ConnectGate';
 import { EmptyState } from '../components/EmptyState';
 import { Field } from '../components/Field';
 import { ReadState } from '../components/ReadState';
+import {
+  BrassButton,
+  Choice,
+  FormatToggle,
+  GhostButton,
+  Glow,
+  Kicker,
+  Rise,
+  ScreenHeader,
+  SealNote,
+} from '../components/records/chrome';
+import { decisionFace, decisionWhen } from '../components/records/copy';
 import { Screen } from '../components/Screen';
-import { TopBar } from '../components/TopBar';
 import { colors, fonts } from '../components/theme';
 import { KIND_PAID, KIND_REFUSED } from '../lib/constants';
 import {
   COMPLETENESS_NOTE,
+  findLedgerDecision,
   formatExport,
   loadedRuleMatchesDecision,
   parseDayBound,
@@ -24,6 +35,7 @@ import {
   type ChargeKind,
   type ShareScope,
 } from '../lib/exportRecord';
+import { explorerTxUrl } from '../lib/format';
 import { mayClaimAbsence } from '../lib/mandateRead';
 import { displayPurpose } from '../lib/ruleView';
 import { useChain } from '../lib/useChain';
@@ -44,6 +56,7 @@ export default function ShareScreen() {
   const id = rawId ? decodeURIComponent(rawId) : '';
   const parsed = id ? parseDecisionId(id) : null;
   const chain = useChain();
+  const router = useRouter();
   const mandate = chain.mandate;
   const kind: ChargeKind | null =
     parsed?.kind === KIND_PAID ? 'paid' : parsed?.kind === KIND_REFUSED ? 'refused' : null;
@@ -52,6 +65,8 @@ export default function ShareScreen() {
   const [fromDay, setFromDay] = useState(() => utcDay(Date.now()));
   const [toDay, setToDay] = useState(() => utcDay(Date.now()));
   const [error, setError] = useState<string | null>(null);
+  const rpcUrl = chain.config?.rpcUrl ?? '';
+  const cluster = chain.config?.explorerCluster ?? 'devnet';
 
   const exportable = useMemo(() => {
     if (!mandate) {
@@ -89,6 +104,10 @@ export default function ShareScreen() {
   const selected = scope ? selectExportRows(exportable, scope) : [];
   const signed = signedExportRows(selected);
   const count = signed.length;
+  const row = findLedgerDecision(chain.rows, parsed, mandate?.address);
+  const face = row ? decisionFace(row, chain.decimals, mandate?.perTxMax, chain.nowMs) : null;
+  const purpose = mandate ? displayPurpose(mandate.purpose) : '';
+  const noun = choice === 'decision' ? 'this decision' : choice === 'date_range' ? 'this date range' : 'everything under this rule';
 
   const onExport = async () => {
     setError(null);
@@ -125,9 +144,40 @@ export default function ShareScreen() {
     }
   };
 
+  const onShareLink = async () => {
+    setError(null);
+    const links = signed
+      .map((item) => item.signature)
+      .filter((signature): signature is string => typeof signature === 'string' && signature.length > 0)
+      .map((signature) => explorerTxUrl(signature, cluster, rpcUrl));
+    if (links.length === 0) {
+      setError('This record has no transaction signature on the chain yet.');
+      return;
+    }
+    try {
+      await Share.share({
+        message: links.join('\n'),
+        title: 'Veto on the blockchain',
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not share the link');
+    }
+  };
+
+  const decisionHint = face
+    ? `${face.title}. ${row ? decisionWhen(row.ts, chain.nowMs) : ''}`
+    : 'Export is complete over paid and refused charges. An override is listed in the app and is not this file.';
+
   return (
     <Screen>
-      <TopBar back="Decisions" meta={mandate ? displayPurpose(mandate.purpose) : undefined} />
+      <Glow />
+      <ScreenHeader
+        title="Share or export"
+        cluster={cluster}
+        backLabel="Decisions"
+        onBack={() => router.back()}
+        onHelp={() => router.push('/help')}
+      />
       <ConnectGate>
         {!mayClaimAbsence(chain.mandateStatus) ? (
           <ReadState
@@ -140,79 +190,76 @@ export default function ShareScreen() {
           <EmptyState>{SHARE_RULE_MISMATCH}</EmptyState>
         ) : (
           <View style={styles.block}>
-            <Text style={styles.h2}>What do you want to prove?</Text>
-            <View style={styles.opts}>
-              <Opt
-                on={choice === 'decision'}
-                title="This decision"
-                hint={
-                  kind
-                    ? 'One answer, its rule and its proof.'
-                    : 'Export is complete over paid and refused charges. An override is listed in the app and is not this file.'
-                }
-                count={choice === 'decision' ? `${count} row` : '1 row'}
-                onPress={() => {
-                  if (kind) {
-                    setChoice('decision');
-                  }
-                }}
-              />
-              <Opt
-                on={choice === 'date_range'}
-                title="A date range"
-                hint="A period under review, UTC calendar days."
-                count={`${choice === 'date_range' ? count : ''} rows`}
-                onPress={() => setChoice('date_range')}
-              />
-              <Opt
-                on={choice === 'rule'}
-                title="Everything under this rule"
-                hint="The complete record this phone can rebuild from the ring and logs."
-                count={`${choice === 'rule' ? count : exportable.length} rows`}
-                onPress={() => setChoice('rule')}
-              />
-            </View>
-
-            {choice === 'date_range' ? (
-              <View style={styles.dates}>
-                <Field label="From (UTC)" value={fromDay} onChangeText={setFromDay} placeholder="YYYY-MM-DD" />
-                <Field label="To (UTC)" value={toDay} onChangeText={setToDay} placeholder="YYYY-MM-DD" />
+            <Rise delayMs={80}>
+              <Text style={styles.h1}>Export the record.</Text>
+              <Text style={styles.lead}>
+                A file of what happened under your rule <Text style={styles.italic}>{purpose}</Text>.
+              </Text>
+            </Rise>
+            <Rise delayMs={180}>
+              <Kicker>What to put in the file</Kicker>
+              <View style={styles.choices}>
+                <Choice
+                  selected={choice === 'decision'}
+                  title="This decision"
+                  hint={decisionHint}
+                  disabled={!kind}
+                  onPress={() => {
+                    if (kind) {
+                      setChoice('decision');
+                    }
+                  }}
+                />
+                <Choice
+                  selected={choice === 'date_range'}
+                  title="A date range"
+                  hint="You pick the first and last day."
+                  onPress={() => setChoice('date_range')}
+                />
+                <Choice
+                  selected={choice === 'rule'}
+                  title="Everything under this rule"
+                  hint="Every payment and refusal under this rule."
+                  onPress={() => setChoice('rule')}
+                />
               </View>
-            ) : null}
-
-            <Text style={styles.eyebrow}>Who reads it</Text>
-            <View style={styles.two}>
-              <Opt
-                on={shape === 'csv'}
-                title="A person · CSV"
-                hint="Opens in a spreadsheet. Sort it, total it."
-                onPress={() => setShape('csv')}
-              />
-              <Opt
-                on={shape === 'json'}
-                title="A system · JSON"
-                hint="The documented record. verify.ts re-checks it."
-                onPress={() => setShape('json')}
-              />
-            </View>
-
-            <Text style={styles.limit}>
-              <Text style={styles.bold}>Complete over payments, never over attempts. </Text>
-              {COMPLETENESS_NOTE} Every exported row carries its own transaction signature. A row
-              this RPC did not sign is omitted rather than invented.
-            </Text>
-
-            <Button
+              {choice === 'date_range' ? (
+                <View style={styles.dates}>
+                  <Field label="From (UTC)" value={fromDay} onChangeText={setFromDay} placeholder="YYYY-MM-DD" />
+                  <Field label="To (UTC)" value={toDay} onChangeText={setToDay} placeholder="YYYY-MM-DD" />
+                </View>
+              ) : null}
+            </Rise>
+            <Rise delayMs={320}>
+              <Kicker>File format</Kicker>
+              <FormatToggle shape={shape} onChange={setShape} />
+            </Rise>
+            <SealNote>
+              <Text style={styles.proveLead}>What the file proves: </Text>
+              it lists every payment and refusal, with the reason and time, and anyone can check each line
+              against the blockchain. {COMPLETENESS_NOTE} {count} signed {count === 1 ? 'row' : 'rows'} in this
+              file.
+            </SealNote>
+            <BrassButton
               label={
                 shape === 'csv'
-                  ? `Export ${count} row${count === 1 ? '' : 's'} as CSV`
-                  : `Export ${count} row${count === 1 ? '' : 's'} as JSON`
+                  ? `Save ${noun} as a CSV file`
+                  : `Save ${noun} as a JSON file`
               }
               onPress={() => {
                 void onExport();
               }}
             />
+            <GhostButton
+              label="Share the blockchain link instead"
+              onPress={() => {
+                void onShareLink();
+              }}
+            />
             {error ? <Text style={styles.err}>{error}</Text> : null}
+            <Text style={styles.foot}>
+              Nothing is signed. The file only reads what is already on the blockchain.
+            </Text>
           </View>
         )}
       </ConnectGate>
@@ -220,135 +267,51 @@ export default function ShareScreen() {
   );
 }
 
-function Opt({
-  on,
-  title,
-  hint,
-  count,
-  onPress,
-}: {
-  on: boolean;
-  title: string;
-  hint: string;
-  count?: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: on }}
-      onPress={onPress}
-      style={[styles.opt, on && styles.optOn]}
-    >
-      <View style={[styles.dot, on && styles.dotOn]} />
-      <View style={styles.optText}>
-        <Text style={[styles.optTitle, on && styles.optOnText]}>{title}</Text>
-        <Text style={[styles.optHint, on && styles.optOnHint]}>{hint}</Text>
-      </View>
-      {count ? <Text style={[styles.optCount, on && styles.optOnText]}>{count}</Text> : null}
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   block: {
-    gap: 12,
+    gap: 14,
     alignSelf: 'stretch',
   },
-  h2: {
-    color: colors.text,
-    fontSize: 28,
+  h1: {
     fontFamily: fonts.serif,
+    fontSize: 32,
+    lineHeight: 36,
+    color: colors.bone,
   },
-  opts: {
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 6,
-    overflow: 'hidden',
+  lead: {
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.body,
   },
-  two: {
-    flexDirection: 'row',
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  opt: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    minHeight: 48,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    flex: 1,
-  },
-  optOn: {
-    backgroundColor: colors.invert,
-  },
-  dot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: colors.muted,
-    marginTop: 2,
-  },
-  dotOn: {
-    borderColor: colors.invertText,
-    backgroundColor: colors.invertText,
-  },
-  optText: {
-    flex: 1,
-  },
-  optTitle: {
-    color: colors.text,
+  italic: {
+    fontFamily: fonts.serifItalic,
     fontSize: 15,
-    fontWeight: '600',
+    color: colors.bone,
   },
-  optHint: {
-    color: colors.muted,
-    fontSize: 12.5,
-    fontWeight: '500',
-    marginTop: 2,
-    lineHeight: 17,
-  },
-  optCount: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '500',
-    fontFamily: fonts.mono,
-  },
-  optOnText: {
-    color: colors.invertText,
-  },
-  optOnHint: {
-    color: colors.inkOnBone,
+  choices: {
+    gap: 8,
+    marginTop: 8,
   },
   dates: {
     gap: 10,
+    marginTop: 8,
   },
-  eyebrow: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    fontFamily: fonts.mono,
-  },
-  limit: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  bold: {
-    color: colors.body,
-    fontWeight: '600',
+  proveLead: {
+    color: colors.bone,
+    fontFamily: fonts.sansBold,
   },
   err: {
     color: colors.body,
+    fontFamily: fonts.sans,
     fontSize: 14,
     lineHeight: 20,
+  },
+  foot: {
+    textAlign: 'center',
+    color: colors.muted,
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
   },
 });

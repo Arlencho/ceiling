@@ -139,6 +139,19 @@ mock.module('react-native', {
   },
 });
 
+mock.module('react-native-svg', {
+  namedExports: {
+    Svg: Host('Svg'),
+    Path: Host('Path'),
+    Circle: Host('Circle'),
+    Rect: Host('Rect'),
+    G: Host('G'),
+    Defs: Host('Defs'),
+    LinearGradient: Host('LinearGradient'),
+    Stop: Host('Stop'),
+  },
+});
+
 mock.module('react-native-safe-area-context', {
   namedExports: {
     SafeAreaView: Host('SafeAreaView'),
@@ -747,9 +760,13 @@ test.describe('landed open', { concurrency: 1 }, () => {
       await act(async () => {
         await api!.grantOverride(api!.mandate!.address, refusedRow());
       });
-      const text = await settle(root, (value) => value.includes('Waived'));
-      assert.match(text, /Waived/);
+      const text = await settle(root, (value) =>
+        value.includes('Allowed once: this payment of 0.00018'),
+      );
+      assert.match(text, /Allowed once: this payment of 0\.00018/);
       assert.match(text, /0\.00018/);
+      assert.equal(text.includes('No decisions on this rule yet'), false);
+      assert.ok(labelsOf(root).includes('Waived by the owner 0.00018'));
     } finally {
       root.unmount();
     }

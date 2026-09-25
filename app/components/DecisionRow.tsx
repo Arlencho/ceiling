@@ -1,15 +1,22 @@
 import { useRouter } from 'expo-router';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import * as RN from 'react-native';
 
 import { ADVISORY_DECLINE_LABEL, KIND_ADVISORY_DECLINE } from '../lib/advisory';
-import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED } from '../lib/constants';
+import { KIND_OVERRIDE, KIND_REFUSED } from '../lib/constants';
 import { encodeDecisionId } from '../lib/exportRecord';
-import { explorerTxUrl, formatBaseUnits, formatClock } from '../lib/format';
+import { explorerTxUrl, formatBaseUnits } from '../lib/format';
 import { overrideRowView } from '../lib/override';
-import { renderReason } from '../lib/reasons';
 import type { LedgerRow } from '../lib/ring';
-import { RefusalCard } from './RefusalCard';
-import { colors, fonts } from './theme';
+import { decisionFace, type RowTone } from './records/copy';
+import { colors, fonts, radii } from './theme';
+
+const TONE: Record<RowTone, { wash: string; ink: string; glyph: string }> = {
+  paid: { wash: colors.paidWash, ink: colors.paid, glyph: '✓' },
+  refused: { wash: colors.refusedWash, ink: colors.refused, glyph: '×' },
+  allowed: { wash: colors.brassWash, ink: colors.amber, glyph: '1' },
+  advisory: { wash: 'rgba(237, 230, 214, 0.06)', ink: colors.body, glyph: '✎' },
+};
 
 export function DecisionRow({
   row,
@@ -19,6 +26,10 @@ export function DecisionRow({
   mandateAddress,
   perTxMax,
   variant = 'list',
+  nowMs,
+  fresh = false,
+  bare = false,
+  divider = false,
 }: {
   row: LedgerRow;
   decimals: number;
@@ -27,14 +38,19 @@ export function DecisionRow({
   mandateAddress: string;
   perTxMax?: bigint;
   variant?: 'list' | 'today';
+  nowMs?: number;
+  fresh?: boolean;
+  bare?: boolean;
+  divider?: boolean;
 }) {
   const router = useRouter();
-  const refused = row.kind === KIND_REFUSED;
-  const paid = row.kind === KIND_PAID;
-  const waived = row.kind === KIND_OVERRIDE;
-  const amount = formatBaseUnits(row.amount, decimals);
-  const clock = formatClock(row.ts);
+  const face = decisionFace(row, decimals, perTxMax, nowMs);
+  const tone = TONE[face.tone];
   const id = encodeDecisionId(mandateAddress, row);
+  const amount = formatBaseUnits(row.amount, decimals);
+  const txLabel = row.signature
+    ? `transaction ${row.signature.slice(0, 4)}...${row.signature.slice(-4)}`
+    : null;
 
   const openDetail = () => {
     router.push(`/decision/${encodeURIComponent(id)}`);
@@ -44,216 +60,232 @@ export function DecisionRow({
     if (!row.signature) {
       return;
     }
-    void Linking.openURL(explorerTxUrl(row.signature, cluster, rpcUrl));
+    void RN.Linking.openURL(explorerTxUrl(row.signature, cluster, rpcUrl));
   };
 
+  let accessibilityLabel = `Paid within rule ${amount}`;
   if (row.kind === KIND_ADVISORY_DECLINE) {
-    const txLabel = row.signature
-      ? `transaction ${row.signature.slice(0, 4)}...${row.signature.slice(-4)}`
-      : null;
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${ADVISORY_DECLINE_LABEL} ${amount}`}
-        onPress={openDetail}
-        style={styles.advisory}
-      >
-        <Text style={styles.time}>{clock}</Text>
-        <View style={styles.body}>
-          <Text style={styles.advisorySay}>{ADVISORY_DECLINE_LABEL}</Text>
-          {row.reasonText ? <Text style={styles.why}>{row.reasonText}</Text> : null}
-          {txLabel ? (
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel={txLabel}
-              onPress={openTx}
-              hitSlop={6}
-            >
-              <Text style={styles.tx}>{txLabel}</Text>
-            </Pressable>
-          ) : null}
-        </View>
-        <Text style={styles.amt}>{amount}</Text>
-      </Pressable>
-    );
+    accessibilityLabel = `${ADVISORY_DECLINE_LABEL} ${amount}`;
+  } else if (row.kind === KIND_REFUSED) {
+    accessibilityLabel = 'Refused, recorded';
+  } else if (row.kind === KIND_OVERRIDE) {
+    accessibilityLabel = `Waived by the owner ${overrideRowView(row, decimals).amount}`;
   }
-
-  if (refused && variant === 'today') {
-    return (
-      <RefusalCard
-        row={row}
-        decimals={decimals}
-        perTxMax={perTxMax}
-        compact
-        onShare={openDetail}
-      />
-    );
-  }
-
-  if (refused) {
-    return (
-      <Pressable accessibilityRole="button" accessibilityLabel="Refused, recorded" onPress={openDetail}>
-        <RefusalCard row={row} decimals={decimals} perTxMax={perTxMax} />
-      </Pressable>
-    );
-  }
-
-  if (waived) {
-    const view = overrideRowView(row, decimals);
-    const txLabel = row.signature
-      ? `transaction ${row.signature.slice(0, 4)}...${row.signature.slice(-4)}`
-      : null;
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Waived by the owner ${view.amount}`}
-        onPress={openDetail}
-        style={styles.paid}
-      >
-        <Text style={styles.time}>{clock}</Text>
-        <View style={styles.body}>
-          <Text style={styles.say}>
-            {view.say} <Text style={styles.italic}>{view.italic}</Text>
-          </Text>
-          <Text style={styles.why}>{view.why}</Text>
-          {txLabel ? (
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel={txLabel}
-              onPress={openTx}
-              hitSlop={6}
-            >
-              <Text style={styles.tx}>{txLabel}</Text>
-            </Pressable>
-          ) : (
-            <Text style={styles.why}>
-              This RPC did not return a transaction signature for this row. The row itself is from the
-              on-chain ledger, not invented.
-            </Text>
-          )}
-        </View>
-        <Text style={styles.amt}>{view.amount}</Text>
-      </Pressable>
-    );
-  }
-
-  if (!paid) {
-    return null;
-  }
-
-  const reason = renderReason(row.reason, row.suggestedOverride, decimals);
-  const txLabel = row.signature
-    ? `transaction ${row.signature.slice(0, 4)}...${row.signature.slice(-4)}`
-    : null;
 
   return (
-    <Pressable
+    <RN.Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Paid within rule ${amount}`}
+      accessibilityLabel={accessibilityLabel}
       onPress={openDetail}
-      style={styles.paid}
+      style={[
+        bare ? styles.bare : styles.card,
+        variant === 'today' && !bare && styles.today,
+        divider && styles.divider,
+      ]}
     >
-      <Text style={styles.time}>{clock}</Text>
-      <View style={styles.body}>
-        <Text style={styles.say}>
-          Paid <Text style={styles.italic}>within rule</Text>
-        </Text>
-        <Text style={styles.why}>
-          {perTxMax != null
-            ? `Under ${formatBaseUnits(perTxMax, decimals)}, cap not reached.`
-            : reason.text === 'ok'
-              ? 'Inside the rule.'
-              : reason.text}
-          {txLabel ? ' ' : ''}
-        </Text>
+      <RN.View style={[styles.mark, { backgroundColor: tone.wash }, face.tone === 'advisory' && styles.noteMark]}>
+        {fresh ? <FreshDot /> : null}
+        <RN.Text style={[styles.glyph, { color: tone.ink }]}>{tone.glyph}</RN.Text>
+      </RN.View>
+      <RN.View style={styles.copy}>
+        {face.badge ? <RN.Text style={styles.badge}>{face.badge}</RN.Text> : null}
+        <RN.Text style={styles.title}>{face.title}</RN.Text>
+        <RN.Text style={styles.detail}>{face.detail}</RN.Text>
         {txLabel ? (
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel={txLabel}
-            onPress={openTx}
-            hitSlop={6}
-          >
-            <Text style={styles.tx}>{txLabel}</Text>
-          </Pressable>
-        ) : (
-          <Text style={styles.why}>
-            This RPC did not return a transaction signature for this row. The row itself is from the
-            on-chain ledger, not invented.
-          </Text>
-        )}
-      </View>
-      <Text style={styles.amt}>{amount}</Text>
-    </Pressable>
+          <RN.Pressable accessibilityRole="link" accessibilityLabel={txLabel} onPress={openTx} hitSlop={6}>
+            <RN.Text style={styles.tx}>{txLabel}</RN.Text>
+          </RN.Pressable>
+        ) : null}
+      </RN.View>
+      <RN.View style={styles.figures}>
+        <RN.Text style={[styles.figure, { color: tone.ink }]}>{face.figure}</RN.Text>
+        <RN.Text style={styles.when}>{face.when}</RN.Text>
+      </RN.View>
+    </RN.Pressable>
   );
 }
 
-const styles = StyleSheet.create({
-  paid: {
+function FreshDot() {
+  const reduced = useSafeReduced();
+  const motionOn = reduced === false && RN.Animated != null;
+  const [scale] = useState(() => (RN.Animated ? new RN.Animated.Value(1) : null));
+
+  useEffect(() => {
+    const Animated = RN.Animated;
+    if (!motionOn || !Animated || !scale) {
+      return;
+    }
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scale, {
+          toValue: 1.8,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scale, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    anim.start();
+    return () => {
+      anim.stop();
+    };
+  }, [motionOn, scale]);
+
+  return (
+    <RN.View style={styles.fresh} pointerEvents="none">
+      {motionOn && scale && RN.Animated?.View ? (
+        <RN.Animated.View style={[styles.freshPing, { transform: [{ scale }] }]} />
+      ) : null}
+      <RN.View style={styles.freshDot} />
+    </RN.View>
+  );
+}
+
+function useSafeReduced(): boolean | null {
+  const [reduced, setReduced] = useState<boolean | null>(null);
+  useEffect(() => {
+    const info = RN.AccessibilityInfo;
+    if (!info?.isReduceMotionEnabled) {
+      return;
+    }
+    let alive = true;
+    Promise.resolve(info.isReduceMotionEnabled())
+      .then((value) => {
+        if (alive) {
+          setReduced(value);
+        }
+      })
+      .catch(() => {
+        if (alive) {
+          setReduced(false);
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return reduced;
+}
+
+const styles = RN.StyleSheet.create({
+  card: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minHeight: 44,
+    borderRadius: radii.row,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  today: {
     paddingVertical: 10,
+  },
+  bare: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minHeight: 44,
+    backgroundColor: colors.surface,
+  },
+  divider: {
     borderTopWidth: 1,
     borderTopColor: colors.line,
   },
-  time: {
-    width: 44,
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '500',
-    fontFamily: fonts.mono,
-    paddingTop: 4,
+  mark: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  body: {
+  noteMark: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(237, 230, 214, 0.35)',
+  },
+  glyph: {
+    fontFamily: fonts.sansBold,
+    fontSize: 16,
+  },
+  fresh: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+  },
+  freshPing: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.refused,
+    opacity: 0.45,
+  },
+  freshDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.refused,
+  },
+  copy: {
     flex: 1,
-    gap: 4,
+    gap: 2,
   },
-  say: {
-    color: colors.text,
-    fontSize: 22,
-    fontFamily: fonts.serif,
-    lineHeight: 24,
+  badge: {
+    alignSelf: 'flex-start',
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: colors.body,
+    borderWidth: 1,
+    borderColor: 'rgba(237, 230, 214, 0.3)',
+    borderRadius: radii.pill,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    overflow: 'hidden',
   },
-  italic: {
-    fontStyle: 'italic',
-    color: colors.muted,
-    fontFamily: fonts.serif,
-  },
-  why: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: '500',
+  title: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 14,
     lineHeight: 18,
+    color: colors.bone,
+  },
+  detail: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.muted,
   },
   tx: {
     color: colors.body,
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 12,
+    fontFamily: fonts.sans,
     textDecorationLine: 'underline',
-    fontFamily: fonts.mono,
   },
-  amt: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '500',
-    fontFamily: fonts.mono,
-    paddingTop: 4,
+  figures: {
+    alignItems: 'flex-end',
+    gap: 2,
   },
-  advisory: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    paddingVertical: 10,
-    paddingLeft: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.brass,
-  },
-  advisorySay: {
-    color: colors.brass,
-    fontSize: 20,
+  figure: {
     fontFamily: fonts.serif,
-    lineHeight: 24,
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  when: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    lineHeight: 14,
+    color: colors.muted,
   },
 });
