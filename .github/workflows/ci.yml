@@ -23,16 +23,53 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
+      # The repo does not pin the Solana CLI, so the cache key cannot name a
+      # version. It names the week instead: runs in the same week restore the
+      # cached stable release and skip the download, and the key rolls over on
+      # its own. The restored binary is verified before it is trusted.
+      - name: Stamp the Solana cache week
+        id: solana-cache-week
+        run: echo "week=$(date -u +%Y-W%V)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the Solana CLI
+        id: solana-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/solana/install
+          key: ${{ runner.os }}-solana-stable-${{ steps.solana-cache-week.outputs.week }}-v1
+
       - name: Install the Solana CLI
         run: |
-          sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+          if [ "${{ steps.solana-cache.outputs.cache-hit }}" = "true" ] && bash scripts/ci-toolchain.sh verify-solana; then
+            echo "Solana CLI restored from cache"
+          else
+            bash scripts/ci-toolchain.sh install-solana
+          fi
           echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      # Anchor is pinned to 1.2.0, so the cache key names the version and the
+      # runner OS. The toolchain lives in ~/.avm; avm and the anchor shim it
+      # places in ~/.cargo/bin are cached too, so a hit skips the cargo build
+      # and the download. The restored binary is verified before it is
+      # trusted, and a failed verify falls back to a fresh install.
+      - name: Cache the Anchor toolchain
+        id: anchor-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.avm
+            ~/.cargo/bin/avm
+            ~/.cargo/bin/anchor
+          key: ${{ runner.os }}-anchor-1.2.0-v1
 
       - name: Install Anchor
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor avm --force
-          avm install 1.2.0
-          avm use 1.2.0
+          export PATH="$HOME/.cargo/bin:$HOME/.avm/bin:$PATH"
+          if [ "${{ steps.anchor-cache.outputs.cache-hit }}" = "true" ] && bash scripts/ci-toolchain.sh verify-anchor; then
+            echo "Anchor 1.2.0 restored from cache"
+          else
+            bash scripts/ci-toolchain.sh install-anchor
+          fi
 
       - name: Build and test
         run: |
