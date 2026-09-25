@@ -1,15 +1,20 @@
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Path, Svg } from 'react-native-svg';
 
+import { CatchMark } from '../../components/backglass/CatchMark';
 import { Button } from '../../components/Button';
+import { ClusterPill } from '../../components/daily/ClusterPill';
+import { LivePill } from '../../components/daily/LivePill';
 import { ConnectGate } from '../../components/ConnectGate';
 import { EmptyState } from '../../components/EmptyState';
 import { ReadState } from '../../components/ReadState';
 import { RuleListItem } from '../../components/RuleListItem';
 import { Screen } from '../../components/Screen';
 import { TopBar } from '../../components/TopBar';
-import { colors, fonts } from '../../components/theme';
+import { colors, fonts, radii, space } from '../../components/theme';
+import { isActive } from '../../lib/mandate';
 import { PAYEE_NOT_IN_RULESET, PAYEE_PREFILL, RULESET_ENVELOPE } from '../../lib/ruleset';
 import { TEMPLATES } from '../../lib/templates';
 import { useChain } from '../../lib/useChain';
@@ -26,6 +31,7 @@ export default function RulesScreen() {
   const nowSec = BigInt(Math.floor(chain.nowMs / 1000));
   const selected = chain.mandate?.address ?? null;
   const count = chain.mandates.length;
+  const liveCount = chain.mandates.filter((row) => isActive(row, nowSec)).length;
 
   const onRefresh = useCallback(() => {
     void chain.refresh();
@@ -40,7 +46,17 @@ export default function RulesScreen() {
 
   return (
     <Screen refreshing={chain.loading} onRefresh={onRefresh}>
-      <TopBar title="rules" meta={count > 0 ? `${count} rules` : undefined} />
+      <TopBar
+        leading={<CatchMark size={20} />}
+        accessory={
+          <>
+            {chain.config ? <ClusterPill cluster={chain.config.explorerCluster} /> : null}
+            {liveCount > 0 ? (
+              <LivePill label={liveCount === 1 ? '1 rule live' : `${liveCount} rules live`} />
+            ) : null}
+          </>
+        }
+      />
       <ConnectGate>
         {chain.configError ? <EmptyState>{chain.configError}</EmptyState> : null}
         {chain.error && chain.mandateStatus !== 'rate-limited' ? (
@@ -53,13 +69,17 @@ export default function RulesScreen() {
 
         {chain.mandateStatus === 'present' || chain.mandateStatus === 'empty' ? (
           <View style={styles.block}>
+            <View style={styles.section}>
+              <Text style={styles.kicker}>Your rules</Text>
+              <Text style={styles.meta}>{count === 1 ? '1 active' : `${liveCount} active`}</Text>
+            </View>
             <Text style={styles.h2}>{heading}</Text>
             <EmptyState>
               Each rule has its own agent key and its own history. A rule opened from this app keeps its
               budget in its own token account. Pick one and Overview and Decisions are about it.
             </EmptyState>
 
-            <View>
+            <View style={styles.list}>
               {chain.mandates.map((row) => (
                 <RuleListItem
                   key={row.address}
@@ -67,6 +87,7 @@ export default function RulesScreen() {
                   decimals={chain.decimals}
                   nowSec={nowSec}
                   current={row.address === selected}
+                  rows={row.address === chain.mandate?.address ? chain.rows : []}
                   onPress={() => {
                     void chain.selectMandate(row.address);
                     router.push(`/rule/${row.address}`);
@@ -75,28 +96,61 @@ export default function RulesScreen() {
               ))}
             </View>
 
-            <Button
-              label="Scan a request"
-              accessibilityLabel="Scan a request"
-              onPress={() => router.push('/scan?target=request')}
-            />
-            <Text style={styles.eyebrow}>Start another rule from</Text>
-            {TEMPLATES.map((template) => (
+            <View style={styles.actions}>
               <Pressable
-                key={template.id}
                 accessibilityRole="button"
-                accessibilityLabel={template.title}
-                onPress={() => router.push(`/rule/new?template=${template.id}`)}
-                style={styles.tpl}
+                accessibilityLabel="Scan a request"
+                onPress={() => router.push('/scan?target=request')}
+                style={styles.scan}
               >
-                <View style={styles.tplText}>
-                  <Text style={styles.tplName}>{template.title}</Text>
-                  <Text style={styles.tplSum}>{template.summary}</Text>
-                </View>
-                <Text style={styles.use}>use</Text>
+                <Svg width={20} height={20} viewBox="0 0 24 24">
+                  <Path
+                    d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10"
+                    fill="none"
+                    stroke={colors.forest}
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+                <Text style={styles.scanText}>Scan a request</Text>
               </Pressable>
-            ))}
-            <Text style={styles.eyebrow}>Rulesets on this phone</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Write a rule"
+                onPress={() => router.push('/rule/new')}
+                style={styles.write}
+              >
+                <Text style={styles.writeText}>Write a rule</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.kicker}>Starting points</Text>
+              <Text style={styles.badge}>Templates</Text>
+            </View>
+            <Text style={styles.note}>
+              Picking one sets no rule. You fill in the numbers, then sign in Seed Vault.
+            </Text>
+            <View style={styles.templates}>
+              {TEMPLATES.map((template, index) => (
+                <Pressable
+                  key={template.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={template.title}
+                  onPress={() => router.push(`/rule/new?template=${template.id}`)}
+                  style={[styles.tpl, index < TEMPLATES.length - 1 && styles.tplBorder]}
+                >
+                  <View style={styles.tplText}>
+                    <Text style={styles.tplName}>{template.title}</Text>
+                    <Text style={styles.tplSum}>{template.summary}</Text>
+                  </View>
+                  <Text style={styles.use}>use</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={styles.kicker}>Rulesets on this phone</Text>
             <EmptyState>
               {`${RULESET_ENVELOPE} ${PAYEE_NOT_IN_RULESET} ${PAYEE_PREFILL} Applying one to a new agent is one action. The ruleset itself is not on chain. Its name and version are written into the purpose, which is on chain and cannot change after the rule is opened.`}
             </EmptyState>
@@ -152,51 +206,131 @@ export default function RulesScreen() {
 
 const styles = StyleSheet.create({
   block: {
-    gap: 12,
+    gap: space.xl,
     alignSelf: 'stretch',
   },
-  h2: {
-    color: colors.text,
-    fontSize: 32,
-    fontFamily: fonts.serif,
-    letterSpacing: -0.3,
+  section: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  eyebrow: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 1,
+  kicker: {
+    fontFamily: fonts.sansBold,
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 1.6,
     textTransform: 'uppercase',
-    fontFamily: fonts.mono,
-    marginTop: 8,
+    color: colors.muted,
+  },
+  meta: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.muted,
+  },
+  h2: {
+    fontFamily: fonts.serifRegular,
+    fontSize: 28,
+    lineHeight: 32,
+    color: colors.bone,
+  },
+  list: {
+    gap: space.lg,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: space.lg,
+  },
+  scan: {
+    flex: 1,
+    height: 56,
+    borderRadius: radii.cta,
+    backgroundColor: colors.brass,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.md,
+  },
+  scanText: {
+    fontFamily: fonts.sansBold,
+    fontSize: 15,
+    lineHeight: 18,
+    color: colors.forest,
+  },
+  write: {
+    flex: 1,
+    height: 56,
+    borderRadius: radii.cta,
+    borderWidth: 1,
+    borderColor: 'rgba(201, 162, 77, 0.55)',
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  writeText: {
+    fontFamily: fonts.sansBold,
+    fontSize: 15,
+    lineHeight: 18,
+    color: colors.bone,
+  },
+  badge: {
+    fontFamily: fonts.sansBold,
+    fontSize: 11,
+    lineHeight: 14,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: colors.muted,
+    borderWidth: 1,
+    borderColor: 'rgba(237, 230, 214, 0.22)',
+    borderRadius: radii.pill,
+    paddingHorizontal: space.md,
+    paddingVertical: 3,
+  },
+  note: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.muted,
+  },
+  templates: {
+    borderRadius: radii.row,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    overflow: 'hidden',
   },
   tpl: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    gap: 12,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
+    alignItems: 'center',
+    gap: space.xl,
+    paddingVertical: space.lg,
+    paddingHorizontal: space.xxl,
+    minHeight: 44,
+  },
+  tplBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
   },
   tplText: {
     flex: 1,
+    gap: 2,
   },
   tplName: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '500',
+    fontFamily: fonts.sansSemibold,
+    fontSize: 14,
+    lineHeight: 18,
+    color: colors.bone,
   },
   tplSum: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
     color: colors.muted,
-    fontSize: 12.5,
-    fontWeight: '500',
-    marginTop: 3,
   },
   use: {
-    color: colors.body,
+    fontFamily: fonts.sansSemibold,
     fontSize: 12,
-    fontWeight: '500',
-    fontFamily: fonts.mono,
+    lineHeight: 16,
+    color: colors.brass,
   },
 });

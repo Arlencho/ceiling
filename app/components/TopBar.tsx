@@ -1,19 +1,26 @@
 import { usePathname, useRouter } from 'expo-router';
+import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { showHelpControl } from '../lib/helpNavigation';
-import { colors, fonts } from './theme';
+import { colors, fonts, space, touchTarget } from './theme';
 
 export function TopBar({
   title,
   meta,
   back,
   help = true,
+  center,
+  leading,
+  accessory,
 }: {
   title?: string;
   meta?: string;
   back?: string;
   help?: boolean;
+  center?: string;
+  leading?: ReactNode;
+  accessory?: ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -26,15 +33,21 @@ export function TopBar({
           accessibilityLabel={back}
           onPress={() => router.back()}
           hitSlop={8}
+          style={styles.hit}
         >
           <Text style={styles.back}>{`\u2190 ${back}`}</Text>
         </Pressable>
       ) : (
-        <Text style={styles.brand}>
-          Veto{title ? <Text style={styles.brandMuted}>{` ${title}`}</Text> : null}
-        </Text>
+        <View style={styles.brandRow}>
+          {leading}
+          <Text style={styles.brand}>
+            Veto{title ? <Text style={styles.brandMuted}>{` ${title}`}</Text> : null}
+          </Text>
+        </View>
       )}
+      {center ? <Text style={styles.center}>{center}</Text> : null}
       <View style={styles.right}>
+        {accessory}
         {meta ? <Text style={styles.meta}>{meta}</Text> : null}
         {showHelp ? (
           <Pressable
@@ -42,6 +55,7 @@ export function TopBar({
             accessibilityLabel="Help"
             onPress={() => router.push('/help')}
             hitSlop={8}
+            style={styles.hit}
           >
             <Text style={styles.help}>Help</Text>
           </Pressable>
@@ -55,13 +69,22 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 6,
+    alignItems: 'center',
+    gap: space.md,
+    minHeight: touchTarget,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.lg,
+    flexShrink: 1,
   },
   brand: {
-    color: colors.text,
-    fontSize: 22,
+    color: colors.bone,
+    fontSize: 20,
+    lineHeight: 24,
     fontFamily: fonts.serif,
+    letterSpacing: 0.4,
   },
   brandMuted: {
     color: colors.muted,
@@ -69,14 +92,25 @@ const styles = StyleSheet.create({
     fontFamily: fonts.serif,
   },
   back: {
-    color: colors.body,
+    color: colors.bone,
     fontSize: 15,
-    fontWeight: '500',
+    fontFamily: fonts.sansMedium,
+  },
+  center: {
+    flex: 1,
+    textAlign: 'center',
+    fontFamily: fonts.sansBold,
+    fontSize: 13,
+    lineHeight: 16,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: colors.muted,
   },
   right: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 12,
+    alignItems: 'center',
+    gap: space.md,
+    flexShrink: 1,
   },
   meta: {
     color: colors.muted,
@@ -86,7 +120,10 @@ const styles = StyleSheet.create({
   help: {
     color: colors.body,
     fontSize: 12,
-    fontWeight: '500',
-    fontFamily: fonts.mono,
+    fontFamily: fonts.sansSemibold,
+  },
+  hit: {
+    minHeight: touchTarget,
+    justifyContent: 'center',
   },
 });

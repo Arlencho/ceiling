@@ -136,6 +136,46 @@ mock.module('react-native', {
     UIManager: { measureLayout: () => undefined },
     View: Host('View'),
     findNodeHandle: () => null,
+    AccessibilityInfo: {
+      isReduceMotionEnabled: async () => true,
+      addEventListener: () => ({ remove() {} }),
+    },
+    Animated: {
+      Value: class {
+        setValue() {}
+        interpolate() {
+          return 0;
+        }
+      },
+      View: Host('Animated.View'),
+      Text: Host('Animated.Text'),
+      timing: () => ({ start() {}, stop() {} }),
+      delay: () => ({ start() {}, stop() {} }),
+      sequence: () => ({ start() {}, stop() {} }),
+      loop: () => ({ start() {}, stop() {} }),
+      createAnimatedComponent: (Component: unknown) => Component,
+    },
+    Easing: {
+      linear: (value: number) => value,
+      cubic: (value: number) => value,
+      out: (ease: (value: number) => number) => ease,
+      inOut: (ease: (value: number) => number) => ease,
+      bezier: () => (value: number) => value,
+    },
+    PanResponder: { create: () => ({ panHandlers: {} }) },
+  },
+});
+
+mock.module('react-native-svg', {
+  namedExports: {
+    Svg: Host('Svg'),
+    Path: Host('Path'),
+    Circle: Host('Circle'),
+    Rect: Host('Rect'),
+    G: Host('G'),
+    Defs: Host('Defs'),
+    LinearGradient: Host('LinearGradient'),
+    Stop: Host('Stop'),
   },
 });
 
@@ -556,6 +596,20 @@ function labelsOf(root: ReactTestRenderer): string[] {
     .map((node) => String(node.props.accessibilityLabel));
 }
 
+function holdButton(root: ReactTestRenderer): ReactTestInstance {
+  const node = root.root
+    .findAll((candidate) => isHost(candidate, 'Pressable'))
+    .find((candidate) => String(candidate.props.accessibilityLabel ?? '').startsWith('Hold to approve rule'));
+  assert.ok(node, `no hold button. Labels: ${labelsOf(root).join(' | ')}`);
+  return node;
+}
+
+function pressHold(node: ReactTestInstance): void {
+  const fire = node.props.onLongPress as (() => void) | undefined;
+  assert.ok(fire, 'hold control has no long press');
+  fire();
+}
+
 function button(root: ReactTestRenderer, label: string): ReactTestInstance {
   const node = root.root
     .findAll((candidate) => isHost(candidate, 'Pressable'))
@@ -594,7 +648,7 @@ test.describe('landed open', { concurrency: 1 }, () => {
     };
     const root = await show('new');
     try {
-      await settle(root, () => labelsOf(root).includes('Open this rule') && api?.config != null);
+      await settle(root, () => labelsOf(root).some((label) => label.startsWith('Hold to approve rule')) && api?.config != null);
       const payee = root.root
         .findAll((node) => isHost(node, 'TextInput'))
         .find((node) => node.props.accessibilityLabel === 'Payee');
@@ -603,10 +657,10 @@ test.describe('landed open', { concurrency: 1 }, () => {
         payee.props.onChangeText(MERCHANT.toBase58());
       });
       await act(async () => {
-        button(root, 'Open this rule').props.onPress();
+        pressHold(holdButton(root));
       });
-      await settle(root, () => !labelsOf(root).includes('Open this rule'));
-      assert.equal(labelsOf(root).includes('Open this rule'), false);
+      await settle(root, () => !labelsOf(root).some((label) => label.startsWith('Hold to approve rule')));
+      assert.equal(labelsOf(root).some((label) => label.startsWith('Hold to approve rule')), false);
       assert.equal(nav.replaces.at(-1), `/rule/${held[0]?.mandate.address}`);
     } finally {
       root.unmount();
@@ -621,7 +675,7 @@ test.describe('landed open', { concurrency: 1 }, () => {
     };
     const root = await show('new');
     try {
-      await settle(root, () => labelsOf(root).includes('Open this rule') && api?.config != null);
+      await settle(root, () => labelsOf(root).some((label) => label.startsWith('Hold to approve rule')) && api?.config != null);
       const payee = root.root
         .findAll((node) => isHost(node, 'TextInput'))
         .find((node) => node.props.accessibilityLabel === 'Payee');
@@ -630,7 +684,7 @@ test.describe('landed open', { concurrency: 1 }, () => {
         payee.props.onChangeText(MERCHANT.toBase58());
       });
       await act(async () => {
-        button(root, 'Open this rule').props.onPress();
+        pressHold(holdButton(root));
       });
       await settle(root, () => nav.replaces.length > 0);
       const href = nav.replaces.at(-1) ?? '';
@@ -846,7 +900,7 @@ test.describe('landed open', { concurrency: 1 }, () => {
     }
     const root = await show('new');
     try {
-      await settle(root, () => labelsOf(root).includes('Open this rule') && api?.config != null);
+      await settle(root, () => labelsOf(root).some((label) => label.startsWith('Hold to approve rule')) && api?.config != null);
       const payee = root.root
         .findAll((node) => isHost(node, 'TextInput'))
         .find((node) => node.props.accessibilityLabel === 'Payee');
@@ -855,23 +909,23 @@ test.describe('landed open', { concurrency: 1 }, () => {
         payee.props.onChangeText(MERCHANT.toBase58());
       });
       await act(async () => {
-        button(root, 'Open this rule').props.onPress();
+        pressHold(holdButton(root));
       });
       const absent = signatureNotYetVisibleMessage('devnet');
       const text = await settle(root, (value) => value.includes(absent));
       assert.equal(text.includes('nothing moved'), false);
-      assert.equal(button(root, 'Open this rule').props.disabled, true);
+      assert.equal(holdButton(root).props.disabled, true);
       const signed = signCalls;
       await act(async () => {
-        button(root, 'Open this rule').props.onPress();
+        pressHold(holdButton(root));
         await new Promise((resolve) => setImmediate(resolve));
       });
       assert.equal(signCalls, signed);
       await act(async () => {
         await api!.refresh();
       });
-      await settle(root, () => button(root, 'Open this rule').props.disabled !== true);
-      assert.equal(button(root, 'Open this rule').props.disabled, false);
+      await settle(root, () => holdButton(root).props.disabled !== true);
+      assert.equal(holdButton(root).props.disabled, false);
     } finally {
       if (watch && savedWindow != null) {
         watch.windowMs = savedWindow;

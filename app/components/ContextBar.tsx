@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, fonts } from './theme';
+import { colors, fonts, radii, space } from './theme';
 
 export function ContextBar({
   title,
@@ -22,7 +22,7 @@ export function ContextBar({
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.sub}>{subtitle}</Text>
       </View>
-      <Text style={styles.sw}>{`switch \u2195`}</Text>
+      <Text style={styles.sw}>Switch rule</Text>
     </Pressable>
   );
 }
@@ -32,20 +32,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: space.lg,
+    paddingHorizontal: space.xl,
     borderWidth: 1,
     borderColor: colors.line,
-    borderRadius: 6,
+    borderRadius: radii.card,
+    backgroundColor: colors.surface,
     minHeight: 48,
-    gap: 12,
+    gap: space.xl,
   },
   text: {
     flex: 1,
   },
   title: {
-    color: colors.text,
+    color: colors.bone,
     fontSize: 20,
+    lineHeight: 24,
     fontFamily: fonts.serif,
   },
   sub: {
@@ -53,13 +55,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    fontFamily: fonts.mono,
-    marginTop: 5,
+    fontFamily: fonts.sansBold,
+    marginTop: space.xs,
   },
   sw: {
-    color: colors.body,
-    fontSize: 12,
-    fontWeight: '500',
-    fontFamily: fonts.mono,
+    color: colors.brass,
+    fontSize: 13,
+    fontFamily: fonts.sansBold,
   },
 });

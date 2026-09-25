@@ -1,136 +1,174 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { formatBaseUnits, formatTimeLeft } from '../lib/format';
+import { formatBaseUnits, formatTimeLeft, timeLeftParts } from '../lib/format';
+import { isActive, mandateRemaining } from '../lib/mandate';
 import type { MandateAccount } from '../lib/mandate';
 import { displayPurpose, ruleStatusLabel, spendRatio } from '../lib/ruleView';
 import { truncateAddress } from '../lib/wallet';
-import { colors, fonts } from './theme';
+import { BrassFrame } from './backglass/BrassFrame';
+import { BlockBar } from './backglass/BlockBar';
+import { barUnits, openedAtSec, ruleDay } from './daily/facts';
+import { LivePill } from './daily/LivePill';
+import { colors, fonts, radii, space } from './theme';
+import type { LedgerRow } from '../lib/ring';
 
 export function RuleListItem({
   mandate,
   decimals,
   nowSec,
   current,
+  rows,
   onPress,
 }: {
   mandate: MandateAccount;
   decimals: number;
   nowSec: bigint;
   current: boolean;
+  rows?: readonly Pick<LedgerRow, 'kind' | 'ts'>[];
   onPress: () => void;
 }) {
   const purpose = displayPurpose(mandate.purpose);
   const spent = formatBaseUnits(mandate.spent, decimals);
   const cap = formatBaseUnits(mandate.cap, decimals);
   const per = formatBaseUnits(mandate.perTxMax, decimals);
-  const ratio = spendRatio(mandate.spent, mandate.cap);
+  const remaining = mandateRemaining(mandate);
+  const bars = barUnits(remaining, mandate.cap);
   const status = ruleStatusLabel(mandate, nowSec, current);
   const time = formatTimeLeft(mandate.expiresAt, nowSec);
+  const left = timeLeftParts(mandate.expiresAt, nowSec);
+  const live = isActive(mandate, nowSec);
+  const clock = ruleDay(openedAtSec(rows ?? []), mandate.expiresAt, nowSec);
+  const spentShare = Math.round(spendRatio(mandate.spent, mandate.cap) * 100);
+  const dayLine = clock ? `Day ${clock.day} of ${clock.total}` : time;
+
+  const body = (
+    <View style={styles.inner}>
+      <View style={styles.head}>
+        <View style={styles.titles}>
+          <Text style={styles.purpose}>{purpose}</Text>
+          <Text style={styles.agent}>{`Your agent: ${truncateAddress(mandate.agent)}`}</Text>
+        </View>
+        <LivePill
+          label={live ? 'Live' : status === 'revoked' ? 'Stopped' : 'Ended'}
+          tone={live ? 'live' : 'stopped'}
+        />
+      </View>
+      <View style={styles.figures}>
+        <Text style={styles.remaining}>{formatBaseUnits(remaining, decimals)}</Text>
+        <Text style={styles.of}>{`left of your ${cap} total`}</Text>
+        <Text style={styles.spent}>
+          <Text style={styles.spentFigure}>{spent}</Text>
+          {' spent'}
+        </Text>
+      </View>
+      <View style={live ? undefined : styles.dim}>
+        <BlockBar
+          remaining={bars.remaining}
+          cap={bars.cap}
+          accessibilityLabel={`${formatBaseUnits(remaining, decimals)} left of ${cap}. ${spentShare} percent of the total is spent.`}
+        />
+      </View>
+      <View style={styles.foot}>
+        <Text style={styles.meta}>{`Most ${per} per payment\nPayee ${truncateAddress(mandate.merchant)} only`}</Text>
+        <Text style={styles.day}>{`${dayLine}. ${left.value} ${left.label}`}</Text>
+      </View>
+    </View>
+  );
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${purpose}, ${status}`}
       onPress={onPress}
-      style={[styles.row, current && styles.current]}
     >
-      <View style={styles.head}>
-        <Text style={styles.purpose}>{purpose}</Text>
-        <Text style={[styles.status, current && styles.statusCurrent]}>
-          {current ? `current · ${time}` : `${status} · ${time}`}
-        </Text>
-      </View>
-      <View style={styles.spent}>
-        <Text style={styles.spentText}>
-          {spent} spent <Text style={styles.dim}>of {cap}</Text>
-        </Text>
-        <Text style={styles.spentText}>{per} per payment</Text>
-      </View>
-      <View style={styles.track}>
-        <View style={[styles.fill, { width: `${Math.max(ratio * 100, mandate.spent > 0n ? 1 : 0)}%` }]} />
-      </View>
-      <View style={styles.agent}>
-        <Text style={styles.agentText}>
-          agent <Text style={styles.mono}>{truncateAddress(mandate.agent)}</Text>
-        </Text>
-        <Text style={styles.agentText}>pays {truncateAddress(mandate.merchant)}</Text>
-      </View>
+      {live ? <BrassFrame padding={14}>{body}</BrassFrame> : <View style={styles.quiet}>{body}</View>}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
-    paddingVertical: 13,
-    paddingLeft: 14,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    borderLeftWidth: 2,
-    borderLeftColor: 'transparent',
-    marginLeft: -16,
-    gap: 8,
+  inner: {
+    gap: space.md,
   },
-  current: {
-    borderLeftColor: colors.text,
+  quiet: {
+    borderRadius: radii.frame,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: 14,
   },
   head: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
-    gap: 12,
+    gap: space.lg,
+  },
+  titles: {
+    flex: 1,
+    gap: 3,
   },
   purpose: {
-    color: colors.text,
-    fontSize: 24,
-    fontFamily: fonts.serif,
-    flex: 1,
-  },
-  status: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    fontFamily: fonts.mono,
-  },
-  statusCurrent: {
-    color: colors.text,
-  },
-  spent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  spentText: {
-    color: colors.body,
-    fontSize: 13,
-    fontWeight: '500',
-    fontFamily: fonts.mono,
-  },
-  dim: {
-    color: colors.muted,
-  },
-  track: {
-    height: 2,
-    backgroundColor: colors.line,
-    alignSelf: 'stretch',
-  },
-  fill: {
-    height: 2,
-    backgroundColor: colors.text,
-    minWidth: 0,
+    fontFamily: fonts.serifItalic,
+    fontSize: 17,
+    lineHeight: 22,
+    color: colors.bone,
   },
   agent: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.muted,
+  },
+  figures: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: space.md,
+  },
+  remaining: {
+    fontFamily: fonts.serifLight,
+    fontSize: 44,
+    lineHeight: 46,
+    color: colors.bone,
+  },
+  of: {
+    flex: 1,
+    fontFamily: fonts.sans,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.body,
+  },
+  spent: {
+    fontFamily: fonts.sans,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.body,
+  },
+  spentFigure: {
+    fontFamily: fonts.serif,
+    fontSize: 18,
+    lineHeight: 22,
+    color: colors.bone,
+  },
+  dim: {
+    opacity: 0.55,
+  },
+  foot: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
+    alignItems: 'flex-end',
+    gap: space.md,
   },
-  agentText: {
+  meta: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
     color: colors.muted,
-    fontSize: 13,
-    fontWeight: '500',
   },
-  mono: {
-    color: colors.body,
-    fontFamily: fonts.mono,
+  day: {
+    fontFamily: fonts.sansBold,
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.brass,
+    textAlign: 'right',
   },
 });
