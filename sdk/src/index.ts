@@ -57,10 +57,10 @@ export type {
   WithdrawalOutlook,
 } from "./hold.js";
 export { PROGRAM_ID } from "./idl.js";
-export { ledgerPda, mandatePda } from "./layout.js";
+export { MANDATE_AGENT_OFFSET, ledgerPda, mandatePda } from "./layout.js";
 export type { LedgerAccount, LedgerEntry, MandateAccount } from "./layout.js";
-export { MissingListedTransactionError, decisionsForMandate, fetchLedger, fetchMandate } from "./read.js";
-export type { DecisionsForMandateOptions, MandateDecisions } from "./read.js";
+export { MissingListedTransactionError, decisionsForMandate, fetchLedger, fetchMandate, mandatesForAgent } from "./read.js";
+export type { AgentMandate, DecisionsForMandateOptions, MandateDecisions } from "./read.js";
 export {
   REASON_ACCOUNT_FROZEN,
   REASON_DELEGATE_MISSING,

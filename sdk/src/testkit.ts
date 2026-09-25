@@ -176,14 +176,33 @@ export class FakeConnection {
   lastTokenFilter: { mint?: PublicKey; programId?: PublicKey } | undefined;
   signatureQueries: { limit?: number; before?: string; until?: string }[] = [];
   opened: string[] = [];
+  programQueries: { programId: string; filters: ProgramAccountFilter[] }[] = [];
+  /** Devnet genesis. A test sets this to another hash, or sets genesisError when the read should fail. */
+  genesisHash = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
+  genesisError: Error | undefined;
 
   async getAccountInfo(key: PublicKey): Promise<StoredAccount | null> {
     return this.accounts.get(key.toBase58()) ?? null;
   }
 
-  /** Devnet genesis. A test that needs another cluster overrides this. */
   async getGenesisHash(): Promise<string> {
-    return "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
+    if (this.genesisError) throw this.genesisError;
+    return this.genesisHash;
+  }
+
+  async getProgramAccounts(
+    programId: PublicKey,
+    configOrCommitment?: string | { filters?: ProgramAccountFilter[] },
+  ): Promise<{ pubkey: PublicKey; account: StoredAccount }[]> {
+    const filters = typeof configOrCommitment === "string" ? [] : (configOrCommitment?.filters ?? []);
+    this.programQueries.push({ programId: programId.toBase58(), filters });
+    const rows: { pubkey: PublicKey; account: StoredAccount }[] = [];
+    for (const [address, account] of this.accounts) {
+      if (!account.owner.equals(programId)) continue;
+      if (!matchesProgramFilters(account.data, filters)) continue;
+      rows.push({ pubkey: new PublicKey(address), account });
+    }
+    return rows;
   }
 
   async getBalance(key: PublicKey): Promise<number> {
@@ -372,6 +391,27 @@ export function legacyChargeTx(args: {
 
 const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
+type ProgramAccountFilter =
+  | { dataSize: number }
+  | { memcmp: { offset: number; bytes: string; encoding?: "base58" | "base64" } };
+
+function matchesProgramFilters(data: Buffer, filters: ProgramAccountFilter[]): boolean {
+  for (const filter of filters) {
+    if ("dataSize" in filter) {
+      if (data.length !== filter.dataSize) return false;
+      continue;
+    }
+    const raw =
+      filter.memcmp.encoding === "base64"
+        ? Buffer.from(filter.memcmp.bytes, "base64")
+        : decodeBase58(filter.memcmp.bytes);
+    const offset = filter.memcmp.offset;
+    if (offset < 0 || offset + raw.length > data.length) return false;
+    if (!data.subarray(offset, offset + raw.length).equals(raw)) return false;
+  }
+  return true;
+}
+
 export function encodeBase58(bytes: Buffer): string {
   let zeros = 0;
   for (const byte of bytes) {
@@ -386,6 +426,27 @@ export function encodeBase58(bytes: Buffer): string {
     n /= 58n;
   }
   return "1".repeat(zeros) + out;
+}
+
+export function decodeBase58(text: string): Buffer {
+  let zeros = 0;
+  while (zeros < text.length && text[zeros] === "1") zeros += 1;
+  let n = 0n;
+  for (let i = zeros; i < text.length; i += 1) {
+    const value = B58.indexOf(text[i] ?? "");
+    if (value < 0) throw new Error(`invalid base58: ${text}`);
+    n = n * 58n + BigInt(value);
+  }
+  const body: number[] = [];
+  while (n > 0n) {
+    body.push(Number(n % 256n));
+    n /= 256n;
+  }
+  const out = Buffer.alloc(zeros + body.length);
+  for (let i = 0; i < body.length; i += 1) {
+    out[zeros + i] = body[body.length - 1 - i] ?? 0;
+  }
+  return out;
 }
 
 export function framed(program: string, lines: string[]): string[] {

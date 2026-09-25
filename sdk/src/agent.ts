@@ -17,6 +17,7 @@ import { decisionsFromTx, viewFromRpc, type RpcTransaction } from "./events.js";
 import { CHARGE_DISCRIMINATOR, PROGRAM_ID } from "./idl.js";
 import {
   asU64,
+  decodeMandate,
   ledgerPda,
   mandatePda,
   toPublicKey,
@@ -215,6 +216,68 @@ export class VetoAgent {
       );
     }
     return veto;
+  }
+
+  /**
+   * Builds an agent from a mandate account.
+   * The program id, mint and decimals, source, payee token account, agent, and cluster
+   * are read from the chain. The keypair must be the agent named on that mandate.
+   * The account must be owned by the Veto program.
+   */
+  static async fromMandate(
+    connection: Connection,
+    mandate: PublicKey | string,
+    agentKeypair: Keypair,
+  ): Promise<VetoAgent> {
+    if (!(agentKeypair instanceof Keypair)) {
+      throw new Error("VetoAgent.fromMandate: agent must be a Keypair");
+    }
+    const mandateKey = toPublicKey(mandate, "VetoAgent.fromMandate mandate");
+    await assertKnownCluster(connection);
+    const info = await connection.getAccountInfo(mandateKey, "confirmed");
+    if (!info) {
+      throw new Error(`VetoAgent.fromMandate: mandate ${mandateKey.toBase58()} not found`);
+    }
+    const programId = info.owner;
+    if (!programId.equals(PROGRAM_ID)) {
+      throw new Error(
+        `VetoAgent.fromMandate: mandate ${mandateKey.toBase58()} is not owned by program ${PROGRAM_ID.toBase58()}`,
+      );
+    }
+    let decoded: MandateAccount;
+    try {
+      const data = info.data;
+      if (!(data instanceof Uint8Array)) {
+        throw new Error("account data was not bytes");
+      }
+      decoded = decodeMandate(Buffer.from(data));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`VetoAgent.fromMandate: ${message}`, { cause: err });
+    }
+    if (!decoded.agent.equals(agentKeypair.publicKey)) {
+      throw new Error(
+        `VetoAgent.fromMandate: mandate agent ${decoded.agent.toBase58()} does not equal the agent key ${agentKeypair.publicKey.toBase58()}`,
+      );
+    }
+    const sourceInfo = await connection.getAccountInfo(decoded.source, "confirmed");
+    if (!sourceInfo) {
+      throw new Error(`VetoAgent.fromMandate: source token account ${decoded.source.toBase58()} not found`);
+    }
+    await readMandateMintDecimals(connection, decoded.mint, sourceInfo.owner);
+    await merchantTokenAccount(
+      connection,
+      decoded.merchant,
+      decoded.mint,
+      sourceInfo.owner,
+      "VetoAgent.fromMandate",
+    );
+    return new VetoAgent({
+      connection,
+      agent: agentKeypair,
+      mandate: mandateKey,
+      programId,
+    });
   }
 
   /** Submits charge and reads the one Veto decision in that transaction. */
@@ -486,6 +549,56 @@ async function assertCluster(connection: Connection, cluster: string): Promise<v
       `VetoAgent.fromConfig: cluster ${JSON.stringify(cluster)} does not match genesis hash ${JSON.stringify(genesis)}`,
     );
   }
+}
+
+async function assertKnownCluster(connection: Connection): Promise<void> {
+  let genesis: string;
+  try {
+    genesis = await connection.getGenesisHash();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `VetoAgent.fromMandate: genesis hash could not be read: ${JSON.stringify(message)}`,
+      { cause: err },
+    );
+  }
+  if (!knownCluster(genesis)) {
+    throw new Error(
+      `VetoAgent.fromMandate: genesis hash ${JSON.stringify(genesis)} is not devnet, testnet, or mainnet-beta`,
+    );
+  }
+}
+
+function knownCluster(genesis: string): string | undefined {
+  if (genesis === CLUSTER_GENESIS.devnet) return "devnet";
+  if (genesis === CLUSTER_GENESIS.testnet) return "testnet";
+  if (genesis === CLUSTER_GENESIS["mainnet-beta"]) return "mainnet-beta";
+  return undefined;
+}
+
+async function readMandateMintDecimals(
+  connection: Connection,
+  mint: PublicKey,
+  tokenProgram: PublicKey,
+): Promise<number> {
+  const info = await connection.getAccountInfo(mint, "confirmed");
+  if (!info) {
+    throw new Error(`VetoAgent.fromMandate: mint account ${mint.toBase58()} not found`);
+  }
+  if (!info.owner.equals(tokenProgram)) {
+    throw new Error(
+      `VetoAgent.fromMandate: mint account ${mint.toBase58()} is not owned by the source token program ${tokenProgram.toBase58()}`,
+    );
+  }
+  const data = info.data;
+  if (!(data instanceof Uint8Array) || data.length < MINT_DECIMALS_OFFSET + 1) {
+    throw new Error(`VetoAgent.fromMandate: mint account ${mint.toBase58()} is too short to read decimals`);
+  }
+  const decimals = data[MINT_DECIMALS_OFFSET];
+  if (decimals === undefined) {
+    throw new Error(`VetoAgent.fromMandate: mint account ${mint.toBase58()} is too short to read decimals`);
+  }
+  return decimals;
 }
 
 async function readMintDecimals(

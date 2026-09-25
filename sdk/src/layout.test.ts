@@ -4,7 +4,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { PROGRAM_ID } from "./idl.js";
-import { decodeLedger, decodeMandate, ledgerPda, mandatePda, u64Le } from "./layout.js";
+import { MANDATE_AGENT_OFFSET, decodeLedger, decodeMandate, ledgerPda, mandatePda, u64Le } from "./layout.js";
 import { ledgerBytes, mandateBytes, type MandateFields } from "./testkit.js";
 
 const DEVNET = {
@@ -56,6 +56,13 @@ test("decodeMandate reads the devnet mandate 3 account, including its stored sou
   assert.equal(mandate.spendCount, 0);
   assert.equal(mandate.refusalCount, 8);
   assert.equal(mandate.bump, 254);
+});
+
+test("the agent pubkey is stored at MANDATE_AGENT_OFFSET", () => {
+  const raw = readFileSync(fileURLToPath(new URL("../fixtures/mandate-3.bin", import.meta.url)));
+  const slice = raw.subarray(MANDATE_AGENT_OFFSET, MANDATE_AGENT_OFFSET + 32);
+  assert.equal(new PublicKey(slice).toBase58(), DEVNET.agent);
+  assert.equal(decodeMandate(raw).agent.toBase58(), DEVNET.agent);
 });
 
 test("decodeMandate rejects an account that is not a mandate", () => {
