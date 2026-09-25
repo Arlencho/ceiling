@@ -71,3 +71,19 @@ test('a missing deployer key names the resolved path it tried', () => {
     rmSync(repo, { recursive: true, force: true });
   }
 });
+
+test('USDC funder defaults to the deployer in VETO_KEYS_DIR and accepts a separate key path', async () => {
+  const { readFunderKey } = await import('../e2e/keysDir');
+  const repo = mkdtempSync(join(tmpdir(), 'veto-funder-'));
+  try {
+    mkdirSync(join(repo, 'keys'));
+    writeFileSync(join(repo, 'keys', 'deployer.json'), 'default-funder');
+    writeFileSync(join(repo, 'separate.json'), 'separate-funder');
+    assert.equal(readFunderKey(repo, {}), 'default-funder');
+    assert.equal(readFunderKey(repo, { VETO_E2E_FUNDER: 'separate.json' }), 'separate-funder');
+    assert.equal(readFunderKey(repo, { VETO_E2E_FUNDER: join(repo, 'separate.json') }), 'separate-funder');
+    assert.throws(() => readFunderKey(repo, { VETO_E2E_FUNDER: 'missing.json' }), /funder key not found/);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});

@@ -5,11 +5,12 @@
 //
 // Needs deployer.json (gitignored). VETO_KEYS_DIR names that folder when it is
 // set, otherwise keys/ at the repo root, the same rule as tools/lib.ts.
-// That key is the mint authority for the demo mint in docs/DEVNET.md.
+// That key pays SOL fees and is the VTEST mint authority. USDC comes from
+// VETO_E2E_FUNDER (default deployer.json), which must hold devnet USDC.
 // The payee is the merchant already on devnet.
 // Each rule is exported while its mandate account still exists. Closed-mandate
 // export waits until issue 204 is fixed on main. The finally block returns
-// leftover SOL and tokens to that deployer key and closes the generated
+// leftover SOL to the deployer and tokens to the funder, and closes the generated
 // wallets' token accounts.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -25,7 +26,7 @@ import {
   TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountIdempotentInstruction,
   createCloseAccountInstruction,
-  createMintToInstruction,
+  unpackAccount,
   createTransferCheckedInstruction,
   getAssociatedTokenAddressSync,
 } from '@solana/spl-token';
@@ -53,7 +54,8 @@ import { decodeEventsFromLogs } from '../lib/events';
 import type { MandateAccount } from '../lib/mandate';
 import { openFundsRefusal, readTokenAmount } from '../lib/ruleAccount';
 import { ledgerPda } from '../lib/ring';
-import { readDeployerKey } from './keysDir';
+import { readDeployerKey, readFunderKey } from './keysDir';
+import { fundingInstruction, USDC_MINT, VTEST_MINT } from './funding';
 import { journeyReportPaths, publishJourneyReport } from './runReport';
 import {
   persistSession,
@@ -69,7 +71,9 @@ mock.module('expo-constants', { defaultExport: { expoConfig: { extra: {} } } });
 
 const ENABLED = process.env.VETO_E2E === '1';
 const PROGRAM_ID_STR = '3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV';
-const MINT_STR = '2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU';
+const MINT_STR = process.env.EXPO_PUBLIC_VETO_MINT?.trim() || VTEST_MINT;
+const IS_USDC = MINT_STR === USDC_MINT;
+const TOKEN = IS_USDC ? 'USDC' : 'VTEST';
 const MERCHANT_STR = '6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG';
 const MERCHANT_ATA_STR = '2bt9HMQbNy6t2J4hnw15QF8iUesPrgJoNDvf99HNay7F';
 const RPC =
@@ -85,7 +89,7 @@ const PAY_A = 100_000n;
 const OVER_A = 300_000n;
 const PAY_B = 150_000n;
 const PAY_B_AFTER = 200_000n;
-const MINT_TO = 5_000_000n;
+const OWNER_TOKENS = IS_USDC ? CAP_A + CAP_B : 5_000_000n;
 const OWNER_LAMPORTS = 400_000_000;
 const AGENT_LAMPORTS = 50_000_000;
 const DEPLOYER_RESERVE = 100_000_000;
@@ -321,9 +325,9 @@ function renderReport(args: {
     '# Devnet journey',
     '',
     `Run started: ${args.started}`,
-    `RPC: ${RPC}`,
+    'RPC: [redacted]',
     `Program: ${PROGRAM_ID_STR}`,
-    `Mint: ${MINT_STR}`,
+    `Mint: ${MINT_STR} (${TOKEN}, amounts in base units)`,
     `Owner: ${args.owner || 'not funded yet'}`,
     `Agent: ${args.agent || 'not funded yet'}`,
     `Merchant: ${MERCHANT_STR}`,
@@ -450,7 +454,7 @@ test(
       const mint = new PublicKey(MINT_STR);
       const merchant = new PublicKey(MERCHANT_STR);
       const merchantAta = getAssociatedTokenAddressSync(mint, merchant, true, TOKEN_PROGRAM_ID);
-      assert.equal(
+      if (!IS_USDC) assert.equal(
         merchantAta.toBase58(),
         MERCHANT_ATA_STR,
         'merchant associated token account does not match the devnet record',
@@ -458,6 +462,9 @@ test(
 
       const deployerFile = readDeployerKey(REPO);
       const deployer = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(deployerFile) as number[]));
+      const funder = IS_USDC
+        ? Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFunderKey(REPO)) as number[]))
+        : deployer;
       const owner = Keypair.generate();
       const agentSdk = SdkKeypair.generate();
       const agent = Keypair.fromSecretKey(Uint8Array.from(agentSdk.secretKey));
@@ -495,7 +502,7 @@ test(
           }
         }
 
-        const deployerAta = getAssociatedTokenAddressSync(mint, deployer.publicKey, false, TOKEN_PROGRAM_ID);
+        const funderAta = getAssociatedTokenAddressSync(mint, funder.publicKey, false, TOKEN_PROGRAM_ID);
         const tx = new Transaction();
         const signers: Keypair[] = [deployer];
         let tokens = 0n;
@@ -511,7 +518,7 @@ test(
               createTransferCheckedInstruction(
                 ata,
                 mint,
-                deployerAta,
+                funderAta,
                 wallet.publicKey,
                 view.amount,
                 DECIMALS,
@@ -534,8 +541,8 @@ test(
           tx.add(
             createAssociatedTokenAccountIdempotentInstruction(
               deployer.publicKey,
-              deployerAta,
-              deployer.publicKey,
+              funderAta,
+              funder.publicKey,
               mint,
               TOKEN_PROGRAM_ID,
             ),
@@ -586,10 +593,10 @@ test(
         }
 
         const detail = [
-          `returned ${tokens.toString()} tokens`,
-          `${ownerSol} owner lamports`,
-          `${agentSol} agent lamports`,
-          `${ataRent} token-account lamports`,
+          `returned ${tokens.toString()} ${TOKEN} base units to ${funder.publicKey.toBase58()}`,
+          `${ownerSol} owner SOL lamports`,
+          `${agentSol} agent SOL lamports`,
+          `${ataRent} token-account SOL lamports`,
           `to ${deployer.publicKey.toBase58()}`,
           closed.length > 0 ? `closed ${closed.join(', ')}` : '',
         ]
@@ -601,7 +608,7 @@ test(
         }
         record({
           step: 'cleanup',
-          action: 'return remaining SOL and tokens to deployer',
+          action: 'return remaining tokens to funder and SOL to deployer',
           signature,
           result: 'pass',
           detail,
@@ -720,8 +727,13 @@ test(
       assert.ok(mintInfo, `mint ${MINT_STR} is not on this cluster`);
       assert.equal(mintInfo.owner.toBase58(), TOKEN_PROGRAM_ID.toBase58());
       assert.equal(mintInfo.data[44], DECIMALS);
-      const merchantInfo = await info(merchantAta);
-      assert.ok(merchantInfo, `merchant token account ${MERCHANT_ATA_STR} is not on this cluster`);
+      const tokenFunding = await fundingInstruction({
+        mint, destination: ownerAta, funder: funder.publicKey, amount: OWNER_TOKENS,
+        readBalance: async (address) => {
+          const account = await info(address);
+          return account ? unpackAccount(address, account, TOKEN_PROGRAM_ID).amount : 0n;
+        },
+      });
 
       const deployerBalance = await connection.getBalance(deployer.publicKey, 'confirmed');
       const fundNeed = OWNER_LAMPORTS + AGENT_LAMPORTS + 20_000_000;
@@ -753,9 +765,12 @@ test(
             mint,
             TOKEN_PROGRAM_ID,
           ),
-          createMintToInstruction(mint, ownerAta, deployer.publicKey, MINT_TO, [], TOKEN_PROGRAM_ID),
+          createAssociatedTokenAccountIdempotentInstruction(
+            deployer.publicKey, merchantAta, merchant, mint, TOKEN_PROGRAM_ID,
+          ),
+          tokenFunding,
         );
-        tx.sign(deployer);
+        tx.sign(...(funder.publicKey.equals(deployer.publicKey) ? [deployer] : [deployer, funder]));
         const signature = await connection.sendRawTransaction(tx.serialize(), {
           preflightCommitment: 'confirmed',
         });
@@ -769,9 +784,9 @@ test(
           const funded = await requireToken(ownerAta, 'owner');
           assert.equal(ownerSol, OWNER_LAMPORTS);
           assert.equal(agentSol, AGENT_LAMPORTS);
-          assert.equal(funded.amount, MINT_TO);
+          assert.equal(funded.amount, OWNER_TOKENS);
         });
-        return { signature, detail: `owner ${ids.owner} agent ${ids.agent}` };
+        return { signature, detail: `owner ${ids.owner} agent ${ids.agent}, funded ${OWNER_TOKENS} ${TOKEN} base units from ${funder.publicKey.toBase58()}` };
       });
       void fundSig;
 
@@ -834,10 +849,10 @@ test(
         const logs = await logsOf(opened.signature);
         assert.ok(logs.some((line) => line.includes('VETO OPENED')));
         const ownerTokens = await requireToken(ownerAta, 'owner');
-        assert.equal(ownerTokens.amount, MINT_TO - CAP_A);
+        assert.equal(ownerTokens.amount, OWNER_TOKENS - CAP_A);
         return {
           signature: opened.signature,
-          detail: opened.mandate.address,
+          detail: `${opened.mandate.address}, deposited ${opened.mandate.cap} ${TOKEN} base units`,
           mandate: opened.mandate,
           ledger: opened.ledger,
         };
@@ -878,10 +893,10 @@ test(
         assert.equal(funds.source, opened.mandate.source);
         await ringHas(new PublicKey(opened.mandate.address), KIND_OPENED, CAP_B, 0n);
         const ownerTokens = await requireToken(ownerAta, 'owner');
-        assert.equal(ownerTokens.amount, MINT_TO - CAP_A - CAP_B);
+        assert.equal(ownerTokens.amount, OWNER_TOKENS - CAP_A - CAP_B);
         return {
           signature: opened.signature,
-          detail: opened.mandate.address,
+          detail: `${opened.mandate.address}, deposited ${opened.mandate.cap} ${TOKEN} base units`,
           mandate: opened.mandate,
           ledger: opened.ledger,
         };
@@ -934,7 +949,7 @@ test(
           reasonCode: 0,
           suggestedOverride: 0n,
         });
-        return { signature: outcome.signature, detail: `paid ${PAY_A.toString()} nonce ${nonce.toString()}` };
+        return { signature: outcome.signature, detail: `paid ${PAY_A.toString()} ${TOKEN} base units nonce ${nonce.toString()}` };
       });
       void paidA;
 
@@ -976,7 +991,7 @@ test(
         });
         return {
           signature: outcome.signature,
-          detail: `refused ${OVER_A.toString()} nonce ${nonce.toString()} override ${OVER_A.toString()}`,
+          detail: `refused ${OVER_A.toString()} ${TOKEN} base units nonce ${nonce.toString()} override ${OVER_A.toString()} ${TOKEN} base units`,
         };
       });
       void refused;
@@ -1009,7 +1024,7 @@ test(
         const logs = await logsOf(result.signature);
         assert.ok(logs.some((line) => line.includes('VETO OVERRIDE')));
         ruleAForGrant = live;
-        return { signature: result.signature, detail: `override ${OVER_A.toString()} nonce ${refusedNonce.toString()}` };
+        return { signature: result.signature, detail: `override ${OVER_A.toString()} ${TOKEN} base units nonce ${refusedNonce.toString()}` };
       });
       void granted;
 
@@ -1045,7 +1060,7 @@ test(
           reasonCode: 0,
           suggestedOverride: 0n,
         });
-        return { signature: outcome.signature, detail: `paid ${OVER_A.toString()} nonce ${refusedNonce.toString()}` };
+        return { signature: outcome.signature, detail: `paid ${OVER_A.toString()} ${TOKEN} base units nonce ${refusedNonce.toString()}` };
       });
       void retried;
 
@@ -1079,7 +1094,7 @@ test(
           reasonCode: 0,
           suggestedOverride: 0n,
         });
-        return { signature: outcome.signature, detail: `paid ${PAY_B.toString()} nonce ${nonce.toString()}` };
+        return { signature: outcome.signature, detail: `paid ${PAY_B.toString()} ${TOKEN} base units nonce ${nonce.toString()}` };
       });
       void paidB;
 
@@ -1136,7 +1151,7 @@ test(
         });
         return {
           signature: outcome.signature,
-          detail: `refused ${PAY_A.toString()} nonce ${nonce.toString()} reason ${REASON_NOT_ACTIVE}`,
+          detail: `refused ${PAY_A.toString()} ${TOKEN} base units nonce ${nonce.toString()} reason ${REASON_NOT_ACTIVE}`,
         };
       });
       void refusedAgain;
@@ -1169,7 +1184,7 @@ test(
           reasonCode: 0,
           suggestedOverride: 0n,
         });
-        return { signature: outcome.signature, detail: `paid ${PAY_B_AFTER.toString()} nonce ${nonce.toString()}` };
+        return { signature: outcome.signature, detail: `paid ${PAY_B_AFTER.toString()} ${TOKEN} base units nonce ${nonce.toString()}` };
       });
       void paidBAgain;
 
@@ -1317,7 +1332,7 @@ test(
         assert.ok(logs.some((line) => line.includes('VETO CLOSED')));
         return {
           signature: result.signature,
-          detail: `returned ${remainingA.toString()} tokens and ${rent.toString()} lamports, fee ${fee}`,
+          detail: `returned ${remainingA.toString()} ${TOKEN} base units and ${rent.toString()} SOL lamports, fee ${fee} SOL lamports`,
         };
       });
 
@@ -1351,16 +1366,19 @@ test(
         assert.equal(await info(sourceB), null);
         const ownerAfterTokens = await requireToken(ownerAta, 'owner');
         assert.equal(ownerAfterTokens.amount, ownerBeforeTokens.amount + remainingB);
-        assert.equal(ownerAfterTokens.amount, MINT_TO - PAY_A - OVER_A - PAY_B - PAY_B_AFTER);
+        assert.equal(ownerAfterTokens.amount, OWNER_TOKENS - PAY_A - OVER_A - PAY_B - PAY_B_AFTER);
         const logs = await logsOf(result.signature);
         assert.ok(logs.some((line) => line.includes('VETO CLOSED')));
         return {
           signature: result.signature,
-          detail: `returned ${remainingB.toString()} tokens and ${rent.toString()} lamports, fee ${fee}`,
+          detail: `returned ${remainingB.toString()} ${TOKEN} base units and ${rent.toString()} SOL lamports, fee ${fee} SOL lamports`,
         };
       });
     } catch (err) {
       journeyError = err;
+      if (!rows.some((row) => row.result === 'fail')) {
+        record({ step: 'setup', action: 'check journey prerequisites', signature: '', result: 'fail', detail: errorText(err).split(RPC).join('[redacted]') });
+      }
     } finally {
       if (reclaimRun) {
         try {
@@ -1369,7 +1387,7 @@ test(
           const text = errorText(err);
           record({
             step: 'cleanup',
-            action: 'return remaining SOL and tokens to deployer',
+            action: 'return remaining tokens to funder and SOL to deployer',
             signature: '',
             result: 'fail',
             detail: text,
