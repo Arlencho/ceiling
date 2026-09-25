@@ -1,0 +1,28 @@
+# Standalone crate, deliberately NOT a member of the root workspace. The empty
+# [workspace] table below keeps cargo from absorbing it into the root
+# workspace, so the root Cargo.toml does not change. Dependency versions
+# mirror programs/veto/Cargo.toml dev-dependencies so the LiteSVM runtime and
+# the solana SDK crates are the same ones the program tests use.
+
+[package]
+name = "veto-loadtest-cu"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89.0"
+description = "Compute-unit load measurement for the veto program (LiteSVM, single-threaded)"
+publish = false
+
+[workspace]
+
+[dependencies]
+veto = { path = "../../programs/veto" }
+anchor-lang = "1.2.0"
+anchor-spl = "1.2.0"
+litesvm = "0.10.0"
+solana-message = "3.0.1"
+solana-transaction = "3.0.2"
+solana-signer = "3.0.0"
+solana-keypair = "3.0.1"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
