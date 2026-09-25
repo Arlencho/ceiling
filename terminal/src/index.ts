@@ -1,4 +1,5 @@
 import { EnergySpotFeed } from "../../watcher/src/feed.js";
+import { EcbFxFeed } from "../../watcher/src/fx.js";
 import { loadTerminalConfig } from "./config.js";
 import { createTerminalServer } from "./server.js";
 import { buildState, quoteResponse } from "./state.js";
@@ -14,6 +15,8 @@ async function main(): Promise<number> {
       at: new Date(),
       kwhMilli: cfg.kwhMilli,
       mintDecimals: cfg.mintDecimals,
+      quoteCurrency: cfg.quoteCurrency,
+      fx: cfg.quoteCurrency === "USD" ? new EcbFxFeed() : undefined,
     });
     const { status, body } = quoteResponse(state, cfg);
     console.log(JSON.stringify(body, null, 2));

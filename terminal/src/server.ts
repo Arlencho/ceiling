@@ -8,6 +8,7 @@
 import { createServer, type Server } from "node:http";
 import { Connection } from "@solana/web3.js";
 import { EnergySpotFeed, type PriceFeed } from "../../watcher/src/feed.js";
+import { EcbFxFeed } from "../../watcher/src/fx.js";
 import type { TerminalConfig } from "./config.js";
 import { fetchBalance, fetchPayments, type Payment } from "./payments.js";
 import { renderPage, type PageView } from "./page.js";
@@ -43,6 +44,9 @@ export function viewFromState(state: TerminalState, snap: PaymentsSnapshot, cfg:
     kwh: formatKwh(cfg.kwhMilli),
     amountTokens: state.quote === null ? null : formatBaseUnits(state.quote.amount, cfg.mintDecimals),
     amountBaseUnits: state.quote === null ? null : state.quote.amount.toString(),
+    tokenSymbol: state.quote?.tokenSymbol,
+    fxRate: state.quote?.fxRate ?? null,
+    fxDate: state.quote?.fxDate ?? null,
     nonce: state.quote === null || state.quote.nonce === null ? null : state.quote.nonce.toString(),
     note: state.note,
     merchantTokenAccount: cfg.merchantTokenAccount,
@@ -64,6 +68,7 @@ export function viewFromState(state: TerminalState, snap: PaymentsSnapshot, cfg:
 export function createTerminalServer(deps: TerminalDeps): Server {
   const cfg = deps.cfg;
   const feed = deps.feed ?? new EnergySpotFeed();
+  const fx = cfg.quoteCurrency === "USD" ? new EcbFxFeed() : undefined;
   const connection = deps.connection ?? new Connection(cfg.rpc, "confirmed");
 
   let stateCache: { fetchedMs: number; state: TerminalState } | null = null;
@@ -90,6 +95,8 @@ export function createTerminalServer(deps: TerminalDeps): Server {
       at: new Date(nowMs),
       kwhMilli: cfg.kwhMilli,
       mintDecimals: cfg.mintDecimals,
+      quoteCurrency: cfg.quoteCurrency,
+      fx,
     });
     stateCache = { fetchedMs: nowMs, state };
     return state;

@@ -229,6 +229,11 @@ VETO_KWH_MILLI: "${VETO_KWH_MILLI:-50000}"
 VETO_MINT_DECIMALS: "${VETO_MINT_DECIMALS:-6}"
 VETO_PURPOSE: "${purpose}"
 EOF
+  # Both jobs read this file. Forward the variable only when the operator set it.
+  if [[ -n "${VETO_QUOTE_CURRENCY:-}" ]]; then
+    need_no_quote VETO_QUOTE_CURRENCY
+    printf 'VETO_QUOTE_CURRENCY: "%s"\n' "${VETO_QUOTE_CURRENCY}" >> "$dest"
+  fi
 }
 
 ensure_sa() {

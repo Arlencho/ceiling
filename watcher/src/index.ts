@@ -12,6 +12,7 @@ import {
   submitCharge,
 } from "./chain.js";
 import { keyPath, loadConfig } from "./config.js";
+import { EcbFxFeed } from "./fx.js";
 import { EnergySpotFeed } from "./feed.js";
 import { JsonlJournal, type JournalRow } from "./journal.js";
 import { fetchChainDecisions, repairJournalFromChain, type ChainDecision } from "./journalRepair.js";
@@ -96,7 +97,8 @@ async function withJournalAndFeed(now: Date) {
   const chainLastNonce = () => readLastNonce({ cfg, agent });
   const recoverSettled = (nonce: bigint) => recoverSettledCharge({ cfg, agent, nonce });
   const recordedCharge = (nonce: bigint) => readRecordedCharge({ cfg, agent, nonce });
-  return { cfg, journal, feed, submit, agent, store, chainLastNonce, recoverSettled, recordedCharge };
+  const fx = cfg.quoteCurrency === "USD" ? new EcbFxFeed() : undefined;
+  return { cfg, journal, feed, submit, agent, store, chainLastNonce, recoverSettled, recordedCharge, fx };
 }
 
 async function lastAppendedAfter<T>(
@@ -111,7 +113,7 @@ async function lastAppendedAfter<T>(
 }
 
 async function processAt(at: Date): Promise<ProcessResult> {
-  const { cfg, journal, feed, submit, store, chainLastNonce, recoverSettled, recordedCharge } =
+  const { cfg, journal, feed, submit, store, chainLastNonce, recoverSettled, recordedCharge, fx } =
     await withJournalAndFeed(at);
   const { result, row } = await lastAppendedAfter(journal, () =>
     processWindow({
@@ -121,6 +123,8 @@ async function processAt(at: Date): Promise<ProcessResult> {
       submit,
       kwhMilli: cfg.kwhMilli,
       mintDecimals: cfg.mintDecimals,
+      quoteCurrency: cfg.quoteCurrency,
+      fx,
       reader: {
         chainLastNonce,
         recoverSettled,
@@ -133,7 +137,7 @@ async function processAt(at: Date): Promise<ProcessResult> {
 }
 
 async function processDue(now: Date, announceIdle = false): Promise<boolean> {
-  const { cfg, journal, feed, submit, store, chainLastNonce, recoverSettled, recordedCharge } =
+  const { cfg, journal, feed, submit, store, chainLastNonce, recoverSettled, recordedCharge, fx } =
     await withJournalAndFeed(now);
   let acted = false;
   let deferred = false;
@@ -149,6 +153,8 @@ async function processDue(now: Date, announceIdle = false): Promise<boolean> {
         submit,
         kwhMilli: cfg.kwhMilli,
         mintDecimals: cfg.mintDecimals,
+        quoteCurrency: cfg.quoteCurrency,
+        fx,
         reader: {
           chainLastNonce,
           recoverSettled,

@@ -60,6 +60,8 @@ export VETO_MERCHANT_TOKEN='MERCHANT_TOKEN'
 export VETO_AGENT='AGENT'
 # optional:
 # export ALERT_EMAIL='you@example.com'
+# optional, forwarded to both jobs when set. Unset keeps 1 token as 1 SEK.
+# export VETO_QUOTE_CURRENCY='USD'
 
 ./scripts/deploy-watcher-cloud.sh --check
 ./scripts/deploy-watcher-cloud.sh

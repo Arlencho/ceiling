@@ -16,6 +16,14 @@ export type JournalRow = {
   reason_code: number | null;
   signature: string | null;
   suggested_override: string | null;
+  /** Present on paid, refused, and fx-gap rows when quoting USD. Older rows omit it. */
+  quote_currency?: string;
+  /** USD per SEK, 8 decimal places, from integer division. Null when no rate was read. */
+  fx_rate?: string | null;
+  /** ECB fixing date (YYYY-MM-DD). Null when the fixing was not read. */
+  fx_date?: string | null;
+  /** URL of the FX document. */
+  fx_source?: string | null;
 };
 
 // Only a decision the chain actually made settles a window. A gap is an

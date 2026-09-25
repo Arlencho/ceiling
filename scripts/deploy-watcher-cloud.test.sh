@@ -408,6 +408,76 @@ else
   bad "dry-run with a missing bucket should print create: ${out}"
 fi
 
+# VETO_QUOTE_CURRENCY is written into the env file both jobs deploy with,
+# and only when the operator set it. deploy() calls write_env_file once and
+# passes that file to veto-watcher and veto-watcher-stale.
+quote_env_body() {
+  local currency="${1:-}"
+  (
+    # The sourced deploy script parses "$@". Drop the function argument so a
+    # currency value is not treated as an unknown flag.
+    set --
+    export VETO_RPC=http://rpc.test
+    export VETO_PROGRAM_ID=Prog
+    export VETO_MINT=Mint
+    export VETO_OWNER=Owner
+    export VETO_OWNER_TOKEN=OwnerToken
+    export VETO_MERCHANT=Merchant
+    export VETO_MERCHANT_TOKEN=MerchantToken
+    export VETO_AGENT=Agent
+    export BUCKET=test-bucket
+    export PROJECT=veto-watcher-260921
+    if [[ -n "$currency" ]]; then
+      export VETO_QUOTE_CURRENCY="$currency"
+    else
+      unset VETO_QUOTE_CURRENCY
+    fi
+    # shellcheck disable=SC1090
+    source "$SCRIPT"
+    local dest
+    dest="$(mktemp)"
+    write_env_file "$dest"
+    cat "$dest"
+    rm -f "$dest"
+  )
+}
+
+unset_body="$(quote_env_body)"
+if printf '%s\n' "$unset_body" | grep -q 'VETO_QUOTE_CURRENCY'; then
+  bad "unset VETO_QUOTE_CURRENCY must not be written into the job env file"
+else
+  pass "unset VETO_QUOTE_CURRENCY is omitted from the job env file"
+fi
+
+usd_body="$(quote_env_body USD)"
+if printf '%s\n' "$usd_body" | grep -qx 'VETO_QUOTE_CURRENCY: "USD"'; then
+  pass "VETO_QUOTE_CURRENCY=USD is written into the job env file"
+else
+  bad "USD env file missing the quote currency line: ${usd_body}"
+fi
+
+job_deploys="$(grep -c -F 'run jobs deploy' "$SCRIPT" || true)"
+env_files="$(grep -c -F -- '--env-vars-file="$env_file"' "$SCRIPT" || true)"
+if [[ "$job_deploys" == "2" && "$env_files" == "2" ]]; then
+  pass "both Cloud Run jobs deploy with the same env file"
+else
+  bad "expected 2 job deploys and 2 env-vars-file uses, got deploys=${job_deploys} files=${env_files}"
+fi
+
+if out="$(run_deploy quote-forward --dry-run 2>&1)"; then
+  watcher_line="$(printf '%s\n' "$out" | grep -F 'run jobs deploy veto-watcher ' | grep -F 'env-vars-file=' || true)"
+  stale_line="$(printf '%s\n' "$out" | grep -F 'run jobs deploy veto-watcher-stale ' | grep -F 'env-vars-file=' || true)"
+  watcher_path="$(printf '%s\n' "$watcher_line" | sed -n 's/.*env-vars-file=\([^ ]*\).*/\1/p')"
+  stale_path="$(printf '%s\n' "$stale_line" | sed -n 's/.*env-vars-file=\([^ ]*\).*/\1/p')"
+  if [[ -n "$watcher_path" && "$watcher_path" == "$stale_path" ]]; then
+    pass "dry-run passes one env file to both jobs"
+  else
+    bad "dry-run env file paths differ: watcher=${watcher_path:-<missing>} stale=${stale_path:-<missing>}"
+  fi
+else
+  bad "dry-run for quote currency forwarding should succeed: ${out}"
+fi
+
 rm -rf "$DIR"
 
 if [[ "$fail" -ne 0 ]]; then

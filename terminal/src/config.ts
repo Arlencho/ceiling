@@ -18,6 +18,8 @@ export type TerminalConfig = {
   mintDecimals: number;
   port: number;
   explorerQuery: string;
+  /** Unset and SEK keep the historical token amount. USD converts with the ECB rate. */
+  quoteCurrency?: "SEK" | "USD";
 };
 
 export function explorerQueryFor(rpc: string): string {
@@ -43,5 +45,6 @@ export function loadTerminalConfig(env: NodeJS.ProcessEnv = process.env): Termin
     mintDecimals: base.mintDecimals,
     port,
     explorerQuery: explorerQueryFor(base.rpc),
+    quoteCurrency: base.quoteCurrency,
   };
 }

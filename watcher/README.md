@@ -18,6 +18,7 @@ Four times per Stockholm day (00:00, 06:00, 12:00, 18:00) the process:
    15-minute window that starts on that hour.
 2. Converts a fixed 50 kWh volume to mint base units with integer arithmetic only.
    1 token is treated as 1 SEK. The test mint has 6 decimals (see `docs/DEVNET.md`).
+   `VETO_QUOTE_CURRENCY=USD` converts that SEK amount into USDC first. See below.
 3. Derives the on-chain nonce from the unix seconds of the cadence slot it
    chose, so a restart cannot double-charge a settled window and a feed that
    moves its window start cannot mint a second nonce for that slot.
@@ -90,6 +91,46 @@ Process defaults that cannot select a chain identity (overridable with env):
 and midday dips and refuses the evening spike. Raise `VETO_PER_TX_MAX` before
 opening if you want a looser ceiling. Opening is a chain instruction; changing
 the env later does not rewrite an existing mandate.
+
+## Quoting USDC
+
+Set `VETO_QUOTE_CURRENCY=USD` to convert the SEK spot into USDC before `charge`.
+Unset, empty, or `SEK` keeps the arithmetic above, byte for byte: 1 token is 1 SEK.
+
+The demo mint for this mode is Circle's devnet USDC,
+`4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`, 6 decimals. Set `VETO_MINT` to
+that address. The watcher does not assume a rate.
+
+The rate is the European Central Bank daily reference:
+`https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml`. The file is
+public and needs no key. It is one XML document. The watcher reads the `Cube`
+whose `time` is `YYYY-MM-DD`, and the `Cube` elements whose `currency` is `USD`
+and `SEK`. Both rates are quoted against EUR, so USD per SEK is the USD rate
+divided by the SEK rate. The division is integer. A failed read, a non-2xx
+response, a body that cannot be parsed, or a missing currency writes a gap
+with reason `fx unavailable`, submits nothing, and leaves the slot due. No
+rate is invented.
+
+The fixing date has to fall within 4 calendar days of the slot, on the
+Stockholm calendar. Friday's fixing serves the weekend and Monday morning.
+An older fixing, or one dated after the slot, writes a gap with reason
+`fx rate stale (<fixing date>)`, submits nothing, and leaves the slot due.
+
+Paid rows, refused rows, and these fx gap rows may carry `quote_currency`,
+`fx_rate`, `fx_date`, and `fx_source`. `fx_rate` is USD per SEK as a decimal
+string with 8 places, produced by integer division. Older rows without those
+fields still load. The paid and refused log line names the converted amount,
+the SEK price, the fx rate, and its date.
+
+Sizing for that demo: 6 kWh, per payment 0.50 USDC, cap 20 USDC, 40 days.
+Set `VETO_KWH_MILLI=6000`, `VETO_PER_TX_MAX=500000`, and `VETO_CAP=20000000`.
+6 kWh at 0.3 to 1.6 SEK per kWh is about 0.17 to 0.95 USD at roughly 10 SEK
+per USD. That 10 is a size check only. The rate on a charge is the ECB rate
+that was read, not an assumed rate.
+
+`scripts/deploy-watcher-cloud.sh` passes `VETO_QUOTE_CURRENCY` to both Cloud
+Run jobs when the variable is set in the environment. It does not invent a
+default. Unset leaves both jobs on the SEK arithmetic.
 
 ## Pointing at a dedicated RPC
 
@@ -194,15 +235,20 @@ jq . data/decisions.jsonl | less
 | Field | |
 |---|---|
 | `decision` | `paid`, `refused`, `gap`, or `skipped` |
-| `reason` | For example `ok`, the on-chain reason text, `feed unavailable`, `zero amount`, `negative price`, `rpc rate limited on all endpoints`, `window start does not match slot`, `unreadable price: ...`, `stale nonce; chain did not confirm this window paid`, `chain shows this window paid; signature could not be recovered`, `window overtaken by a later settled charge` |
+| `reason` | For example `ok`, the on-chain reason text, `feed unavailable`, `fx unavailable`, `fx rate stale (YYYY-MM-DD)`, `zero amount`, `negative price`, `rpc rate limited on all endpoints`, `window start does not match slot`, `unreadable price: ...`, `stale nonce; chain did not confirm this window paid`, `chain shows this window paid; signature could not be recovered`, `window overtaken by a later settled charge` |
+| `quote_currency` | Optional. `USD` on paid, refused, and fx-gap rows when conversion is on. Older rows omit it. |
+| `fx_rate` | Optional. USD per SEK, 8 decimal places, integer division of the two EUR rates. Null when the rate was not read. |
+| `fx_date` | Optional. ECB fixing date `YYYY-MM-DD`. Null when the fixing was not read. |
+| `fx_source` | Optional. The ECB document URL. |
 | `reason_code` | on-chain u8, or null when the chain was not called |
 | `amount` | mint base units, decimal string of an integer |
 | `nonce` | unix seconds of the cadence slot |
 | `signature` | confirmed transaction, or null when no transaction confirmed for this row. A gap or skip left by a stale-nonce race carries the refused transaction's signature. A paid row can carry null when the signature could not be recovered |
 | `sek_per_kwh` | decimal string copied from the feed body |
 
-`refused` is a success path. Count it, keep going. `gap` means the feed did not
-answer; there is no invented price in that row.
+`refused` is a success path. Count it, keep going. `gap` means the feed or the
+FX source did not yield a rate that could be charged. Nothing is submitted,
+and there is no invented price or invented rate in that row. The slot stays due.
 
 First live rows, 2026-09-20, 50 kWh, 0.5 token per-payment max, against the
 cluster in `docs/DEVNET.md`:
@@ -240,7 +286,9 @@ Anchor is not required to read the committed JSON.
 npm test
 ```
 
-Covered: integer money conversion, no float in the money source, deterministic
-nonce, re-running the same window does not resubmit, a refusal is recorded
-rather than thrown, a down feed writes a gap, a 429 is failed over and a rate
-limited slot stays due.
+Covered: integer money conversion, no float in the money or FX source,
+deterministic nonce, re-running the same window does not resubmit, a refusal
+is recorded rather than thrown, a down feed writes a gap, a 429 is failed over
+and a rate limited slot stays due, an ECB document converts three known rows,
+a stale fixing and an unreachable FX source leave the slot due, and USD off
+matches today's base units.
