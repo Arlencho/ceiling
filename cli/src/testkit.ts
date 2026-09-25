@@ -173,14 +173,19 @@ export function plantDecision(
   blockTime: number,
   amount: bigint,
   nonce: bigint,
+  kind: "paid" | "refused" = "paid",
 ): void {
+  const logs =
+    kind === "paid"
+      ? framed(PROGRAM_ID.toBase58(), [paidLog(w.mandate, amount, nonce, amount)])
+      : framed(PROGRAM_ID.toBase58(), [refusedLog(w.mandate, amount, nonce, 5, 500_000n)]);
   w.fake.transactions.set(
     signature,
     legacyChargeTx({
       signature,
       slot,
       blockTime,
-      logs: framed(PROGRAM_ID.toBase58(), [paidLog(w.mandate, amount, nonce, amount)]),
+      logs,
       amount,
       nonce,
       keys: chargeKeys(w, w.mandate),

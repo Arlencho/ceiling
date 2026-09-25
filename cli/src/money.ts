@@ -20,7 +20,8 @@ const U64_MAX = 18446744073709551615n;
 const MINT_DECIMALS_OFFSET = 44;
 
 /** The line an owner pastes into the agent's MCP config. */
-export const MCP_CONFIG_LINE = '{"mcpServers":{"veto":{"command":"veto","args":["pay"]}}}';
+export const MCP_CONFIG_LINE =
+  '{"mcpServers":{"veto":{"command":"npx","args":["-y","@veto-hq/veto","mcp"]}}}';
 
 export function shortAddress(address: string): string {
   if (address.length <= 8) return address;

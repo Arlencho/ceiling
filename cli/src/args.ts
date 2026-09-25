@@ -25,8 +25,9 @@ export const USAGE = `veto connect [--key <file>] [--rule <address>] [--payee <a
 veto pay <amount in base units> [--rule <address>]
 veto status
 veto decisions [--limit <n>]
+veto mcp
 
-veto trade arrives with the trade rule.`;
+the trade rule is not on this program yet`;
 
 function isFlag(name: string): name is Flag {
   return (FLAGS as readonly string[]).includes(name);
