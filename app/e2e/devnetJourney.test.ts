@@ -392,6 +392,7 @@ test(
       publishJourneyReport(reportPaths, reportBody(), 'writing');
     };
     const record = (row: Row) => {
+      row = { ...row, detail: row.detail.split(RPC).join('[redacted]') };
       rows.push(row);
       console.log(`${row.step}\t${row.action}\t${row.signature}\t${row.result}\t${row.detail}`);
       flush();
@@ -1377,7 +1378,7 @@ test(
     } catch (err) {
       journeyError = err;
       if (!rows.some((row) => row.result === 'fail')) {
-        record({ step: 'setup', action: 'check journey prerequisites', signature: '', result: 'fail', detail: errorText(err).split(RPC).join('[redacted]') });
+        record({ step: 'setup', action: 'check journey prerequisites', signature: '', result: 'fail', detail: errorText(err) });
       }
     } finally {
       if (reclaimRun) {
