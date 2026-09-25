@@ -9,6 +9,8 @@ cp "$ROOT/scripts/mainnet-deploy.sh" "$TMP/scripts/"
 export CALLS="$TMP/calls" CASE=ok
 export VETO_MAINNET_RPC='https://rpc.invalid/?api-key=secret-marker'
 export ANCHOR_BUILD_SBF_ARCH=v0
+export REAL_GIT
+REAL_GIT="$(command -v git)"
 export PATH="$TMP/bin:$PATH"
 cat > "$TMP/bin/git" <<'STUB'
 #!/usr/bin/env bash
@@ -18,10 +20,10 @@ case "$1" in
     [[ "$CASE" != git-fail ]] || exit 1
     if [[ "$CASE" == dirty || ( "$CASE" == build-dirty && -f build-marker ) ]]; then
       echo '?? untracked'
+      exit 0
     fi;;
-  rev-parse) printf '%040d\n' 1;;
-  *) exit 90;;
 esac
+exec "$REAL_GIT" "$@"
 STUB
 cat > "$TMP/bin/solana-keygen" <<'STUB'
 #!/usr/bin/env bash
@@ -80,8 +82,23 @@ STUB
 chmod +x "$TMP/bin/"*
 printf 'declare_id!("program");\n' > "$TMP/programs/veto/src/lib.rs"
 touch "$TMP/keys/"{program,deployer}.json
+printf '*\n' > "$TMP/.gitignore"
+printf '## Deploy log\n' > "$TMP/docs/MAINNET.md"
+git -C "$TMP" init -q
+git -C "$TMP" config user.name 'Offline Test'
+git -C "$TMP" config user.email 'offline@example.invalid'
+git -C "$TMP" config commit.gpgsign false
+git -C "$TMP" config tag.gpgsign false
+git -C "$TMP" add -f .gitignore scripts/mainnet-deploy.sh docs/MAINNET.md programs/veto/src/lib.rs
+git -C "$TMP" commit -qm fixture
+commit="$(git -C "$TMP" rev-parse HEAD)"
 reset_fixture() {
-  printf 'Deploy commit: %040d\n\n## Deploy log\n' 1 > "$TMP/docs/MAINNET.md"
+  printf '## Deploy log\n' > "$TMP/docs/MAINNET.md"
+  while IFS= read -r tag; do
+    git -C "$TMP" tag -d "$tag" >/dev/null
+  done < <(git -C "$TMP" tag -l)
+  git -C "$TMP" tag -a mainnet-deploy-test -m 'Reviewed offline deployment fixture'
+
   printf stale-v0 > "$TMP/target/deploy/veto.so"
   rm -f "$TMP/build-marker"
   : > "$CALLS"
@@ -109,12 +126,23 @@ done
 CASE=ok
 reset_fixture
 VETO_MAINNET_RPC='' refuse VETO_MAINNET_RPC --dry-run
-reset_fixture
-printf 'Deploy commit: TBD\n\n## Deploy log\n' > "$TMP/docs/MAINNET.md"
-refuse 'Deploy commit' --dry-run
-reset_fixture
-printf 'Deploy commit: %040d\n\n## Deploy log\n' 2 > "$TMP/docs/MAINNET.md"
-refuse 'Deploy commit' --dry-run
+for CASE in untagged lightweight wrong-tag ancestor-tag; do
+  reset_fixture
+  git -C "$TMP" tag -d mainnet-deploy-test >/dev/null
+  case "$CASE" in
+    lightweight) git -C "$TMP" tag mainnet-deploy-test;;
+    wrong-tag) git -C "$TMP" tag -a release-test -m 'Wrong prefix';;
+    ancestor-tag)
+      git -C "$TMP" tag -a mainnet-deploy-test -m 'Previous commit'
+      git -C "$TMP" commit --allow-empty -qm 'Untagged successor';;
+  esac
+  refuse 'annotated mainnet-deploy-* tag' --dry-run
+  [[ ! -s "$CALLS" ]]
+  if [[ "$CASE" == ancestor-tag ]]; then
+    git -C "$TMP" checkout -q "$commit"
+  fi
+done
+CASE=ok
 for key in program deployer; do
   reset_fixture
   rm "$TMP/keys/$key.json"
@@ -132,6 +160,8 @@ reset_fixture
 refuse 'unknown argument' --bad
 reset_fixture
 (cd "$TMP" && printf 'DEPLOY\n' | bash scripts/mainnet-deploy.sh --dry-run) > "$TMP/output" 2>&1
+grep -q 'Attestation tag: mainnet-deploy-test' "$TMP/output"
+grep -q 'Reviewed offline deployment fixture' "$TMP/output"
 grep -q 'SHA256:' "$TMP/output"
 grep -q 'Program size: 16 bytes' "$TMP/output"
 grep -q 'rent 61 ' "$CALLS"
@@ -145,7 +175,7 @@ grep -q 'program show' "$CALLS"
 grep -q 'Slot: 123' "$TMP/docs/MAINNET.md"
 grep -q 'Signature: 111111' "$TMP/docs/MAINNET.md"
 grep -q 'SHA256:' "$TMP/docs/MAINNET.md"
-grep -q 'Commit: 0000000000000000000000000000000000000001' "$TMP/docs/MAINNET.md"
+grep -q "Commit: $commit" "$TMP/docs/MAINNET.md"
 if grep -q secret-marker "$TMP/output"; then exit 1; fi
 echo 'ok - deploy uses explicit signers and records verified receipt'
 for CASE in deploy-fail show-fail; do
