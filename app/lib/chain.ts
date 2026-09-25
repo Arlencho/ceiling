@@ -52,6 +52,7 @@ import {
   type RuleAccountKind,
 } from './ruleAccount';
 import { displayPurpose } from './ruleView';
+import { isRateLimitError } from './rpcError';
 import { signatureNotYetVisibleMessage, signatureSeenUnconfirmedMessage } from './wallet';
 import { assessOverride, type OverrideAssessment } from './override';
 import { decodeMandateAccount, type MandateAccount } from './mandate';
@@ -900,6 +901,155 @@ export async function fetchAdvisoryDeclines(
   });
 }
 
+// Two at a time, then a longer wait, so a phone burst does not sit on HTTP 429.
+export const ledgerBodyFetch = {
+  concurrency: 2,
+  retryMs: [400, 1200] as const,
+  sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  },
+};
+
+// A confirmed signature's body does not change. A failed read is left out so
+// the next pull can try that signature again.
+const ledgerSignatureCache = new Map<string, Map<string, DecodedTxDecision[]>>();
+
+function signaturesForLedger(ledger: string): Map<string, DecodedTxDecision[]> {
+  let found = ledgerSignatureCache.get(ledger);
+  if (!found) {
+    found = new Map();
+    ledgerSignatureCache.set(ledger, found);
+  }
+  return found;
+}
+
+function errorBlob(err: unknown): string {
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  const push = (value: unknown, depth: number) => {
+    if (value == null || depth > 4 || seen.has(value)) {
+      return;
+    }
+    if (typeof value === 'object') {
+      seen.add(value);
+    }
+    if (value instanceof Error) {
+      parts.push(value.name, value.message);
+      const extra = value as Error & {
+        code?: unknown;
+        status?: unknown;
+        statusCode?: unknown;
+        cause?: unknown;
+      };
+      if (extra.code != null) {
+        parts.push(String(extra.code));
+      }
+      if (extra.status != null) {
+        parts.push(String(extra.status));
+      }
+      if (extra.statusCode != null) {
+        parts.push(String(extra.statusCode));
+      }
+      push(extra.cause, depth + 1);
+      return;
+    }
+    parts.push(String(value));
+  };
+  push(err, 0);
+  return parts.join(' ').toLowerCase();
+}
+
+function isNetworkError(err: unknown): boolean {
+  const blob = errorBlob(err);
+  return (
+    blob.includes('network') ||
+    blob.includes('fetch failed') ||
+    blob.includes('failed to fetch') ||
+    blob.includes('econnreset') ||
+    blob.includes('etimedout') ||
+    blob.includes('econnrefused') ||
+    blob.includes('enotfound') ||
+    blob.includes('eai_again') ||
+    blob.includes('socket hang up') ||
+    blob.includes('timed out') ||
+    blob.includes('timeout') ||
+    blob.includes('offline') ||
+    blob.includes('aborted')
+  );
+}
+
+function retryableBodyError(err: unknown): boolean {
+  return isRateLimitError(err) || isNetworkError(err);
+}
+
+async function readTransactionBody(
+  client: ChainClient,
+  signature: string,
+): Promise<VersionedTransactionResponse | null> {
+  const delays = ledgerBodyFetch.retryMs;
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await client.connection.getTransaction(signature, {
+        commitment: 'confirmed',
+        maxSupportedTransactionVersion: 0,
+      });
+    } catch (err) {
+      const delay = delays[attempt];
+      if (attempt >= delays.length || delay == null || !retryableBodyError(err)) {
+        throw err;
+      }
+      attempt += 1;
+      await ledgerBodyFetch.sleep(delay);
+    }
+  }
+}
+
+async function loadDecoded(
+  client: ChainClient,
+  info: ConfirmedSignatureInfo,
+): Promise<DecodedTxDecision[] | null> {
+  const tx = await readTransactionBody(client, info.signature);
+  if (!tx) {
+    return null;
+  }
+  const blockTime = info.blockTime ?? tx.blockTime ?? null;
+  return decisionsFromTx(info.signature, tx, client.programId.toBase58()).map((decision) => ({
+    ...decision,
+    blockTime,
+    slot: info.slot,
+  }));
+}
+
+async function mapLimited(
+  indexes: readonly number[],
+  limit: number,
+  run: (index: number) => Promise<void>,
+): Promise<void> {
+  if (indexes.length === 0) {
+    return;
+  }
+  let cursor = 0;
+  const width = Math.max(1, Math.min(limit, indexes.length));
+  const worker = async () => {
+    for (;;) {
+      const cursorIndex = cursor;
+      cursor += 1;
+      if (cursorIndex >= indexes.length) {
+        return;
+      }
+      const index = indexes[cursorIndex];
+      if (index == null) {
+        return;
+      }
+      await run(index);
+    }
+  };
+  await Promise.all(Array.from({ length: width }, () => worker()));
+}
+
 export async function fetchLedgerRows(
   client: ChainClient,
   mandate: PublicKey,
@@ -915,38 +1065,46 @@ export async function fetchLedgerRows(
     throw new Error(`Failed to list ledger signatures: ${detail}`);
   }
 
-  const decoded: DecodedTxDecision[] = [];
   const ok = signatures.filter((info) => !info.err);
-  const chunkSize = 10;
-  for (let i = 0; i < ok.length; i += chunkSize) {
-    const chunk = ok.slice(i, i + chunkSize);
-    const bodies = await Promise.all(
-      chunk.map((info) =>
-        client.connection
-          .getTransaction(info.signature, {
-            commitment: 'confirmed',
-            maxSupportedTransactionVersion: 0,
-          })
-          .catch(() => null),
-      ),
-    );
-    for (let j = 0; j < chunk.length; j++) {
-      const tx = bodies[j];
-      const info = chunk[j];
-      if (!tx || !info) {
-        continue;
-      }
-      const blockTime = info.blockTime ?? tx.blockTime ?? null;
-      decoded.push(
-        ...decisionsFromTx(info.signature, tx, client.programId.toBase58()).map((decision) => ({
-          ...decision,
-          blockTime,
-          slot: info.slot,
-        })),
-      );
+  const cache = signaturesForLedger(ledgerAddress.toBase58());
+  const decodedByIndex: DecodedTxDecision[][] = ok.map(() => []);
+  const missing: number[] = [];
+  for (let i = 0; i < ok.length; i += 1) {
+    const info = ok[i];
+    const hit = info ? cache.get(info.signature) : undefined;
+    if (hit) {
+      decodedByIndex[i] = hit;
+    } else {
+      missing.push(i);
     }
   }
 
+  let failures = 0;
+  await mapLimited(missing, ledgerBodyFetch.concurrency, async (index) => {
+    const info = ok[index];
+    if (!info) {
+      return;
+    }
+    try {
+      const decisions = await loadDecoded(client, info);
+      if (!decisions) {
+        failures += 1;
+        return;
+      }
+      cache.set(info.signature, decisions);
+      decodedByIndex[index] = decisions;
+    } catch {
+      failures += 1;
+    }
+  });
+  if (failures > 0) {
+    const noun = failures === 1 ? 'body' : 'bodies';
+    console.warn(
+      `fetchLedgerRows: ${failures} transaction ${noun} could not be read for ledger ${ledgerAddress.toBase58()}`,
+    );
+  }
+
+  const decoded = decodedByIndex.flat();
   const rows = attachSignatures(snapshot.entries, decoded);
   if (!agent) {
     return { snapshot, rows };

@@ -8,7 +8,7 @@ export default function AgentsTab() {
   const data = useAgentHistories();
   const router = useRouter();
   return (
-    <ConnectGate padNetwork>
+    <ConnectGate padNetwork showNetwork={false}>
       <AgentsScreen
         data={data}
         topInset={false}

@@ -15,11 +15,13 @@ export function Cabinet({
   refreshing = false,
   onRefresh,
   edges = ['top'],
+  showReading = true,
 }: {
   children: ReactNode;
   refreshing?: boolean;
   onRefresh?: () => void;
   edges?: ('top' | 'bottom' | 'left' | 'right')[];
+  showReading?: boolean;
 }) {
   return (
     <SafeAreaView style={styles.safe} edges={edges}>
@@ -28,7 +30,7 @@ export function Cabinet({
         keyboardShouldPersistTaps="handled"
         refreshControl={quietRefreshControl(onRefresh)}
       >
-        <QuietReading busy={refreshing} />
+        {showReading ? <QuietReading busy={refreshing} /> : null}
         {children}
       </ScrollView>
     </SafeAreaView>
@@ -47,18 +49,28 @@ export function NetworkPill({ label }: { label: string }) {
   );
 }
 
-export function LiveRules({ count, label }: { count: number; label: string }) {
+export function LiveRules({
+  count,
+  label,
+  pending = false,
+}: {
+  count: number;
+  label: string;
+  pending?: boolean;
+}) {
   const reduced = useReducedMotion();
   const motionOn = motionAllowed(reduced);
-  const live = count > 0;
+  const live = count > 0 && !pending;
+  const tone = pending ? colors.brass : live ? colors.paid : colors.muted;
+  const shell = pending ? styles.livePending : live ? styles.liveOn : styles.liveOff;
   return (
-    <View style={[styles.live, live ? styles.liveOn : styles.liveOff]}>
+    <View style={[styles.live, shell]}>
       {live && motionOn ? (
         <Lamp state="pulse" size={8} litColor={colors.paid} accessibilityLabel={label} />
       ) : (
-        <View style={[styles.liveDot, { backgroundColor: live ? colors.paid : colors.muted }]} />
+        <View style={[styles.liveDot, { backgroundColor: tone }]} />
       )}
-      <Text style={[styles.liveText, { color: live ? colors.paid : colors.muted }]}>{label}</Text>
+      <Text style={[styles.liveText, { color: tone }]}>{label}</Text>
     </View>
   );
 }
@@ -216,6 +228,9 @@ const styles = StyleSheet.create({
   },
   liveOff: {
     borderColor: colors.line,
+  },
+  livePending: {
+    borderColor: 'rgba(201, 162, 77, 0.45)',
   },
   liveDot: { width: 8, height: 8, borderRadius: 4 },
   liveText: {

@@ -59,9 +59,11 @@ function Guide({ onFinish }: { onFinish: () => void }) {
 export function ConnectGate({
   children,
   padNetwork = false,
+  showNetwork = true,
 }: {
   children: ReactNode;
   padNetwork?: boolean;
+  showNetwork?: boolean;
 }) {
   const wallet = useWallet();
   const onboarding = useOnboarding();
@@ -128,7 +130,7 @@ export function ConnectGate({
 
   const body = (
     <View style={styles.block}>
-      {networkLine ? <Text style={styles.thesis}>{networkLine}</Text> : null}
+      {showNetwork && networkLine ? <Text style={styles.thesis}>{networkLine}</Text> : null}
       {wallet.error ? <Text style={styles.error}>{wallet.error}</Text> : null}
       {children}
     </View>

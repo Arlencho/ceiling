@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { StatTile } from '../backglass/StatTile';
+import { QuietReading } from '../QuietRefresh';
 import { colors, fonts, radii, space } from '../theme';
 import { agentsHeading, liveRulesLabel, networkBadge, type AgentRecord } from '../../lib/grade';
+import { clusterNotice } from '../../lib/wallet';
 import type { AgentScreenData } from './useAgentHistories';
 import { Cabinet, Chevron, GradeFace, HelpMark, LiveRules, NetworkPill, StatusLine, Wordmark } from './chrome';
 
@@ -20,17 +22,32 @@ export function AgentsScreen({
   onNameAgent?: (agent: string, name: string) => void;
   topInset?: boolean;
 }) {
+  const rulesPending = data.status === 'loading';
   return (
-    <Cabinet refreshing={data.refreshing} onRefresh={data.refresh} edges={topInset ? ['top'] : []}>
+    <Cabinet
+      refreshing={data.refreshing}
+      onRefresh={data.refresh}
+      edges={topInset ? ['top'] : []}
+      showReading={false}
+    >
       <View style={styles.header}>
         <View style={styles.brand}>
           <Wordmark />
           <NetworkPill label={networkBadge(data.cluster, 'name')} />
         </View>
         <View style={styles.headerRight}>
-          <LiveRules count={data.liveRules} label={liveRulesLabel(data.liveRules)} />
+          <LiveRules
+            count={data.liveRules}
+            label={rulesPending ? 'Reading...' : liveRulesLabel(data.liveRules)}
+            pending={rulesPending}
+          />
           <HelpMark onPress={onHowGrades} />
         </View>
+      </View>
+
+      <View style={styles.belowHeader}>
+        <Text style={styles.notice}>{clusterNotice(data.cluster)}</Text>
+        <QuietReading busy={data.refreshing} />
       </View>
 
       {data.status === 'loading' ? <StatusLine>Reading your agents from the blockchain.</StatusLine> : null}
@@ -192,6 +209,17 @@ const styles = StyleSheet.create({
   },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  belowHeader: {
+    paddingHorizontal: space.screen,
+    paddingTop: space.lg,
+    gap: space.sm,
+  },
+  notice: {
+    color: colors.body,
+    fontSize: 15,
+    lineHeight: 22,
+    fontFamily: fonts.sans,
+  },
   kickerRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
