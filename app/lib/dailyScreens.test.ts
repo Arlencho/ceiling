@@ -33,6 +33,7 @@ let openCalls = 0;
 let closeCalls = 0;
 let sharedWalletError: string | null = null;
 let focused = true;
+let laterWalletTransact: import('./wallet').TransactFn | null = null;
 const openedUrls: string[] = [];
 const copiedText: string[] = [];
 
@@ -206,9 +207,10 @@ mock.module('./mwa', {
       setItem: async () => undefined,
       deleteItem: async () => undefined,
     },
-    transact: async () => {
-      throw new Error('no wallet');
-    },
+    transact: ((callback, config) => {
+      if (!laterWalletTransact) throw new Error('no wallet');
+      return laterWalletTransact(callback, config);
+    }) as import('./wallet').TransactFn,
   },
 });
 
@@ -853,7 +855,7 @@ test('Overview and Rules never display the wallet error from another screen', as
   }
 });
 
-for (const later of ['navigation', 'connect', 'sign', 'disconnect'] as const) {
+for (const later of ['navigation', 'connect', 'sign', 'disconnect', 'partial sign', 'account selection'] as const) {
   test(`a rule cancellation disappears after later ${later}`, async () => {
     const Screen = (await import('../app/rule/[address]')).default;
     const row = mandate({ status: STATUS_REVOKED });
@@ -881,17 +883,29 @@ for (const later of ['navigation', 'connect', 'sign', 'disconnect'] as const) {
         setItem: async () => undefined,
         deleteItem: async () => undefined,
       };
-      const transact: import('./wallet').TransactFn = async (callback) => callback({
+      const signingWallet = {
         authorize: async () => ({
           accounts: [{ address: Buffer.from(new PublicKey(owner).toBytes()).toString('base64') }],
           auth_token: 'test-token',
         }),
         deauthorize: async () => undefined,
         signAndSendTransactions: async () => ['confirmed-signature'],
-      });
+        signTransactions: async ({ transactions }: { transactions: import('@solana/web3.js').Transaction[] }) => transactions,
+      };
+      const transact: import('./wallet').TransactFn = async (callback) => callback(signingWallet);
       await act(async () => {
         if (later === 'connect') await connect(transact, store);
         if (later === 'disconnect') await disconnect(transact, store);
+        if (later === 'partial sign') {
+          const { signHoldPartial } = await import('./holdSign');
+          const tx = new Transaction({ feePayer: new PublicKey(owner), recentBlockhash: owner });
+          await signHoldPartial(transact, store, tx);
+        }
+        if (later === 'account selection') {
+          const { exposedWalletAccounts } = await import('./holdSign');
+          laterWalletTransact = transact;
+          try { await exposedWalletAccounts(); } finally { laterWalletTransact = null; }
+        }
         if (later === 'sign') await signAndSendTransactions(transact, store, [new Transaction()], {
           lookup: async () => 'confirmed',
         });
