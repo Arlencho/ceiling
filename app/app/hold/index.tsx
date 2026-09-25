@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 
 import { PromiseScreen } from '../../components/hold/PromiseScreen';
-import { VaultHome, type VaultCard } from '../../components/hold/VaultHome';
+import { VaultHome, type GuardedCard, type VaultCard } from '../../components/hold/VaultHome';
 import { Screen } from '../../components/Screen';
 import { ConnectGate } from '../../components/ConnectGate';
 import {
@@ -13,6 +13,8 @@ import {
   waitLabel,
 } from '../../lib/hold';
 import { holdClient, listHoldVaults, readTokenAmount } from '../../lib/holdChain';
+import { discoverGuardedVaults, guardState, guardStateLabel } from '../../lib/holdGuard';
+import { secureStore } from '../../lib/mwa';
 import { raiseHoldAlertsOnScan } from '../../lib/holdNotify';
 import { fetchMintDecimals } from '../../lib/chain';
 import { tokenSymbol } from '../../lib/tokens';
@@ -24,6 +26,7 @@ export default function HoldIndex() {
   const [status, setStatus] = useState<'loading' | 'error' | 'empty' | 'ready'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [vaults, setVaults] = useState<VaultCard[]>([]);
+  const [guarded, setGuarded] = useState<GuardedCard[]>([]);
 
   const load = useCallback(async () => {
     await Promise.resolve();
@@ -41,6 +44,12 @@ export default function HoldIndex() {
     try {
       const client = holdClient(session.config);
       const rows = await listHoldVaults(client, session.owner);
+      // A failed guardian search must not hide the vaults this wallet owns.
+      const guardedRows = await discoverGuardedVaults({
+        client,
+        store: secureStore,
+        guardian: session.owner,
+      }).catch(() => []);
       const decimalsByMint = new Map<string, number>();
       const cards: VaultCard[] = [];
       for (const row of rows) {
@@ -73,9 +82,29 @@ export default function HoldIndex() {
           safeLabel: shortKey(row.safeAddress.toBase58()),
         });
       }
+      const guardCards: GuardedCard[] = [];
+      for (const row of guardedRows) {
+        const mintKey = row.mint.toBase58();
+        let decimals = decimalsByMint.get(mintKey);
+        if (decimals == null) {
+          decimals = await fetchMintDecimals(client, row.mint);
+          decimalsByMint.set(mintKey, decimals);
+        }
+        const balance = (await readTokenAmount(client.connection, row.vaultToken)) ?? 0n;
+        const tokenName = tokenSymbol(mintKey);
+        guardCards.push({
+          address: row.address.toBase58(),
+          ownerLabel: shortKey(row.owner.toBase58()),
+          amountLabel: formatHoldAmount(balance, decimals),
+          tokenName,
+          state: guardState(row),
+          stateLabel: guardStateLabel(row, decimals, tokenName),
+        });
+      }
       setVaults(cards);
+      setGuarded(guardCards);
       setError(null);
-      setStatus(cards.length === 0 ? 'empty' : 'ready');
+      setStatus(cards.length === 0 && guardCards.length === 0 ? 'empty' : 'ready');
       void raiseHoldAlertsOnScan().catch(() => undefined);
     } catch (err) {
       setStatus('error');
@@ -110,6 +139,8 @@ export default function HoldIndex() {
             status={session.wallet.ready ? status : 'loading'}
             error={error}
             vaults={vaults}
+            guarded={guarded}
+            onGuard={(address) => router.push(`/hold/guard?vault=${address}`)}
             onBack={() => router.back()}
             onSetup={() => router.push('/hold/amount')}
             onOpen={(address, kind) => {

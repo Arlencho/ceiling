@@ -15,24 +15,37 @@ export type VaultCard = {
   safeLabel: string;
 };
 
+export type GuardedCard = {
+  address: string;
+  ownerLabel: string;
+  amountLabel: string;
+  tokenName: string;
+  state: 'normal' | 'waiting' | 'frozen';
+  stateLabel: string;
+};
+
 export function VaultHome({
   network,
   status,
   error,
   vaults,
+  guarded = [],
   onBack,
   onSetup,
   onOpen,
   onSend,
+  onGuard = () => undefined,
 }: {
   network: string;
   status: 'loading' | 'error' | 'empty' | 'ready';
   error?: string | null;
   vaults: readonly VaultCard[];
+  guarded?: readonly GuardedCard[];
   onBack: () => void;
   onSetup: () => void;
   onOpen: (address: string, kind: 'held' | 'frozen' | 'vault') => void;
   onSend: (address: string) => void;
+  onGuard?: (address: string) => void;
 }) {
   return (
     <View style={styles.wrap}>
@@ -80,6 +93,37 @@ export function VaultHome({
             ) : null}
           </View>
         ))}
+        {guarded.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Vaults you guard</Text>
+            <Text style={styles.hint}>
+              Your key is the guardian of these vaults. This phone tells you when a withdrawal or a settings change is
+              waiting.
+            </Text>
+            {guarded.map((vault) => (
+              <Pressable
+                key={vault.address}
+                accessibilityRole="button"
+                accessibilityLabel={`Vault of ${vault.ownerLabel}: ${vault.stateLabel}`}
+                onPress={() => onGuard(vault.address)}
+                style={[styles.guardRow, vault.state === 'waiting' && styles.guardWaiting, vault.state === 'frozen' && styles.guardFrozen]}
+              >
+                <Text style={styles.guardTitle}>
+                  Vault of {vault.ownerLabel}: {vault.amountLabel} {vault.tokenName}
+                </Text>
+                <Text
+                  style={[
+                    styles.guardState,
+                    vault.state === 'waiting' && styles.holdText,
+                    vault.state === 'frozen' && styles.warnText,
+                  ]}
+                >
+                  {vault.stateLabel}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
         <Pressable accessibilityRole="button" accessibilityLabel="Set up another vault" onPress={onSetup} style={styles.cta}>
           <Text style={styles.ctaText}>{vaults.length === 0 ? 'Set up a vault' : 'Set up another vault'}</Text>
         </Pressable>
@@ -126,6 +170,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
   },
   holdText: { color: colors.amber, fontFamily: fonts.sansBold, fontSize: 14 },
+  section: { gap: space.md },
+  sectionTitle: {
+    color: colors.muted,
+    fontFamily: fonts.sansBold,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  hint: { color: colors.muted, fontFamily: fonts.sans, fontSize: 12, lineHeight: 17 },
+  guardRow: {
+    borderRadius: radii.control,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+    padding: space.lg,
+    gap: space.xs,
+  },
+  guardWaiting: { borderColor: colors.brassLine },
+  guardFrozen: { borderColor: 'rgba(228, 164, 142, 0.5)' },
+  guardTitle: { color: colors.bone, fontFamily: fonts.sansBold, fontSize: 15 },
+  guardState: { color: colors.body, fontFamily: fonts.sans, fontSize: 13 },
   ghost: {
     minHeight: 48,
     borderRadius: radii.control,

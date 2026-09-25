@@ -7,6 +7,7 @@ import { dueHoldAlerts, futureHoldAlerts, holdAlertPlan, type HoldAlert } from '
 import { formatHoldAmount, shortKey } from './hold';
 import { tokenSymbol } from './tokens';
 import { holdClient, listHoldVaults, readChainClock, readHoldVault } from './holdChain';
+import { guardPath, raiseGuardAlerts, type GuardAlert } from './holdGuard';
 import { holdCreatedAt } from './holdRead';
 import { loadSession } from './wallet';
 
@@ -27,6 +28,7 @@ export function holdPathFromNoticeData(data: unknown): string | null {
   const vault = record.holdVault;
   const id = record.holdWithdrawal;
   if (typeof vault !== 'string' || vault.length === 0) return null;
+  if (record.holdGuard === true) return guardPath(vault, typeof id === 'string' ? id : null);
   if (typeof id !== 'string' || id.length === 0) return `/hold/frozen?vault=${encodeURIComponent(vault)}`;
   return `/hold/held?vault=${encodeURIComponent(vault)}&id=${encodeURIComponent(id)}`;
 }
@@ -68,6 +70,27 @@ export function expoHoldScheduler(): HoldScheduler {
       }
     },
   };
+}
+
+export function guardNoticeContent(alert: GuardAlert) {
+  return {
+    title: alert.title,
+    body: alert.body,
+    data: {
+      holdVault: alert.vault,
+      holdWithdrawal: alert.withdrawalId ?? '',
+      holdGuard: true,
+      holdAlert: alert.kind,
+    },
+  };
+}
+
+export async function presentGuardAlert(alert: GuardAlert): Promise<void> {
+  await Notifications.scheduleNotificationAsync({
+    identifier: alert.key,
+    content: guardNoticeContent(alert),
+    trigger: { channelId: HOLD_CHANNEL_ID },
+  });
 }
 
 function noticeContent(alert: HoldAlert, vault: string, withdrawalId: string) {
@@ -160,5 +183,29 @@ export async function raiseHoldAlertsOnScan(): Promise<void> {
   } catch {
     return;
   }
-  await raiseHoldAlertsForOwner({ owner, scheduler: expoHoldScheduler() });
+  const scheduler = expoHoldScheduler();
+  let ownerError: unknown = null;
+  try {
+    await raiseHoldAlertsForOwner({ owner, scheduler });
+  } catch (err) {
+    ownerError = err;
+  }
+  await raiseHoldAlertsForGuardian({ guardian: owner, scheduler });
+  if (ownerError) throw ownerError;
+}
+
+/** The same local read on the guardian phone: vaults that name this wallet as guardian. */
+export async function raiseHoldAlertsForGuardian(args: {
+  guardian: PublicKey;
+  scheduler: HoldScheduler;
+}): Promise<string[]> {
+  const loaded = tryLoadConfig();
+  if (!loaded.ok) return [];
+  return raiseGuardAlerts({
+    client: holdClient(loaded.config),
+    store: secureStore,
+    guardian: args.guardian,
+    ensureChannel: () => args.scheduler.ensureChannel(),
+    present: presentGuardAlert,
+  });
 }
