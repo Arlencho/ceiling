@@ -53,7 +53,7 @@ export default function HoldAlerts() {
           error={loaded.error}
           headline={
             row
-              ? `This phone schedules the remaining reminders when it checks, if notifications are allowed.${bundle && !isDefaultKey(bundle.account.guardian.toBase58()) ? ' Your guardian’s phone does the same when it next checks.' : ''} These are the planned times while ${amountLabel} to ${destinationLabel} waits. Miss them all and the wait still runs its full ${days ? waitLabel(days) : 'length'}.`
+              ? `This phone schedules the remaining reminders when it checks, if notifications are allowed.${bundle && !isDefaultKey(bundle.account.guardian.toBase58()) ? " Your guardian's phone does the same when it next checks." : ''} These are the planned times while ${amountLabel} to ${destinationLabel} waits. Miss them all and the wait still runs its full ${days ? waitLabel(days) : 'length'}.`
               : ''
           }
           noticeTitle={created?.title ?? 'Held'}

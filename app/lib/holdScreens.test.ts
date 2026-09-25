@@ -853,9 +853,18 @@ test('the owner held screen explains when the guardian phone checks only when a 
     onStop: async () => undefined,
     onFreeze: async () => undefined,
   };
+  const withGuardian = await mount(createElement(HeldScreen, { ...props, guardianLine: "Your guardian's phone is told when it next checks, and it can stop this." }));
   assert.match(
-    textOf(await mount(createElement(HeldScreen, { ...props, guardianLine: "Your guardian's phone is told when it next checks, and it can stop this." }))),
+    textOf(withGuardian),
     /Your guardian's phone is told when it next checks, and it can stop this./,
+  );
+  assert.ok(
+    withGuardian.root.findAll((node) => node.props.accessibilityLabel === 'Guardian set').length >= 1,
+    'the lamp says the guardian is set, not alerted',
+  );
+  assert.equal(
+    withGuardian.root.findAll((node) => node.props.accessibilityLabel === 'Guardian alerted').length,
+    0,
   );
   assert.doesNotMatch(
     textOf(await mount(createElement(HeldScreen, { ...props, guardianLine: null }))),
@@ -949,4 +958,85 @@ test('a stale notification explains the missing withdrawal without offering Stop
   const root = await mount(createElement(GuardScreen, { ...guardBase, status: 'ready', waiting: null, missingWithdrawal: true }));
   assert.match(textOf(root), /The withdrawal you were told about is no longer waiting./);
   assert.doesNotMatch(textOf(root), /Stop this withdrawal|Nothing is waiting right now/);
+});
+
+test('a stale notification lists the withdrawals still waiting and lets the guardian pick one', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const picked: string[] = [];
+  const root = await mount(
+    createElement(GuardScreen, {
+      ...guardBase,
+      status: 'ready',
+      error: null,
+      waiting: null,
+      missingWithdrawal: true,
+      moreWaiting: 1,
+      waitingOthers: [
+        {
+          id: '7',
+          amountLabel: '400',
+          destinationLabel: '8xQf...Tz9A',
+          untilLabel: 'Waits until Thu 16 Nov, 22:13, unless stopped.',
+        },
+      ],
+      onPick: (id: string) => picked.push(id),
+    }),
+  );
+  const text = textOf(root);
+  assert.match(text, /The withdrawal you were told about is no longer waiting\./);
+  assert.match(text, /1 withdrawal is waiting\./);
+  assert.match(text, /400 USDC to 8xQf\.\.\.Tz9A\./);
+  assert.doesNotMatch(text, /Stop this withdrawal|Nothing is waiting right now/);
+  await act(async () => {
+    pressable(root, 'Review the withdrawal of 400 USDC to 8xQf...Tz9A').props.onPress();
+  });
+  assert.deepEqual(picked, ['7']);
+
+  const plural = textOf(
+    await mount(
+      createElement(GuardScreen, {
+        ...guardBase,
+        status: 'ready',
+        error: null,
+        waiting: null,
+        missingWithdrawal: true,
+        moreWaiting: 2,
+        waitingOthers: [
+          {
+            id: '7',
+            amountLabel: '400',
+            destinationLabel: '8xQf...Tz9A',
+            untilLabel: 'Waits until Thu 16 Nov, 22:13, unless stopped.',
+          },
+          {
+            id: '8',
+            amountLabel: '25',
+            destinationLabel: '4mKp...R2vd',
+            untilLabel: 'Waits until Fri 17 Nov, 10:00, unless stopped.',
+          },
+        ],
+        onPick() {},
+      }),
+    ),
+  );
+  assert.match(plural, /2 withdrawals are waiting\./);
+  assert.match(plural, /400 USDC/);
+  assert.match(plural, /25 USDC/);
+});
+
+test('the transaction link has a 48dp touch target', async () => {
+  const { GuardScreen } = await import('../components/hold/GuardScreen');
+  const root = await mount(
+    createElement(GuardScreen, {
+      ...guardBase,
+      status: 'ready',
+      error: null,
+      waiting: null,
+      result: {
+        line: 'Stopped. 400 USDC to 8xQf...Tz9A will not be paid.',
+        link: 'https://explorer.solana.com/tx/abc?cluster=devnet',
+      },
+    }),
+  );
+  assert.ok(pressable(root, 'See the transaction').props.style.minHeight >= 48);
 });

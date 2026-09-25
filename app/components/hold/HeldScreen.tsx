@@ -83,7 +83,7 @@ export function HeldScreen({
         </View>
         {guardianLine ? (
           <View style={styles.guardian} accessibilityLabel={guardianLine}>
-            <Lamp state="on" litColor={colors.paid} size={10} accessibilityLabel="Guardian alerted" />
+            <Lamp state="on" litColor={colors.paid} size={10} accessibilityLabel="Guardian set" />
             <Text style={styles.guardianText}>{guardianLine}</Text>
           </View>
         ) : null}
