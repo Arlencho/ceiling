@@ -39,7 +39,8 @@ test('the wallet chain follows the configured cluster instead of a fixed devnet 
       },
     };
     await authorize(wallet);
-    assert.equal(chains[0], `solana:${config.explorerCluster}`);
+    assert.equal(config.explorerCluster, 'mainnet-beta');
+    assert.equal(chains[0], 'solana:mainnet');
   } finally {
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) {
