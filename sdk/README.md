@@ -216,7 +216,7 @@ Do not pass `limit` on this walk. `limit` can stop before the end of the listing
 
 A trade rule is a permission to swap. The owner pins one input token account, one output token account, and one pool. `VetoAgent.trade({ amountIn, minOut, nonce })` loads that rule and submits the thirteen-account `trade` instruction. The accounts are the agent, the rule, the trade ledger, the source, the destination, the exchange program, the pool, the pool authority, the input vault, the output vault, the pool mint, the fee account, and the token program. The mints are not accounts on the instruction. Every account except the token program is taken from the keys stored on the rule. The caller cannot pass a pool, a vault, or a destination.
 
-The call returns `kind: "traded"` or `kind: "refused"`, with `amountIn`, `amountOut`, `reasonCode`, `reasonText`, `suggestedOverride`, `signature`, and `slot`. It reads the one Veto trade decision in that transaction, the same way `charge` reads the one payment decision. On a refusal, `amountOut` is zero.
+The call returns `kind: "traded"` or `kind: "refused"`, with `amountIn`, `amountOut`, `reasonCode`, `reasonText`, `suggestedOverride`, `signature`, and `slot`. It reads the one Veto trade decision in that transaction, the same way `charge` reads the one payment decision. On a refusal, `amountOut` is zero. On `kind: "traded"`, the returned `amountIn` is the settled input, which can be below the requested amount.
 
 `tradeStatus()` reports the cap, what has been spent, what remains, the per-trade maximum, the daily limit, what remains today, the floor as `{ num, den }`, expiry, status, any override, the last nonce, and the pinned destination. A 24 hour window that has already ended counts as unused, so `remainingToday` is the full daily limit until the next trade opens a new window. `nextTradeNonce()` is `last_nonce` plus one, or `overrideNonce` when an override is pending above `last_nonce`. A refusal does not advance `last_nonce`.
 
@@ -248,7 +248,7 @@ The program refuses the trade, and moves nothing, when:
 - The output account is not the pinned destination. Reason 11, output account not allowed.
 - A pool account (the pool, its authority, either vault, the pool mint, the fee account, or the exchange program) is not the one stored on the rule. Reason 12, pool not allowed.
 - The trade would push the current 24 hour window over the daily limit. Reason 13, over daily limit.
-- The optimistic spot quote is already under the price floor `floor.num / floor.den`. Reason 14, quote below floor. The program then requires the tokens that come back to clear that same floor.
+- The spot quote is already under the price floor `floor.num / floor.den`. Reason 14, quote below floor. The program then requires the tokens that come back to clear that same floor.
 
 It also enforces the lifetime cap, the per-trade maximum, expiry, the nonce, that the rule is active, that the delegation is still in place, that the source can cover the input, and that neither token account is frozen. An override raises the per-trade maximum for one nonce. It does not raise the daily limit or the cap.
 
