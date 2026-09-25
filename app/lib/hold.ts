@@ -8,6 +8,11 @@ export const HOLD_SHARE_BPS = 2500;
 export const HOLD_DAYS = [1, 2, 3] as const;
 export type HoldDays = (typeof HOLD_DAYS)[number];
 
+/** A first vault sized for 5 devnet USDC: deposit 5, everyday limit 1, wait 1 day. */
+export const HOLD_SUGGESTED_DEPOSIT = '5';
+export const HOLD_SUGGESTED_DAILY = '1';
+export const HOLD_SUGGESTED_DAYS: HoldDays = 1;
+
 const HOUR = 3600n;
 const DAY = 86_400n;
 
@@ -50,17 +55,17 @@ export function waitLabel(days: HoldDays): string {
   return days === 1 ? '1 day' : `${days} days`;
 }
 
-export function holdTokenName(cluster: string, mint?: string | null): string {
+export function holdTokenName(_cluster: string, mint?: string | null): string {
   const named = mint?.trim() ? tokenSymbol(mint) : '';
   if (named) {
     return named;
   }
-  if (cluster === 'devnet' || cluster === 'testnet') return 'test tokens';
   return 'tokens';
 }
 
 export function holdNetworkPill(cluster: string): string {
-  if (cluster === 'devnet' || cluster === 'testnet') return 'Test tokens';
+  if (cluster === 'devnet') return 'Devnet, a test network';
+  if (cluster === 'testnet') return 'Testnet, a test network';
   if (cluster === 'mainnet-beta') return 'Mainnet';
   return cluster;
 }

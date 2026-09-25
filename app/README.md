@@ -171,7 +171,7 @@ Required:
 
 - `EXPO_PUBLIC_VETO_RPC` (the cluster RPC; blank in `.env.example`, set for release builds as a sensitive EAS environment variable in the production environment, so a dedicated devnet RPC key stays out of the repository; the program id and the mint stay in the `eas.json` production profile)
 - `EXPO_PUBLIC_VETO_PROGRAM_ID`
-- `EXPO_PUBLIC_VETO_MINT` (needed to open a mandate)
+- `EXPO_PUBLIC_VETO_MINT` (needed to open a mandate). On devnet the default is Circle USDC, `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`, 6 decimals. Nobody can mint it. The owner gets it from https://faucet.circle.com. VTEST stays in the app for rules that already use it.
 
 Optional:
 

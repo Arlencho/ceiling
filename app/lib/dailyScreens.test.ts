@@ -10,7 +10,7 @@ import { barUnits, networkLabel, refusalStreak, ruleDay } from '../components/da
 import { space } from '../components/theme';
 import { KIND_PAID, KIND_REFUSED, STATUS_REVOKED } from './constants';
 import type { MandateAccount } from './mandate';
-import { VTEST_DEVNET_NOTE, VTEST_MINT } from './tokens';
+import { DEVNET_USDC_MINT, USDC_DEVNET_NOTE, VTEST_DEVNET_NOTE, VTEST_MINT } from './tokens';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 (globalThis as { __DEV__?: boolean }).__DEV__ = false;
@@ -31,6 +31,8 @@ const camera: { permission: { granted: boolean; canAskAgain: boolean } | null } 
 const rulesetReady = { current: true };
 let openCalls = 0;
 let closeCalls = 0;
+const openedUrls: string[] = [];
+const copiedText: string[] = [];
 
 function key(): string {
   return Keypair.generate().publicKey.toBase58();
@@ -137,7 +139,11 @@ mock.module('react-native', {
     Image: Host('Image'),
     Keyboard: { addListener: () => ({ remove() {} }) },
     KeyboardAvoidingView: Host('KeyboardAvoidingView'),
-    Linking: { openURL: async () => undefined },
+    Linking: {
+      openURL: async (url: string) => {
+        openedUrls.push(url);
+      },
+    },
     PanResponder: { create: () => ({ panHandlers: {} }) },
     Platform: { OS: 'ios', select: (spec: { ios?: unknown }) => spec.ios },
     Pressable: Host('Pressable'),
@@ -207,7 +213,9 @@ mock.module('./mwa', {
 mock.module('expo-clipboard', {
   namedExports: {
     getStringAsync: async () => '',
-    setStringAsync: async () => undefined,
+    setStringAsync: async (value: string) => {
+      copiedText.push(value);
+    },
   },
 });
 
@@ -478,6 +486,96 @@ test('home reads loading, empty, error, and the chain amounts', async () => {
   assert.equal(textOf(root).includes(VTEST_DEVNET_NOTE), false);
   chain.config = { ...chain.config, explorerCluster: 'devnet' };
   await act(async () => root.unmount());
+});
+
+test('home offers Get devnet USDC on the empty state only for that mint, and names the USDC note once', async () => {
+  const Screen = (await import('../app/(tabs)/index')).default;
+  const previous = chain.config;
+  chain.mandateStatus = 'empty';
+  chain.mandate = null;
+  chain.mandates = [];
+  chain.error = null;
+  chain.config = { ...previous, mint: DEVNET_USDC_MINT, explorerCluster: 'devnet' };
+  openedUrls.length = 0;
+  copiedText.length = 0;
+  let root = await mount(createElement(Screen));
+  let text = textOf(root);
+  assert.equal(text.split('Get devnet USDC').length - 1, 1);
+  assert.match(text, /Paste this address into the faucet\. It sends devnet USDC, which has no value\./);
+  assert.match(text, new RegExp(owner));
+  await act(async () => {
+    byLabel(root, 'Copy').props.onPress();
+    byLabel(root, 'Get devnet USDC').props.onPress();
+  });
+  assert.deepEqual(copiedText, [owner]);
+  assert.deepEqual(openedUrls, ['https://faucet.circle.com']);
+  await act(async () => root.unmount());
+
+  chain.config = { ...previous, mint: DEVNET_USDC_MINT, explorerCluster: 'mainnet-beta' };
+  root = await mount(createElement(Screen));
+  assert.equal(textOf(root).includes('Get devnet USDC'), false);
+  await act(async () => root.unmount());
+
+  chain.config = { ...previous, mint: VTEST_MINT, explorerCluster: 'devnet' };
+  root = await mount(createElement(Screen));
+  assert.equal(textOf(root).includes('Get devnet USDC'), false);
+  await act(async () => root.unmount());
+
+  const usdc = mandate({ mint: DEVNET_USDC_MINT });
+  chain.mandateStatus = 'present';
+  chain.decimals = 0;
+  chain.mandate = usdc;
+  chain.mandates = [usdc];
+  chain.config = { ...previous, mint: DEVNET_USDC_MINT, explorerCluster: 'devnet' };
+  root = await mount(createElement(Screen));
+  const noted = textOf(root);
+  assert.equal(noted.split(USDC_DEVNET_NOTE).length - 1, 1);
+  assert.equal(noted.includes(VTEST_DEVNET_NOTE), false);
+  assert.equal(noted.includes('Get devnet USDC'), false);
+  assert.match(noted, /258 USDC/);
+  await act(async () => root.unmount());
+
+  chain.mandateStatus = 'empty';
+  chain.mandate = null;
+  chain.mandates = [];
+  chain.config = previous;
+});
+
+test('the rules list names each token and does not add different mints together', async () => {
+  const Screen = (await import('../app/(tabs)/rules')).default;
+  const vtest = mandate({
+    address: 'RuleVtestAddressaaaaaaaaaaaaaaaaaaaaaa',
+    agent: 'AgentVtestAddressaaaaaaaaaaaaaaaaaaaaa',
+    merchant: 'PayeeVtestAddressaaaaaaaaaaaaaaaaaaaaa',
+    mint: VTEST_MINT,
+    cap: 111n,
+    spent: 0n,
+    purpose: 'garage charger',
+  });
+  const usdc = mandate({
+    address: 'RuleUsdcAddressbbbbbbbbbbbbbbbbbbbbbb',
+    agent: 'AgentUsdcAddressbbbbbbbbbbbbbbbbbbbbbbb',
+    merchant: 'PayeeUsdcAddressbbbbbbbbbbbbbbbbbbbbbbb',
+    mint: DEVNET_USDC_MINT,
+    cap: 222n,
+    spent: 0n,
+    purpose: 'charge the car',
+  });
+  chain.mandateStatus = 'present';
+  chain.error = null;
+  chain.decimals = 0;
+  chain.mandate = vtest;
+  chain.mandates = [vtest, usdc];
+  const root = await mount(createElement(Screen));
+  const text = textOf(root);
+  assert.match(text, /111 VTEST/);
+  assert.match(text, /222 USDC/);
+  assert.match(text, /1 rule in VTEST\. 1 rule in USDC\./);
+  assert.equal(text.includes('333'), false);
+  await act(async () => root.unmount());
+  chain.mandateStatus = 'empty';
+  chain.mandate = null;
+  chain.mandates = [];
 });
 
 test('rules reads loading, empty, error, and a live rule from the chain', async () => {

@@ -89,9 +89,9 @@ export const TEMPLATES: MandateTemplate[] = [
     title: 'Charge the car under a price',
     summary: 'Starting limits only. Choosing this does not invent a price or a charge.',
     fields: {
-      cap: '100',
-      perTxMax: '0.5',
-      expiryDays: '30',
+      cap: '20',
+      perTxMax: '0.50',
+      expiryDays: '40',
       merchant: '',
       purpose: 'charge the car under a price',
     },

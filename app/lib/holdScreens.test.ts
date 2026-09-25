@@ -192,6 +192,35 @@ test('moving money in shows loading, an empty wallet, an error, and a balance', 
   );
   assert.match(ready, /holds 1,000 test tokens/);
   assert.match(ready, /6Ywq\.\.\.GSV5/);
+  assert.equal(ready.includes('Get devnet USDC'), false);
+});
+
+test('the deposit screen keeps the devnet USDC faucet when the wallet has no token account', async () => {
+  const { AmountScreen } = await import('../components/hold/AmountScreen');
+  const { Text } = await import('react-native');
+  const props = {
+    network: 'Devnet, a test network',
+    amountText: '5',
+    balanceLabel: null as string | null,
+    tokenName: 'USDC',
+    walletLabel: '6Ywq...GSV5',
+    onAmount() {},
+    onBack() {},
+    onNext() {},
+    faucet: createElement(Text, null, 'Get devnet USDC'),
+  };
+  const empty = textOf(
+    await mount(createElement(AmountScreen, { ...props, status: 'empty', error: null })),
+  );
+  assert.match(empty, /No token account was found/);
+  assert.match(empty, /Get devnet USDC/);
+  const ready = textOf(
+    await mount(
+      createElement(AmountScreen, { ...props, status: 'ready', error: null, balanceLabel: '1' }),
+    ),
+  );
+  assert.match(ready, /holds 1 USDC/);
+  assert.match(ready, /Get devnet USDC/);
 });
 
 test('the rules screen names the amount, the daily limit, the wait, and the four triggers', async () => {

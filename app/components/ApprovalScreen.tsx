@@ -27,6 +27,7 @@ import { loadAddressBook, saveAddressBook, withSavedName } from '../lib/addressB
 import { parseOptionalAgentAddress } from '../lib/agentAddress';
 import { createClient, type OpenMandateResult } from '../lib/chain';
 import { formatBaseUnits } from '../lib/format';
+import { showDevnetUsdcFaucet } from '../lib/faucet';
 import { devnetTestTokenNote, withToken } from '../lib/tokens';
 import { secureStore } from '../lib/mwa';
 import { evaluatePresign, type PresignObservation } from '../lib/presign';
@@ -37,6 +38,7 @@ import { BUILD_YOUR_OWN_IDS, templateById, type MandateTemplate } from '../lib/t
 import { useChain } from '../lib/useChain';
 import { useWallet } from '../lib/useWallet';
 import { AddressActions } from './AddressActions';
+import { GetDevnetUsdc } from './GetDevnetUsdc';
 import { Button } from './Button';
 import { BLOCK_COUNT, BlockBar } from './backglass/BlockBar';
 import { HoldToApprove } from './backglass/HoldToApprove';
@@ -296,6 +298,17 @@ function ApprovalCard({
           payeeHasTokenAccount: payeeFieldReady(payeeText) ? liveObservation.payeeHasTokenAccount : null,
         })
       : [];
+  const showFaucet =
+    wallet.ownerPublicKey != null &&
+    showDevnetUsdcFaucet({
+      cluster: chain.config?.explorerCluster,
+      mint: mintText,
+      shortfall: {
+        balance: liveObservation?.ownerTokenBalance ?? null,
+        needed: cap ?? 0n,
+        balanceKnown: liveObservation?.mintReadable === true && cap != null,
+      },
+    });
   const ready = canApprove({
     checks,
     payeeReady: payeeFieldReady(payeeText),
@@ -704,6 +717,7 @@ function ApprovalCard({
               <Text style={styles.fix}>{check.fix}</Text>
             </View>
           ))}
+        {showFaucet && wallet.ownerPublicKey ? <GetDevnetUsdc owner={wallet.ownerPublicKey} /> : null}
         {!liveObservation && wallet.ownerPublicKey && mintText ? (
           <Text style={styles.body}>Checking the wallet, the token, and the network.</Text>
         ) : null}

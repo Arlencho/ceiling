@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, fonts, radii, space } from '../theme';
@@ -14,6 +15,7 @@ export function AmountScreen({
   onAmount,
   onBack,
   onNext,
+  faucet,
 }: {
   network: string;
   status: 'loading' | 'error' | 'empty' | 'ready';
@@ -25,6 +27,7 @@ export function AmountScreen({
   onAmount: (text: string) => void;
   onBack: () => void;
   onNext: () => void;
+  faucet?: ReactNode;
 }) {
   return (
     <View style={styles.wrap}>
@@ -47,6 +50,7 @@ export function AmountScreen({
           <Text style={styles.ctaText}>Next: set the rules</Text>
         </Pressable>
       </StatusBlock>
+      {faucet}
     </View>
   );
 }

@@ -2,7 +2,12 @@ import { Stack } from 'expo-router';
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 
 import { colors } from '../../components/theme';
-import type { HoldDays } from '../../lib/hold';
+import {
+  HOLD_SUGGESTED_DAILY,
+  HOLD_SUGGESTED_DAYS,
+  HOLD_SUGGESTED_DEPOSIT,
+  type HoldDays,
+} from '../../lib/hold';
 
 export type HoldDraft = {
   amountText: string;
@@ -31,9 +36,9 @@ type DraftApi = HoldDraft & {
 const DraftContext = createContext<DraftApi | null>(null);
 
 function DraftProvider({ children }: { children: ReactNode }) {
-  const [amountText, setAmountText] = useState('');
-  const [dailyText, setDailyText] = useState('50');
-  const [days, setDays] = useState<HoldDays>(2);
+  const [amountText, setAmountText] = useState(HOLD_SUGGESTED_DEPOSIT);
+  const [dailyText, setDailyText] = useState(HOLD_SUGGESTED_DAILY);
+  const [days, setDays] = useState<HoldDays>(HOLD_SUGGESTED_DAYS);
   const [mode, setMode] = useState<'phone' | 'seeker'>('seeker');
   const [guardianText, setGuardianText] = useState('');
   const [safeText, setSafeTextState] = useState('');

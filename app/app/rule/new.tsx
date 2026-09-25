@@ -14,6 +14,7 @@ import { SpendBoard } from '../../components/daily/SpendBoard';
 import { StepPair } from '../../components/daily/StepPair';
 import { barUnits, wholePayments } from '../../components/daily/facts';
 import { EmptyState } from '../../components/EmptyState';
+import { GetDevnetUsdc } from '../../components/GetDevnetUsdc';
 import { Field } from '../../components/Field';
 import { RuleScreen } from '../../components/RuleScreen';
 import { Screen } from '../../components/Screen';
@@ -27,8 +28,10 @@ import {
   TOTAL_CAP_GUIDANCE,
 } from '../../lib/ruleGuidance';
 import { PURPOSE_MAX_LEN } from '../../lib/constants';
+import { askedBaseUnits, isDevnetUsdcMint, showDevnetUsdcFaucet } from '../../lib/faucet';
 import { formatBaseUnits, parseBaseUnits } from '../../lib/format';
 import { devnetTestTokenNote, formatTokenAmount, tokenSymbol } from '../../lib/tokens';
+import { useOwnerTokenBalance } from '../../lib/useOwnerTokenBalance';
 import type { MandateAccount } from '../../lib/mandate';
 import { displayPurpose } from '../../lib/ruleView';
 import {
@@ -197,7 +200,21 @@ function RuleCompose({
   const openingRef = useRef(false);
   const formMint = chain.config?.mint ?? null;
   const formSymbol = tokenSymbol(formMint);
-  const tokenNote = devnetTestTokenNote(formMint, chain.config?.explorerCluster ?? null);
+  const formCluster = chain.config?.explorerCluster ?? null;
+  const tokenNote = devnetTestTokenNote(formMint, formCluster);
+  const funds = useOwnerTokenBalance(formMint, isDevnetUsdcMint(formCluster, formMint));
+  const capNeeded = askedBaseUnits(fields.cap, chain.decimals);
+  const showFaucet =
+    wallet.ownerPublicKey != null &&
+    showDevnetUsdcFaucet({
+      cluster: formCluster,
+      mint: formMint,
+      shortfall: {
+        balance: funds.balance,
+        needed: capNeeded ?? 0n,
+        balanceKnown: funds.known,
+      },
+    });
 
   const setField = useCallback((key: keyof MandateFields, value: string) => {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -456,6 +473,7 @@ function RuleCompose({
             onUp={() => stepAmount('cap', 1)}
           />
         </View>
+        {showFaucet && wallet.ownerPublicKey ? <GetDevnetUsdc owner={wallet.ownerPublicKey} /> : null}
         <View style={styles.dial}>
           <View style={styles.dialField}>
             <Field

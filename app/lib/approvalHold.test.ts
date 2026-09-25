@@ -8,6 +8,7 @@ import { act, createElement, type ReactElement, type ReactNode } from 'react';
 import { create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
 import { GENESIS_BY_CLUSTER } from './presign';
+import { DEVNET_USDC_MINT } from './tokens';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -16,6 +17,8 @@ const agent = Keypair.generate().publicKey;
 const payee = Keypair.generate().publicKey;
 const mint = Keypair.generate().publicKey;
 const openCalls: string[] = [];
+const openedUrls: string[] = [];
+const copiedText: string[] = [];
 
 function Host(type: string) {
   return function MockHost(props: { children?: ReactNode; style?: unknown } & Record<string, unknown>) {
@@ -82,6 +85,11 @@ mock.module('react-native', {
     Pressable: Host('Pressable'),
     ScrollView: Host('ScrollView'),
     StyleSheet: { create<T>(styles: T): T { return styles; }, hairlineWidth: 1, absoluteFill: {} },
+    Linking: {
+      openURL: async (url: string) => {
+        openedUrls.push(url);
+      },
+    },
     Text: Host('Text'),
     TextInput: Host('TextInput'),
     UIManager: { measureLayout() {} },
@@ -117,7 +125,10 @@ mock.module('expo-constants', {
 
 mock.module('expo-clipboard', {
   namedExports: {
-    setStringAsync: async () => true,
+    setStringAsync: async (value: string) => {
+      copiedText.push(value);
+      return true;
+    },
     getStringAsync: async () => '',
   },
 });
@@ -294,6 +305,92 @@ test('a cancelled signature arms Hold to approve again', async () => {
   });
   assert.equal(openCalls.length, 2, 'a failed signature left Hold to approve disarmed');
 });
+
+test('the rule form offers devnet USDC when the wallet is short of the cap', async () => {
+  const savedMint = chainStub.config.mint;
+  const savedBalance = observation.ownerTokenBalance;
+  const savedDecimals = observation.decimals;
+  chainStub.config.mint = DEVNET_USDC_MINT;
+  observation.ownerTokenBalance = 1n;
+  observation.decimals = 6;
+  observation.mintReadable = true;
+  openedUrls.length = 0;
+  copiedText.length = 0;
+  try {
+    const { ApprovalScreen } = await import('../components/ApprovalScreen');
+    const root = await mount(
+      createElement(ApprovalScreen, {
+        mode: 'template',
+        request: null,
+        invalidReason: null,
+        templateId: 'charging-agent',
+      }),
+    );
+    for (let i = 0; i < 20 && !visibleText(root).includes('Get devnet USDC'); i += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setImmediate(resolve));
+      });
+    }
+    const text = visibleText(root);
+    assert.equal(text.split("USDC on devnet is Circle's test token. It has no value.").length - 1, 1);
+    assert.match(text, /Get devnet USDC/);
+    assert.match(text, /Paste this address into the faucet\. It sends devnet USDC, which has no value\./);
+    await act(async () => {
+      holdButton(root, 'Copy').props.onPress();
+      holdButton(root, 'Get devnet USDC').props.onPress();
+    });
+    assert.deepEqual(copiedText, [owner.toBase58()]);
+    assert.deepEqual(openedUrls, ['https://faucet.circle.com']);
+    await act(async () => root.unmount());
+  } finally {
+    chainStub.config.mint = savedMint;
+    observation.ownerTokenBalance = savedBalance;
+    observation.decimals = savedDecimals;
+  }
+});
+
+test('the rule form hides the faucet when the devnet USDC balance covers the cap', async () => {
+  const savedMint = chainStub.config.mint;
+  const savedBalance = observation.ownerTokenBalance;
+  const savedDecimals = observation.decimals;
+  chainStub.config.mint = DEVNET_USDC_MINT;
+  observation.ownerTokenBalance = 80_000_000n;
+  observation.decimals = 6;
+  observation.mintReadable = true;
+  try {
+    const { ApprovalScreen } = await import('../components/ApprovalScreen');
+    const root = await mount(
+      createElement(ApprovalScreen, {
+        mode: 'template',
+        request: null,
+        invalidReason: null,
+        templateId: 'charging-agent',
+      }),
+    );
+    for (let i = 0; i < 20 && !visibleText(root).includes('80 USDC'); i += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setImmediate(resolve));
+      });
+    }
+    const text = visibleText(root);
+    assert.match(text, /80 USDC/);
+    assert.equal(text.split("USDC on devnet is Circle's test token. It has no value.").length - 1, 1);
+    assert.equal(text.includes('Get devnet USDC'), false);
+    await act(async () => root.unmount());
+  } finally {
+    chainStub.config.mint = savedMint;
+    observation.ownerTokenBalance = savedBalance;
+    observation.decimals = savedDecimals;
+  }
+});
+
+function holdButton(root: ReactTestRenderer, label: string): ReactTestInstance {
+  const node = root.root
+    .findAll((candidate) => (candidate.type as unknown) === 'Pressable')
+    .find((candidate) => candidate.props.accessibilityLabel === label);
+  assert.ok(node, `missing ${label}`);
+  return node;
+}
 
 test('an invalid request, a missing payee, and a readable request each show their state', async () => {
   const { ApprovalScreen } = await import('../components/ApprovalScreen');
