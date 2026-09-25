@@ -25,7 +25,7 @@ Hold both real Seekers in frame for three seconds, establishing the owner phone 
 
 **00:03 to 00:15. The USDC refusal.**
 
-Open a real Refused row from Decisions on the Seeker for rule `UsRHyKtm41XMpQUcFGevYKgdWJEHQUf44QDCxLjEGWh`. Show its amount and refusal sentence. Choose a per-payment refusal above 0.50 USDC: the phone shows the sentence; the explorer and the tool result show reason 5. Use the actual recorded amount, never the old 16.659625-over-10 example.
+Open a real Refused row from Decisions on the Seeker for rule `UsRHyKtm41XMpQUcFGevYKgdWJEHQUf44QDCxLjEGWh`. Show its amount and refusal sentence. Choose a per-payment refusal above 0.50 USDC: the phone shows the sentence; the explorer log shows reason 5. Use the actual recorded amount, never the old 16.659625-over-10 example.
 
 Voice: *"The agent asked to pay more than I allowed. The program refused, and recorded why. No payment moved."*
 
@@ -37,7 +37,7 @@ Voice: *"I approved 20 USDC in total, at most half a USDC per payment, for 40 da
 
 **00:33 to 00:48. One paid, one refused.**
 
-In Decisions on the Seeker, open one Paid row within the limit and return to the Refused row on this same USDC rule. Open the refusal's actual transaction in the public explorer with `cluster=devnet`. Show the matching amount: the phone shows the sentence; the explorer and the tool result show reason 5. The payment must also be within the remaining cap, before expiry and otherwise valid. Refused payments still incur transaction fees.
+In Decisions on the Seeker, open one Paid row within the limit and return to the Refused row on this same USDC rule. Open the refusal's actual transaction in the public explorer with `cluster=devnet`. Show the matching amount: the phone shows the sentence; the explorer log shows reason 5. The payment must also be within the remaining cap, before expiry and otherwise valid. Refused payments still incur transaction fees.
 
 Voice: *"Inside the rule, it paid without another approval. Over the payment limit, it recorded a refusal. This is devnet test USDC, paying our counterparty for a bill repriced by a public index. It buys no electricity."*
 
@@ -86,7 +86,7 @@ Voice: *"Onboarding also offers Hold, with my second Seeker as the guardian."*
 
 Both Seekers in frame. Use a funded vault configured for **1 day**, with the second Seeker's distinct wallet as guardian. On the owner phone request a big withdrawal above the everyday limit to a new address. Show the waiting withdrawal and chain-clock countdown. Nothing is released by this request.
 
-The second Seeker receives the real alert. Open it to **You are the guardian**, with the matching amount and destination. The guardian taps and holds **Stop this withdrawal**, completes its wallet signature, and shows **Confirmed on the blockchain**. Hold the camera frame through signing so **Waiting on Seed Vault...** and the Seed Vault sheet are visible. Confirm that this withdrawal is stopped and the funds stay in the vault. A quick tap alone does not sign: this control uses the same hold gesture as approval.
+The second Seeker receives the real alert. Open it to **You are the guardian**, with the matching amount and destination. The guardian taps and holds **Stop this withdrawal**, completes its wallet signature, and shows **Confirmed on the blockchain**. Hold the camera frame through signing so the Seed Vault sheet is visible. Confirm that this withdrawal is stopped and the funds stay in the vault. A quick tap alone does not sign: this control uses the same hold gesture as approval.
 
 Voice: *"A big withdrawal to a new address waits one day. My second Seeker gets the alert. I stop this withdrawal with its guardian key, signed in the Seeker's Seed Vault. The money stays in the vault."*
 

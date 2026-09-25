@@ -16,7 +16,7 @@ Use `UsRHyKtm41XMpQUcFGevYKgdWJEHQUf44QDCxLjEGWh`: 0.50 USDC per payment, 20 USD
 
 The checked configuration in [GCP_SETUP.md](../GCP_SETUP.md) records cap `20000000`, maximum `500000`, source `8eyjxUJNHuuqYrbqoFxacu4Qx54ystkGirewxigfJtLm`, agent `6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w`, and payee `6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG`. Re-read on shoot day; this is not a claim about October's live balances.
 
-Find one real Paid row within 0.50 USDC and one Refused row above it in Decisions on the Seeker. The phone shows the refusal sentence; the explorer and the tool result show reason 5. Read the actual amounts from those rows. Match the explorer signatures and token balance changes, allowing for transaction fees. The bill is repriced by a public index and pays our counterparty; it buys no electricity. Preserve both rows before the 32-entry ring wraps. Do not promise a fixed count of paid or refused rows on recording day.
+Find one real Paid row within 0.50 USDC and one Refused row above it in Decisions on the Seeker. The phone shows the refusal sentence; the explorer log shows reason 5. Read the actual amounts from those rows. Match the explorer signatures and token balance changes, allowing for transaction fees. The bill is repriced by a public index and pays our counterparty; it buys no electricity. Preserve both rows before the 32-entry ring wraps. Do not promise a fixed count of paid or refused rows on recording day.
 
 ## Trade gate: devnet upgrade by 2026-10-05
 
@@ -53,7 +53,7 @@ Use **Next: protect your money** from first run, then **Protect the rest of your
 
 Configure a funded vault for 1 day, an everyday limit below the proposed withdrawal, a safe address and the second Seeker's distinct guardian key. Connect the guardian wallet on the second phone, confirm it discovers the vault, enable notification permissions and rehearse the alert in the actual foreground or background state used for filming. Do not infer delivery from the owner phone's guardian indicator.
 
-Request a big withdrawal to a new address. Confirm the pending amount, destination and one-day release time on chain. Capture the second Seeker receiving the notification and opening the matching withdrawal in **You are the guardian**. Press and hold **Stop this withdrawal**, complete the guardian wallet signature while holding the camera frame through **Waiting on Seed Vault...** and the Seed Vault sheet, with the voice line "signed in the Seeker's Seed Vault", then capture **Confirmed on the blockchain** and verify that the withdrawal is stopped and the funds remain. The control requires a hold, not a quick tap. Only funds inside Hold's vault have this protection.
+Request a big withdrawal to a new address. Confirm the pending amount, destination and one-day release time on chain. Capture the second Seeker receiving the notification and opening the matching withdrawal in **You are the guardian**. Press and hold **Stop this withdrawal**, complete the guardian wallet signature while holding the camera frame through the Seed Vault sheet, with the voice line "signed in the Seeker's Seed Vault", then capture **Confirmed on the blockchain** and verify that the withdrawal is stopped and the funds remain. The control requires a hold, not a quick tap. Only funds inside Hold's vault have this protection.
 
 ## Code checks behind the copy
 
