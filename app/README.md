@@ -211,7 +211,7 @@ This is the shape:
   "payeeTokenAccount": "<payee token account>",
   "agent": "<agent address>",
   "cluster": "devnet",
-  "rpcUrl": "<rpc url this app uses>"
+  "rpcUrl": "https://api.devnet.solana.com"
 }
 ```
 
@@ -219,10 +219,9 @@ This is the shape:
 token account a charge pays: the payee's associated token account for this
 mint when that account exists, otherwise the payee's only token account for
 the mint. `cluster` is checked against the endpoint's genesis hash (`devnet`,
-`testnet`, or `mainnet-beta`). `rpcUrl` is the RPC this app uses, copied as
-configured, including any query string. It is the endpoint when the caller
-does not pass a connection. A provider URL with a key in that query is on the
-clipboard and in the QR.
+`testnet`, or `mainnet-beta`). `rpcUrl` is the public endpoint for the cluster.
+The app's configured endpoint and credentials are never included in the setup.
+The agent can pass its own connection for production.
 
 ## One-time: Expo account
 

@@ -1,3 +1,4 @@
+import { redactRpc } from '../../lib/rpcPrivacy';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 
@@ -45,7 +46,7 @@ export default function AlertsRoute() {
             });
           })()
             .catch((err: unknown) => {
-              setExplanation(err instanceof Error ? err.message : 'Alerts could not be turned on.');
+              setExplanation(err instanceof Error ? redactRpc(err.message) : 'Alerts could not be turned on.');
             })
             .finally(() => {
               setBusy(false);

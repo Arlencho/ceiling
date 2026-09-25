@@ -1,3 +1,4 @@
+import { redactRpc } from './rpcPrivacy';
 import { PublicKey } from '@solana/web3.js';
 import * as BackgroundTask from 'expo-background-task';
 import * as Notifications from 'expo-notifications';
@@ -81,7 +82,7 @@ async function readOwnerMandates(
         }
       }
     }
-    const detail = last instanceof Error ? last.message : '429';
+    const detail = last instanceof Error ? redactRpc(last.message) : '429';
     throw new Error(`The RPC rate limited this read. ${detail}`);
   }
 }

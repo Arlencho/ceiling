@@ -1,6 +1,8 @@
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { PublicKey } from '@solana/web3.js';
 
+import { publicRpcFor, redactRpc } from './rpcPrivacy';
+
 import { walletChainForCluster } from './appConfig';
 
 export const AGENT_CONNECT_LINE =
@@ -95,7 +97,7 @@ export function agentChargeConfig(input: AgentChargeConfig): AgentChargeConfig {
     payeeTokenAccount: canonicalAddress(input.payeeTokenAccount, 'payee token account'),
     agent: canonicalAddress(input.agent, 'agent'),
     cluster: input.cluster,
-    rpcUrl,
+    rpcUrl: publicRpcFor(input.cluster),
   };
 }
 
@@ -166,13 +168,13 @@ export function agentConnectStatus(args: {
     return 'The mint account did not include decimals, so this config is not ready.';
   }
   if (args.payeeProblem) {
-    return args.payeeProblem;
+    return redactRpc(args.payeeProblem);
   }
   if (!args.fundsLoaded && args.fundsError) {
-    return args.fundsError;
+    return redactRpc(args.fundsError);
   }
   if (args.configProblem) {
-    return args.configProblem;
+    return redactRpc(args.configProblem);
   }
   return 'Reading the mint decimals and the payee token account.';
 }
@@ -187,7 +189,7 @@ export function agentChargeRows(config: AgentChargeConfig): { label: string; val
     { label: 'Payee token account', value: config.payeeTokenAccount },
     { label: 'Agent', value: config.agent },
     { label: 'Cluster', value: config.cluster },
-    { label: 'RPC', value: config.rpcUrl },
+    { label: 'RPC (public; use your own for production)', value: publicRpcFor(config.cluster) },
   ];
 }
 

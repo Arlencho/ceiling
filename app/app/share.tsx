@@ -1,3 +1,4 @@
+import { redactRpc } from '../lib/rpcPrivacy';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Share, StyleSheet, Text, View } from 'react-native';
@@ -146,7 +147,7 @@ export default function ShareScreen() {
         title: shape === 'csv' ? 'Veto decisions.csv' : 'Veto decisions.json',
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Export failed');
+      setError(err instanceof Error ? redactRpc(err.message) : 'Export failed');
     }
   };
 
@@ -166,7 +167,7 @@ export default function ShareScreen() {
         title: 'Veto on the blockchain',
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not share the link');
+      setError(err instanceof Error ? redactRpc(err.message) : 'Could not share the link');
     }
   };
 

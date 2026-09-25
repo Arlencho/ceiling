@@ -1,3 +1,4 @@
+import { redactRpc } from '../../lib/rpcPrivacy';
 import { PublicKey } from '@solana/web3.js';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -92,7 +93,7 @@ export default function RenewalRoute() {
         }
         setLedger(null);
         setLedgerFor(ruleAddress);
-        setLedgerError(err instanceof Error ? err.message : 'The decision record could not be read.');
+        setLedgerError(err instanceof Error ? redactRpc(err.message) : 'The decision record could not be read.');
       });
     return () => {
       cancelled = true;

@@ -1,3 +1,4 @@
+import { redactRpc } from './rpcPrivacy';
 import { PublicKey } from '@solana/web3.js';
 import {
   createContext,
@@ -119,7 +120,7 @@ function useChainState(): ChainState {
   const submitEpoch = useRef(0);
 
   const holdIfPending = useCallback((err: unknown) => {
-    const message = err instanceof Error ? err.message : '';
+    const message = err instanceof Error ? redactRpc(err.message) : '';
     if (
       !message.startsWith('The transaction has not appeared on ') &&
       !message.startsWith('The transaction was seen on ')
@@ -244,12 +245,12 @@ function useChainState(): ChainState {
             setError(RATE_LIMIT_GAVE_UP);
             setRateLimited(false);
           } else {
-            setError(last instanceof Error ? last.message : 'Chain read failed');
+            setError(last instanceof Error ? redactRpc(last.message) : 'Chain read failed');
             setRateLimited(false);
           }
         }
       } else {
-        setError(err instanceof Error ? err.message : 'Chain read failed');
+        setError(err instanceof Error ? redactRpc(err.message) : 'Chain read failed');
       }
     } finally {
       setLoading(false);

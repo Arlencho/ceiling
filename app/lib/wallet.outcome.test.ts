@@ -5,6 +5,7 @@ import { Buffer } from 'buffer';
 import { Keypair, Transaction } from '@solana/web3.js';
 
 import {
+  explainWalletFailure,
   SESSION_STORE_KEY,
   connect,
   disconnect,
@@ -416,4 +417,13 @@ test('each confirmation reads every poll through one connection', async () => {
       restoreConfirmation(saved);
     }
   });
+});
+
+test('wallet error text never exposes RPC credentials', () => {
+  const error = 'Request failed at https://user:password@rpc.example/?api-key=wallet-secret';
+  for (const input of [error, new Error(error)]) {
+    const message = explainWalletFailure(input, 'devnet');
+    assert.doesNotMatch(message, /api-key|wallet-secret|password|user/);
+    assert.match(message, /\[redacted\]/);
+  }
 });

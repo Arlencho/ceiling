@@ -1,3 +1,4 @@
+import { redactRpc } from '../../lib/rpcPrivacy';
 import { useRouter } from 'expo-router';
 import { useEffect, useState, type ComponentType } from 'react';
 import { ActivityIndicator } from 'react-native';
@@ -51,7 +52,7 @@ export function FirstRunGuide({ onFinish }: { onFinish: () => void }) {
       const book = await loadAddressBook(secureStore);
       await saveAddressBook(secureStore, withSavedName(book, address, trimmed));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'The name could not be saved.');
+      setError(err instanceof Error ? redactRpc(err.message) : 'The name could not be saved.');
     }
   }
 
@@ -64,7 +65,7 @@ export function FirstRunGuide({ onFinish }: { onFinish: () => void }) {
       setAgentAddress(key.publicKey.toBase58());
       setStage('name');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'The test agent could not be created.');
+      setError(err instanceof Error ? redactRpc(err.message) : 'The test agent could not be created.');
     } finally {
       setBusy(false);
     }

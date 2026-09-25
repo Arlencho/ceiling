@@ -326,49 +326,59 @@ test('the app block round-trips through the SDK loader', async () => {
   assert.deepEqual(mod.loadAgentConfig(JSON.parse(json)), config);
 });
 
-test('the QR code is the same JSON Copy all hands to the clipboard', async () => {
-  const config = sample();
-  const json = agentChargeConfigJson(config);
-  assert.equal(decodePng(qrPng(json).bytes), json);
+for (const rpcUrl of [
+  'https://rpc.example/?api-key=setup-secret',
+  'https://user:setup-secret@rpc.example/',
+  'https://rpc.example/?token=setup-secret',
+]) {
+  test(`screen, clipboard and QR use public RPC for ${new URL(rpcUrl).search ? 'query' : 'credentials'} (${rpcUrl.includes('token=') ? 'token' : 'key'})`, async () => {
+    const config = { ...sample(), rpcUrl };
+    const json = agentChargeConfigJson(config);
+    assert.equal(decodePng(qrPng(json).bytes), json);
 
-  const { ConnectAgentPanel } = await import('../components/ConnectAgentPanel');
-  let copied = '';
-  let root: ReactTestRenderer | null = null;
-  await act(async () => {
-    root = create(
-      createElement(ConnectAgentPanel, {
-        rows: agentChargeRows(config),
-        configJson: json,
-        status: null,
-        onCopy: (value: string) => {
-          copied = value;
-        },
-      }),
-    );
+    const { ConnectAgentPanel } = await import('../components/ConnectAgentPanel');
+    let copied = '';
+    let root: ReactTestRenderer | null = null;
+    await act(async () => {
+      root = create(
+        createElement(ConnectAgentPanel, {
+          rows: agentChargeRows(config),
+          configJson: json,
+          status: null,
+          onCopy: (value: string) => {
+            copied = value;
+          },
+        }),
+      );
+    });
+    assert.ok(root);
+    const shown = root as ReactTestRenderer;
+    const text = visibleText(shown);
+    assert.match(text, /Give your agent its setup/);
+    assert.match(text, new RegExp(config.mandate));
+    assert.match(text, new RegExp(config.payeeTokenAccount));
+    assert.match(text, /Copy setup text/);
+    assert.ok(text.includes(AGENT_CONNECT_LINE));
+    const image = shown.root.findAll((node) => isHost(node, 'Image'));
+    assert.equal(image.length, 1);
+    const uri = image[0]?.props.source.uri as string;
+    const encoded = uri.slice(uri.indexOf('base64,') + 'base64,'.length);
+    assert.equal(decodePng(Buffer.from(encoded, 'base64')), json);
+    const button = shown.root
+      .findAll((node) => isHost(node, 'Pressable'))
+      .find((node) => node.props.accessibilityLabel === 'Copy setup text');
+    assert.ok(button);
+    button.props.onPress();
+    assert.equal(copied, json);
+    assert.doesNotMatch(text + copied + decodePng(Buffer.from(encoded, 'base64')), /api-key|setup-secret/);
+    assert.match(text, /RPC \(public; use your own for production\)/);
+    assert.equal(JSON.parse(copied).rpcUrl, 'https://api.devnet.solana.com');
+    await act(async () => {
+      shown.unmount();
+    });
   });
-  assert.ok(root);
-  const shown = root as ReactTestRenderer;
-  const text = visibleText(shown);
-  assert.match(text, /Give your agent its setup/);
-  assert.match(text, new RegExp(config.mandate));
-  assert.match(text, new RegExp(config.payeeTokenAccount));
-  assert.match(text, /Copy setup text/);
-  assert.ok(text.includes(AGENT_CONNECT_LINE));
-  const image = shown.root.findAll((node) => isHost(node, 'Image'));
-  assert.equal(image.length, 1);
-  const uri = image[0]?.props.source.uri as string;
-  const encoded = uri.slice(uri.indexOf('base64,') + 'base64,'.length);
-  assert.equal(decodePng(Buffer.from(encoded, 'base64')), json);
-  const button = shown.root
-    .findAll((node) => isHost(node, 'Pressable'))
-    .find((node) => node.props.accessibilityLabel === 'Copy setup text');
-  assert.ok(button);
-  button.props.onPress();
-  assert.equal(copied, json);
-  await act(async () => {
-    shown.unmount();
-  });
-});
+
+}
 
 function mintBytes(): Uint8Array {
   return new Uint8Array(45);
@@ -521,4 +531,23 @@ test('several token accounts and none at all leave the config unpicked', async (
       ),
     /Mint .* was not found on chain/,
   );
+});
+
+test('the SDK accepts public setup while using the agent connection', async () => {
+  const { world } = await import('../../sdk/src/testkit');
+  const { PROGRAM_ID } = await import('../../sdk/src/idl');
+  const { VetoAgent } = await import('../../sdk/src/agent');
+  const w = world();
+  const config = agentChargeConfig({
+    mandate: w.mandate.toBase58(), programId: PROGRAM_ID.toBase58(),
+    mint: w.mint.publicKey.toBase58(), mintDecimals: 6,
+    sourceTokenAccount: w.source.publicKey.toBase58(),
+    payeeTokenAccount: w.destination.publicKey.toBase58(),
+    agent: w.agent.publicKey.toBase58(), cluster: 'devnet',
+    rpcUrl: 'https://user:password@rpc.example/?api-key=setup-secret',
+  });
+  assert.equal(config.rpcUrl, 'https://api.devnet.solana.com');
+  const agent = await VetoAgent.fromConfig(config, w.agent, w.connection);
+  assert.equal(agent.connection, w.connection);
+  assert.equal(agent.mandate.toBase58(), config.mandate);
 });

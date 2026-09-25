@@ -1,3 +1,4 @@
+import { redactRpc } from '../../lib/rpcPrivacy';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Circle, Path, Svg } from 'react-native-svg';
@@ -37,7 +38,7 @@ export function WeekScreen({
     try {
       await action();
     } catch (err) {
-      setShareError(err instanceof Error ? err.message : 'The share did not finish.');
+      setShareError(err instanceof Error ? redactRpc(err.message) : 'The share did not finish.');
     }
   }
 

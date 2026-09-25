@@ -1,3 +1,4 @@
+import { redactRpc } from '../lib/rpcPrivacy';
 import { PublicKey } from '@solana/web3.js';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -364,7 +365,7 @@ function ApprovalCard({
       setNameDraft('');
       setNameError(null);
     } catch (err) {
-      setNameError(err instanceof Error ? err.message : 'The name could not be saved.');
+      setNameError(err instanceof Error ? redactRpc(err.message) : 'The name could not be saved.');
     }
   };
 
@@ -407,7 +408,7 @@ function ApprovalCard({
         router.replace(`/rule/${result.mandate.address}`);
       }
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Open failed');
+      setFormError(err instanceof Error ? redactRpc(err.message) : 'Open failed');
       setHoldReset((current) => current + 1);
     } finally {
       openingRef.current = false;

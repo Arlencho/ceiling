@@ -1,3 +1,4 @@
+import { redactRpc } from '../../lib/rpcPrivacy';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { PublicKey } from '@solana/web3.js';
@@ -40,7 +41,7 @@ export default function HoldGuardian() {
       } catch (err) {
         if (!alive) return;
         setPhoneKey(null);
-        setError(err instanceof Error ? err.message : 'The wallet did not list its accounts.');
+        setError(err instanceof Error ? redactRpc(err.message) : 'The wallet did not list its accounts.');
         setStatus('ready');
       }
     })();

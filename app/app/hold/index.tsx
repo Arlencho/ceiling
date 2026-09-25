@@ -1,3 +1,4 @@
+import { redactRpc } from '../../lib/rpcPrivacy';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -108,7 +109,7 @@ export default function HoldIndex() {
       void raiseHoldAlertsOnScan().catch(() => undefined);
     } catch (err) {
       setStatus('error');
-      setError(err instanceof Error ? err.message : 'The vaults could not be read.');
+      setError(err instanceof Error ? redactRpc(err.message) : 'The vaults could not be read.');
     }
   }, [session.chain.configError, session.client, session.config, session.owner]);
 

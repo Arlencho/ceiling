@@ -1,3 +1,4 @@
+import { redactRpc } from './rpcPrivacy';
 const KNOWN_CLUSTERS = ['devnet', 'testnet', 'mainnet-beta'] as const;
 
 export function walletChainForCluster(cluster: string): string {
@@ -82,6 +83,6 @@ export function tryConfigFromExtra(
   try {
     return { ok: true, config: configFromExtra(extra, env) };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'Config is invalid' };
+    return { ok: false, error: err instanceof Error ? redactRpc(err.message) : 'Config is invalid' };
   }
 }

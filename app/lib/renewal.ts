@@ -1,3 +1,4 @@
+import { redactRpc } from './rpcPrivacy';
 import { PublicKey } from '@solana/web3.js';
 
 import { openedAtSec, ruleDay } from '../components/daily/facts';
@@ -280,7 +281,7 @@ export function renewalDraftError(draft: NextRuleDraft, decimals: number): strin
     cap = parseBaseUnits(draft.cap, decimals);
     per = parseBaseUnits(draft.perTxMax, decimals);
   } catch (err) {
-    return err instanceof Error ? err.message : 'Enter the amounts for the next rule.';
+    return err instanceof Error ? redactRpc(err.message) : 'Enter the amounts for the next rule.';
   }
   if (per <= 0n || cap < 0n) {
     return 'Enter the most per payment and the total set aside.';
