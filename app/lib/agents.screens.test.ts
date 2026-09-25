@@ -69,6 +69,7 @@ mock.module('react-native', {
       absoluteFill: {},
     },
     Text: Host('Text'),
+    TextInput: Host('TextInput'),
     View: Host('View'),
   },
 });
@@ -185,6 +186,7 @@ function screenData(over: Partial<AgentScreenData> = {}): AgentScreenData {
     agents: [],
     refreshing: false,
     refresh() {},
+    saveName: async () => undefined,
     ...over,
   };
 }
@@ -395,6 +397,42 @@ test('week in review shows loading, empty, error, and the seven-day counts', asy
   assert.match(saved, /Paid: \d+ payments/);
   assert.match(saved, /0 moved/);
   assert.match(saved, /Every line is read from the blockchain/);
+});
+
+test('an agent with no saved name is Unnamed agent, the address shows once, and it can be named', async () => {
+  const { AgentsScreen } = await import('../components/agents/AgentsScreen');
+  const unnamed = buildAgentRecords([sampleRule()], {}, NOW);
+  const record = unnamed[0];
+  assert.ok(record);
+  let saved = '';
+  const root = await mount(
+    createElement(AgentsScreen, {
+      data: screenData({ agents: unnamed }),
+      onOpenAgent() {},
+      onHowGrades() {},
+      onNameAgent(agent: string, name: string) {
+        saved = `${agent}:${name}`;
+      },
+    }),
+  );
+  const text = visibleText(root);
+  assert.match(text, /Unnamed agent/);
+  assert.equal(text.split(record.shortAddress).length - 1, 1);
+  assert.match(text, /Name this agent/);
+  await act(async () => {
+    button(root, 'Name this agent').props.onPress();
+  });
+  const field = root.root
+    .findAll((node) => (node.type as unknown) === 'TextInput')
+    .find((node) => node.props.accessibilityLabel === 'Agent name');
+  assert.ok(field);
+  await act(async () => {
+    field.props.onChangeText('Depot agent');
+  });
+  await act(async () => {
+    button(root, 'Save agent name').props.onPress();
+  });
+  assert.equal(saved, `${record.agent}:Depot agent`);
 });
 
 test('the tab bar has Agents between Rules and Decisions', async () => {

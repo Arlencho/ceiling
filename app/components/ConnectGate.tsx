@@ -1,5 +1,6 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { showsIntroduction } from '../lib/onboarding';
 import { useOnboarding } from '../lib/useOnboarding';
@@ -55,7 +56,13 @@ function Guide({ onFinish }: { onFinish: () => void }) {
   return <View onFinish={onFinish} />;
 }
 
-export function ConnectGate({ children }: { children: ReactNode }) {
+export function ConnectGate({
+  children,
+  padNetwork = false,
+}: {
+  children: ReactNode;
+  padNetwork?: boolean;
+}) {
   const wallet = useWallet();
   const onboarding = useOnboarding();
   const connected = wallet.ownerPublicKey !== null;
@@ -119,16 +126,29 @@ export function ConnectGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return (
+  const body = (
     <View style={styles.block}>
       {networkLine ? <Text style={styles.thesis}>{networkLine}</Text> : null}
       {wallet.error ? <Text style={styles.error}>{wallet.error}</Text> : null}
       {children}
     </View>
   );
+  if (!padNetwork) {
+    return body;
+  }
+  return (
+    <SafeAreaView edges={['top']} style={styles.safe}>
+      {body}
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    alignSelf: 'stretch',
+    backgroundColor: colors.bg,
+  },
   block: {
     gap: 16,
     alignSelf: 'stretch',

@@ -15,7 +15,7 @@ import {
   REASON_STALE_NONCE,
   REASON_ZERO_AMOUNT,
 } from './constants';
-import { formatBaseUnits, remainingCap } from './format';
+import { formatDisplayAmount, remainingCap } from './format';
 import { canonicalAddress } from './ruleRequest';
 import { truncateAddress } from './wallet';
 
@@ -133,6 +133,7 @@ export type AgentRecord = {
   spend: SpendLine | null;
   daysValue: string;
   daysCaption: string;
+  named: boolean;
 };
 
 const BANDS: readonly GradedBand[] = ['stayed', 'tested', 'pushed'];
@@ -158,11 +159,12 @@ export function ruleTotalDays(startedAt: bigint | null, expiresAt: bigint): numb
   if (startedAt == null || expiresAt <= startedAt) {
     return null;
   }
-  const whole = (expiresAt - startedAt) / 86400n;
-  if (whole <= 0n || whole > BigInt(Number.MAX_SAFE_INTEGER)) {
+  const span = expiresAt - startedAt;
+  const total = (span + 86399n) / 86400n;
+  if (total <= 0n || total > BigInt(Number.MAX_SAFE_INTEGER)) {
     return null;
   }
-  return Number(whole);
+  return Number(total);
 }
 
 export function ruleDayNumber(
@@ -462,8 +464,8 @@ export function snapshotRule(rule: RuleFacts, nowSec: bigint): RuleSnapshot {
   const day = ruleDayNumber(startedAt, rule.expiresAt, nowSec);
   const totalDays = ruleTotalDays(startedAt, rule.expiresAt);
   const remaining = remainingCap(rule.cap, rule.spent);
-  const remainingLabel = formatBaseUnits(remaining, rule.decimals);
-  const capLabel = formatBaseUnits(rule.cap, rule.decimals);
+  const remainingLabel = formatDisplayAmount(remaining, rule.decimals);
+  const capLabel = formatDisplayAmount(rule.cap, rule.decimals);
   const facts = countRule(rule.rows);
   const dayLabel =
     day != null && totalDays != null
@@ -476,8 +478,8 @@ export function snapshotRule(rule: RuleFacts, nowSec: bigint): RuleSnapshot {
     shortAddress: truncateAddress(rule.address),
     remainingLabel,
     capLabel,
-    spentLabel: formatBaseUnits(rule.spent, rule.decimals),
-    perTxMaxLabel: formatBaseUnits(rule.perTxMax, rule.decimals),
+    spentLabel: formatDisplayAmount(rule.spent, rule.decimals),
+    perTxMaxLabel: formatDisplayAmount(rule.perTxMax, rule.decimals),
     remainingRatio: ratio(remaining, rule.cap),
     day,
     totalDays,
@@ -494,12 +496,14 @@ export function snapshotRule(rule: RuleFacts, nowSec: bigint): RuleSnapshot {
   };
 }
 
+export const UNNAMED_AGENT = 'Unnamed agent';
+
 export function agentName(agent: string, names: Record<string, string>): string {
   const key = canonicalAddress(agent);
   if (key && names[key]) {
     return names[key];
   }
-  return truncateAddress(agent);
+  return UNNAMED_AGENT;
 }
 
 export function agentsHeading(records: readonly AgentRecord[]): string {
@@ -576,6 +580,10 @@ export function buildAgentRecords(
     const ticks = snapshots
       .flatMap((rule) => requestTicks(rule.rows))
       .sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+    const nameKey = canonicalAddress(agent);
+    const storedName = nameKey ? names[nameKey] : undefined;
+    const named = Boolean(storedName);
+    const savedName = storedName || UNNAMED_AGENT;
     const one = snapshots.length === 1 ? snapshots[0] : null;
     const spend: SpendLine | null = one
       ? {
@@ -594,7 +602,8 @@ export function buildAgentRecords(
       : `${snapshots.length}`;
     records.push({
       agent,
-      name: agentName(agent, names),
+      name: savedName,
+      named,
       shortAddress: truncateAddress(agent),
       grade,
       cardLine: gradeCardLine(grade),

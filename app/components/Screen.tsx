@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { QuietReading, quietRefreshControl } from './QuietRefresh';
 import { colors, space } from './theme';
 
 export function Screen({
@@ -21,16 +22,9 @@ export function Screen({
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
-          refreshControl={
-            onRefresh ? (
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor={colors.bone}
-              />
-            ) : undefined
-          }
+          refreshControl={quietRefreshControl(onRefresh)}
         >
+          <QuietReading busy={refreshing} />
           {children}
         </ScrollView>
       ) : (

@@ -105,7 +105,12 @@ export default function ShareScreen() {
   const signed = signedExportRows(selected);
   const count = signed.length;
   const row = findLedgerDecision(chain.rows, parsed, mandate?.address);
-  const face = row ? decisionFace(row, chain.decimals, mandate?.perTxMax, chain.nowMs) : null;
+  const face = row
+    ? decisionFace(row, chain.decimals, mandate?.perTxMax, chain.nowMs, {
+        payee: mandate?.merchant,
+        amounts: 'exact',
+      })
+    : null;
   const purpose = mandate ? displayPurpose(mandate.purpose) : '';
   const noun = choice === 'decision' ? 'this decision' : choice === 'date_range' ? 'this date range' : 'everything under this rule';
 

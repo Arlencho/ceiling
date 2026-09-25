@@ -331,6 +331,30 @@ function byLabel(root: ReactTestRenderer, prefix: string): ReactTestInstance {
   return found;
 }
 
+test('the home spend board says what one block is and shows two decimals', async () => {
+  const { SpendBoard } = await import('../components/daily/SpendBoard');
+  const root = await mount(
+    createElement(SpendBoard, {
+      kicker: 'Your agent can still spend',
+      remainingText: '15.15275',
+      ofText: 'of 300',
+      spentText: '16.939875',
+      spentCaption: 'spent so far',
+      remaining: 151,
+      cap: 300,
+      accessibilityLabel: 'left',
+      leftCaption: '1 block is one share of 300',
+      rightCaption: 'Most per payment: 10',
+    }),
+  );
+  const text = textOf(root);
+  assert.match(text, /1 block = 1 payment of 10/);
+  assert.doesNotMatch(text, /one share of/);
+  assert.match(text, /15\.15/);
+  assert.match(text, /16\.94/);
+  assert.doesNotMatch(text, /15\.15275|16\.939875/);
+});
+
 test('a refusal streak counts only the newest run, and the day comes from the opened time', () => {
   assert.equal(networkLabel('devnet'), 'Devnet');
   assert.equal(refusalStreak([{ kind: KIND_PAID }, { kind: KIND_REFUSED }, { kind: KIND_REFUSED }]), 2);
