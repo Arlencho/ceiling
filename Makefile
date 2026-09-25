@@ -52,6 +52,7 @@ test: build-test ## Build and run the program test suite
 test-scripts: ## Run deploy-script checks that do not need a cluster
 	./scripts/devnet-setup.test.sh
 	./scripts/devnet-usdc.test.sh
+	./scripts/devnet-token-swap-pool.test.sh
 	./scripts/ci-covers-packages.test.sh
 	./scripts/ci-covers-packages-round2.test.sh
 	./scripts/ci-covers-packages-round3.test.sh

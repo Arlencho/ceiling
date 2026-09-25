@@ -423,6 +423,28 @@ Devnet USDC is Circle's test token. It has no value.
 
 The founder gets it from https://faucet.circle.com by pasting the Seeker owner `GtA2Vxhomfm2WGaBcvz5oCBrqkAecKHMAL3UTn4HVFzq` and the deployer `GYus8c91vyc7XDrgqfDaYcmVTERb4hQWcf6fLr2SyR1`. Nobody can mint this token. `scripts/devnet-usdc.sh` creates the merchant and deployer accounts when they are absent, and re-running it is a no-op.
 
+## Demo pool
+
+Constant-product pool on the token-swap program `SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8`. The pair is wrapped SOL (`So11111111111111111111111111111111111111112`, 9 decimals) and Circle devnet USDC (`4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`, 6 decimals).
+
+| Role | Address |
+|---|---|
+| Pool | `DTFPL7GmcFN9yc6Yv2FZrq158gRhM8JG1v6svgcNNjxL` |
+| Authority | `8bMBGNZf9L1h2cFQMVPmqkZzUMbdfB549q27UioGTknS` |
+| wSOL vault | `HUUHvdSrsADyuXbkL5Q9Lu72Ybek4oNpFyBajaKmLfnp` |
+| USDC vault | `HejE81VKyAmThbTBBR6mxaPmkmk2qFJnZy2SC7whd4nL` |
+| Pool mint | `6j9w4Gh2XNNoFsqtCcxGJkPENUvCrc8P7hQCMdwvgMdV` |
+| Fee account | `9ZxbMsqrUQLiWrTAvSFToZZK3Yfs7UMAP7WP1QfeCe2i` |
+| Fee owner | `HfoTxFR1Tm6kGmWgYWD6J7YHVy1UwqSULUGVLXkJqaKN` |
+
+the exchange takes 0.30 percent of each trade's input, of which 0.05 percent goes as pool tokens to a fee account owned by a key compiled into the exchange, not held by us
+
+Seeded with 10 USDC and 0.083 SOL. 0.083 SOL is what 10 USD bought at 120.58 USD per SOL on 2026-09-25, from https://api.coinbase.com/v2/prices/SOL-USD/spot.
+
+our pool, devnet, the rate is whatever our own trades make it
+
+`DLKNn8KPGf9EYWTpVtVxQ4tfott91pTFJYDFkKCnNRoa` and `6TddoWn8yPVjedBesZqESBB8zEw7UHb7jUbbVkjowUD7` are unused mints left by the gate run, not pools.
+
 ## Notes
 
 - This script never deploys to mainnet and never prints private keys.
