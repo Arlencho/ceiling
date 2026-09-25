@@ -4,7 +4,7 @@
     "slug": "veto",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/brand/app-icon-1024.png",
     "scheme": "veto",
     "userInterfaceStyle": "dark",
     "platforms": [
@@ -21,21 +21,21 @@
       ],
       "adaptiveIcon": {
         "backgroundColor": "#0F1A16",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/brand/adaptive-icon-foreground-1024.png",
+        "backgroundImage": "./assets/brand/adaptive-icon-background-1024.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
       "expo-router",
+      "expo-font",
       "expo-dev-client",
       [
         "expo-splash-screen",
         {
           "backgroundColor": "#0F1A16",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "image": "./assets/brand/splash-mark-512.png",
+          "imageWidth": 112
         }
       ],
       "expo-secure-store",
