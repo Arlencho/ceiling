@@ -169,7 +169,7 @@ cp .env.example .env
 
 Required:
 
-- `EXPO_PUBLIC_VETO_RPC` (the cluster RPC; blank in `.env.example`, preset to the public devnet RPC in the `eas.json` production profile, together with the program id and the mint)
+- `EXPO_PUBLIC_VETO_RPC` (the cluster RPC; blank in `.env.example`, set for release builds as a sensitive EAS environment variable in the production environment, so a dedicated devnet RPC key stays out of the repository; the program id and the mint stay in the `eas.json` production profile)
 - `EXPO_PUBLIC_VETO_PROGRAM_ID`
 - `EXPO_PUBLIC_VETO_MINT` (needed to open a mandate)
 
