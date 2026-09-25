@@ -28,7 +28,7 @@ Solana devnet. Devnet USDC is a test token with no value.
 | Open Overview; the new rule appears with its amounts in USDC. | | |
 | Trigger the agent's first decision; a notification arrives and the same decision appears as a row. | | |
 | Open a refused row; read its reason and the figure that would allow the payment. | | |
-| Choose to allow once; the hold button reads "Allow this one payment of" with the amount, Seed Vault asks for one signature, and the agent's retry pays. | | |
+| Choose to allow once; the hold button reads "Hold to allow this one payment of &lt;amount&gt;", Seed Vault asks for one signature, and the agent's retry pays. | | |
 | Revoke the rule; Seed Vault asks for one signature and the rule is revoked. | | |
 | Attempt the next charge; it is refused with "mandate not active". | | |
 | Close the rule; the remaining funds and the account rent return to the wallet. | | |
