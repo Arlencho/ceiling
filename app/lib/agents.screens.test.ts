@@ -240,7 +240,9 @@ test('the agents screen shows loading, an empty wallet, a read error, and a grad
   assert.match(empty, /No agent is on a rule yet/);
 
   const error = visibleText(await mount(createElement(AgentsScreen, { data: screenData({ status: 'error', error: 'The RPC refused the read.' }), onOpenAgent() {}, onHowGrades() {} })));
-  assert.match(error, /The RPC refused the read/);
+  assert.match(error, /Could not reach the blockchain/);
+  assert.doesNotMatch(error, /RPC/);
+  assert.doesNotMatch(error, /no rule live/i);
 
   let opened = '';
   const normal = await mount(
@@ -261,6 +263,62 @@ test('the agents screen shows loading, an empty wallet, a read error, and a grad
     button(normal, `Open the full record of Charging agent. Grade: Pushed its limit often.`).props.onPress();
   });
   assert.equal(opened, AGENT);
+});
+
+test('agents while the chain is rate limited says the blockchain is busy and does not claim no rule is live', async () => {
+  const { AgentsScreen } = await import('../components/agents/AgentsScreen');
+  const data = screenData({
+    status: 'loading',
+    error: 'The RPC rate limited this read. Pull to retry.',
+    notice: 'The RPC rate limited this read. Pull to retry.',
+    liveRules: 0,
+    refreshing: true,
+    agents: [],
+  });
+  const text = visibleText(
+    await mount(createElement(AgentsScreen, { data, onOpenAgent() {}, onHowGrades() {} })),
+  );
+  assert.match(text, /The blockchain is busy right now\. Veto keeps trying\./);
+  assert.match(text, /Reading\.\.\./);
+  assert.doesNotMatch(text, /RPC/);
+  assert.doesNotMatch(text, /no rule live/i);
+  assert.doesNotMatch(text, /No agent/);
+});
+
+test('agents after a failed read says to pull down and does not claim no rule or no agent', async () => {
+  const { AgentsScreen } = await import('../components/agents/AgentsScreen');
+  const text = visibleText(
+    await mount(
+      createElement(AgentsScreen, {
+        data: screenData({ status: 'error', error: 'The RPC refused the read.', liveRules: 0, agents: [] }),
+        onOpenAgent() {},
+        onHowGrades() {},
+      }),
+    ),
+  );
+  assert.match(text, /Could not reach the blockchain\. Pull down to try again\./);
+  assert.match(text, /Could not read/);
+  assert.doesNotMatch(text, /RPC/);
+  assert.doesNotMatch(text, /no rule live/i);
+  assert.doesNotMatch(text, /No agent/);
+});
+
+test('agents after a successful read shows the agent and that one rule is live', async () => {
+  const { AgentsScreen } = await import('../components/agents/AgentsScreen');
+  const text = visibleText(
+    await mount(
+      createElement(AgentsScreen, {
+        data: screenData({ agents: readyAgents(), liveRules: 1, status: 'ready', error: null }),
+        onOpenAgent() {},
+        onHowGrades() {},
+      }),
+    ),
+  );
+  assert.match(text, /Charging agent/);
+  assert.match(text, /1 rule live/);
+  assert.doesNotMatch(text, /Could not read/);
+  assert.doesNotMatch(text, /blockchain is busy/);
+  assert.doesNotMatch(text, /No agent/);
 });
 
 test('how grades work shows loading, empty, error, and the four rules', async () => {
