@@ -158,6 +158,7 @@ mock.module('react-native', {
     Animated: {
       Value: AnimatedValue,
       View: Host('Animated.View'),
+      Text: Host('Animated.Text'),
       timing: () => still,
       delay: () => still,
       sequence: () => still,
@@ -191,32 +192,6 @@ mock.module('react-native', {
     UIManager: { measureLayout: () => undefined },
     View: Host('View'),
     findNodeHandle: () => null,
-    AccessibilityInfo: {
-      isReduceMotionEnabled: async () => true,
-      addEventListener: () => ({ remove() {} }),
-    },
-    Animated: {
-      Value: class {
-        setValue() {}
-        interpolate() {
-          return 0;
-        }
-      },
-      View: Host('Animated.View'),
-      Text: Host('Animated.Text'),
-      timing: () => ({ start() {}, stop() {} }),
-      delay: () => ({ start() {}, stop() {} }),
-      sequence: () => ({ start() {}, stop() {} }),
-      loop: () => ({ start() {}, stop() {} }),
-      createAnimatedComponent: (Component: unknown) => Component,
-    },
-    Easing: {
-      linear: (value: number) => value,
-      cubic: (value: number) => value,
-      out: (ease: (value: number) => number) => ease,
-      inOut: (ease: (value: number) => number) => ease,
-      bezier: () => (value: number) => value,
-    },
     PanResponder: { create: () => ({ panHandlers: {} }) },
   },
 });

@@ -103,32 +103,6 @@ mock.module('react-native', {
     Text: Host('Text'),
     TextInput: Host('TextInput'),
     View: Host('View'),
-    AccessibilityInfo: {
-      isReduceMotionEnabled: async () => true,
-      addEventListener: () => ({ remove() {} }),
-    },
-    Animated: {
-      Value: class {
-        setValue() {}
-        interpolate() {
-          return 0;
-        }
-      },
-      View: Host('Animated.View'),
-      Text: Host('Animated.Text'),
-      timing: () => ({ start() {}, stop() {} }),
-      delay: () => ({ start() {}, stop() {} }),
-      sequence: () => ({ start() {}, stop() {} }),
-      loop: () => ({ start() {}, stop() {} }),
-      createAnimatedComponent: (Component: unknown) => Component,
-    },
-    Easing: {
-      linear: (value: number) => value,
-      cubic: (value: number) => value,
-      out: (ease: (value: number) => number) => ease,
-      inOut: (ease: (value: number) => number) => ease,
-      bezier: () => (value: number) => value,
-    },
   },
 });
 
