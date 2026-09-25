@@ -7,6 +7,8 @@
  */
 
 import { feedUrlFor, type FeedRead, type FeedStatus, type PriceFeed } from "../../watcher/src/feed.js";
+import { fxFixingIsFresh, readFxOrUnreachable, type FxSource } from "../../watcher/src/fx.js";
+import { sekPerKwhToScaled, type SpotQuoteCurrency } from "../../watcher/src/money.js";
 import { quoteForWindow, type Quote } from "./quote.js";
 
 export type StateWindow = {
@@ -59,6 +61,8 @@ export async function buildState(args: {
   at: Date;
   kwhMilli: bigint;
   mintDecimals: number;
+  quoteCurrency?: SpotQuoteCurrency;
+  fx?: FxSource;
 }): Promise<TerminalState> {
   const sourceUrl = feedUrlFor(args.at);
 
@@ -100,14 +104,33 @@ export async function buildState(args: {
 
   let quote: Quote | null = null;
   let unreadable = false;
+  let fxNote: string | null = null;
   if (read.window !== null) {
     try {
-      quote = quoteForWindow({
-        window: read.window,
-        kwhMilli: args.kwhMilli,
-        mintDecimals: args.mintDecimals,
-        at: args.at,
-      });
+      const scaled = sekPerKwhToScaled(read.window.sekPerKwh);
+      if (args.quoteCurrency === "USD" && scaled > 0n) {
+        const fxRead = await readFxOrUnreachable(args.fx, args.at);
+        if (!fxRead.ok) {
+          fxNote = "The ECB reference rate could not be read, so no USDC quote is offered.";
+        } else if (!fxFixingIsFresh(fxRead.quote.fixingDate, args.at)) {
+          fxNote = `The ECB fixing ${fxRead.quote.fixingDate} is more than 4 calendar days before this slot, so no USDC quote is offered.`;
+        } else {
+          quote = quoteForWindow({
+            window: read.window,
+            kwhMilli: args.kwhMilli,
+            mintDecimals: args.mintDecimals,
+            at: args.at,
+            fx: fxRead.quote,
+          });
+        }
+      } else {
+        quote = quoteForWindow({
+          window: read.window,
+          kwhMilli: args.kwhMilli,
+          mintDecimals: args.mintDecimals,
+          at: args.at,
+        });
+      }
     } catch {
       unreadable = true;
       quote = null;
@@ -124,7 +147,7 @@ export async function buildState(args: {
     refreshFailed: read.refreshFailed,
     window,
     quote: unreadable ? null : quote,
-    note: noteFor(read, quote, unreadable),
+    note: fxNote ?? noteFor(read, quote, unreadable),
     httpStatus: read.httpStatus,
   };
 }
@@ -166,6 +189,15 @@ export function quoteResponse(
       mint_decimals: endpoints.mintDecimals,
       merchant_token_account: endpoints.merchantTokenAccount,
       source: state.sourceUrl,
+      token_symbol: state.quote.tokenSymbol,
+      ...(state.quote.quoteCurrency === "USD"
+        ? {
+            quote_currency: state.quote.quoteCurrency,
+            fx_rate: state.quote.fxRate,
+            fx_date: state.quote.fxDate,
+            fx_source: state.quote.fxSource,
+          }
+        : {}),
     },
   };
 }

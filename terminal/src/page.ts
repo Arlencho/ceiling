@@ -25,6 +25,10 @@ export type PageView = {
   kwh: string;
   amountTokens: string | null;
   amountBaseUnits: string | null;
+  /** Shown next to the quoted amount. Omitted views keep the historical word "tokens". */
+  tokenSymbol?: string;
+  fxRate?: string | null;
+  fxDate?: string | null;
   nonce: string | null;
   note: string | null;
   merchantTokenAccount: string;
@@ -79,8 +83,11 @@ export function renderPage(view: PageView): string {
             "Quoted amount",
             view.amountTokens === null || view.amountBaseUnits === null
               ? esc("none for this window")
-              : `${esc(view.amountTokens)} tokens (${esc(view.amountBaseUnits)} base units)`,
+              : `${esc(view.amountTokens)} ${esc(view.tokenSymbol ?? "tokens")} (${esc(view.amountBaseUnits)} base units)`,
           ),
+          ...(view.fxRate !== null && view.fxRate !== undefined
+            ? [row("USD per SEK", esc(view.fxRate)), row("ECB fixing", esc(view.fxDate ?? ""))]
+            : []),
           row("Nonce", esc(view.nonce ?? "none for this window")),
         ].join("\n")
       : "";

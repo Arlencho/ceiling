@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseGsUri } from "./journalStore.js";
-import { DEFAULT_KWH_MILLI, DEFAULT_MINT_DECIMALS } from "./money.js";
+import { DEFAULT_KWH_MILLI, DEFAULT_MINT_DECIMALS, type SpotQuoteCurrency } from "./money.js";
 import { parseRpcList } from "./rpc.js";
 
 export const WATCHER_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -45,7 +45,18 @@ export type WatcherConfig = {
   purpose: string;
   /** Hold vault addresses from VETO_HOLD_VAULTS. Empty when the variable is unset. */
   holdVaults: string[];
+  /** USD converts the SEK spot before charging. Unset and SEK keep 1 token as 1 SEK. */
+  quoteCurrency: SpotQuoteCurrency;
 };
+
+/** Unset, empty, and SEK keep today's arithmetic. Only USD turns conversion on. */
+export function parseQuoteCurrency(raw: string | undefined): SpotQuoteCurrency {
+  if (raw === undefined) return "SEK";
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed.toUpperCase() === "SEK") return "SEK";
+  if (trimmed.toUpperCase() === "USD") return "USD";
+  throw new Error(`config.loadConfig: VETO_QUOTE_CURRENCY must be USD or SEK, got ${trimmed}`);
+}
 
 export type LoadConfigOpts = {
   /** Override the default env-file list. Tests use this so they do not touch package .env files. */
@@ -187,6 +198,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts?: LoadConf
     perTxMax,
     purpose: env.VETO_PURPOSE ?? "SE3 home charging",
     holdVaults: parseHoldVaultList(lookupFrom(env, files, "VETO_HOLD_VAULTS")),
+    quoteCurrency: parseQuoteCurrency(lookupFrom(env, files, "VETO_QUOTE_CURRENCY")),
   };
 }
 

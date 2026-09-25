@@ -6,8 +6,11 @@
  */
 
 import type { PriceWindow } from "../../watcher/src/feed.js";
-import { amountBaseUnits, sekPerKwhToScaled } from "../../watcher/src/money.js";
+import type { FxQuote } from "../../watcher/src/fx.js";
+import { amountBaseUnitsQuoted, sekPerKwhToScaled, usdPerSekDecimal } from "../../watcher/src/money.js";
 import { nonceFromSlot, nonceFromWindowStart } from "../../watcher/src/nonce.js";
+
+export const USD_TOKEN_SYMBOL = "USDC";
 
 export type Quote = {
   windowStart: string;
@@ -17,6 +20,12 @@ export type Quote = {
   amount: bigint;
   /** Cadence slot being quoted. Null when the feed window does not start on that slot. */
   nonce: bigint | null;
+  /** "USDC" when the amount was converted. "tokens" keeps the historical SEK label. */
+  tokenSymbol: string;
+  quoteCurrency: "SEK" | "USD";
+  fxRate: string | null;
+  fxDate: string | null;
+  fxSource: string | null;
 };
 
 /** Price a fixed kWh volume for one feed window.
@@ -33,13 +42,18 @@ export function quoteForWindow(args: {
   kwhMilli: bigint;
   mintDecimals: number;
   at: Date | string;
+  /** When set, the amount is USDC from the shared watcher conversion. Omit to keep SEK units. */
+  fx?: FxQuote;
 }): Quote | null {
   const scaled = sekPerKwhToScaled(args.window.sekPerKwh);
   if (scaled < 0n) return null;
-  const amount = amountBaseUnits({
+  const amount = amountBaseUnitsQuoted({
     kwhMilli: args.kwhMilli,
     sekPerKwhScaled: scaled,
     mintDecimals: args.mintDecimals,
+    quoteCurrency: args.fx ? "USD" : "SEK",
+    usdRateScaled: args.fx?.usdRateScaled,
+    sekRateScaled: args.fx?.sekRateScaled,
   });
   if (amount === 0n) return null;
   const slot = nonceFromSlot(args.at);
@@ -51,6 +65,11 @@ export function quoteForWindow(args: {
     kwhMilli: args.kwhMilli,
     amount,
     nonce: startsOnSlot ? slot : null,
+    tokenSymbol: args.fx ? USD_TOKEN_SYMBOL : "tokens",
+    quoteCurrency: args.fx ? "USD" : "SEK",
+    fxRate: args.fx ? usdPerSekDecimal(args.fx.usdRateScaled, args.fx.sekRateScaled) : null,
+    fxDate: args.fx ? args.fx.fixingDate : null,
+    fxSource: args.fx ? args.fx.sourceUrl : null,
   };
 }
 

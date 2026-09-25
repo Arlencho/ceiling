@@ -126,6 +126,30 @@ test("loadConfig accepts VETO_JOURNAL_GCS and keeps the local path", () => {
   assert.match(cfg.journalPath, /decisions\.jsonl$/);
 });
 
+test("loadConfig treats unset and SEK as no conversion and accepts USD", () => {
+  const dir = tmpDir();
+  const file = join(dir, ".env");
+  writeFileSync(
+    file,
+    Object.entries(IDENTITIES)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\n"),
+  );
+  assert.equal(loadConfig({ VETO_KEYS_DIR: dir }, { envFiles: [file] }).quoteCurrency, "SEK");
+  assert.equal(
+    loadConfig({ VETO_KEYS_DIR: dir, VETO_QUOTE_CURRENCY: "SEK" }, { envFiles: [file] }).quoteCurrency,
+    "SEK",
+  );
+  assert.equal(
+    loadConfig({ VETO_KEYS_DIR: dir, VETO_QUOTE_CURRENCY: "USD" }, { envFiles: [file] }).quoteCurrency,
+    "USD",
+  );
+  assert.throws(
+    () => loadConfig({ VETO_KEYS_DIR: dir, VETO_QUOTE_CURRENCY: "EUR" }, { envFiles: [file] }),
+    /VETO_QUOTE_CURRENCY must be USD or SEK/,
+  );
+});
+
 test("loadConfig refuses a bad VETO_JOURNAL_GCS URI", () => {
   const dir = tmpDir();
   const file = join(dir, ".env");

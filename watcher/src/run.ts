@@ -1,7 +1,8 @@
 import type { PriceFeed, PriceWindow } from "./feed.js";
 import type { JournalRow, JsonlJournal } from "./journal.js";
 import { logError, logLine } from "./log.js";
-import { amountBaseUnits, sekPerKwhToScaled } from "./money.js";
+import { readFxOrUnreachable, fxFixingIsFresh, type FxQuote, type FxSource } from "./fx.js";
+import { amountBaseUnitsQuoted, sekPerKwhToScaled, usdPerSekDecimal, type SpotQuoteCurrency } from "./money.js";
 import { nonceFromSlot, nonceFromWindowStart } from "./nonce.js";
 import type { ChargeReceipt, RecoveredCharge } from "./chain.js";
 import { REASON_STALE_NONCE } from "./reasons.js";
@@ -101,6 +102,10 @@ type ProcessWindowFields = {
   log?: (line: string) => void;
   feedAttempts?: number;
   feedRetryMs?: number;
+  /** Unset and SEK keep the SEK base-unit arithmetic. USD converts before submit. */
+  quoteCurrency?: SpotQuoteCurrency;
+  /** Required in practice when quoteCurrency is USD. A missing reader is an fx gap. */
+  fx?: FxSource;
 };
 
 /** Chain reads for one charge. recordedCharge travels with the nonce reader so
@@ -377,10 +382,58 @@ export async function processWindow<T extends ProcessWindowArgs>(
     return "skipped";
   }
 
-  const amount = amountBaseUnits({
+  const quoteCurrency = args.quoteCurrency ?? "SEK";
+  let fxQuote: FxQuote | null = null;
+  if (quoteCurrency === "USD") {
+    const fxRead = await readFxOrUnreachable(args.fx, args.at);
+    const writeFxGap = (
+      reason: string,
+      extra: Pick<JournalRow, "quote_currency" | "fx_rate" | "fx_date" | "fx_source">,
+    ): ProcessResult => {
+      // Same shape as a feed gap: one row per reason, nothing submitted, slot stays due.
+      if (args.journal.hasGap(nonce, reason)) {
+        log(`gap ${reason} still at=${args.at.toISOString()}, window stays due`);
+        return "gap";
+      }
+      args.journal.append({
+        ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount: 0n }),
+        decision: "gap",
+        reason,
+        reason_code: null,
+        signature: null,
+        suggested_override: null,
+        ...extra,
+      });
+      log(`gap ${reason} at=${args.at.toISOString()}`);
+      return "gap";
+    };
+    if (!fxRead.ok) {
+      return writeFxGap("fx unavailable", {
+        quote_currency: "USD",
+        fx_rate: null,
+        fx_date: null,
+        fx_source: fxRead.sourceUrl,
+      });
+    }
+    // A fixing outside the window is not used, including one dated after the slot.
+    if (!fxFixingIsFresh(fxRead.quote.fixingDate, args.at)) {
+      return writeFxGap(`fx rate stale (${fxRead.quote.fixingDate})`, {
+        quote_currency: "USD",
+        fx_rate: usdPerSekDecimal(fxRead.quote.usdRateScaled, fxRead.quote.sekRateScaled),
+        fx_date: fxRead.quote.fixingDate,
+        fx_source: fxRead.quote.sourceUrl,
+      });
+    }
+    fxQuote = fxRead.quote;
+  }
+
+  const amount = amountBaseUnitsQuoted({
     kwhMilli: args.kwhMilli,
     sekPerKwhScaled: scaled,
     mintDecimals: args.mintDecimals,
+    quoteCurrency,
+    usdRateScaled: fxQuote?.usdRateScaled,
+    sekRateScaled: fxQuote?.sekRateScaled,
   });
 
   if (amount === 0n) {
@@ -417,6 +470,16 @@ export async function processWindow<T extends ProcessWindowArgs>(
     }
   }
 
+  const fxFields =
+    fxQuote === null
+      ? {}
+      : {
+          quote_currency: "USD",
+          fx_rate: usdPerSekDecimal(fxQuote.usdRateScaled, fxQuote.sekRateScaled),
+          fx_date: fxQuote.fixingDate,
+          fx_source: fxQuote.sourceUrl,
+        };
+
   args.journal.append({
     ...rowBase({ window, nonce, kwhMilli: args.kwhMilli, amount }),
     decision: receipt.decision,
@@ -424,15 +487,26 @@ export async function processWindow<T extends ProcessWindowArgs>(
     reason_code: receipt.reasonCode,
     signature: journalSignature(receipt.signature),
     suggested_override: receipt.suggestedOverride === null ? null : receipt.suggestedOverride.toString(),
+    ...fxFields,
   });
 
   if (receipt.decision === "refused") {
+    if (fxQuote === null) {
+      log(
+        `refused reason=${receipt.reason} amount=${amount.toString()} nonce=${nonce.toString()} window=${window.timeStart} sig=${receipt.signature}`,
+      );
+    } else {
+      log(
+        `refused reason=${receipt.reason} amount=${amount.toString()} sek=${window.sekPerKwh} fx=${usdPerSekDecimal(fxQuote.usdRateScaled, fxQuote.sekRateScaled)} fx_date=${fxQuote.fixingDate} nonce=${nonce.toString()} window=${window.timeStart} sig=${receipt.signature}`,
+      );
+    }
+  } else if (fxQuote === null) {
     log(
-      `refused reason=${receipt.reason} amount=${amount.toString()} nonce=${nonce.toString()} window=${window.timeStart} sig=${receipt.signature}`,
+      `paid amount=${amount.toString()} nonce=${nonce.toString()} window=${window.timeStart} sig=${receipt.signature}`,
     );
   } else {
     log(
-      `paid amount=${amount.toString()} nonce=${nonce.toString()} window=${window.timeStart} sig=${receipt.signature}`,
+      `paid amount=${amount.toString()} sek=${window.sekPerKwh} fx=${usdPerSekDecimal(fxQuote.usdRateScaled, fxQuote.sekRateScaled)} fx_date=${fxQuote.fixingDate} nonce=${nonce.toString()} window=${window.timeStart} sig=${receipt.signature}`,
     );
   }
   return "submitted";
