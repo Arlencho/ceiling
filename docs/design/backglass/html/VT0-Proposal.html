@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hold proposal</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0F1A16;}
+@keyframes lampBreathe{0%,100%{box-shadow:0 0 4px rgba(227,199,126,0.4);}50%{box-shadow:0 0 12px rgba(227,199,126,0.95);}}
+@keyframes glow{0%,100%{opacity:0.35;}50%{opacity:0.7;}}
+.lamp{animation:lampBreathe 3s ease-in-out infinite;}
+.glow{animation:glow 6s ease-in-out infinite;}
+.card{box-sizing:border-box;border-radius:18px;background:#16231E;border:1px solid rgba(237,230,214,0.14);padding:14px 16px 12px 16px;display:flex;flex-direction:column;gap:6px;min-width:0;overflow:hidden;}
+.card h3{margin:0;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#C9A24D;}
+.card h4{margin:0;font-family:'Fraunces',serif;font-weight:400;font-size:19px;line-height:1.15;color:#EDE6D6;}
+.card p{margin:0;font-size:12px;line-height:1.4;color:#D3CCBB;}
+.card p.fact{margin-top:auto;padding-top:7px;border-top:1px solid rgba(237,230,214,0.12);font-size:11.5px;line-height:1.38;color:#93A097;}
+.card ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:5px;}
+.card ul li{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.4;color:#D3CCBB;}
+.card ul li svg{flex-shrink:0;margin-top:3px;}
+.card ol{margin:0;padding:0 0 0 18px;display:flex;flex-direction:column;gap:3px;}
+.card ol li{font-size:11.5px;line-height:1.38;color:#D3CCBB;}
+.card ol li::marker{color:#C9A24D;font-weight:700;}
+.card b{color:#EDE6D6;font-weight:600;}
+.num{font-family:'Fraunces',serif;color:#E3C77E;font-variant-numeric:tabular-nums;}
+.hero{box-sizing:border-box;border-radius:20px;padding:2px;background:linear-gradient(160deg,#E3C77E 0%,#C9A24D 35%,#7E5E14 100%);min-width:0;}
+.hero-in{border-radius:18px;background:linear-gradient(180deg,#1C2C25 0%,#16231E 100%);padding:14px 16px 12px 16px;display:flex;flex-direction:column;gap:6px;height:100%;box-sizing:border-box;overflow:hidden;}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;}
+.pill-line{color:#C9A24D;border:1px solid rgba(201,162,77,0.5);}
+.pill-red{color:#E4A48E;border:1px solid rgba(228,164,142,0.55);}
+table.who{border-collapse:collapse;width:100%;font-size:11.5px;line-height:1.3;color:#D3CCBB;}
+table.who th{text-align:left;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#93A097;padding:0 6px 5px 0;border-bottom:1px solid rgba(237,230,214,0.14);}
+table.who td{padding:3px 6px 3px 0;border-bottom:1px solid rgba(237,230,214,0.08);vertical-align:top;white-space:nowrap;}
+table.who td.yes{color:#9CC9A8;font-weight:700;}
+table.who td.no{color:#93A097;}
+table.who td.both{color:#E3C77E;font-weight:700;}
+.tl{display:flex;flex-direction:column;}
+.tl-row{display:flex;gap:10px;align-items:flex-start;}
+.tl-dot{width:10px;height:10px;border-radius:50%;background:#C9A24D;flex-shrink:0;margin-top:4px;}
+.tl-when{width:96px;flex-shrink:0;font-size:10.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#93A097;padding-top:2px;}
+.tl-what{font-size:12px;line-height:1.38;color:#D3CCBB;padding-bottom:7px;}
+.door{box-sizing:border-box;border-radius:12px;padding:7px 10px;display:flex;flex-direction:column;gap:2px;font-size:11.5px;line-height:1.35;color:#D3CCBB;}
+.door-fast{background:rgba(156,201,168,0.10);border:1px solid rgba(156,201,168,0.45);}
+.door-slow{background:rgba(201,162,77,0.10);border:1px solid rgba(201,162,77,0.55);}
+.door-stop{background:rgba(228,164,142,0.10);border:1px solid rgba(228,164,142,0.5);}
+.door span.t{font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;}
+.day{flex:1;box-sizing:border-box;border-radius:12px;border:1px solid rgba(237,230,214,0.18);padding:7px 6px;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.day.on{border-color:#C9A24D;background:rgba(201,162,77,0.10);box-shadow:0 0 0 3px rgba(201,162,77,0.10);}
+.day .d{font-family:'Fraunces',serif;font-size:24px;line-height:1;color:#EDE6D6;}
+.day .l{font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#93A097;}
+.day .s{font-size:10.5px;line-height:1.3;color:#93A097;text-align:center;}
+@media (prefers-reduced-motion: reduce){.lamp,.glow{animation:none;}}
+</style>
+</helmet>
+<div style="width: 1600px; height: 1200px; position: relative; overflow: hidden; background: #0F1A16; color: #EDE6D6; font-family: 'Manrope', sans-serif; box-sizing: border-box; padding: 30px 48px 22px 48px; display: flex; flex-direction: column; gap: 14px;">
+
+  <div class="glow" aria-hidden="true" style="position: absolute; top: -260px; left: 50%; width: 900px; height: 700px; margin-left: -450px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,77,0.18) 0%, rgba(201,162,77,0.05) 45%, rgba(15,26,22,0) 70%); pointer-events: none;"></div>
+
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; position: relative;">
+    <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <svg width="32" height="32" viewBox="0 0 100 100" aria-hidden="true"><path d="M16 14L50 80L84 14" fill="none" stroke="#C9A24D" stroke-width="9" stroke-linecap="butt" stroke-linejoin="miter"></path><circle cx="50" cy="37.4" r="12" fill="#E3C77E" stroke="#7E5E14" stroke-width="2"></circle></svg>
+        <span style="font-family: 'Fraunces', serif; font-size: 24px; font-weight: 500; letter-spacing: 0.02em;">Veto</span>
+        <span class="pill pill-line">Feature proposal</span>
+        <span class="pill pill-line">Devnet, test tokens</span>
+      </div>
+      <h1 style="margin: 0; font-family: 'Fraunces', serif; font-weight: 400; font-size: 40px; line-height: 1.1; letter-spacing: -0.01em; color: #EDE6D6; white-space: nowrap;">Hold: big money waits, and a second key can say no.</h1>
+      <p style="margin: 0; font-size: 15px; line-height: 1.45; color: #D3CCBB; max-width: 1120px;"><b style="color: #EDE6D6; font-weight: 600;">The promise:</b> if someone gets your key, they can start a big withdrawal but they cannot finish it. Anything large waits 1, 2 or 3 days on the blockchain clock, and you or your second key can stop it, freeze the vault, or move everything to a safe address you chose while calm.</p>
+    </div>
+    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 5px; text-align: right; font-size: 12px; line-height: 1.5; color: #93A097; flex-shrink: 0;">
+      <span>Backglass direction</span>
+      <span>Same program, same Seed Vault, same public record</span>
+      <span style="display: flex; align-items: center; gap: 8px; color: #E3C77E; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-size: 11px;"><span class="lamp" style="display: block; width: 8px; height: 8px; border-radius: 50%; background: #E3C77E;"></span>Tightening is instant. Loosening waits.</span>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 326px 326px 306px; gap: 18px; position: relative;">
+
+    <div class="hero">
+      <div class="hero-in">
+        <h3 style="margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #C9A24D;">1. How it works</h3>
+        <h4 style="margin: 0; font-family: 'Fraunces', serif; font-weight: 400; font-size: 19px; line-height: 1.15; color: #EDE6D6;">Two doors out of one vault.</h4>
+        <p style="margin: 0; font-size: 12px; line-height: 1.4; color: #D3CCBB;">You move money into a Hold vault, an account the Veto program controls, so every withdrawal must pass a rule. Sample: <span class="num">1,000</span> test USDC.</p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <div class="door door-fast">
+            <span class="t" style="color: #9CC9A8;">Everyday door: instant</span>
+            <span>Up to <b>50 per day</b> (your limit) to addresses you have paid before. No wait.</span>
+          </div>
+          <div class="door door-slow">
+            <span class="t" style="color: #E3C77E;">Big door: held</span>
+            <span>Anything else waits <b>2 days</b> (your choice). Held, not refused. It goes if nobody stops it.</span>
+          </div>
+        </div>
+        <div class="door door-stop">
+          <span class="t" style="color: #E4A48E;">While it waits</span>
+          <span>You or your guardian key can <b>Stop</b> that withdrawal, <b>Freeze</b> the vault, or <b>Recover</b> everything to your safe address. Each stop is saved on the blockchain, like a refusal today.</span>
+        </div>
+        <p style="margin: auto 0 0 0; padding-top: 7px; border-top: 1px solid rgba(237,230,214,0.12); font-size: 11.5px; line-height: 1.38; color: #93A097;">The wait runs on the blockchain clock. The program will not pay before it has passed, whether or not your phone was awake.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>2. What triggers a hold</h3>
+      <h4>Small and familiar goes now. Big, new or looser waits.</h4>
+      <ul>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E3C77E" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span><b>Over your everyday limit.</b> More than <span class="num">50</span> in one day, on its own or added up.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E3C77E" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span><b>To a new address.</b> The first payment to any address this vault has never paid, whatever the amount.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E3C77E" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span><b>A big share of the vault.</b> More than <span class="num">25%</span> of what it holds within 24 hours, even to a known address.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E3C77E" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span><b>Anything that loosens the rules.</b> A higher limit, a shorter wait, removing the guardian key, a new safe address: each waits the full delay, so a thief cannot switch the protection off first.</span></li>
+      </ul>
+      <p class="fact">Tightening (a lower limit, a longer wait, adding a guardian) is instant. Sample: <span class="num">1,000</span> to unknown 8xQf...Tz9A trips three of the four. Held for 2 days.</p>
+    </div>
+
+    <div class="card">
+      <h3>3. The wait you choose</h3>
+      <h4>Picked once, changed slowly.</h4>
+      <div style="display: flex; gap: 8px;">
+        <div class="day"><span class="d">1</span><span class="l">day</span><span class="s">Money you touch often</span></div>
+        <div class="day on"><span class="d">2</span><span class="l">days</span><span class="s" style="color: #D3CCBB;">Suggested. A weekend away still fits</span></div>
+        <div class="day"><span class="d">3</span><span class="l">days</span><span class="s">Savings you rarely move</span></div>
+      </div>
+      <ul style="margin-top: 2px;">
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CC9A8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg><span><b>Shortening the wait</b> is itself held for the current wait. Lengthening it is instant.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CC9A8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg><span><b>Skipping the wait</b> for one withdrawal needs both keys, signed separately. One key can never skip.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CC9A8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg><span><b>Stopping</b> needs one key and no wait. Saying no is always the fastest thing you can do.</span></li>
+      </ul>
+      <p class="fact">The countdown on screen reads the blockchain clock. The app can be late or asleep; the wait cannot.</p>
+    </div>
+
+    <div class="card">
+      <h3>4. Who can do what</h3>
+      <h4>Your key drives. The guardian only brakes.</h4>
+      <table class="who" aria-label="What each key can do">
+        <thead><tr><th>Action</th><th>Your key</th><th>Guardian key</th></tr></thead>
+        <tbody>
+          <tr><td>Everyday withdrawal, up to 50 a day</td><td class="yes">Yes, instant</td><td class="no">No</td></tr>
+          <tr><td>Ask for a big withdrawal</td><td class="yes">Yes, then it waits</td><td class="no">No</td></tr>
+          <tr><td>Stop a waiting withdrawal</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
+          <tr><td>Freeze the whole vault</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
+          <tr><td>Recover all to the safe address</td><td class="yes">Yes, instant</td><td class="yes">Yes, instant</td></tr>
+          <tr><td>Skip the wait, or unfreeze</td><td class="both">Both together</td><td class="both">Both together</td></tr>
+          <tr><td>Loosen a rule, change safe address</td><td class="yes">Yes, after the wait</td><td class="no">No</td></tr>
+          <tr><td>Send money anywhere else</td><td class="no">Only through the doors</td><td class="no">Never</td></tr>
+        </tbody>
+      </table>
+      <p class="fact">A stolen guardian key gains a thief nothing. A stolen owner key gains at most the everyday amount until you freeze.</p>
+    </div>
+
+    <div class="card">
+      <h3>5. The alert plan</h3>
+      <h4>Many chances to say no. None of them required.</h4>
+      <div class="tl">
+        <div class="tl-row"><span class="tl-dot"></span><span class="tl-when">Right away</span><span class="tl-what"><b>Held: 1,000 to a new address.</b> Push to both phones from the cloud watcher. Home shows the hold and a Stop button.</span></div>
+        <div class="tl-row"><span class="tl-dot"></span><span class="tl-when">1 h, 12 h</span><span class="tl-what">Reminders while it waits: amount, address, time left.</span></div>
+        <div class="tl-row"><span class="tl-dot"></span><span class="tl-when">Every 12 h</span><span class="tl-what">Repeats until it goes. Alerts about a hold cannot be muted.</span></div>
+        <div class="tl-row"><span class="tl-dot"></span><span class="tl-when">6 h, 1 h before</span><span class="tl-what">Last calls: "goes in 1 hour unless you stop it".</span></div>
+        <div class="tl-row"><span class="tl-dot" style="background: #9CC9A8;"></span><span class="tl-when">At the end</span><span class="tl-what">"Paid 1,000 to 8xQf...Tz9A" or "Stopped by your guardian key". Both saved on the blockchain.</span></div>
+      </div>
+      <p class="fact">Alerts come from the cloud watcher and from the app's own check about every 15 minutes. Miss every one and the wait still runs its full length. Safety never depends on seeing a notification in time.</p>
+    </div>
+
+    <div class="card">
+      <h3>6. Fits Veto, built for Seeker</h3>
+      <h4>Same rule engine. The agent is you, on a bad day.</h4>
+      <ul>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"></path></svg><span><b>Rules, not trust.</b> Today an agent asks and the program decides. Hold does the same for a withdrawal from your own vault.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9"></path></svg><span><b>Every stop is on the record.</b> Held, stopped, frozen, recovered, released: each saved on the blockchain with who and why, next to today's refusals.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2.5"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg><span><b>Seed Vault signs everything.</b> Your key and the guardian key both live in Seed Vault; each action is a fingerprint or PIN. Keys never leave the phone.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A24D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"></rect><path d="M11 18h2"></path></svg><span><b>Two homes for the guardian key.</b> A second key in Seed Vault on the same phone (quick; stops a stolen hot key or a scam signed by mistake), or your second Seeker (also covers a stolen seed phrase). The app suggests the second phone when it sees one.</span></li>
+      </ul>
+      <p class="fact">The safe address is picked at setup, ideally your second Seeker. Recovery to it is instant because you chose it while calm; changing it waits.</p>
+    </div>
+
+    <div class="card">
+      <h3>7. Honest limits</h3>
+      <h4>What Hold does not do.</h4>
+      <ul>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg><span>Only money inside the vault is protected. Your normal wallet stays as fast and as exposed as before; nothing on Solana can pause it.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg><span>A thief with your key still gets the everyday amount, here 50 a day, until you freeze. Keep that limit small.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg><span>A guardian key on the same phone and seed does not stop someone who has the seed phrase. For that, the guardian must be the second Seeker.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg><span>With no guardian, you and a thief sharing your key can cancel each other forever: money locked, not stolen. The guardian key ends that fight.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg><span>Lose both keys and nobody, Veto included, can reach the money. Veto cannot reach in to help you, so it cannot help a thief either.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E4A48E" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path></svg><span>Devnet and test tokens today. Works for SOL, USDC and any token you move in; no special token needed.</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>8. Why this beats a normal wallet</h3>
+      <h4>A normal wallet has no undo. This one has a no.</h4>
+      <ul>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CC9A8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg><span><b>Time is the defence, not secrecy.</b> Hardware wallets guard the key. Hold guards the decision: even a signed withdrawal must survive two days in public.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CC9A8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg><span><b>A brake key, not a co-owner.</b> Multi-signature wallets need two people for every payment. Here everyday money stays instant and the second key can only say no.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CC9A8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg><span><b>Protection cannot be switched off quickly.</b> Every loosening waits as long as a withdrawal would. The first thing a thief wants is the slowest.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CC9A8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg><span><b>A pre-decided escape.</b> Recovery to the safe address works with one key in one tap, because you chose the destination in advance.</span></li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CC9A8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg><span><b>A public track record.</b> "Veto stopped 1,000 from leaving" is a fact anyone can verify on the blockchain, not a claim.</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>9. The sample case, start to finish</h3>
+      <h4>1,000 test USDC to 8xQf...Tz9A, never paid before.</h4>
+      <ol>
+        <li>Vault holds <span class="num">1,000</span>. Everyday limit <span class="num">50</span> a day. Wait <span class="num">2</span> days. Guardian key on your second Seeker.</li>
+        <li>A request: <span class="num">1,000</span> to 8xQf...Tz9A. Over 50, new address, all of the vault. Held. <span class="pill pill-line" style="height: 17px; font-size: 9px; vertical-align: middle;">Held</span></li>
+        <li>Both phones: "Held: 1,000 to a new address. Goes Sunday 14:12 unless you stop it."</li>
+        <li>It was you? Wait, or sign on both phones to let it go now.</li>
+        <li>Not you? Tap <b>Stop</b> on either phone (one fingerprint). Then <b>Freeze</b>: not even the everyday 50 can leave. <span class="pill pill-red" style="height: 17px; font-size: 9px; vertical-align: middle;">Frozen</span></li>
+        <li>Tap <b>Recover</b> from the guardian phone: all 1,000 moves to your safe address at once. The thief holds a key to an empty room.</li>
+        <li>The record reads: held, stopped by guardian key, frozen, recovered. On the blockchain with times.</li>
+      </ol>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1600,"height":1200}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
