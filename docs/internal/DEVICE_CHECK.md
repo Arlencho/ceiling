@@ -21,14 +21,14 @@ Solana devnet. Devnet USDC is a test token with no value.
 | On the connect screen, read the network line; it says "Your wallet must be set to devnet before you connect", and the wallet is on devnet. | | |
 | Add your agent by scanning the companion QR from `veto connect` on a laptop or entering a bare agent address; the intended agent appears. | | |
 | Read the approval card; it names USDC, 20 total, 0.50 per payment, the days, and the payee you chose. | | |
-| Hold "Hold to approve rule"; Seed Vault asks for one signature and approval completes once. | | |
+| Hold "Press and hold to approve rule"; Seed Vault asks for one signature and approval completes once. | | |
 | Read Rule live; it says "Your rule is live." | | |
 | From Rule live, choose "Give your agent its setup"; agent setup says "Your agent can find this rule by itself when it runs the Veto companion. Keep your agent running." | | |
 | Continue with "Next: protect your money"; the Protect step offers "Set up later" or "Set up with my second Seeker". Choose either and complete that path. | | |
 | Open Overview; the new rule appears with its amounts in USDC. | | |
 | Trigger the agent's first decision; a notification arrives and the same decision appears as a row. | | |
 | Open a refused row; read its reason and the figure that would allow the payment. | | |
-| Choose to allow once; the hold button reads "Hold to allow this one payment of &lt;amount&gt;", Seed Vault asks for one signature, and the agent's retry pays. | | |
+| Choose to allow once; the hold button reads "Press and hold to allow this one payment of &lt;amount&gt;", Seed Vault asks for one signature, and the agent's retry pays. | | |
 | Revoke the rule; Seed Vault asks for one signature and the rule is revoked. | | |
 | Attempt the next charge; it is refused with "mandate not active". | | |
 | Close the rule; the remaining funds and the account rent return to the wallet. | | |

@@ -43,7 +43,7 @@ npx @veto-hq/veto connect --payee 6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG -
 
 Devnet defaults to USDC. Do not pass an existing rule to connect for this take: that path skips the request QR.
 
-Scan on the Seeker, review, hold **Hold to approve rule**, and finish the wallet signature. Hold the camera frame through **Waiting on Seed Vault...** and the Seed Vault sheet, with the voice line "signed in the Seeker's Seed Vault". Configure an MCP-capable assistant to use the CLI's MCP server. Call `veto_pay` with `{"amount":"250000"}`, then `{"amount":"500001"}` on this newly funded rule. Amount strings are base units. Require a paid result and a reason-5 refused result, with signatures and corresponding Seeker Decisions rows. The agent key stays on the laptop; the owner approves the rule on the phone.
+Scan on the Seeker, review, hold **Press and hold to approve rule**, and finish the wallet signature. Hold the camera frame through **Waiting on Seed Vault...** and the Seed Vault sheet, with the voice line "signed in the Seeker's Seed Vault". Configure an MCP-capable assistant to use the CLI's MCP server. Call `veto_pay` with `{"amount":"250000"}`, then `{"amount":"500001"}` on this newly funded rule. Amount strings are base units. Require a paid result and a reason-5 refused result, with signatures and corresponding Seeker Decisions rows. The agent key stays on the laptop; the owner approves the rule on the phone.
 
 Frame the tool calls and results without an assistant vendor name or logo. If the published install or complete flow fails, cut all 35 seconds. The spending and Hold beats remain independent of npm, and this spending connection remains independent of the trade upgrade.
 
@@ -62,7 +62,7 @@ Request a big withdrawal to a new address. Confirm the pending amount, destinati
 | Rule fields: Total cap, Per payment, max, Expires, Payee | [Rule detail](../../app/app/rule/[address].tsx) |
 | Trade rule in Rules and trade refusals in Decisions | [PR 294](https://github.com/Arlencho/veto/pull/294), `feat/app-trade-rule`; main has reason constants only, not these screens. |
 | Phone refusal sentence | [reasons.ts](../../app/lib/reasons.ts), `refusalWhyLine`, and [decision copy](../../app/components/records/copy.ts), `whyRefused`. |
-| Hold to approve rule | [ApprovalScreen.tsx](../../app/components/ApprovalScreen.tsx) |
+| Press and hold to approve rule | [ApprovalScreen.tsx](../../app/components/ApprovalScreen.tsx) |
 | Next: protect your money | [RuleLiveScreen.tsx](../../app/components/firstrun/RuleLiveScreen.tsx) and [AgentSetupScreen.tsx](../../app/components/firstrun/AgentSetupScreen.tsx) |
 | Protect copy and second Seeker choice | [ProtectScreen.tsx](../../app/components/firstrun/ProtectScreen.tsx) |
 | Guardian title, Stop and confirmation | [GuardScreen.tsx](../../app/components/hold/GuardScreen.tsx) |

@@ -31,7 +31,7 @@ Voice: *"The agent asked to pay more than I allowed. The program refused, and re
 
 **00:15 to 00:33. The USDC rule.**
 
-Open that same rule from Rules. Show **Total cap** 20 USDC, **Per payment, max** 0.50 USDC, **Expires**, and **Payee**. It was opened for 40 days. The screen shows an expiry date, not a promise of 40 days remaining. The payee is `6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG`; the app truncates it.
+Open that same rule from Rules. The open is not listed on Decisions. Show **Total cap** 20 USDC, **Per payment, max** 0.50 USDC, **Expires**, and **Payee**. It was opened for 40 days. The screen shows an expiry date, not a promise of 40 days remaining. The payee is `6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG`; the app truncates it.
 
 Voice: *"I approved 20 USDC in total, at most half a USDC per payment, for 40 days, to this payee. The agent cannot widen those limits."*
 
@@ -72,7 +72,7 @@ npx @veto-hq/veto connect --payee 6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG -
 
 Show the generated QR. Use a fresh agent key and a separate spending rule for this shot. On devnet the default mint is USDC; amounts are base units. These flags set 0.50 USDC per payment, 20 USDC total and 40 days.
 
-The Seeker scans the QR, reviews the request and holds **Hold to approve rule**, then completes the wallet signature. Hold the camera frame through signing so **Waiting on Seed Vault...** and the Seed Vault sheet are visible. Show the connected result. An MCP-capable assistant connected to the CLI's MCP server then calls `veto_pay` once inside the rule and once above the limit. For the freshly funded rule, use `{"amount":"250000"}` and `{"amount":"500001"}`: 0.25 USDC paid, 0.500001 USDC refused. Show both results and matching Decisions rows: the phone shows the sentence; the explorer and the tool result show reason 5. For example, the phone says "Asked for 0.500001 USDC, over the 0.50 USDC per-payment maximum." Do not show an assistant vendor name, logo, title bar or configuration filename identifying one.
+The Seeker scans the QR, reviews the request and holds **Press and hold to approve rule**, then completes the wallet signature. Hold the camera frame through signing so **Waiting on Seed Vault...** and the Seed Vault sheet are visible. Show the connected result. An MCP-capable assistant connected to the CLI's MCP server then calls `veto_pay` once inside the rule and once above the limit. For the freshly funded rule, use `{"amount":"250000"}` and `{"amount":"500001"}`: 0.25 USDC paid, 0.500001 USDC refused. Show both results and matching Decisions rows: the phone shows the sentence; the explorer and the tool result show reason 5. For example, the phone says "Asked for 0.500001 USDC, over the 0.50 USDC per-payment maximum." Do not show an assistant vendor name, logo, title bar or configuration filename identifying one.
 
 Voice: *"Connect gives me a QR. I scan, review, and hold to approve, signed in the Seeker's Seed Vault. My assistant can now ask to pay. This one pays. This one is refused by the same on-chain rule."*
 
