@@ -1,6 +1,14 @@
 # @veto-hq/agent-sdk
 
-TypeScript client for one `charge`, for reading the mandate, the ledger, and the decisions, and for a Hold vault. The package name is `@veto-hq/agent-sdk`. It is not yet published to npm ([issue 190](https://github.com/Arlencho/veto/issues/190)). `private` is still true. The npm registry has no such package. Install it from this checkout. `watcher/` is the full reference agent. The app does not import this package. It builds Hold instructions itself.
+TypeScript client for one `charge`, for reading the mandate, the ledger, and the decisions, and for a Hold vault. The package name is `@veto-hq/agent-sdk`.
+
+```bash
+npm install @veto-hq/agent-sdk
+```
+
+Published to npm on <date>.
+
+The package is published from this checkout by the maintainer. `watcher/` is the full reference agent. The app does not import this package. It builds Hold instructions itself.
 
 Node 22 or newer.
 
@@ -210,4 +218,4 @@ Do not pass `limit` on this walk. `limit` can stop before the end of the listing
 
 The vault PDA is `["hold", owner, vault_id]` with `vault_id` as a little-endian u64. The known-destination list holds 16 addresses. The hold ledger is a 32-entry ring. The instructions and the account fields are in `programs/veto/src/hold.rs`.
 
-Hold is merged and tested, and live on devnet. These methods target the program recorded in [docs/DEVNET.md](../docs/DEVNET.md). The app screens exist, and a device check with a real vault follows. The package that exports `HoldVault` is still not published to npm.
+Hold is merged and tested, and live on devnet. These methods target the program recorded in [docs/DEVNET.md](../docs/DEVNET.md). The app screens exist, and a device check with a real vault follows. The package that exports `HoldVault` is published from this checkout by the maintainer.

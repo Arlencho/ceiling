@@ -2,8 +2,8 @@
 // R8 is the source-level lock for F1: nothing under sdk/ that ships reads a Veto
 // text line. R9 and R10 are the two no-event shapes R2 did not cover: a frame that
 // closes cleanly with the text line and no Program data, and a transaction whose
-// logMessages is null. R11 is the executable form of F2: the README paragraph and
-// the fenced block match the package and the example's usage.
+// logMessages is null. R11 locks the npm install line, the publication sentences,
+// and the example usage.
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
@@ -107,19 +107,45 @@ test("R10 charge fails loudly when the confirmed transaction carries logMessages
   await assert.rejects(() => veto.charge({ amount: 5n, nonce: 1n }), /carries no attributable Veto decision/);
 });
 
-test("R11 the README agent section matches the private package and the example usage", () => {
+test("R11 the README install line is the published package and the example usage is unchanged", () => {
   const readme = readFileSync(`${REPO_ROOT}README.md`, "utf8");
-  const pkg = JSON.parse(readFileSync(`${SDK_ROOT}package.json`, "utf8")) as { name: string; private?: boolean };
+  const pkg = JSON.parse(readFileSync(`${SDK_ROOT}package.json`, "utf8")) as {
+    name: string;
+    version: string;
+    private?: boolean;
+    description: string;
+    license: string;
+    homepage: string;
+    engines: { node: string };
+    files: string[];
+    scripts: { prepublishOnly: string };
+    repository: { url: string; directory?: string };
+  };
   assert.equal(pkg.name, "@veto-hq/agent-sdk");
-  const lines = readme.split("\n");
-  const mention = lines.findIndex((line) => line.includes("`@veto-hq/agent-sdk`"));
-  assert.notEqual(mention, -1, "README names the package");
-  const sentence = lines[mention]!;
-  assert.equal(pkg.private, true, "@veto-hq/agent-sdk is not yet published");
-  assert.match(sentence, /not yet published/);
-  assert.match(sentence, /issues\/190/);
-  assert.doesNotMatch(sentence, /Install this repo's package/);
-  const fenceStart = lines.indexOf("```bash", mention);
+  assert.equal(pkg.version, "0.1.0");
+  assert.equal(pkg.private, false);
+  assert.equal(pkg.license, "Apache-2.0");
+  assert.equal(pkg.homepage, "https://github.com/Arlencho/veto");
+  assert.equal(pkg.engines.node, ">=22");
+  assert.deepEqual(pkg.files, ["dist", "idl", "README.md"]);
+  assert.equal(pkg.scripts.prepublishOnly, "npm run build && npm test");
+  assert.match(pkg.repository.url, /github\.com\/Arlencho\/veto/);
+  assert.equal(pkg.repository.directory, "sdk");
+  const sentences = pkg.description.split(".").filter((part) => part.trim().length > 0);
+  assert.equal(sentences.length, 1, "description is one sentence");
+
+  const sectionStart = readme.indexOf("## Put your agent under a rule");
+  assert.notEqual(sectionStart, -1, "README has the agent section");
+  const sectionEnd = readme.indexOf("\n## ", sectionStart + 1);
+  const section = readme.slice(sectionStart, sectionEnd === -1 ? undefined : sectionEnd);
+  assert.match(section, /npm install @veto-hq\/agent-sdk/);
+  assert.match(section, /Published to npm on <date>\./);
+  assert.match(section, /The package is published from this checkout by the maintainer\./);
+  assert.doesNotMatch(section, /not yet published/);
+  assert.doesNotMatch(section, /Install this repo's package/);
+  const lines = section.split("\n");
+  const fenceStart = lines.findIndex((line, index) => line === "```bash" && lines[index + 1] === "cd sdk");
+  assert.notEqual(fenceStart, -1, "the in-repo example is still fenced");
   const fenceEnd = lines.indexOf("```", fenceStart + 1);
   const block = lines.slice(fenceStart + 1, fenceEnd);
   assert.deepEqual(block, [

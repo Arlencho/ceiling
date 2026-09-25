@@ -162,7 +162,7 @@ A fresh install shows four introduction cards before Connect. Skip or Connect on
 
 On an active rule the rule screen shows Connect your agent, with Copy all and a QR of the same JSON. A rule that is not active shows neither control.
 
-`sdk/` is a private package. `loadAgentConfig` reads the block. `VetoAgent.fromConfig` pins the program to the bundled id unless the caller passes another id in code, checks `mintDecimals` on the mint account, checks `cluster` against the endpoint's genesis hash, and uses a passed `Connection` instead of `rpcUrl`. The example is `sdk/examples/pay-once.ts`.
+`sdk/` is `@veto-hq/agent-sdk`. The package is published from this checkout by the maintainer. `loadAgentConfig` reads the block. `VetoAgent.fromConfig` pins the program to the bundled id unless the caller passes another id in code, checks `mintDecimals` on the mint account, checks `cluster` against the endpoint's genesis hash, and uses a passed `Connection` instead of `rpcUrl`. The example is `sdk/examples/pay-once.ts`.
 
 `make e2e-devnet` runs `app/e2e/devnetJourney.test.ts` and writes `app/e2e/last-run.md`. It needs the gitignored deployer key.
 
@@ -182,7 +182,7 @@ Three outcomes would show the claim does not hold.
 
 The phone is the Backglass app. A fresh install walks five stages: Learn, Connect wallet, Add your agent, Approve the rule, and Live. The four tabs are Overview, Rules, Agents, and Decisions. Overview is the home screen. Agents grades each agent with the rules in `app/lib/grade.ts`. Plaques, a seven-day week in review, a track record card, renewal in the last seven days, and a quiet note that is off until turned on are in the app. Two Android widgets show what an agent can still spend. `authorize` identifies the app as `https://veto-hq.github.io`.
 
-The agent package is `@veto-hq/agent-sdk`. It is not yet published to npm. `private` remains true.
+The agent package is `@veto-hq/agent-sdk`. Install it with `npm install @veto-hq/agent-sdk`. Published to npm on <date>. The package is published from this checkout by the maintainer.
 
 Hold is a vault in the same program (`programs/veto/src/hold.rs`). It does not replace the spending rule. A rule is still a delegate, not an escrow. The SDK exports `HoldVault`. The watcher alerts on `VETO_HOLD_VAULTS`. The app has the Hold screens. Hold is merged and tested, and live on devnet as of the 2026-09-25 upgrade recorded in [DEVNET.md](../DEVNET.md). A device check with a real vault follows.
 

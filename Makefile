@@ -75,6 +75,7 @@ test-scripts: ## Run deploy-script checks that do not need a cluster
 	./scripts/journey158-path3.critic-r1-pr184.test.sh
 	./scripts/docs-phase2-191.critic-r1-pr209.test.sh
 	./scripts/docs-phase2-191.critic-r2-pr209.test.sh
+	./scripts/sdk-publish-check.test.sh
 
 # Provision a chain plus the demo fixtures. `make setup` names public devnet
 # (the recorded cluster). `make localnet` names a local validator. The script

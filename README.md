@@ -174,7 +174,13 @@ Fund that address with a little SOL for fees. `status()` warns when the balance 
 
 In the app, open a new rule and paste that public address into the field labeled "Agent address". The same screen takes Cap, Per-payment maximum, Expiry (days from now), Payee, and Purpose. The owner key signs the open.
 
-The package `@veto-hq/agent-sdk` is not yet published to npm ([issue 190](https://github.com/Arlencho/veto/issues/190)). `private` is still true, and the npm registry has no such package. Install it from this checkout. The same package exports `HoldVault` for the vault instructions. Those instructions are not on the deployed devnet program yet. The field-by-field checks are in [sdk/README.md](sdk/README.md). The example loads the agent key and the JSON block the app copies (Copy all, or the same block a QR scan returns), checks that block against the chain, reads the next nonce, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
+```bash
+npm install @veto-hq/agent-sdk
+```
+
+Published to npm on <date>.
+
+The package is published from this checkout by the maintainer. The same package exports `HoldVault` for the vault instructions. Those instructions are not on the deployed devnet program yet. The field-by-field checks are in [sdk/README.md](sdk/README.md). The example loads the agent key and the JSON block the app copies (Copy all, or the same block a QR scan returns), checks that block against the chain, reads the next nonce, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
 
 `loadAgentConfig` accepts the JSON text or the parsed object and refuses a missing or extra field. `VetoAgent.fromConfig` pins the program to the id bundled in `sdk/idl/veto.json` unless the caller passes `{ programId }` in code, and a block whose `programId` differs from that id is refused. `mintDecimals` is checked against the mint account. `cluster` is checked against the endpoint's genesis hash (`devnet`, `testnet`, or `mainnet-beta`). A `Connection` passed to `fromConfig` is the endpoint. When it is omitted, the example opens `rpcUrl` from the block.
 
@@ -320,7 +326,7 @@ Tightening is a lower daily limit, a longer delay, a lower share, or adding a gu
 
 The wait uses the chain clock only. A stolen guardian key can move money only to the safe address. With only the owner key, an attacker can move at most the instant allowance before someone freezes the vault. No single key shortens a wait or loosens a rule before the delay. `unfreeze` and `skip` are the exception, and they need both keys. Every action writes a hold ledger entry and an event. Mandate accounts are unchanged.
 
-`@veto-hq/agent-sdk` exports `HoldVault`. That package is not yet published to npm. The watcher raises hold alerts when `VETO_HOLD_VAULTS` is set. The app has the Hold screens, and the phone raises the same alerts. Overview and Rules each open Hold. Details are in [app/README.md](app/README.md), [sdk/README.md](sdk/README.md), and [watcher/README.md](watcher/README.md).
+`@veto-hq/agent-sdk` exports `HoldVault`. The package is published from this checkout by the maintainer. The watcher raises hold alerts when `VETO_HOLD_VAULTS` is set. The app has the Hold screens, and the phone raises the same alerts. Overview and Rules each open Hold. Details are in [app/README.md](app/README.md), [sdk/README.md](sdk/README.md), and [watcher/README.md](watcher/README.md).
 
 ## The demo
 
@@ -354,7 +360,7 @@ not the demo mint `2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU`.
 ```
 programs/veto/            the Anchor program: mandates, the refusal ledger, and Hold
 app/                      the Android app: Backglass, four tabs, grades, Hold, widgets
-sdk/                      @veto-hq/agent-sdk: charge, decisions, and HoldVault (not on npm yet)
+sdk/                      @veto-hq/agent-sdk: charge, decisions, and HoldVault
 watcher/                  unattended agent, and Hold alerts when VETO_HOLD_VAULTS is set
 indexer/                  rebuild Paid and Refused history from transaction logs
 tools/                    export one decision as JSON and verify it against the chain
