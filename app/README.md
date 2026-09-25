@@ -278,13 +278,12 @@ then downloads it. From the repository root, run these two commands in order
 ```
 
 Put Android SDK `aapt2` or `apkanalyzer`, plus `apksigner`, on PATH. The
-inspection also needs `unzip` and `sha256sum` or `shasum`. It writes
+inspection also needs Node.js, `unzip` and `sha256sum` or `shasum`. It writes
 `release-notes.md` beside the APK with the targetSdk, the full permission
-list, and the URL schemes, and records the local `main` commit at inspection
+list, and the URL schemes, and records the checkout `HEAD` commit at inspection
 time (not proof of the build's source commit). It refuses a package that is
 not `com.veto.app`, a targetSdk below 36, any permission blocked in
-`app.json` (`SYSTEM_ALERT_WINDOW`, `READ_EXTERNAL_STORAGE`,
-`WRITE_EXTERNAL_STORAGE`, `VIBRATE`), a missing `veto` scheme or any `exp+`
+`app.json` (read at inspection time), a missing `veto` scheme or any `exp+`
 scheme, a bundle that names `mainnet-beta` or never names devnet, a failed
 signature, or a missing program id or devnet USDC mint. A failed check is
 not a release. Run the printed install command from the APK's directory.

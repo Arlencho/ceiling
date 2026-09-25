@@ -49,16 +49,15 @@ fi
 [[ "$package" == com.veto.app ]] || fail "package is $package, not com.veto.app"
 # Google Play requires targetSdk 36 for new releases.
 [[ "$target_sdk" -ge 36 ]] || fail "targetSdk $target_sdk is below 36"
-# The blocked list mirrors android.blockedPermissions in app/app.json. That
-# list still blocks VIBRATE (expo-haptics is not a dependency), so it is
-# blocked here too.
-blocked_permissions='android.permission.SYSTEM_ALERT_WINDOW android.permission.READ_EXTERNAL_STORAGE android.permission.WRITE_EXTERNAL_STORAGE android.permission.VIBRATE'
+# Read the same permission policy used by the Android build.
+command -v node >/dev/null 2>&1 || fail 'node is not on PATH'
+blocked_permissions="$(node -p 'require(process.argv[1]).expo.android.blockedPermissions.join("\n")' "$root/app/app.json" 2>"$work/errors")" || fail 'could not read blocked permissions from app/app.json'
 while IFS= read -r permission; do
   [[ -z "$permission" ]] && continue
   [[ "$permission" =~ ^[a-zA-Z][a-zA-Z0-9_.]*$ ]] || fail 'invalid permission metadata'
-  for blocked in $blocked_permissions; do
+  while IFS= read -r blocked; do
     [[ "$permission" == "$blocked" ]] && fail "blocked permission present: $blocked"
-  done
+  done <<<"$blocked_permissions"
 done <"$work/permissions"
 # URL schemes come from the manifest as scheme="value" pairs, in both
 # aapt2 xmltree and apkanalyzer print output.
@@ -107,8 +106,8 @@ else
   fail 'sha256sum or shasum is required'
 fi
 size="$(wc -c <"$apk" | tr -d '[:space:]')"
-main_commit="$(git -C "$root" rev-parse --verify refs/heads/main 2>"$work/errors")" || fail 'local main ref is missing'
-[[ "$main_commit" =~ ^[a-f0-9]{40,64}$ ]] || fail 'invalid main commit'
+checkout_commit="$(git -C "$root" rev-parse HEAD 2>"$work/errors")" || fail 'checkout commit is missing'
+[[ "$checkout_commit" =~ ^[a-f0-9]{40,64}$ ]] || fail 'invalid checkout commit'
 {
   printf 'Metadata tool: %s\nPackage: %s\nversionCode: %s\nversionName: %s\ntargetSdk: %s\n' "$metadata_tool" "$package" "$version_code" "$version_name" "$target_sdk"
   while IFS= read -r permission; do
@@ -120,7 +119,7 @@ main_commit="$(git -C "$root" rev-parse --verify refs/heads/main 2>"$work/errors
   while IFS= read -r fingerprint; do printf 'Signing certificate SHA-256: %s\n' "$fingerprint"; done <<<"$fingerprints"
   printf 'Signature verifies: %s\nFile SHA-256: %s\nSize (bytes): %s\n' "$signature" "$digest" "$size"
   printf 'Program id %s present: %s\nDevnet USDC mint %s present: %s\n' "$program" "$program_present" "$mint" "$mint_present"
-  printf 'RPC present: %s\nBundle names devnet: %s\nMain commit: %s\nadb install %s\n' "$rpc_present" "$devnet_named" "$main_commit" "$name"
+  printf 'RPC present: %s\nBundle names devnet: %s\nCheckout commit: %s\nadb install %s\n' "$rpc_present" "$devnet_named" "$checkout_commit" "$name"
   printf 'Solana devnet. Devnet USDC is a test token with no value.\n'
 } >"$work/notes"
 cat "$work/notes"
