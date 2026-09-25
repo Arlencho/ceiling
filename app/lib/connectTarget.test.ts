@@ -25,6 +25,13 @@ function Host(type: string) {
   };
 }
 
+mock.module('react-native-safe-area-context', {
+  namedExports: {
+    SafeAreaView: Host('SafeAreaView'),
+    useSafeAreaInsets: () => ({ top: 48, right: 0, bottom: 0, left: 0 }),
+  },
+});
+
 mock.module('react-native', {
   namedExports: {
     ActivityIndicator: Host('ActivityIndicator'),
@@ -90,7 +97,7 @@ mock.module('./mwa', {
 });
 
 type Loaded = {
-  ConnectGate: (props: { children: ReactNode }) => ReactNode;
+  ConnectGate: (props: { children: ReactNode; padNetwork?: boolean }) => ReactNode;
   WalletProvider: (props: { children: ReactNode }) => ReactNode;
   OnboardingProvider: (props: { children: ReactNode }) => ReactNode;
   Text: ComponentType<{ children?: ReactNode }>;
@@ -115,7 +122,7 @@ function button(root: ReactTestRenderer, label: string): ReactTestInstance | und
     .find((node) => node.props.accessibilityLabel === label);
 }
 
-async function mount(): Promise<ReactTestRenderer> {
+async function mount(padNetwork = false): Promise<ReactTestRenderer> {
   let root: ReactTestRenderer | null = null;
   await act(async () => {
     root = create(
@@ -125,7 +132,10 @@ async function mount(): Promise<ReactTestRenderer> {
         createElement(
           ui.OnboardingProvider,
           null,
-          createElement(ui.ConnectGate, null, createElement(ui.Text, null, 'home')),
+          createElement(ui.ConnectGate, {
+            padNetwork,
+            children: createElement(ui.Text, null, 'home'),
+          }),
         ),
       ) as ReactElement,
     );
@@ -168,6 +178,31 @@ test.beforeEach(() => {
   memory.set('veto.onboarding.seen', '1');
   calls.length = 0;
   installed = true;
+});
+
+test('the devnet notice on a screen outside the safe area sits below the status bar', async () => {
+  const root = await mount(true);
+  await settle(root, (value) => value.includes(SEEKER_LINE));
+  const connectButton = button(root, 'Open Solana Mobile wallet');
+  assert.ok(connectButton);
+  await act(async () => {
+    connectButton.props.onPress();
+    await new Promise((resolve) => setImmediate(resolve));
+  });
+  await settle(root, (value) => value.includes('home') && value.includes(NETWORK_LINE));
+  const notice = root.root
+    .findAll((node) => isHost(node, 'Text'))
+    .find((node) => node.children.some((child) => typeof child === 'string' && child.includes('This app uses devnet')));
+  assert.ok(notice);
+  let safe = false;
+  let parent = notice.parent;
+  while (parent) {
+    if (isHost(parent, 'SafeAreaView') && Array.isArray(parent.props.edges) && parent.props.edges.includes('top')) {
+      safe = true;
+    }
+    parent = parent.parent;
+  }
+  assert.equal(safe, true);
 });
 
 test('Connect names Seeker ID and targets the Solana Mobile wallet when it is installed', async () => {

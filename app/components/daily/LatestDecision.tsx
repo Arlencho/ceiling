@@ -5,7 +5,7 @@ import { Circle, Path, Svg } from 'react-native-svg';
 import { ADVISORY_DECLINE_LABEL, KIND_ADVISORY_DECLINE } from '../../lib/advisory';
 import { KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, REASON_OVER_PER_TX_MAX } from '../../lib/constants';
 import { encodeDecisionId } from '../../lib/exportRecord';
-import { formatBaseUnits } from '../../lib/format';
+import { formatDisplayAmount } from '../../lib/format';
 import { overrideRowView } from '../../lib/override';
 import { reasonText } from '../../lib/reasons';
 import type { LedgerRow } from '../../lib/ring';
@@ -32,9 +32,9 @@ export function LatestDecision({
   last: boolean;
 }) {
   const router = useRouter();
-  const amount = formatBaseUnits(row.amount, decimals);
-  const limit = perTxMax != null ? formatBaseUnits(perTxMax, decimals) : null;
-  const who = truncateAddress(row.counterparty || payee);
+  const amount = formatDisplayAmount(row.amount, decimals);
+  const limit = perTxMax != null ? formatDisplayAmount(perTxMax, decimals) : null;
+  const who = truncateAddress(payee || row.counterparty);
   const refused = row.kind === KIND_REFUSED;
   const paid = row.kind === KIND_PAID;
   const waived = row.kind === KIND_OVERRIDE;

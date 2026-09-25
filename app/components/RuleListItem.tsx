@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { formatBaseUnits, formatTimeLeft, timeLeftParts } from '../lib/format';
+import { formatDisplayAmount, formatTimeLeft, timeLeftParts } from '../lib/format';
 import { isActive, mandateRemaining } from '../lib/mandate';
 import type { MandateAccount } from '../lib/mandate';
 import { displayPurpose, ruleStatusLabel, spendRatio } from '../lib/ruleView';
@@ -28,9 +28,9 @@ export function RuleListItem({
   onPress: () => void;
 }) {
   const purpose = displayPurpose(mandate.purpose);
-  const spent = formatBaseUnits(mandate.spent, decimals);
-  const cap = formatBaseUnits(mandate.cap, decimals);
-  const per = formatBaseUnits(mandate.perTxMax, decimals);
+  const spent = formatDisplayAmount(mandate.spent, decimals);
+  const cap = formatDisplayAmount(mandate.cap, decimals);
+  const per = formatDisplayAmount(mandate.perTxMax, decimals);
   const remaining = mandateRemaining(mandate);
   const bars = barUnits(remaining, mandate.cap);
   const status = ruleStatusLabel(mandate, nowSec, current);
@@ -54,7 +54,7 @@ export function RuleListItem({
         />
       </View>
       <View style={styles.figures}>
-        <Text style={styles.remaining}>{formatBaseUnits(remaining, decimals)}</Text>
+        <Text style={styles.remaining}>{formatDisplayAmount(remaining, decimals)}</Text>
         <Text style={styles.of}>{`left of your ${cap} total`}</Text>
         <Text style={styles.spent}>
           <Text style={styles.spentFigure}>{spent}</Text>
@@ -65,7 +65,7 @@ export function RuleListItem({
         <BlockBar
           remaining={bars.remaining}
           cap={bars.cap}
-          accessibilityLabel={`${formatBaseUnits(remaining, decimals)} left of ${cap}. ${spentShare} percent of the total is spent.`}
+          accessibilityLabel={`${formatDisplayAmount(remaining, decimals)} left of ${cap}. ${spentShare} percent of the total is spent.`}
         />
       </View>
       <View style={styles.foot}>

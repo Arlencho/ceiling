@@ -1,5 +1,6 @@
 import { KIND_ADVISORY_DECLINE } from '../../lib/advisory';
 import { KIND_OPENED, KIND_OVERRIDE, KIND_PAID, KIND_REFUSED, KIND_REVOKED } from '../../lib/constants';
+import { formatBaseUnits } from '../../lib/format';
 
 const BREAKS_STREAK = new Set<number>([KIND_PAID, KIND_OVERRIDE, KIND_ADVISORY_DECLINE]);
 const SKIP_STREAK = new Set<number>([KIND_OPENED, KIND_REVOKED]);
@@ -90,4 +91,51 @@ export function wholePayments(cap: bigint, perPayment: bigint): bigint | null {
     return null;
   }
   return cap / perPayment;
+}
+
+const SHARE_CAPTION = /^1 block is one share of (\d+(?:\.\d+)?)$/;
+const PER_CAPTION = /^Most per payment: (\d+(?:\.\d+)?)$/;
+
+function parseAmount(text: string): { value: bigint; scale: number } | null {
+  if (!/^\d+(?:\.\d+)?$/.test(text)) {
+    return null;
+  }
+  const [whole, frac = ''] = text.split('.');
+  return { value: BigInt(`${whole || '0'}${frac}`), scale: frac.length };
+}
+
+function align(left: { value: bigint; scale: number }, right: { value: bigint; scale: number }): { a: bigint; b: bigint } {
+  if (left.scale === right.scale) {
+    return { a: left.value, b: right.value };
+  }
+  if (left.scale > right.scale) {
+    return { a: left.value, b: right.value * 10n ** BigInt(left.scale - right.scale) };
+  }
+  return { a: left.value * 10n ** BigInt(right.scale - left.scale), b: right.value };
+}
+
+/** Home passes a share caption. Say what one of the 30 blocks is. */
+export function homeBlockCaption(left: string, right: string, blocks = 30): string | null {
+  const capText = SHARE_CAPTION.exec(left)?.[1];
+  const perText = PER_CAPTION.exec(right)?.[1];
+  if (!capText || !perText || blocks <= 0) {
+    return null;
+  }
+  const cap = parseAmount(capText);
+  const per = parseAmount(perText);
+  if (!cap || !per || per.value === 0n) {
+    return null;
+  }
+  const pair = align(cap, per);
+  if (pair.b === 0n) {
+    return null;
+  }
+  if (pair.a / pair.b === BigInt(blocks) && pair.a % pair.b === 0n) {
+    return `1 block = 1 payment of ${perText}`;
+  }
+  const slice = cap.value / BigInt(blocks);
+  if (cap.value % BigInt(blocks) === 0n) {
+    return `1 block is ${formatBaseUnits(slice, cap.scale)} of your ${capText}`;
+  }
+  return blocks === 30 ? `1 block is one thirtieth of your ${capText}` : `1 block is one share of your ${capText}`;
 }

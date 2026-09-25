@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { StatTile } from '../backglass/StatTile';
 import { colors, fonts, radii, space } from '../theme';
@@ -10,13 +11,17 @@ export function AgentsScreen({
   data,
   onOpenAgent,
   onHowGrades,
+  onNameAgent,
+  topInset = true,
 }: {
   data: AgentScreenData;
   onOpenAgent: (agent: string) => void;
   onHowGrades: () => void;
+  onNameAgent?: (agent: string, name: string) => void;
+  topInset?: boolean;
 }) {
   return (
-    <Cabinet refreshing={data.refreshing} onRefresh={data.refresh}>
+    <Cabinet refreshing={data.refreshing} onRefresh={data.refresh} edges={topInset ? ['top'] : []}>
       <View style={styles.header}>
         <View style={styles.brand}>
           <Wordmark />
@@ -42,7 +47,12 @@ export function AgentsScreen({
           </View>
           <View style={styles.list}>
             {data.agents.map((agent) => (
-              <AgentCard key={agent.agent} agent={agent} onPress={() => onOpenAgent(agent.agent)} />
+              <AgentCard
+                key={agent.agent}
+                agent={agent}
+                onPress={() => onOpenAgent(agent.agent)}
+                onNameAgent={onNameAgent}
+              />
             ))}
           </View>
         </>
@@ -60,58 +70,114 @@ export function AgentsScreen({
   );
 }
 
-function AgentCard({ agent, onPress }: { agent: AgentRecord; onPress: () => void }) {
+function AgentCard({
+  agent,
+  onPress,
+  onNameAgent,
+}: {
+  agent: AgentRecord;
+  onPress: () => void;
+  onNameAgent?: (agent: string, name: string) => void;
+}) {
   const one = agent.rules.length === 1 ? agent.rules[0] : null;
   const days = agent.daysValue.split(' of ');
+  const [naming, setNaming] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [nameError, setNameError] = useState<string | null>(null);
+  const nameControls = !agent.named ? (
+    naming ? (
+      <View style={styles.nameRow}>
+        <TextInput
+          accessibilityLabel="Agent name"
+          value={draft}
+          onChangeText={setDraft}
+          placeholder="A name you will recognise"
+          placeholderTextColor={colors.muted}
+          autoCorrect={false}
+          style={styles.nameInput}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Save agent name"
+          onPress={() => {
+            const trimmed = draft.trim();
+            if (!trimmed) {
+              setNameError('Enter a name.');
+              return;
+            }
+            setNameError(null);
+            onNameAgent?.(agent.agent, trimmed);
+            setNaming(false);
+          }}
+          style={styles.nameSave}
+        >
+          <Text style={styles.nameSaveText}>Save</Text>
+        </Pressable>
+        {nameError ? <Text style={styles.nameError}>{nameError}</Text> : null}
+      </View>
+    ) : (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Name this agent"
+        onPress={() => setNaming(true)}
+        style={styles.nameAction}
+      >
+        <Text style={styles.nameActionText}>Name this agent</Text>
+      </Pressable>
+    )
+  ) : null;
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Open the full record of ${agent.name}. Grade: ${agent.grade.label}.`}
-      onPress={onPress}
-      style={styles.card}
-    >
-      <View style={styles.cardTop}>
-        <Text style={styles.name}>{agent.name}</Text>
-        <View style={styles.address}>
-          <Text style={styles.addressText}>{agent.shortAddress}</Text>
-          <Chevron />
-        </View>
-      </View>
-      {one ? (
-        <Text style={styles.under} numberOfLines={1}>
-          Under your rule <Text style={styles.purpose}>{one.purpose}</Text>
-        </Text>
-      ) : (
-        <Text style={styles.under}>{`Under ${agent.rules.length} of your rules`}</Text>
-      )}
-      <GradeFace grade={agent.grade} detail={agent.cardLine} compact />
-      <View style={styles.stats}>
-        <StatTile value={String(agent.grade.paid)} label="paid, inside its rule" valueColor={colors.paid} />
-        <StatTile value={String(agent.grade.outside)} label="asked outside" valueColor={colors.refused} />
-        <StatTile
-          value={String(agent.grade.allowances)}
-          label="allowed once by you"
-          valueColor={agent.grade.allowances > 0 ? colors.amber : colors.bone}
-        />
-        <StatTile
-          value={days[0] ?? agent.daysValue}
-          suffix={days[1] ? `of ${days[1]}` : undefined}
-          label={agent.daysCaption}
-        />
-      </View>
-      {agent.spend ? (
-        <View style={styles.spendRow}>
-          <Text style={styles.spend}>
-            Can still spend <Text style={styles.spendNum}>{agent.spend.remainingLabel}</Text> of your {agent.spend.capLabel}
-          </Text>
-          <View style={styles.track}>
-            <View style={[styles.fill, { width: `${Math.round(agent.spend.ratio * 100)}%` }]} />
+    <View style={styles.card}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open the full record of ${agent.name}. Grade: ${agent.grade.label}.`}
+        onPress={onPress}
+        style={styles.cardBody}
+      >
+        <View style={styles.cardTop}>
+          <Text style={styles.name}>{agent.name}</Text>
+          <View style={styles.address}>
+            <Text style={styles.addressText}>{agent.shortAddress}</Text>
+            <Chevron />
           </View>
         </View>
-      ) : (
-        <Text style={styles.spend}>Open the record for what each rule can still spend.</Text>
-      )}
-    </Pressable>
+        {nameControls}
+        {one ? (
+          <Text style={styles.under} numberOfLines={1}>
+            Under your rule <Text style={styles.purpose}>{one.purpose}</Text>
+          </Text>
+        ) : (
+          <Text style={styles.under}>{`Under ${agent.rules.length} of your rules`}</Text>
+        )}
+        <GradeFace grade={agent.grade} detail={agent.cardLine} compact />
+        <View style={styles.stats}>
+          <StatTile value={String(agent.grade.paid)} label="paid, inside its rule" valueColor={colors.paid} />
+          <StatTile value={String(agent.grade.outside)} label="asked outside" valueColor={colors.refused} />
+          <StatTile
+            value={String(agent.grade.allowances)}
+            label="allowed once by you"
+            valueColor={agent.grade.allowances > 0 ? colors.amber : colors.bone}
+          />
+          <StatTile
+            value={days[0] ?? agent.daysValue}
+            suffix={days[1] ? `of ${days[1]}` : undefined}
+            label={agent.daysCaption}
+          />
+        </View>
+        {agent.spend ? (
+          <View style={styles.spendRow}>
+            <Text style={styles.spend}>
+              Can still spend <Text style={styles.spendNum}>{agent.spend.remainingLabel}</Text> of your {agent.spend.capLabel}
+            </Text>
+            <View style={styles.track}>
+              <View style={[styles.fill, { width: `${Math.round(agent.spend.ratio * 100)}%` }]} />
+            </View>
+          </View>
+        ) : (
+          <Text style={styles.spend}>Open the record for what each rule can still spend.</Text>
+        )}
+      </Pressable>
+    </View>
   );
 }
 
@@ -151,10 +217,36 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
   },
+  cardBody: { gap: 5 },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   name: { fontFamily: fonts.serifRegular, fontSize: 18, color: colors.bone, flexShrink: 1 },
   address: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   addressText: { fontFamily: fonts.sans, fontSize: 11, color: colors.muted },
+  nameAction: { alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' },
+  nameActionText: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.brass },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  nameInput: {
+    flex: 1,
+    minWidth: 120,
+    minHeight: 36,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radii.stat,
+    paddingHorizontal: 10,
+    color: colors.bone,
+    fontFamily: fonts.sans,
+    fontSize: 14,
+  },
+  nameSave: {
+    minHeight: 36,
+    paddingHorizontal: 12,
+    borderRadius: radii.stat,
+    backgroundColor: colors.brass,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nameSaveText: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.forest },
+  nameError: { fontFamily: fonts.sans, fontSize: 12, color: colors.refused },
   under: { fontFamily: fonts.sans, fontSize: 12, color: colors.muted },
   purpose: { fontFamily: fonts.serifItalic, color: colors.body },
   stats: { flexDirection: 'row', gap: 6 },

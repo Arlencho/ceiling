@@ -336,6 +336,54 @@ test('decisions shows a failed read and hides it while the RPC is only rate limi
   assert.doesNotMatch(limited, /The RPC refused this read/);
 });
 
+test('loading decisions does not raise the pull spinner, and the header names Export without a brass blob', async () => {
+  let pulls = 0;
+  chainState = baseChain({
+    loading: true,
+    refresh: async () => {
+      pulls += 1;
+    },
+  });
+  const { default: Decisions } = await import('../app/(tabs)/decisions');
+  const root = await mount(createElement(Decisions));
+  const scroll = root.root.findAll((node) => (node.type as unknown) === 'ScrollView')[0];
+  assert.ok(scroll);
+  const control = scroll.props.refreshControl;
+  assert.ok(control);
+  assert.equal(control.props.refreshing, false);
+  assert.equal(control.props.progressBackgroundColor, '#0F1A16');
+  const text = visibleText(root);
+  assert.match(text, /Reading the chain/);
+  assert.match(text, /Export/);
+  assert.doesNotMatch(text, /↑/);
+  const brass = root.root.findAll((node) => {
+    const style = node.props.style;
+    return style && !Array.isArray(style) && style.backgroundColor === 'rgba(201, 162, 77, 0.16)';
+  });
+  assert.equal(brass.length, 0);
+  await act(async () => {
+    control.props.onRefresh();
+  });
+  assert.equal(pulls, 1);
+});
+
+test('the decision list shows the payee and two decimals, and the detail keeps the exact amount', async () => {
+  const row = paidRow();
+  row.amount = 15_152_750n;
+  row.counterparty = '2bt9bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbay7F';
+  const rule = mandate({ perTxMax: 10_000_000n, cap: 300_000_000n, spent: 0n });
+  chainState = baseChain({ decimals: 6, rows: [row], mandate: rule, mandates: [rule] });
+  const { default: Decisions } = await import('../app/(tabs)/decisions');
+  const list = visibleText(await mount(createElement(Decisions)));
+  assert.match(list, /Paid 15\.15 to Paye\.\.\.1111/);
+  assert.match(list, /See it on the blockchain/);
+  assert.doesNotMatch(list, /15\.15275|2bt9|RPC/);
+  params = { id: `${rule.address}:${row.ts.toString()}:${row.kind}:${row.nonce.toString()}` };
+  const { default: Detail } = await import('../app/decision/[id]');
+  const detail = visibleText(await mount(createElement(Detail)));
+  assert.match(detail, /15\.15275/);
+});
+
 test('decisions lists paid and refused rows in plain words and the filter keeps one kind', async () => {
   const paid = paidRow();
   paid.ts = 1_700n;
