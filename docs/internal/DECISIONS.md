@@ -177,3 +177,15 @@ Three outcomes would show the claim does not hold.
 - If the person using this on a Tuesday is still a hypothetical, the consumer framing is wrong and the product is developer infrastructure with an app in front of it.
 - If the export lands as a curiosity, the record is not the wedge and what remains is mobile UX on limits.
 - If someone else ships a recorded on-chain refusal on mobile before October 8, 2026 ([Solana Mobile announcement](https://solanamobile.com/blog/clock-in-the-solana-mobile-hackathon)), that wedge is gone and the entry needs a different one.
+
+## 2026-09-25: Backglass, grades, and Hold
+
+The phone is the Backglass app. A fresh install walks five stages: Learn, Connect wallet, Add your agent, Approve the rule, and Live. The four tabs are Overview, Rules, Agents, and Decisions. Overview is the home screen. Agents grades each agent with the rules in `app/lib/grade.ts`. Plaques, a seven-day week in review, a track record card, renewal in the last seven days, and a quiet note that is off until turned on are in the app. Two Android widgets show what an agent can still spend. `authorize` identifies the app as `https://veto-hq.github.io`.
+
+The agent package is `@veto-hq/agent-sdk`. It is not yet published to npm. `private` remains true.
+
+Hold is a vault in the same program (`programs/veto/src/hold.rs`). It does not replace the spending rule. A rule is still a delegate, not an escrow. The SDK exports `HoldVault`. The watcher alerts on `VETO_HOLD_VAULTS`. The app has the Hold screens. Hold is merged and tested. The devnet program upgrade is pending, so Hold is not live on devnet yet.
+
+The 2026-09-24 introduction entry described four cards before Connect. Those steps are now the Learn stage. The 2026-09-24 custody entry still describes a spending rule.
+
+Reversed by: nothing in this entry. It records what shipped. Removing Hold before the devnet upgrade would delete the vault path and leave the spending rule as it was.

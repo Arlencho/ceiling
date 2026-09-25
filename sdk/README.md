@@ -1,6 +1,6 @@
 # @veto-hq/agent-sdk
 
-TypeScript client for one `charge` and for reading the mandate, the ledger, and the decisions. The package is not yet published ([issue 190](https://github.com/Arlencho/veto/issues/190)). Install it from this checkout. `watcher/` is the full reference agent.
+TypeScript client for one `charge`, for reading the mandate, the ledger, and the decisions, and for a Hold vault. The package name is `@veto-hq/agent-sdk`. It is not yet published to npm ([issue 190](https://github.com/Arlencho/veto/issues/190)). `private` is still true. The npm registry has no such package. Install it from this checkout. `watcher/` is the full reference agent. The app does not import this package. It builds Hold instructions itself.
 
 Node 22 or newer.
 
@@ -176,3 +176,11 @@ for (;;) {
 ```
 
 Do not pass `limit` on this walk. `limit` can stop before the end of the listing, and `oldestSignature` is still the oldest signature listed, so the next page would skip signatures `limit` left unread. After a limited page, continue from the signature of the oldest decision in that result.
+
+## Hold vault
+
+`HoldVault` builds and sends `init_vault`, `deposit`, `withdraw`, `execute`, `stop`, `freeze`, `unfreeze` (owner and guardian), `skip` (owner and guardian), `recover`, `propose_change`, `apply_change`, and `cancel_change`. `readVault` reads the vault account, its pending withdrawals, and its ledger. `withdrawalOutlook` says whether a planned withdrawal would pay at once or be held, and why: frozen, a new address, over the daily limit, or over the share. A withdrawal the vault cannot cover is refused. A withdrawal that would wait when the pending list is already full (8) is refused. A withdrawal that can pay at once is not blocked by a full pending list.
+
+The vault PDA is `["hold", owner, vault_id]` with `vault_id` as a little-endian u64. The known-destination list holds 16 addresses. The hold ledger is a 32-entry ring. The instructions and the account fields are in `programs/veto/src/hold.rs`.
+
+Hold is merged and tested. The devnet program upgrade is pending, so Hold is not live on devnet yet. Calling these methods against the program in [docs/DEVNET.md](../docs/DEVNET.md) will fail until that upgrade runs. The package that exports `HoldVault` is still not published to npm.

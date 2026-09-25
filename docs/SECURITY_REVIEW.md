@@ -7,6 +7,8 @@ have moved. The program was not changed in this review. Every verdict below was 
 against the compiled program, not by reading it; the attacks live in `programs/veto/tests/red_team.rs`
 and run under `make test`.
 
+Hold (`programs/veto/src/hold.rs`) landed after this review. The verdicts below do not cover it. Hold is merged and tested in `programs/veto/tests/hold.rs`. The devnet program upgrade is pending, so Hold is not live on devnet yet.
+
 Toolchain used: anchor-cli 1.2.0, solana-cli 4.1.2, rustc 1.89.0, LiteSVM 0.10.0, SBPF v0 build.
 
 ```

@@ -39,8 +39,8 @@ Veto is that mandate on Solana, and the record of the decisions under it.
 
 The owner sets the four limits and a purpose string. The purpose is stored on chain as written
 and the program does not evaluate it. A rule opened in the app moves the cap into a token
-account derived from the owner. The mandate PDA is the SPL delegate on that account. The program does not escrow
-into a vault. The owner key stays in Seed Vault and is reached through Mobile Wallet Adapter.
+account derived from the owner. The mandate PDA is the SPL delegate on that account. A spending rule does not escrow
+into a vault. Hold is a separate vault in the same program, for a balance the owner deposits and cannot move with a raw transfer. Hold is merged and tested. The devnet program upgrade is pending, so Hold is not live on devnet yet. The owner key stays in Seed Vault and is reached through Mobile Wallet Adapter. The wallet sees the app as `https://veto-hq.github.io`.
 A separate agent key can submit a charge. It cannot change a limit, change the merchant, extend
 the expiry, or move funds outside the mandate.
 

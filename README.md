@@ -135,9 +135,10 @@ it rather than a copy of the key.
 | Can | open a mandate, override one payment, revoke, close | submit a charge |
 | Cannot | be impersonated by the agent | change any limit, change the merchant, extend the expiry, or move funds outside the mandate |
 
-The program does not escrow into a vault. `open_mandate` approves the mandate PDA as an SPL
+The program does not escrow a spending rule into a vault. `open_mandate` approves the mandate PDA as an SPL
 delegate on the source token account for the cap. `charge` moves tokens only within that
-delegation.
+delegation. Hold, below, is a separate vault in the same program. The devnet upgrade that
+includes it is pending, so Hold is not live on devnet yet.
 
 A rule opened in the app gets its own token account. The address is `createAccountWithSeed`
 from the owner, seed `veto-rule-<mandate id>`. One owner signature creates that account, moves
@@ -173,7 +174,7 @@ Fund that address with a little SOL for fees. `status()` warns when the balance 
 
 In the app, open a new rule and paste that public address into the field labeled "Agent address". The same screen takes Cap, Per-payment maximum, Expiry (days from now), Payee, and Purpose. The owner key signs the open.
 
-The package `@veto-hq/agent-sdk` is not yet published ([issue 190](https://github.com/Arlencho/veto/issues/190)). Install it from this checkout. The field-by-field checks are in [sdk/README.md](sdk/README.md). The example loads the agent key and the JSON block the app copies (Copy all, or the same block a QR scan returns), checks that block against the chain, reads the next nonce, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
+The package `@veto-hq/agent-sdk` is not yet published to npm ([issue 190](https://github.com/Arlencho/veto/issues/190)). `private` is still true, and the npm registry has no such package. Install it from this checkout. The same package exports `HoldVault` for the vault instructions. Those instructions are not on the deployed devnet program yet. The field-by-field checks are in [sdk/README.md](sdk/README.md). The example loads the agent key and the JSON block the app copies (Copy all, or the same block a QR scan returns), checks that block against the chain, reads the next nonce, submits one `charge` for the amount you pass, and prints the kind, reason code, reason text, suggested override, signature, and slot.
 
 `loadAgentConfig` accepts the JSON text or the parsed object and refuses a missing or extra field. `VetoAgent.fromConfig` pins the program to the id bundled in `sdk/idl/veto.json` unless the caller passes `{ programId }` in code, and a block whose `programId` differs from that id is refused. `mintDecimals` is checked against the mint account. `cluster` is checked against the endpoint's genesis hash (`devnet`, `testnet`, or `mainnet-beta`). A `Connection` passed to `fromConfig` is the endpoint. When it is omitted, the example opens `rpcUrl` from the block.
 
@@ -242,6 +243,85 @@ The agent retries that refused charge at the nonce the owner named. `VetoAgent.s
 returns `overrideNonce`. Charge that nonce for an amount no greater than `overrideAmount`, and
 still within the remaining cap. The steps are in [sdk/README.md](sdk/README.md).
 
+## The phone
+
+The Android app uses the Backglass look: the Catch mark, Fraunces and Manrope, and the cabinet colors. The approved screens are in [docs/design/backglass/README.md](docs/design/backglass/README.md). Screen-by-screen notes are in [app/README.md](app/README.md).
+
+A fresh install walks five stages, named on the progress strip: Learn, Connect wallet, Add your agent, Approve the rule, and Live. Learn is four steps: your agent can only ask, you set one rule, a refusal is saved, and you decide. Connect continues through naming the agent, approving the rule in Seed Vault, and the live rule. After Live, the same run hands the agent its setup and offers alerts. Those two screens stay on the Live stage of the strip. Skip stores the seen flag. A later launch does not start at Learn again. Help can open How Veto works without clearing that flag.
+
+The four tabs are Overview, Rules, Agents, and Decisions. Overview is the home screen: what the selected agent can still spend, the day of the rule, the paid count, refusals in a row, and today's latest decisions. Rules lists the owner's rules. Agents groups every rule by agent. Decisions filters All, Paid, Refused, Allowed once, and Agent's own declines.
+
+Authorize identifies the app to the wallet as `https://veto-hq.github.io`, name Veto, icon `/icon.png`.
+
+### Grades
+
+An agent is graded across every rule that agent is on. The name comes from the phone's address book. With no saved name the card says Unnamed agent. How grades work states these four rules, from `app/lib/grade.ts`:
+
+| Grade | Rule |
+|---|---|
+| Stayed inside its rule | Fewer than 1 request in 20 outside its rule. |
+| Tested its limit now and then | 1 to 4 requests in 20 outside its rule. |
+| Pushed its limit often | More than 4 requests in 20 outside its rule. |
+| Too new to grade | Fewer than 10 requests, or fewer than 3 days running. The facts still show; the label waits. |
+
+A request is a payment the rule paid inside the rule, or refused. A later payment that settles an allowance is not a payment inside the rule. An allowance whose refusal has fallen off the ring still counts as outside. Outside means the rule refused it. The agent's own signed declines are not requests. Money moved outside the rule is always 0, and it is never credit.
+
+The day count starts at the earliest open on that agent's rules. If there is no open row, days count only once the earliest stamp is already 3 days old. Otherwise the grade stays Too new to grade.
+
+Two or more allowances move the shown grade one step lower, and only after the agent is old enough to grade. Stayed inside its rule becomes Tested its limit now and then. Tested its limit now and then becomes Pushed its limit often. Pushed its limit often does not move further.
+
+### Record, week, renewal, quiet note
+
+Plaques come from one rule's history. The five are: First payment inside the rule; First refusal saved; Ten refusals, none allowed (10 refusals, and none allowed by you); 30 days inside the rule; Rule finished, rest returned (the rule ran to its end inside its cap). A revoke before the end does not earn the last one.
+
+Week in review is seven local days of that rule: paid and refused counts, refusals grouped by reason, and save or share.
+
+The track record card is an image. Its QR is the rule address. On devnet the card says Devnet, test tokens. The phone opens the share sheet.
+
+During the last seven days before an active rule ends, a banner on Overview and on the rule page opens renewal. It shows what happened, the highest amount asked against the highest amount paid, and the next rule filled from this one (payee, most per payment, total set aside, how long it runs, and purpose). Change edits a field before signing. Let this one end writes nothing and costs nothing. Set up the next rule opens the existing rule flow, and the owner signs it in Seed Vault. The agent stays the one on this rule.
+
+The quiet note is off until you turn it on. You pick a time and one of three sends: Every evening, Only on days something moved, or Never. It is one local notification, computed from that day's decisions. Refusals still arrive when they happen. The phone checks about every 15 minutes in the background, and battery saving can delay a check, so the note says when it last looked.
+
+### Widget
+
+Two Android home screen widgets ship in a build that runs Expo prebuild (a dev client or a release build). Expo Go cannot install them.
+
+- What this agent can still spend: the rule selected in the app, what it can still spend, the last decision, days left, paid and refused counts, and the time the numbers were read.
+- One rule: one card per rule. Placing it asks which rule to show.
+
+Every amount comes from the same chain reads as the app. If there is no signed-in owner, no rule, or the read fails, the card says so and does not invent a balance. The app redraws the widgets when it starts in the foreground, when it returns to the foreground, and from the decision background task (minimum interval 15 minutes). Android also requests an update on its own cadence. The minimum these widgets set is 30 minutes, so the background task is the faster path.
+
+## Hold
+
+Hold is a vault in the same program as a spending rule. A rule still does not escrow: the mandate is a delegate. Hold is for a balance the owner deposits and cannot move with a raw transfer. The vault PDA (`["hold", owner, vault_id]`, `vault_id` as a little-endian u64) is the authority of its token account. It holds SPL tokens. Native SOL goes in as wrapped SOL.
+
+Hold is merged and tested. The devnet program upgrade is pending, so Hold is not live on devnet yet. The program recorded in [docs/DEVNET.md](docs/DEVNET.md) does not include it.
+
+An everyday withdrawal pays at once only when the vault is not frozen, the destination token account has already been paid by this vault, and the running 24 hour total stays inside both the daily limit and `big_share_bps` of the current balance. The app sets that share at 2500, a quarter of the vault. The delay is 1, 2, or 3 days. Anything else is held until `execute` after `unlock_at` on the chain clock. It is not refused, except when the vault cannot cover the amount, or the pending list is full (8). Those two write a refusal and pay nothing. A full known-destination list (16) still pays, and does not grow.
+
+Instructions, from `programs/veto/src/hold.rs`:
+
+| Instruction | Who | What it does |
+|---|---|---|
+| `init_vault` | owner | Creates the vault, its token account, and its ledger |
+| `deposit` | owner | Moves tokens into the vault |
+| `withdraw` | owner | Pays at once, or holds until the chain clock plus `delay_secs` |
+| `execute` | anyone | Pays a held withdrawal once the chain clock reaches `unlock_at`, if the vault is not frozen, and remembers the destination |
+| `stop` | owner or guardian | Cancels one held withdrawal, with no wait |
+| `freeze` | owner or guardian | Nothing leaves except `recover` |
+| `unfreeze` | owner and guardian | With no guardian set, the owner waits out the current delay |
+| `skip` | owner and guardian | Pays a held withdrawal before `unlock_at`, and not while frozen |
+| `recover` | owner or guardian | Sends the whole balance to the safe address, including while frozen |
+| `propose_change` | owner | Tightening applies immediately. Loosening waits out the current delay |
+| `apply_change` | anyone | Applies a pending change after `effective_at` on the chain clock |
+| `cancel_change` | owner or guardian | Drops a pending change |
+
+Tightening is a lower daily limit, a longer delay, a lower share, or adding a guardian. Loosening is a higher limit, a shorter delay, a higher share, removing or changing the guardian, or changing the safe address. A mixed change applies the tightening fields now and holds the loosening fields for the current delay.
+
+The wait uses the chain clock only. A stolen guardian key can move money only to the safe address. With only the owner key, an attacker can move at most the instant allowance before someone freezes the vault. No single key shortens a wait or loosens a rule before the delay. `unfreeze` and `skip` are the exception, and they need both keys. Every action writes a hold ledger entry and an event. Mandate accounts are unchanged.
+
+`@veto-hq/agent-sdk` exports `HoldVault`. That package is not yet published to npm. The watcher raises hold alerts when `VETO_HOLD_VAULTS` is set. The app has the Hold screens, and the phone raises the same alerts. Overview and Rules each open Hold. Details are in [app/README.md](app/README.md), [sdk/README.md](sdk/README.md), and [watcher/README.md](watcher/README.md).
+
 ## The demo
 
 An agent pays a bill repriced by a public index, unattended, against an on-chain rule. The index
@@ -272,19 +352,24 @@ not the demo mint `2dV6DLAUF63ugfD1sgNF8fUmQKr9pMDzeLxJGSwkMcCU`.
 ## Repository layout
 
 ```
-programs/veto/            the Anchor program: state, policy, zero-copy ledger
-app/                      the Android app: Expo, custom dev client, Seed Vault via MWA
-sdk/                      TypeScript client: charge, mandate, ledger, decisions
-watcher/                  unattended agent: live SE3 feed, charge, JSONL diary
+programs/veto/            the Anchor program: mandates, the refusal ledger, and Hold
+app/                      the Android app: Backglass, four tabs, grades, Hold, widgets
+sdk/                      @veto-hq/agent-sdk: charge, decisions, and HoldVault (not on npm yet)
+watcher/                  unattended agent, and Hold alerts when VETO_HOLD_VAULTS is set
 indexer/                  rebuild Paid and Refused history from transaction logs
 tools/                    export one decision as JSON and verify it against the chain
 scripts/devnet-setup.sh   recreate the chain deploy and demo fixtures from nothing
 docs/DECISION_RECORD.md   stable schema for that JSON
+docs/DECISIONS.md         pointer to the decision log under docs/internal/
 docs/PROBLEM.md           the problem, who has it, what they do today, what Veto does
 docs/PLAN.md              build plan, milestones, and prior art
 docs/PITCH.md             the pitch: position and the sixty seconds
 docs/DECK.md              the deck, slide by slide
+docs/DEVNET.md            public devnet addresses; Hold is not in that deploy yet
+docs/VIDEO.md             the three-minute shot list
+docs/SECURITY_REVIEW.md   review of the mandate program at an earlier commit; Hold is out of scope
 docs/GCP_SETUP.md         the watcher GCP project, checked by scripts/gcp-verify.sh
+docs/design/backglass/    approved Backglass screens and the screen map
 docs/internal/            working notes: decisions, self-review, design brief, design decision
 ```
 
@@ -361,6 +446,7 @@ What a key can do under a mandate.
   charge at all; only the named agent signs `charge`.
 - **A forged mandate account cannot be substituted.** `charge` re-derives the mandate address from
   the fields stored inside it and rejects a mismatch, and the CPI signs as that PDA.
+- **Hold is not on devnet yet.** The vault instructions are in this repository and tested. The devnet program upgrade is pending, so Hold is not live on devnet yet. The bounds in the bullets above are the spending rule, which is what the program in [docs/DEVNET.md](docs/DEVNET.md) runs.
 - **Devnet upgrade authority.** The devnet program is owned by the upgradeable loader. Its
   upgrade authority is the deployer key listed in [docs/DEVNET.md](docs/DEVNET.md), confirmed
   on chain. Whoever holds that key can replace the program logic and, through it, move anything
