@@ -20,7 +20,7 @@ A rule opened in the app keeps the cap in a token account derived from the owner
 
 The names are the table in [PLAN.md](PLAN.md): Squads v4 spending limits, SPL `approve` / delegate, LazorKit, SolAgent Pay, Oculus, x402, AP2, and Seed Vault.
 
-SolAgent Pay's README says an overspend "is not a policy violation logged after the fact, it is an impossible transaction." They escrow into a vault. The funds here stay in an account the owner controls, under a delegate, and the decline is recorded.
+SolAgent Pay's README says an overspend "is not a policy violation logged after the fact, it is an impossible transaction." They escrow into a vault. On a Veto spending rule the funds stay in an account the owner controls, under a delegate, and the decline is recorded. Hold is a separate vault in the same program, for money the owner deposits and cannot move with a raw transfer. Hold is merged and tested. The devnet program upgrade is pending, so Hold is not live on devnet yet.
 
 AP2 mandates are the record of a yes, held off chain as the merchant's evidence. The word mandate, in this repository, is the on-chain rule. Oculus reimburses a breach from a USDC reserve after the fact. This declines before money moves, and the decline is recorded.
 
@@ -37,6 +37,31 @@ The recording uses the decisions already on mandate `CZw2prUtN6Kb5kmiGKYDk4zaVmF
 ## Connect your agent
 
 On an active rule the rule screen shows Connect your agent: the fields of one JSON block, Copy all, and a QR of that same block. A rule that is not active shows "This rule is not active, so there is no config to hand an agent." and does not show Copy all or the QR. `loadAgentConfig` reads the block. `VetoAgent.fromConfig` checks it against the chain. The program id is the one bundled with the SDK unless the caller passes a different id in code. Decimals are checked on the mint account. The cluster name is checked against the endpoint's genesis hash. A connection passed to `fromConfig` is the endpoint. The example is [sdk/examples/pay-once.ts](../sdk/examples/pay-once.ts).
+
+The agent package is `@veto-hq/agent-sdk`. It is not yet published to npm. `private` is still true. Install it from this checkout. The same package exports `HoldVault`. The app does not import the package.
+
+## On the phone
+
+The app uses the Backglass look. A fresh install walks five stages: Learn, Connect wallet, Add your agent, Approve the rule, and Live. The four tabs are Overview, Rules, Agents, and Decisions. Overview is the home screen. Authorize identifies the app to the wallet as `https://veto-hq.github.io`.
+
+Agents grades each agent across every rule that agent is on. The four rules, from `app/lib/grade.ts`:
+
+| Grade | Rule |
+|---|---|
+| Stayed inside its rule | Fewer than 1 request in 20 outside its rule. |
+| Tested its limit now and then | 1 to 4 requests in 20 outside its rule. |
+| Pushed its limit often | More than 4 requests in 20 outside its rule. |
+| Too new to grade | Fewer than 10 requests, or fewer than 3 days running. The facts still show; the label waits. |
+
+A request is a payment the rule paid inside the rule, or refused. A payment that settles an allowance is not a payment inside the rule. An allowance whose refusal has fallen off the ring still counts as outside. The agent's own signed declines are not requests. Money moved outside the rule is always 0. Two or more allowances, once the agent can be graded, move the shown grade one step lower. Pushed its limit often does not move further.
+
+Plaques from one rule's history: First payment inside the rule, First refusal saved, Ten refusals, none allowed, 30 days inside the rule, and Rule finished, rest returned. Week in review is seven local days, with paid and refused counts and refusals grouped by reason. The track record card is an image whose QR is the rule address. On devnet it says Devnet, test tokens.
+
+During the last seven days before an active rule ends, renewal offers the next rule filled from this one, or Let this one end, which writes nothing. The quiet note is off until you turn it on: one local line, at a time you choose, sent every evening, only on days something moved, or never.
+
+Two Android home screen widgets show what an agent can still spend. They need a build that runs Expo prebuild. Expo Go cannot install them. Numbers come from the chain. A missing owner, a missing rule, or a failed read does not invent a balance.
+
+Hold on the phone is the vault above: a wait of 1, 2, or 3 days, a second key that can stop a big withdrawal, and alerts that cannot be muted. It is not live on devnet yet.
 
 ## Limits
 
@@ -64,7 +89,7 @@ People built trust with a payment history. Agents will build it with a history o
 
 Submissions close October 8, 2026 ([Solana Mobile announcement](https://solanamobile.com/blog/clock-in-the-solana-mobile-hackathon)).
 
-One rule type. A delegate on a token account the owner controls. Several rules, one agent each. A ruleset written once and applied to the next agent. One pay path. One refusal path with a reason and an override hint. A Decisions screen. Connect your agent on an active rule. An export anyone can re-read from the chain, including after the mandate account is closed. The quoted rule's history is the span above. No DeFi zoo, no marketplace, no W3C verifiable credential, no signing ceremony, no verifier service.
+One spending-rule type. A delegate on a token account the owner controls. Several rules, one agent each. A ruleset written once and applied to the next agent. One pay path. One refusal path with a reason and an override hint. Four tabs: Overview, Rules, Agents, and Decisions. Connect your agent on an active rule. Grades, plaques, a week in review, a track record card, renewal, and a quiet note. An export anyone can re-read from the chain, including after the mandate account is closed. The quoted rule's history is the span above. Hold is a separate vault in the same program, merged and tested, and not live on devnet yet. No DeFi zoo, no marketplace, no W3C verifiable credential, no signing ceremony, no verifier service.
 
 ## Words
 

@@ -55,23 +55,20 @@ still required for a signature on a device.
 
 ## First launch
 
-A fresh install, with no stored session and with `veto.onboarding.seen` unset,
-shows four introduction cards before Connect. The cards are "It can only ask",
-"One rule", "A recorded no", and "You decide". The last card also says the
-owner key stays in Seed Vault. Skip, or Connect on the last card, stores
-`veto.onboarding.seen`. Help on the top bar stays on the other screens, and
-Help can show the introduction again. The introduction route itself has no
-Help control.
+A fresh install, with no stored session and with `veto.onboarding.seen` unset, starts at Learn. The progress strip names five stages: Learn, Connect wallet, Add your agent, Approve the rule, and Live.
 
-With no rule on chain, Overview shows Open your first rule. The new rule
-screen has a hint under Cap, Per-payment maximum, Expiry, Payee, and Agent
-address.
+Learn is four steps: "Your agent can only ask.", "You set one rule.", "Ask too much, get nothing.", and "You decide." The first step says the owner key stays in Seed Vault. Skip or Connect stores `veto.onboarding.seen`. Connect continues. After the wallet is connected the run adds the agent (scan, paste, or create a test agent), names it, approves the rule with Hold to approve in Seed Vault, and shows the rule live. After Live, the same run hands the agent its setup (the same JSON as Copy all, and a QR) and offers alerts. Those two screens stay on the Live stage of the strip.
+
+A later launch, or an owner restored from the session, does not start at Learn again. Help opens How Veto works at `/onboarding` and does not clear the seen flag. The introduction route itself has no Help control.
+
+With no rule on chain, Overview shows Open your first rule.
 
 ## Sign-in
 
 Connect runs `transact`, then `authorize`, against the Seed Vault wallet through
-Mobile Wallet Adapter. The agent public key is shown truncated on Overview,
-Rules, Decisions, and the rule screen. The rule screen also truncates the
+Mobile Wallet Adapter. `authorize` identifies the app as name `Veto`, uri
+`https://veto-hq.github.io`, icon `/icon.png`. The agent public key is shown truncated on Overview,
+Rules, Agents, Decisions, and the rule screen. The rule screen also truncates the
 payee. The owner public key is not rendered. The authorization token is stored
 in `expo-secure-store` so a returning user is not prompted again. Disconnect
 deauthorizes that token and clears it.
@@ -94,29 +91,58 @@ still closes, and that token account stays.
 
 ## Owner screens
 
-Three tabs, all Android. Share is an action on a decision. Revoke is an
-action on a rule. Neither is a tab. Help is reachable from every tab.
+Four tabs, all Android. The labels are Overview, Rules, Agents, and Decisions. Overview is the home screen. Share is an action on a decision. Revoke is an action on a rule. Neither is a tab. Help is reachable from every tab. Overview and Rules each have one entry that opens Hold.
 
-- **Overview.** Which rule first, then spent against cap, paid and refused
-  counts, time left, then today. A refusal is the inverted block: "Your
-  rule held. No payment made." Never styled as an error.
-- **Rules.** Every rule the owner holds, each with purpose, spent against
-  cap, time left, its own agent key, and its state. Switching one makes
-  Overview and Decisions about it. Templates still prefill a blank form
-  and never ship history or prices. A ruleset is authored on the phone;
-  applying one to a new agent is one action. The ruleset itself is not on
-  chain. Its name and version are written into the purpose, which is.
-- **Decisions.** Every paid, refused, and override row under the selected
-  rule, with the reason in plain language. Ordinary rows say "Paid within
-  rule". A refusal that names a suggested override offers granting it as
-  one action, after a live check that the rule is still active and the
-  nonce still unsettled. The owner sees what they are about to sign. The
-  result is read back from chain as its own kind of decision, never as a
-  settings change. A charge blocked by the total cap offers nothing and
-  says an override cannot raise the cap. The payee lives on the rule, not
-  as an unlabelled address on the row. A transaction signature, when
-  present, is labelled as a transaction. Share is the full-width primary
-  action on a paid or refused decision, never an overflow menu.
+- **Overview.** What the selected agent can still spend, the day of the rule, the paid count, refusals in a row, and the latest decisions from today. A refusal is the inverted block: "Your rule held. No payment made." Never styled as an error. A renewal banner appears during the last seven days before an active rule ends. The quiet note is opened from here.
+- **Rules.** Every rule the owner holds, each with purpose, spent against cap, time left, its own agent key, and its state. Switching one makes Overview and Decisions about it. Templates still prefill a blank form and never ship history or prices. A ruleset is authored on the phone; applying one to a new agent is one action. The ruleset itself is not on chain. Its name and version are written into the purpose, which is.
+- **Agents.** One card per agent, grouped across every rule that agent is on. The name comes from the phone address book. With no saved name the title is Unnamed agent, with Name this agent, and the address once. The card opens that agent's record: the grade, paid and refused counts, the request strip, why the rule refused, and the latest plaques. How grades work states the four rules below.
+- **Decisions.** Filters are All, Paid, Refused, Allowed once, and Agent's own declines. Rows say in plain words what happened. Numbers come from the chain. Amounts on screen show at most two decimal places. The decision detail and the export keep the exact amount. A paid row names the rule's payee. When the signature is found, the row links See it on the blockchain. When it is not, the row says Saved on the blockchain. A refusal that names a suggested override offers granting it as one action, after a live check that the rule is still active and the nonce is still unsettled. The owner sees what they are about to sign. The result is read back from chain as its own kind of decision, never as a settings change. A charge blocked by the total cap offers nothing and says an override cannot raise the cap. Share is the full-width primary action on a paid or refused decision, never an overflow menu. The header says Export.
+
+The grade rules, from `app/lib/grade.ts`:
+
+| Grade | Rule |
+|---|---|
+| Stayed inside its rule | Fewer than 1 request in 20 outside its rule. |
+| Tested its limit now and then | 1 to 4 requests in 20 outside its rule. |
+| Pushed its limit often | More than 4 requests in 20 outside its rule. |
+| Too new to grade | Fewer than 10 requests, or fewer than 3 days running. The facts still show; the label waits. |
+
+A request is a payment the rule paid inside the rule, or refused. A later payment that settles an allowance is not a payment inside the rule. An allowance whose refusal has fallen off the ring still counts as outside. The agent's own signed declines are not requests. Money moved outside the rule is always 0, and it is never credit. Fewer than 10 requests, or fewer than 3 days running, or a start that is not yet old enough to date, is Too new to grade. The facts still show. Two or more allowances, once the agent can be graded, move the shown grade one step lower: stayed becomes tested, tested becomes pushed, and pushed does not move further.
+
+Plaques on an agent's record, from that rule's history: First payment inside the rule, First refusal saved, Ten refusals, none allowed, 30 days inside the rule, and Rule finished, rest returned. Ten refusals requires 10 refusals and no allowance. The last plaque is earned when the rule runs to its end inside its cap. A revoke before the end does not earn it.
+
+Week in review is seven local days of the rule: paid and refused counts, refusals grouped by reason, save as a file, or share as a card.
+
+The track record card is an image. The QR is the rule address. On devnet it says Devnet, test tokens. Share opens the phone share sheet.
+
+Renewal opens from the banner on Overview and on the rule page while an active rule has seven days or less left, and more than none. It shows what happened, the highest amount asked, and the highest amount paid. The next rule is filled from this one: payee, most per payment, total set aside, how long it runs, and purpose. Change edits each of those before signing. The agent stays the one on this rule. Let this one end writes nothing and costs nothing. Set up the next rule opens the existing new-rule flow, and the owner signs it in Seed Vault.
+
+The quiet note is off until you turn it on. You pick a time and one send: Every evening, Only on days something moved, or Never. It is one local notification whose text comes from that day's decisions. Refusals still arrive when they happen, whatever you pick here. The screen says the phone checks the blockchain about every 15 minutes in the background, and that battery saving can delay a check.
+
+## Widget
+
+Two Android home screen widgets. They are native. They show up after a build that runs Expo prebuild: a dev client or an EAS build. Expo Go cannot install them.
+
+- **What this agent can still spend.** The rule selected in the app. What that agent can still spend, the block bar, the last decision in plain words, days left and when the rule ends, the paid and refused counts, and the date and time the numbers were read. Tap opens that rule.
+- **One rule.** One card per rule. When it is placed, the app asks which rule to show. It shows what that rule can still spend, the last decision, and when the numbers were read. Tap opens that rule.
+
+Every amount, count, and date comes from the same chain reads as the app. If there is no signed-in owner, no rule, or the read fails, the card says so and does not invent a balance.
+
+The widgets redraw when the app process starts in the foreground, when the app returns to the foreground, and after the decision background task (minimum interval 15 minutes). Android also requests an update on its own cadence. The minimum these widgets set is 30 minutes, so the background task is the faster path.
+
+## Hold
+
+Hold on the phone: big money waits, and a second key can say no. Overview and Rules each open it. The first screen states the promise: if someone gets your key, they can start a big withdrawal but they cannot finish it.
+
+The screens set the amount moved in, the everyday limit, a wait of 1, 2, or 3 days, and the four triggers (more than the daily limit in one day, any amount to an address this vault has never paid, more than a quarter of the vault within 24 hours, and any change that loosens these rules). Then the guardian key and the safe address, the live vault, a held withdrawal with a countdown from the chain clock (Stop is the main action, Freeze is beside it), the alert plan, the frozen state (Recover to the safe address, Unfreeze with both keys), skip a wait with both keys, and send from the vault.
+
+Every owner or guardian signature goes through the Mobile Wallet Adapter and Hold to approve. A cancelled or failed signature arms the button again.
+
+The 15 minute local check also raises hold alerts: at creation, at 1 hour, at 12 hours, every 12 hours after that, at 6 hours and 1 hour before the end, and when the wait ends. Hold alerts cannot be muted in the app. The watcher raises the same alerts when `VETO_HOLD_VAULTS` is set. See [watcher/README.md](../watcher/README.md).
+
+The phone builds Hold instructions itself. It does not import `@veto-hq/agent-sdk`. That package is not yet published to npm. The program instructions are in the root [README](../README.md).
+
+Hold is merged and tested. The devnet program upgrade is pending, so Hold is not live on devnet yet.
 
 Export offers three scopes (this decision, a date range, everything under
 this rule) and two shapes (CSV with the documented columns, JSON as in

@@ -2,6 +2,8 @@
 
 Decided 2026-09-21 after four proposals against `DESIGN_BRIEF.md`. They are Proposal A, Proposal B, Proposal C, and Proposal D in this note. This file does not list branch names.
 
+On 2026-09-25 the app added a fourth tab, Agents. Share and Revoke are still actions, not tabs. A paid row's title names the payee. The notification title is still "Paid within rule". Grades, plaques, the week in review, the track record card, renewal, the quiet note, the widgets, and Hold are described in the root README. The notes below are the 2026-09-21 decision, kept as written.
+
 ## The base is Proposal A
 
 Its information design and its writing are the base the app follows.
