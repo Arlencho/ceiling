@@ -27,7 +27,8 @@ import {
   getAccount,
   mintTo,
 } from "@solana/spl-token";
-import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
+import { readFileSync } from "node:fs";
 import { HoldVault } from "../src/hold.js";
 import { PROGRAM_ID } from "../src/idl.js";
 
@@ -103,7 +104,25 @@ async function retry<T>(label: string, fn: () => Promise<T>): Promise<T> {
   throw last instanceof Error ? last : new Error(`${label} failed`);
 }
 
+// On devnet the faucet allows about 1 SOL per project per day, so a funder key
+// (VETO_FUNDER_KEYPAIR, a keypair file) pays small amounts instead when it is set.
+const FUNDER_PATH = process.env.VETO_FUNDER_KEYPAIR;
+const funder = FUNDER_PATH
+  ? Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(FUNDER_PATH, "utf8")) as number[]))
+  : null;
+const FUNDED_SOL: Record<number, number> = { 10: 0.3, 2: 0.05 };
+
 async function airdrop(connection: Connection, pubkey: PublicKey, sol: number): Promise<void> {
+  if (funder) {
+    const amount = FUNDED_SOL[sol] ?? Math.min(sol, 0.3);
+    await retry(`fund ${pubkey.toBase58()}`, async () => {
+      const tx = new Transaction().add(
+        SystemProgram.transfer({ fromPubkey: funder.publicKey, toPubkey: pubkey, lamports: Math.round(amount * LAMPORTS_PER_SOL) }),
+      );
+      await sendAndConfirmTransaction(connection, tx, [funder], { commitment: "confirmed" });
+    });
+    return;
+  }
   await retry(`airdrop ${pubkey.toBase58()}`, async () => {
     const signature = await connection.requestAirdrop(pubkey, sol * LAMPORTS_PER_SOL);
     const latest = await connection.getLatestBlockhash("confirmed");
@@ -500,7 +519,7 @@ test(
     assert.equal(view.change.active, true);
 
     const lines = [
-      `cluster: ${CLUSTER} ${RPC}`,
+      `cluster: ${CLUSTER} ${RPC.replace(/([?&]api-key=)[^&]+/i, "$1***")}`,
       `vault: ${opened.vault.toBase58()}`,
       `mint: ${mint.toBase58()}`,
       "init: guardian and safe address set",
