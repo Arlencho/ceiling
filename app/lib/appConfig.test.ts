@@ -39,10 +39,18 @@ test('an unknown cluster is refused instead of a devnet wallet chain', () => {
       ),
     /Unknown cluster "localnet"/,
   );
-  assert.equal(walletChainForCluster('mainnet-beta'), 'solana:mainnet-beta');
-  assert.equal(walletChainForCluster('testnet'), 'solana:testnet');
   assert.throws(() => walletChainForCluster('mainnet'), /Unknown cluster "mainnet"/);
 });
+
+for (const [cluster, chain] of [
+  ['mainnet-beta', 'solana:mainnet'],
+  ['devnet', 'solana:devnet'],
+  ['testnet', 'solana:testnet'],
+]) {
+  test(`${cluster} uses the wallet chain ${chain}`, () => {
+    assert.equal(walletChainForCluster(cluster), chain);
+  });
+}
 
 test('env fills extra when extra is empty', () => {
   const cfg = configFromExtra(

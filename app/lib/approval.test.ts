@@ -20,11 +20,28 @@ import {
   introductionHidesTabBar,
 } from './approval';
 import { withSavedName } from './addressBook';
-import { evaluatePresign, NO_TOKEN_MESSAGE, type PresignObservation } from './presign';
+import { evaluatePresign, GENESIS_BY_CLUSTER, NO_TOKEN_MESSAGE, type PresignObservation } from './presign';
 import { BUILD_YOUR_OWN_IDS, templateById } from './templates';
 
 const DEVNET_GENESIS = 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
 const MAINNET_GENESIS = '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d';
+
+test('mainnet-beta uses the canonical mainnet genesis hash', () => {
+  assert.equal(GENESIS_BY_CLUSTER['mainnet-beta'], MAINNET_GENESIS);
+});
+
+test('the presign network check accepts the mainnet genesis hash on mainnet-beta', () => {
+  const checks = evaluatePresign(readyObservation({
+    configuredCluster: 'mainnet-beta',
+    genesisHash: MAINNET_GENESIS,
+  }));
+  assert.equal(checks.find((check) => check.id === 'network')?.ok, true);
+});
+
+test('the presign network check rejects devnet when mainnet-beta is configured', () => {
+  const checks = evaluatePresign(readyObservation({ configuredCluster: 'mainnet-beta' }));
+  assert.equal(checks.find((check) => check.id === 'network')?.ok, false);
+});
 
 function readyObservation(overrides: Partial<PresignObservation> = {}): PresignObservation {
   return {
