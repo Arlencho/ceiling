@@ -3,22 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": { "node": ">=22" },
+  "main": "./dist/service/src/ingest.js",
+  "types": "./dist/service/src/ingest.d.ts",
   "scripts": {
-    "test": "tsx --test src/decode/*.test.ts",
+    "build": "tsc && mkdir -p dist/service/src/db/migrations && cp src/db/migrations/*.sql dist/service/src/db/migrations/",
     "typecheck": "tsc --noEmit",
-    "build": "tsc",
+    "lint": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts src/**/*.test.ts",
+    "migrate": "tsx src/db/cli.ts",
     "record-fixtures": "tsx scripts/record-fixtures.ts"
   },
-  "dependencies": {
-    "@solana/web3.js": "^1.98.4",
-    "bs58": "^6.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.15.3",
-    "tsx": "^4.19.4",
-    "typescript": "~5.8.3"
-  },
-  "engines": {
-    "node": ">=22"
-  }
+  "dependencies": { "@solana/web3.js": "^1.98.4", "bs58": "^6.0.0", "pg": "^8.16.3" },
+  "devDependencies": { "@types/node": "^22.15.3", "@types/pg": "^8.15.5", "tsx": "^4.19.4", "typescript": "~5.8.3" }
 }
