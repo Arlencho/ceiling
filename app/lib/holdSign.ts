@@ -3,18 +3,18 @@ import { Transaction } from '@solana/web3.js';
 
 import { secureStore, transact } from './mwa';
 import {
-  APP_IDENTITY,
   associationBaseUri,
   authorize,
+  authorizeAccounts,
   configuredCluster,
   explainWalletFailure,
+  httpsWalletBase,
   loadSession,
   persistSession,
   type MwaWallet,
   type TransactFn,
   type WalletStore,
 } from './wallet';
-import { walletChainForCluster } from './appConfig';
 
 type SigningWallet = MwaWallet & {
   signTransactions?: (params: { transactions: Transaction[] }) => Promise<unknown>;
@@ -53,7 +53,7 @@ export async function signHoldPartial(
   const baseUri = associationBaseUri({ storedBaseUri: stored?.walletUriBase });
   try {
     return await transactFn(async (wallet) => {
-      const session = await authorize(wallet, stored?.authToken);
+      const session = await authorize(wallet, stored?.authToken, store);
       await persistSession(store, session);
       const signTransactions = (wallet as SigningWallet).signTransactions;
       if (!signTransactions) {
@@ -81,12 +81,16 @@ export async function exposedWalletAccounts(): Promise<string[]> {
   const baseUri = associationBaseUri({ storedBaseUri: stored?.walletUriBase });
   try {
     return await transact(async (wallet) => {
-      const chain = walletChainForCluster(await configuredCluster());
-      const result = await wallet.authorize({
-        identity: APP_IDENTITY,
-        chain,
-        ...(stored?.authToken ? { auth_token: stored.authToken } : {}),
-      });
+      const result = await authorizeAccounts(wallet, stored?.authToken, secureStore);
+      const account = result.accounts[0];
+      if (account) {
+        const walletUriBase = httpsWalletBase(result.wallet_uri_base);
+        await persistSession(secureStore, {
+          authToken: result.auth_token,
+          ownerPublicKey: publicKeyFromAccount(account).toBase58(),
+          ...(walletUriBase ? { walletUriBase } : {}),
+        });
+      }
       return result.accounts.map((account) => publicKeyFromAccount(account).toBase58());
     }, baseUri ? { baseUri } : undefined);
   } catch (err) {

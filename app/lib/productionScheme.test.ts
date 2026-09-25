@@ -77,7 +77,16 @@ test('the production config does not apply the dev client and still blocks unuse
     };
   };
   const blocked = app.expo.android?.blockedPermissions ?? [];
-  assert.ok(blocked.includes('android.permission.VIBRATE'), 'android.permission.VIBRATE');
+  assert.deepEqual(blocked, [
+    'android.permission.SYSTEM_ALERT_WINDOW',
+    'android.permission.READ_EXTERNAL_STORAGE',
+    'android.permission.WRITE_EXTERNAL_STORAGE',
+  ]);
+  assert.equal(
+    blocked.includes('android.permission.VIBRATE'),
+    false,
+    'VIBRATE stays declared so hold to sign feedback and notification vibration work',
+  );
   assert.equal(
     blocked.includes('android.permission.RECEIVE_BOOT_COMPLETED'),
     false,

@@ -160,6 +160,24 @@ mock.module('react-native-svg', {
   },
 });
 
+const haptics: string[] = [];
+
+mock.module('expo-haptics', {
+  namedExports: {
+    ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
+    NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' },
+    impactAsync: async (style: string) => {
+      haptics.push(`impact:${style}`);
+    },
+    selectionAsync: async () => {
+      haptics.push('selection');
+    },
+    notificationAsync: async (kind: string) => {
+      haptics.push(`notification:${kind}`);
+    },
+  },
+});
+
 function flatStyle(style: unknown): Record<string, unknown> {
   if (Array.isArray(style)) {
     return Object.assign({}, ...style.map((item) => flatStyle(item)));
@@ -437,6 +455,59 @@ describe('backglass components', { concurrency: 1 }, () => {
     assert.equal(typeof movingShift?.translateX, 'object');
   });
 
+  test('the small hold hint keeps at least 3:1 contrast whenever visible during the fill', async () => {
+    const { HoldToApprove } = await import('./HoldToApprove');
+    motion.reduced = false;
+    const root = await mount(createElement(HoldToApprove, { hint: 'Hold hint', onConfirm: () => undefined }));
+    const hint = root.root.findAll((node) => node.type === ('Text' as unknown) && node.props.children === 'Hold hint')[0];
+    assert.ok(hint);
+    const style = flatStyle(hint.props.style);
+    type Interpolation = { config: { inputRange: number[]; outputRange: (string | number)[] } };
+    const sample = (value: unknown, progress: number): number[] => {
+      const { inputRange, outputRange } = (value as Interpolation).config;
+      const channels = (entry: string | number): number[] => typeof entry === 'number'
+        ? [entry]
+        : [1, 3, 5].map((start) => parseInt(entry.slice(start, start + 2), 16));
+      const end = inputRange.findIndex((at, index) => index > 0 && progress <= at);
+      const start = end - 1;
+      const ratio = (progress - inputRange[start]!) / (inputRange[end]! - inputRange[start]!);
+      const from = channels(outputRange[start]!);
+      const to = channels(outputRange[end]!);
+      return from.map((channel, index) => channel + (to[index]! - channel) * ratio);
+    };
+    const luminance = (rgb: number[]) => rgb.map((channel) => {
+      const value = channel / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    }).reduce((total, value, index) => total + value * [0.2126, 0.7152, 0.0722][index]!, 0);
+    const fill = flatStyle(root.root.findAll((node) => node.props.testID === 'hold-fill')[0]!.props.style);
+    for (let percent = 0; percent <= 100; percent += 1) {
+      const progress = percent / 100;
+      if (style.opacity !== undefined && sample(style.opacity, progress)[0]! === 0) continue;
+      const foreground = luminance(sample(style.color, progress));
+      const background = luminance(sample(fill.backgroundColor, progress));
+      const contrast = (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+      assert.ok(contrast >= 3, `hint contrast at ${percent}% is ${contrast}`);
+    }
+    await act(async () => { root.unmount(); });
+  });
+
+  test('unmounting during a hold never confirms, even with a queued completion', async () => {
+    const { HoldToApprove, HOLD_MS } = await import('./HoldToApprove');
+    motion.reduced = false;
+    let confirmed = 0;
+    const root = await mount(createElement(HoldToApprove, { onConfirm: () => { confirmed += 1; } }));
+    await act(async () => { hostOf(root.root, 'Pressable').props.onPressIn(); });
+    const fill = [...timings].reverse().find((anim) => anim.toValue === 1 && anim.duration === HOLD_MS);
+    assert.ok(fill?._cb);
+    const queuedCompletion = fill._cb;
+    await act(async () => { root.unmount(); });
+    await act(async () => {
+      fill._cb?.({ finished: true });
+      queuedCompletion({ finished: true });
+    });
+    assert.equal(confirmed, 0);
+  });
+
   test('holding through the ring confirms the rule, and letting go early does not', async () => {
     const { HoldToApprove, HOLD_MS } = await import('./HoldToApprove');
     motion.reduced = false;
@@ -513,6 +584,151 @@ describe('backglass components', { concurrency: 1 }, () => {
       hostOf(root.root, 'Pressable').props.onLongPress();
     });
     assert.equal(confirmed, 2);
+  });
+
+  test('pressing in starts the ring at once with a light haptic, a glow, and the fill colour', async () => {
+    const { HoldToApprove, HOLD_MS } = await import('./HoldToApprove');
+    const { hapticsSettled } = await import('./haptics');
+    const { colors } = await import('../theme');
+    motion.reduced = false;
+    haptics.length = 0;
+    const root = await mount(createElement(HoldToApprove, { onConfirm: () => undefined }));
+    const idleFill = flatStyle(root.root.findByProps({ testID: 'hold-fill' }).props.style);
+    const idleRange = (idleFill.backgroundColor as { config: { outputRange: string[] } }).config.outputRange;
+    assert.deepEqual(idleRange, [colors.surface, colors.brass], 'the fill runs from the dark surface to brass');
+    await act(async () => {
+      hostOf(root.root, 'Pressable').props.onPressIn();
+    });
+    await hapticsSettled();
+    assert.deepEqual(haptics, ['impact:light']);
+    assert.ok(timings.some((anim) => anim.toValue === 1 && anim.duration === HOLD_MS), 'the ring starts filling');
+    assert.ok(timings.some((anim) => anim.toValue === 1 && anim.duration < HOLD_MS), 'the glow comes up');
+    const ring = root.root.findAll((node) => isHost(node, 'Circle') && node.props.strokeDasharray)[0];
+    assert.equal(typeof ring?.props.strokeDashoffset, 'object', 'the ring and the fill share one animated value');
+  });
+
+  test('a full hold ticks at a quarter, half and three quarters, then confirms with a success haptic and a flash', async () => {
+    const { HoldToApprove, HOLD_MS } = await import('./HoldToApprove');
+    const { hapticsSettled } = await import('./haptics');
+    motion.reduced = false;
+    haptics.length = 0;
+    let confirmed = 0;
+    const root = await mount(createElement(HoldToApprove, { onConfirm: () => { confirmed += 1; } }));
+    mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+      await act(async () => {
+        hostOf(root.root, 'Pressable').props.onPressIn();
+      });
+      const fill = [...timings].reverse().find((anim) => anim.toValue === 1 && anim.duration === HOLD_MS);
+      assert.ok(fill);
+      mock.timers.tick(HOLD_MS * 0.25);
+      await hapticsSettled();
+      assert.deepEqual(haptics, ['impact:light', 'selection']);
+      mock.timers.tick(HOLD_MS * 0.5);
+      await hapticsSettled();
+      assert.deepEqual(haptics, ['impact:light', 'selection', 'selection', 'selection']);
+      assert.equal(confirmed, 0);
+      const before = timings.length;
+      await act(async () => {
+        fill?._cb?.({ finished: true });
+      });
+      await hapticsSettled();
+      assert.equal(confirmed, 1, 'the wallet prompt opens as before');
+      assert.deepEqual(haptics.slice(-1), ['notification:success']);
+      assert.equal(haptics.filter((item) => item === 'selection').length, 3);
+      assert.ok(timings.slice(before).some((anim) => anim.toValue === 1 && anim.duration === 90), 'the success colour flashes');
+      assert.ok(root.root.findAllByProps({ testID: 'hold-flash' }).length > 0);
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  test('letting go early drains the colour, stops the ticks, and shows the hint for a few seconds', async () => {
+    const { HoldToApprove, HOLD_MS, RELEASE_HINT, RELEASE_HINT_MS } = await import('./HoldToApprove');
+    const { hapticsSettled } = await import('./haptics');
+    motion.reduced = false;
+    haptics.length = 0;
+    let confirmed = 0;
+    const root = await mount(createElement(HoldToApprove, { onConfirm: () => { confirmed += 1; } }));
+    mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+      assert.doesNotMatch(visibleText(root), /Press and hold until the ring fills/);
+      await act(async () => {
+        hostOf(root.root, 'Pressable').props.onPressIn();
+      });
+      mock.timers.tick(HOLD_MS * 0.3);
+      const before = timings.length;
+      await act(async () => {
+        hostOf(root.root, 'Pressable').props.onPressOut();
+      });
+      assert.ok(
+        timings.slice(before).some((anim) => anim.toValue === 0 && anim.duration > 0 && anim.duration < HOLD_MS),
+        'the colour drains back',
+      );
+      assert.match(visibleText(root), new RegExp(RELEASE_HINT));
+      mock.timers.tick(HOLD_MS);
+      await hapticsSettled();
+      assert.deepEqual(haptics, ['impact:light', 'selection'], 'no tick after the release');
+      assert.equal(confirmed, 0);
+      await act(async () => {
+        mock.timers.tick(RELEASE_HINT_MS);
+      });
+      assert.doesNotMatch(visibleText(root), new RegExp(RELEASE_HINT));
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  test('reduced motion still changes colour on press, without a pulse or a flash', async () => {
+    const { HoldToApprove, HOLD_MS, RELEASE_HINT } = await import('./HoldToApprove');
+    const { hapticsSettled } = await import('./haptics');
+    const { colors } = await import('../theme');
+    motion.reduced = true;
+    haptics.length = 0;
+    let confirmed = 0;
+    const root = await mount(createElement(HoldToApprove, { onConfirm: () => { confirmed += 1; } }));
+    const fillColor = () => flatStyle(root.root.findByProps({ testID: 'hold-fill' }).props.style).backgroundColor;
+    assert.equal(fillColor(), colors.surface);
+    await act(async () => {
+      hostOf(root.root, 'Pressable').props.onPressIn();
+    });
+    await hapticsSettled();
+    assert.deepEqual(haptics, ['impact:light']);
+    assert.equal(fillColor(), colors.brass, 'the colour changes in one step');
+    assert.equal(timings.length, 0, 'nothing animates');
+    await act(async () => {
+      hostOf(root.root, 'Pressable').props.onPressOut();
+    });
+    assert.equal(fillColor(), colors.surface);
+    assert.match(visibleText(root), new RegExp(RELEASE_HINT));
+    await act(async () => {
+      hostOf(root.root, 'Pressable').props.onPressIn();
+    });
+    await act(async () => {
+      hostOf(root.root, 'Pressable').props.onLongPress();
+    });
+    await hapticsSettled();
+    assert.equal(confirmed, 1);
+    assert.equal(haptics.at(-1), 'notification:success');
+    assert.equal(fillColor(), colors.brass);
+    assert.equal(root.root.findAllByProps({ testID: 'hold-flash' }).length, 0, 'no flash');
+    assert.ok(!timings.some((anim) => anim.duration === HOLD_MS || anim.duration === 90));
+    assert.doesNotMatch(visibleText(root), new RegExp(RELEASE_HINT));
+  });
+
+  test('the accessibility action completes the hold and is named for what it does', async () => {
+    const { HoldToApprove, HOLD_A11Y_ACTION } = await import('./HoldToApprove');
+    motion.reduced = false;
+    let confirmed = 0;
+    const root = await mount(createElement(HoldToApprove, { onConfirm: () => { confirmed += 1; } }));
+    const button = hostOf(root.root, 'Pressable');
+    assert.equal(HOLD_A11Y_ACTION, 'Press and hold to sign');
+    assert.deepEqual(button.props.accessibilityActions, [{ name: 'longpress', label: 'Press and hold to sign' }]);
+    assert.match(String(button.props.accessibilityHint), /^Press and hold to sign/);
+    await act(async () => {
+      button.props.onAccessibilityAction({ nativeEvent: { actionName: 'longpress' } });
+    });
+    assert.equal(confirmed, 1);
   });
 
   test('the seal row offers a link to the record', async () => {
