@@ -1043,6 +1043,52 @@ fn revoke_trade_rule_clears_the_delegate_and_a_later_trade_is_refused_with_reaso
 }
 
 #[test]
+fn revoke_on_a_frozen_source_flips_the_status_and_a_trade_after_thaw_is_refused_with_reason_1() {
+    let mut w = open_world(Rules::default());
+    let owner = w.owner.insecure_clone();
+    send(
+        &mut w.svm,
+        &owner,
+        &[&owner],
+        &[spl_token::instruction::freeze_account(
+            &spl_token::ID,
+            &w.source,
+            &w.in_mint,
+            &owner.pubkey(),
+            &[],
+        )
+        .unwrap()],
+    )
+    .expect("freeze the source");
+
+    revoke(&mut w).expect("revoke on a frozen source");
+    assert_eq!(read_rule(&w.svm, &w.rule).status, veto::STATUS_REVOKED);
+    assert_eq!(
+        token_account(&w.svm, &w.source).delegate,
+        COption::Some(w.rule)
+    );
+
+    send(
+        &mut w.svm,
+        &owner,
+        &[&owner],
+        &[spl_token::instruction::thaw_account(
+            &spl_token::ID,
+            &w.source,
+            &w.in_mint,
+            &owner.pubkey(),
+            &[],
+        )
+        .unwrap()],
+    )
+    .expect("thaw the source");
+
+    let before = snap(&w);
+    let meta = trade(&mut w, 10 * IN_ONE, 1, 1).expect("refusal confirms");
+    assert_refused(&w, &meta.logs, &before, REASON_NOT_ACTIVE, w.pool);
+}
+
+#[test]
 fn close_trade_rule_is_refused_while_the_rule_is_active_and_returns_rent_after_revoke() {
     let mut w = open_world(Rules::default());
     assert_err(close_rule(&mut w), "TradeRuleStillActive");
@@ -1268,7 +1314,7 @@ fn existing_mandate_and_hold_layouts_match_the_values_shipped_today() {
 }
 
 #[test]
-fn small_fee_trade_settles_or_records_reason_14_at_the_program_quote() {
+fn a_small_fee_trade_with_the_floor_at_the_program_quote_settles_for_exactly_the_quote() {
     for amount in [1999u64, 399] {
         let net = u128::from(veto::trade::input_after_fees(amount));
         let quote = (net * u128::from(LIQUIDITY_OUT) / (u128::from(LIQUIDITY_IN) + net)) as u64;
@@ -1277,17 +1323,10 @@ fn small_fee_trade_settles_or_records_reason_14_at_the_program_quote() {
             floor_den: amount,
             ..Rules::default()
         });
-        let before = snap(&w);
-        let meta = trade(&mut w, amount, 0, 1)
-            .expect("small fee trade must settle or record a floor refusal");
+        trade(&mut w, amount, 0, 1).expect("small fee trade at the floor quote settles");
         let entry = last_entry(&w.svm, &w.ledger);
-        if entry.kind == TRADE_KIND_REFUSED {
-            assert_refused(&w, &meta.logs, &before, REASON_BELOW_FLOOR, w.pool);
-        } else {
-            assert_eq!(entry.kind, TRADE_KIND_TRADED);
-            assert!(entry.amount_out >= quote);
-            assert_eq!(entry.amount_in, before.source - snap(&w).source);
-        }
+        assert_eq!(entry.kind, TRADE_KIND_TRADED);
+        assert_eq!(entry.amount_out, quote);
     }
     assert_eq!(veto::trade::input_after_fees(0), 0);
     assert_eq!(veto::trade::input_after_fees(1), 0);

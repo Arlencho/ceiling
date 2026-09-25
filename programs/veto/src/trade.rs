@@ -287,13 +287,19 @@ pub fn revoke_trade_rule(ctx: Context<RevokeTradeRule>) -> Result<()> {
         _pad: [0; 6],
     });
 
-    token::revoke(CpiContext::new(
-        ctx.accounts.token_program.key(),
-        token::Revoke {
-            source: ctx.accounts.source.to_account_info(),
-            authority: ctx.accounts.owner.to_account_info(),
-        },
-    ))?;
+    // The SPL revoke fails on a frozen source. Skip it there as close does:
+    // a frozen delegation is inert, and reopening requires a new approval.
+    let rule_key = ctx.accounts.rule.key();
+    let source = &ctx.accounts.source;
+    if source.delegate == COption::Some(rule_key) && !source.is_frozen() {
+        token::revoke(CpiContext::new(
+            ctx.accounts.token_program.key(),
+            token::Revoke {
+                source: ctx.accounts.source.to_account_info(),
+                authority: ctx.accounts.owner.to_account_info(),
+            },
+        ))?;
+    }
 
     msg!(
         "VETO TRADE REVOKED spent={} of cap={}",
@@ -489,9 +495,9 @@ pub fn input_after_fees(amount_in: u64) -> u64 {
 /// `net * out_reserve / (in_reserve + net)`, where `net` is the input after
 /// the exchange fees.
 ///
-/// The curve rounds the output down further, so this quote is an optimistic
-/// bound. A floor failure here is certain. The floor itself is compared with
-/// the gross `amount_in`, since that is what the owner gives up.
+/// For the pinned curve and the fee schedule above this quote is exact, not
+/// an optimistic bound. A floor failure here is certain. The floor itself is
+/// compared with the gross `amount_in`, since that is what the owner gives up.
 pub fn spot_below_floor(
     amount_in: u64,
     in_reserve: u64,
@@ -884,7 +890,7 @@ mod quote_tests {
     use super::{input_after_fees, spot_below_floor};
 
     #[test]
-    fn the_optimistic_quote_refuses_a_floor_the_curve_cannot_clear() {
+    fn the_spot_quote_refuses_a_floor_the_curve_cannot_clear() {
         let amount_in = 10_000_000u64;
         let in_reserve = 1_000_000_000_000u64;
         let out_reserve = 1_000_000_000_000_000u64;
