@@ -5,7 +5,8 @@ import { walletChainForCluster } from './appConfig';
 
 export const APP_IDENTITY = {
   name: 'Veto',
-  uri: 'https://github.com/Arlencho/veto',
+  uri: 'https://veto-hq.github.io',
+  icon: '/icon.png',
 } as const;
 
 export const SESSION_STORE_KEY = 'veto.wallet.session';
