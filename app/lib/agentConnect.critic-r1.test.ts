@@ -90,19 +90,6 @@ mock.module('react-native', {
   },
 });
 
-mock.module('react-native-svg', {
-  namedExports: {
-    Svg: Host('Svg'),
-    Path: Host('Path'),
-    Circle: Host('Circle'),
-    Rect: Host('Rect'),
-    G: Host('G'),
-    Defs: Host('Defs'),
-    LinearGradient: Host('LinearGradient'),
-    Stop: Host('Stop'),
-  },
-});
-
 mock.module('react-native-safe-area-context', {
   namedExports: {
     SafeAreaView: Host('SafeAreaView'),

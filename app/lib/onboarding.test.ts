@@ -113,19 +113,6 @@ mock.module('react-native-svg', {
     Circle: Host('Circle'),
     Rect: Host('Rect'),
     G: Host('G'),
-    Defs: Host('Defs'),
-    LinearGradient: Host('LinearGradient'),
-    Stop: Host('Stop'),
-  },
-});
-
-mock.module('react-native-svg', {
-  namedExports: {
-    Svg: Host('Svg'),
-    Path: Host('Path'),
-    Circle: Host('Circle'),
-    Rect: Host('Rect'),
-    G: Host('G'),
     Text: Host('SvgText'),
     Defs: Host('Defs'),
     LinearGradient: Host('LinearGradient'),
