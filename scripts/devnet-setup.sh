@@ -396,6 +396,24 @@ solana account {program_id} -u {rpc}
 
 ## Upgrades
 
+### Trade upgrade, 2026-09-25
+
+On 2026-09-25T22:58:50Z the program `{program_id}` was upgraded on devnet in slot 504196958. This completes the 2026-09-25T22:21:37Z attempt, which had stopped before deployment because `VETO_RPC` was unset in the run environment.
+
+- Upgrade signature: `3VWb3pABFZYSeYdNnQaG6bbKvLUFpyJgFcicNV81RAdas6s2TcWgp6SBWbev6vWR41kU1MzLM2puFRkrwmaWLqJ6`
+- Transaction: https://explorer.solana.com/tx/3VWb3pABFZYSeYdNnQaG6bbKvLUFpyJgFcicNV81RAdas6s2TcWgp6SBWbev6vWR41kU1MzLM2puFRkrwmaWLqJ6?cluster={cluster}
+- Program data account: `7KhczbWwnrJYLF2YA3oyxosZLoqaPZDXh64tQJmsAAcM`. The upgrade first extended it by 152568 bytes because the new binary is larger than the 440152 bytes the account held, then wrote the program into it. The account itself is 592765 bytes, which includes the loader header.
+- Program data account: https://explorer.solana.com/address/7KhczbWwnrJYLF2YA3oyxosZLoqaPZDXh64tQJmsAAcM?cluster={cluster}
+- Program data: 592720 bytes, SHA-256 `7b96751bf3cad17225a46f21c951bd04c9b4f30be0f00ec092a8999cab8255e9`. `solana program dump` of the upgraded program is byte-identical to the build below.
+- The binary is a deploy-arch build of main at `b7aac4a3806b67b872e35407acede5e1d1246199` (`b7aac4a`), from a clean checkout with `rm -f target/deploy/veto.so` then `anchor build --ignore-keys` and no v0 flag. Main CI on that commit: [successful run 36198015670](https://github.com/Arlencho/veto/actions/runs/36198015670). Main advanced to `992a0fbd104e248117b4f5b828f0c8213a7830c3` during the run without touching `programs/`, so the binary still matches the program source on main; main CI stayed green ([run 36200818637](https://github.com/Arlencho/veto/actions/runs/36200818637)).
+- `make test` from the same commit: 127 passed, 0 failed. Counts: unit 2, Hold 19, Hold red-team 18, payment red-team 20, refusal recording 6, SKR mint 2, token-swap fixture 3, trade 27, trade red-team 30; doc-tests 0.
+- The trade rule (`open_trade_rule`, `trade`, `grant_trade_override`, `revoke_trade_rule`, `close_trade_rule`) is in this binary; its red-team suite is `programs/veto/tests/trade_red_team.rs`.
+- `make e2e-devnet` passed on the upgraded program: `devnet journey opens two rules, pays, refuses, overrides, revokes, closes, and verifies every decision`; tests 1, pass 1, fail 0.
+- `make hold-e2e-devnet` passed on the upgraded program: `a Hold vault pays a known everyday withdrawal at once, holds a big one, and lets the guardian stop, freeze, and recover`; tests 1, pass 1, fail 0. Vault `9HAAoskDkZj1RE1QHm7i9RZEaMNpeo7uphCA6wi2NrdQ`: everyday withdrawal paid at once, big withdrawal held and refused before unlock, guardian stop, freeze, recover while frozen, unfreeze with both keys, loosening waits, tightening applies at once.
+- `anchor idl build` from the same commit matches the deployed program's interface, and `diff` against each committed consumer copy is empty: `watcher/idl/veto.json`, `tools/idl/veto.json`, `sdk/idl/veto.json`.
+
+### Hold upgrade, 2026-09-25
+
 On 2026-09-25T12:18:23Z the program `{program_id}` was upgraded on devnet in slot 503984132.
 
 - Upgrade signature: `5papvME2orZuY6PxEmmwymmkHzwyquCnHgpygCbCdV2qUKJSg5D1HpVGpz5pY2FrpeuEZ5ZKDLsyNLifyC9k4RT`
@@ -445,11 +463,42 @@ our pool, devnet, the rate is whatever our own trades make it
 
 `DLKNn8KPGf9EYWTpVtVxQ4tfott91pTFJYDFkKCnNRoa` and `6TddoWn8yPVjedBesZqESBB8zEw7UHb7jUbbVkjowUD7` are unused mints left by the gate run, not pools.
 
+## Trade rule on devnet
+
+Opened 2026-09-25 on the upgraded program with the owner key `keys/owner.json` (the recorded owner `{owner}`, not a fresh key) on the wSOL and USDC demo pool above: per trade 0.002 SOL, per day 0.01 SOL, cap 0.05 SOL, floor 90 percent of the spot at open, 30 days. The trade rule's own account holds the wrapped cap; the pool accounts come from the `TOKEN_SWAP_*` values in `keys/devnet-addresses.env`, matching the Demo pool table.
+
+Just before the open the deployer deposited matching liquidity into the pool at the unchanged rate (signature `5jv4CftALiPxcRv8b5Qf8B35YncsYN1xQ2xNGkBkfuTCdNQfe7ysoRvsFGUSBvSoMB9pgxMkiNdArcnQuCRED2Lm`), doubling the vaults from 83999994 lamports and 9881306 USDC base units to 167999988 and 19762612, so the journey's full daily volume clears the 90 percent floor.
+
+- Rule: `91D7FjbUXcsZ6a1rAnS2u4XHd7rFhc1Y7zxiApV7w3jY`; ledger `HLTTzfMHiKtE8onBg3F9fsdCXo7P9gByih2n8hPo9H6b`; source `ArFd2g8VF4jz1q9ZSRXr4thncJt74KNfXGxgKy4qAGa7`; destination `HcyMqQuodBgL9RzMMbEwAM6zYZhoFrSnoPuVbqVh6wgg`; agent `{agent}`; floor 14821959/139999990; expires_at 1792970226.
+- Rule: https://explorer.solana.com/address/91D7FjbUXcsZ6a1rAnS2u4XHd7rFhc1Y7zxiApV7w3jY?cluster={cluster}
+- Open signature: `BH5ktZxaxdm1NkgJQrfYmhEmbkw5tfcV22QdUxJmjNJUiphRhGXmuVpArxT8X25rYGoC44Vp8145iZRdjaMKVgF`
+
+`make trade-demo-devnet` with `TRADE_DEMO_AMOUNT=1000000` (0.001 SOL), the agent key `keys/agent.json`, and a fresh funded second-trader key (`DPBKyrBHxtfvcrtAQpM23vgeD4FN8h1iJLZaT8jiEco`, created for this run and funded with 0.25 SOL by the deployer, signature `58D9Yr64wLKxzitGtXokxCubVataYpuuhLxiiuR3dvM5sLwUjZDL8ybLWR1H88MgfoTzBjNj2AQeurFjhg6NsZ3E`) passed. The hostile-agent demo builds a decoy pool that needs one USDC base unit in the agent's associated account, so the deployer also sent 0.001 USDC there (signature `2NTw7RkdBs7MAzBVk62oYxSbn8yUc4rtqHucJK4kLxKP5CKFfkhzjBprWX5zo13oko1XGUC22mi7vouYcD6d9T6P`). That transfer, not the setup script, is the one exception to the agent zero-token note below. Every row, with the reason recorded in its trade decision:
+
+| Row | Recorded reason | Signature |
+|---|---|---|
+| trade-once | traded (0 ok, in 999994, out 116589) | `v2yMjbcksnMK3aAFPbivhRq46yXUA5v3nWUPT59VAeTL9j8tkDk6dGw5tJoYKkwhtt5GAbTyFkaRNv8HAuegc56` |
+| a.destination | refused 11 output account not allowed | `qSTEfyGEiQv1kzAD2jwWSYksdhZaEoTFZ5UtD1Ygu6KYmgrq8NMTH8B16Lm7CJDwD7YnP8Z8B2i7K1Y6L9pfoZq` |
+| b.pool | refused 12 pool not allowed | `4aUygak4EfPE5WM6zoLKXa6RGg4WeZhUcpRAtD4eC3nyQUyFxSNGaVA8h2GNYGjP2MhVYfEhDp9mFVP4zPdmwL8V` |
+| c.per_trade | refused 5 over per-payment maximum, suggested override 2000001 | `xC1TJJC9uwsZvWhP9ex16fXURkT2hF4sDB6NZ1TNjvjuLZZv7Z4vAuDsyQ36zJZ6gResvXk1X6vZas6WRtrMKbv` |
+| d.floor | refused 14 quote below floor | `28KjYSzCBtGaR9FuofNmWjp7NxGB3VAXV2Eh1WWDZpVoh4bE4KxqmySmaVRAgeFTAmnRjPPXvaSYcDA1Y38oio9T` |
+| e.honest | traded (0 ok, in 1000000, out 114877) | `3rMKiGykqp9j8xPVdiFpMREtyZUr9CtFj2jqzTwAdoJqGxEkyGq81eFEscSAbZw9bJ75X26QPJdXaiFicUVDspKB` |
+| f.fill | traded (0 ok, in 1999996, out 225766) | `2hqvE5UkkZfQo6jLPhK42ApH3FnMGX6e2Er7T2NiXGy7ZzZomB9MUSwevvpjDuCq7NFAUb3mAJHp6JivGpWN1oXQ` |
+| f.fill | traded (0 ok, in 1999999, out 220599) | `5gZsDjcbrLwjCXp5AZgP5M2udb1cMEbecdRtooLMXbNAQE2S1XqVcJyFXqP1Ee7DQzgX3Yv48M41EWsfDRNZ6YD5` |
+| f.fill | traded (0 ok, in 1999998, out 215607) | `2JJig6JqkYh8Vcakr3J7YDnSzTiv7FmGTSDd546S2fA4G7tZJY2S1yPPxFs9fdMDrnHTWeyt978P3koxRhch59JE` |
+| f.fill | traded (0 ok, in 1000006, out 105984) | `etMD1E6HeHQD2ruoQn2Kw6m9GkHPuQaHatbcSZfgQLxS1M94qTDmj4gtzmZ3YEsfC2onPRHt3jPsyLUTyMjQ3Te` |
+| f.daily | refused 13 over daily limit | `4yNk5CX5S8b7gyVSasD27zg1h3v5VRCYB7dR31N2MsvT5xgYKgLFaAbXSGYBnLCvYWQfF8EbX1syEtW4rjiEuSzE` |
+
+Export and verify of one refused and one traded row (`tools/export.ts --signature <tx> | tools/verify.ts`):
+
+- Refused f.daily `4yNk5CX5S8b7gyVSasD27zg1h3v5VRCYB7dR31N2MsvT5xgYKgLFaAbXSGYBnLCvYWQfF8EbX1syEtW4rjiEuSzE`: `VERDICT: CONFIRMED` (trade rule limits, ledger entry, and trade transaction agree).
+- Traded e.honest `3rMKiGykqp9j8xPVdiFpMREtyZUr9CtFj2jqzTwAdoJqGxEkyGq81eFEscSAbZw9bJ75X26QPJdXaiFicUVDspKB`: `VERDICT: CONFIRMED` (trade rule limits, ledger entry, and trade transaction agree).
+
 ## Notes
 
 - This script never deploys to mainnet and never prints private keys.
 - `declare_id!` in `programs/veto/src/lib.rs` is left as committed. The live program address is the Program row above. A later program-side change can sync `declare_id!` in its own PR.
-- The agent must keep holding zero tokens. Do not mint to it and do not create an agent token account.
+- The agent must keep holding zero tokens apart from the trade-demo amount recorded under Trade rule on devnet. The setup does not mint to it and does not create an agent token account.
 """
 Path("docs/DEVNET.md").write_text(md)
 print("wrote docs/DEVNET.md")
