@@ -57,7 +57,7 @@ still required for a signature on a device.
 
 A fresh install, with no stored session and with `veto.onboarding.seen` unset, starts at Learn. The progress strip names five stages: Learn, Connect wallet, Add your agent, Approve the rule, and Live.
 
-Learn is four steps: "Your agent can only ask.", "You set one rule.", "Ask too much, get nothing.", and "You decide." The first step says the owner key stays in Seed Vault. Skip or Connect stores `veto.onboarding.seen`. Connect continues. After the wallet is connected the run adds the agent (scan, paste, or create a test agent), names it, approves the rule with Hold to approve in Seed Vault, and shows the rule live. After Live, the same run hands the agent its setup (the same JSON as Copy all, and a QR) and offers alerts. Those two screens stay on the Live stage of the strip.
+Learn is four steps: "Your agent can only ask.", "You set one rule.", "Ask too much, get nothing.", and "You decide." The first step says the owner key stays in Seed Vault. Skip or Connect stores `veto.onboarding.seen`. Connect continues. After the wallet is connected the run adds the agent (scan, paste, or create a test agent), names it, approves the rule with Press and hold to approve in Seed Vault, and shows the rule live. After Live, the same run hands the agent its setup (the same JSON as Copy all, and a QR) and offers alerts. Those two screens stay on the Live stage of the strip.
 
 A later launch, or an owner restored from the session, does not start at Learn again. Help opens How Veto works at `/onboarding` and does not clear the seen flag. The introduction route itself has no Help control.
 
@@ -136,7 +136,7 @@ Hold on the phone: big money waits, and a second key can say no. Overview and Ru
 
 The screens set the amount moved in, the everyday limit, a wait of 1, 2, or 3 days, and the four triggers (more than the daily limit in one day, any amount to an address this vault has never paid, more than a quarter of the vault within 24 hours, and any change that loosens these rules). Then the guardian key and the safe address, the live vault, a held withdrawal with a countdown from the chain clock (Stop is the main action, Freeze is beside it), the alert plan, the frozen state (Recover to the safe address, Unfreeze with both keys), skip a wait with both keys, and send from the vault.
 
-Every owner or guardian signature goes through the Mobile Wallet Adapter and Hold to approve. A cancelled or failed signature arms the button again.
+Every owner or guardian signature goes through the Mobile Wallet Adapter and Press and hold to approve. A cancelled or failed signature arms the button again.
 
 The 15 minute local check also raises hold alerts: at creation, at 1 hour, at 12 hours, every 12 hours after that, at 6 hours and 1 hour before the end, and when the wait ends. Hold alerts cannot be muted in the app. The watcher raises the same alerts when `VETO_HOLD_VAULTS` is set. See [watcher/README.md](../watcher/README.md).
 

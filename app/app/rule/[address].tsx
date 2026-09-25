@@ -574,8 +574,8 @@ export default function RuleDetailScreen() {
                   </Text>
                 )}
                 <HoldToApprove
-                  label={`Hold to close this rule and get ${remainingText} back to your wallet`}
-                  hint="Hold to sign in Seed Vault. Veto never sees your key."
+                  label={`Press and hold to close this rule and get ${remainingText} back to your wallet`}
+                  hint="Press and hold to sign in Seed Vault. Veto never sees your key."
                   disabled={closing || chain.loading || chain.submitHeld}
                   resetKey={closeReset}
                   onConfirm={() => {

@@ -422,7 +422,7 @@ function ApprovalCard({
       ) : (
         <View testID={`approve-hold-${holdReset}`}>
           <HoldToApprove
-            label={wallet.busy ? 'Waiting on Seed Vault...' : 'Hold to approve rule'}
+            label={wallet.busy ? 'Waiting on Seed Vault...' : 'Press and hold to approve rule'}
             disabled={!ready || chain.submitHeld || wallet.busy}
             resetKey={holdReset}
             onConfirm={() => {

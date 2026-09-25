@@ -757,7 +757,7 @@ test('a stopped rule offers close again after a cancelled signature', async () =
   closeCalls = 0;
   const root = await mount(createElement(Screen));
   assert.match(textOf(root), /You stopped this rule/);
-  const press = () => byLabel(root, 'Hold to close this rule');
+  const press = () => byLabel(root, 'Press and hold to close this rule');
   await act(async () => {
     press().props.onLongPress();
     await new Promise((resolve) => setImmediate(resolve));
@@ -811,7 +811,7 @@ test('a new rule shows loading, an empty payee, a failed open, and arms the hold
   openCalls = 0;
   root = await mount(createElement(Screen));
   const shown = textOf(root);
-  assert.match(shown, /Author a ruleset|Hold to approve rule/);
+  assert.match(shown, /Author a ruleset|Press and hold to approve rule/);
   const payee = root.root
     .findAll((node) => (node.type as unknown) === 'TextInput')
     .find((node) => node.props.accessibilityLabel === 'Payee');
@@ -820,7 +820,7 @@ test('a new rule shows loading, an empty payee, a failed open, and arms the hold
   await act(async () => {
     payee.props.onChangeText(key());
   });
-  const press = () => byLabel(root, 'Hold to approve rule');
+  const press = () => byLabel(root, 'Press and hold to approve rule');
   await act(async () => {
     press().props.onLongPress();
     await new Promise((resolve) => setImmediate(resolve));
