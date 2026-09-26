@@ -1047,3 +1047,17 @@ test('home and rules have no Hold entry on mainnet', async () => {
   const root = await mount(createElement(HoldEntry, { cluster: 'mainnet-beta' }));
   assert.equal(root.toJSON(), null);
 });
+
+test('an old vault offers an owner update and no send action', async () => {
+  const { VaultHome } = await import('../components/hold/VaultHome');
+  const root = await mount(createElement(VaultHome, {
+    network: 'Test tokens', status: 'ready', onBack() {}, onSetup() {}, onOpen() {}, onSend() {},
+    onMigrate() {},
+    vaults: [{ address: 'legacy', amountLabel: '5', tokenName: 'USDC', dailyLabel: '1 USDC',
+      waitLabel: '1 day', frozen: false, pendingLabel: null, guardianLabel: 'guardian',
+      safeLabel: 'safe', migrationRequired: true }],
+  }));
+  assert.match(textOf(root), /Update this vault/);
+  assert.doesNotMatch(textOf(root), /Send from this vault/);
+  assert.equal(pressable(root, 'Update this vault').props.accessibilityRole, 'button');
+});
