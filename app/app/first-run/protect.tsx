@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator } from 'react-native';
 import { ProtectScreen } from '../../components/firstrun/ProtectScreen';
@@ -12,6 +12,13 @@ import {
 import { useWallet } from '../../lib/useWallet';
 
 export default function ProtectRoute() {
+  const { cluster } = useWallet();
+  if (!cluster) return null;
+  if (cluster === 'mainnet-beta') return <Redirect href="/(tabs)" />;
+  return <ProtectRouteContent />;
+}
+
+function ProtectRouteContent() {
   const router = useRouter();
   const wallet = useWallet();
   const owner = wallet.ownerPublicKey;

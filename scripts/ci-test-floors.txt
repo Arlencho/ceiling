@@ -18,5 +18,5 @@ indexer node 31
 sdk node 36
 cli node 50
 program cargo 26
-scripts shell 288
+scripts shell 444
 service node 147

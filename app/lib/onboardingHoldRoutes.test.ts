@@ -124,6 +124,7 @@ let destination: unknown = '';
 mock.module('expo-router', {
   namedExports: {
     Stack: () => current,
+    Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
     useLocalSearchParams: () => params,
     useRouter: () => ({
       push: (route: unknown) => {
@@ -213,9 +214,10 @@ mock.module('./mwa', {
     },
   },
 });
+let walletCluster: string | null = 'devnet';
 mock.module('./useWallet', {
   namedExports: {
-    useWallet: () => ({ ready: true, ownerPublicKey: owner.toBase58(), cluster: 'devnet' }),
+    useWallet: () => ({ ready: true, ownerPublicKey: owner.toBase58(), cluster: walletCluster }),
   },
 });
 
@@ -305,4 +307,22 @@ test('returning to the offer shows the kept address in the input', async () => {
   const input = root.root.findByType('TextInput' as never);
   assert.equal(input.props.value, 'So11111111111111111111111111111111111111112');
   await act(async () => root.unmount());
+});
+
+
+test('mainnet skips the Hold offer and finish and blocks direct Hold routes', async () => {
+  const { default: Protect } = await import('../app/first-run/protect');
+  const { default: Finish } = await import('../app/first-run/finish');
+  const { default: HoldLayout } = await import('../app/hold/_layout');
+  walletCluster = 'mainnet-beta';
+  try {
+    for (const route of [Protect, Finish, HoldLayout]) {
+      const root = await mount(createElement(route));
+      assert.equal(root.root.find((node) => (node.type as unknown) === 'Redirect').props.href, '/(tabs)');
+      assert.doesNotMatch(visibleText(root), /Hold|Protect the rest/);
+      await act(async () => root.unmount());
+    }
+  } finally {
+    walletCluster = 'devnet';
+  }
 });

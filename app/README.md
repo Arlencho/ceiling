@@ -178,6 +178,10 @@ Optional:
 - `EXPO_PUBLIC_VETO_EXPLORER_CLUSTER` (default `devnet`)
 - `EXPO_PUBLIC_VETO_MINT_DECIMALS` (fallback if the mint account cannot be read)
 
+EAS secrets:
+
+- `VETO_MAINNET_PREVIEW_RPC` (sensitive EAS environment variable in the preview environment). The `mainnet-preview` build profile points at mainnet-beta with the SKR mint and refuses to build without this secret, and the app refuses the `EXPO_PUBLIC_VETO_RPC` fallback at runtime on mainnet-beta, so the preview build never talks to a devnet RPC.
+
 ## Connect an agent
 
 The rule screen shows Connect your agent. Copy all and the QR appear only
@@ -296,6 +300,20 @@ Attach the inspected APK and its notes to the GitHub release, then walk the
 [device checklist](../docs/internal/DEVICE_CHECK.md) on a wiped Seeker using
 that release link. Keep the completed checklist as release evidence. A
 production build runs without Metro.
+
+## Mainnet preview APK
+
+The `mainnet-preview` EAS profile builds an internal APK that installs beside
+the devnet app: its own name (Veto Mainnet preview), package
+(`com.veto.app.mainnetpreview`), and URL scheme (`veto-mainnet-preview`). It
+targets mainnet-beta with the SKR mint and the same program id as production.
+Set the `VETO_MAINNET_PREVIEW_RPC` EAS secret in the preview environment first;
+the build refuses to proceed without it.
+
+```bash
+cd app
+npx eas-cli build --profile mainnet-preview --platform android
+```
 
 ## Entry file
 

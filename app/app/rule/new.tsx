@@ -33,7 +33,7 @@ import {
 import { PURPOSE_MAX_LEN } from '../../lib/constants';
 import { askedBaseUnits, isDevnetUsdcMint, showDevnetUsdcFaucet } from '../../lib/faucet';
 import { formatBaseUnits, parseBaseUnits } from '../../lib/format';
-import { devnetTestTokenNote, formatTokenAmount, tokenSymbol } from '../../lib/tokens';
+import { mainnetPreviewNote, devnetTestTokenNote, formatTokenAmount, tokenSymbol } from '../../lib/tokens';
 import { useOwnerTokenBalance } from '../../lib/useOwnerTokenBalance';
 import type { MandateAccount } from '../../lib/mandate';
 import { displayPurpose } from '../../lib/ruleView';
@@ -224,7 +224,7 @@ function RuleCompose({
   const formMint = chain.config?.mint ?? null;
   const formSymbol = tokenSymbol(formMint);
   const formCluster = chain.config?.explorerCluster ?? null;
-  const tokenNote = devnetTestTokenNote(formMint, formCluster);
+  const tokenNote = mainnetPreviewNote(formMint, formCluster) ?? devnetTestTokenNote(formMint, formCluster);
   const funds = useOwnerTokenBalance(formMint, isDevnetUsdcMint(formCluster, formMint));
   const capNeeded = askedBaseUnits(fields.cap, chain.decimals);
   const showFaucet =

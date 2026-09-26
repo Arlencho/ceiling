@@ -70,7 +70,7 @@ export default function RulesScreen() {
       onRefresh={onRefresh}
     >
       <ConnectGate>
-        <HoldEntry />
+        <HoldEntry cluster={wallet.cluster} />
         {chain.configError ? <EmptyState>{chain.configError}</EmptyState> : null}
         <ReadState
           status={chain.mandateStatus}
