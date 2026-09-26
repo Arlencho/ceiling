@@ -12,6 +12,7 @@
     "lint": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts src/**/*.test.ts",
     "migrate": "tsx src/db/cli.ts",
+    "api": "tsx src/api/cli.ts",
     "record-fixtures": "tsx scripts/record-fixtures.ts",
     "webhook": "tsx src/sources/webhook.ts",
     "backfill": "tsx src/sources/backfill.ts"

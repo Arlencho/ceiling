@@ -31,12 +31,15 @@ check_checkout() {
   status="$(git status --porcelain --untracked-files=all)" || die 'cannot inspect working tree'
   [[ -z "$status" ]] || die 'working tree must be clean'
   head="$(git rev-parse HEAD)"
-  approved="$(sed -n 's/^Deploy commit: //p' docs/MAINNET.md)"
-  [[ "$approved" =~ ^[0-9a-f]{40}$ && "$head" == "$approved" ]] \
-    || die 'Deploy commit must be the full current HEAD hash'
+  tag="$(git describe --exact-match --tags --match 'mainnet-deploy-*' HEAD 2>/dev/null)" \
+    || die 'HEAD must carry an exact annotated mainnet-deploy-* tag'
+  [[ "$tag" == mainnet-deploy-* && "$(git cat-file -t "refs/tags/$tag")" == tag ]] \
+    || die 'HEAD must carry an exact annotated mainnet-deploy-* tag'
 }
 check_checkout
 commit="$head"
+printf 'Attestation tag: %s\n' "$tag"
+git for-each-ref --format='%(contents)' "refs/tags/$tag"
 [[ "$(grep -c '^## Deploy log$' docs/MAINNET.md)" == 1 ]] || die 'missing or duplicate Deploy log section'
 check_chain() {
   [[ "$(rpc genesis-hash)" == 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d ]] \
