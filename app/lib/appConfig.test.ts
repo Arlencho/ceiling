@@ -64,3 +64,33 @@ test('env fills extra when extra is empty', () => {
   assert.equal(cfg.rpcUrl, 'http://127.0.0.1:8999');
   assert.equal(cfg.mint, 'Mint111111111111111111111111111111111111111');
 });
+
+test('mainnet-beta refuses the EXPO_PUBLIC_VETO_RPC fallback and needs the baked preview RPC', () => {
+  const env = {
+    EXPO_PUBLIC_VETO_RPC: 'https://api.mainnet-beta.solana.com',
+    EXPO_PUBLIC_VETO_PROGRAM_ID: 'Pid11111111111111111111111111111111111111111',
+    EXPO_PUBLIC_VETO_EXPLORER_CLUSTER: 'mainnet-beta',
+  };
+  assert.throws(() => configFromExtra({}, env), /VETO_MAINNET_PREVIEW_RPC/);
+  assert.throws(
+    () =>
+      configFromExtra(
+        {
+          vetoExplorerCluster: 'mainnet-beta',
+          vetoProgramId: 'Pid11111111111111111111111111111111111111111',
+        },
+        {},
+      ),
+    /VETO_MAINNET_PREVIEW_RPC/,
+  );
+  const cfg = configFromExtra(
+    {
+      vetoRpc: '  https://preview.rpc.example  ',
+      vetoExplorerCluster: 'mainnet-beta',
+      vetoProgramId: 'Pid11111111111111111111111111111111111111111',
+    },
+    env,
+  );
+  assert.equal(cfg.rpcUrl, 'https://preview.rpc.example');
+  assert.equal(cfg.explorerCluster, 'mainnet-beta');
+});

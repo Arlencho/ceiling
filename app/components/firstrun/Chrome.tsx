@@ -64,7 +64,7 @@ export function FirstRunChrome({
           {pill ? <NetworkPill label={pill} cluster={cluster ?? pill} /> : null}
         </View>
       )}
-      <ProgressStrip current={stage} done={stagesBefore(stage)} />
+      <ProgressStrip current={stage} done={stagesBefore(stage)} cluster={cluster} />
       <View style={styles.body}>
         {view === 'loading' ? (
           <View>

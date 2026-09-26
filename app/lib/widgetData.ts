@@ -31,6 +31,7 @@ import { isActive, type MandateAccount } from './mandate';
 import { isRateLimitError } from './rpcError';
 import type { RingEntry } from './ring';
 import { canonicalAddress } from './ruleRequest';
+import { appScheme } from './config';
 import { displayPurpose } from './ruleView';
 import { loadSession, truncateAddress } from './wallet';
 
@@ -272,7 +273,7 @@ export function decisionCopy(
 }
 
 export function ruleWidgetUri(address: string): string {
-  return `veto://rule/${encodeURIComponent(address)}`;
+  return `${appScheme()}://rule/${encodeURIComponent(address)}`;
 }
 
 export function describeWidget(face: WidgetRuleFace, size: 'large' | 'small'): string {

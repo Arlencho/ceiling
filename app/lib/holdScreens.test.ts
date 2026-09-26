@@ -689,7 +689,7 @@ test('a vault home shows loading, an error, and a live vault', async () => {
 
 test('home and rules share one Hold entry', async () => {
   const { HoldEntry } = await import('../components/hold/HoldEntry');
-  const text = textOf(await mount(createElement(HoldEntry)));
+  const text = textOf(await mount(createElement(HoldEntry, { cluster: 'devnet' })));
   assert.match(text, /Big money waits, and a second key can say no/);
   assert.match(text, /they cannot finish it/);
 });
@@ -1039,4 +1039,11 @@ test('the transaction link has a 48dp touch target', async () => {
     }),
   );
   assert.ok(pressable(root, 'See the transaction').props.style.minHeight >= 48);
+});
+
+
+test('home and rules have no Hold entry on mainnet', async () => {
+  const { HoldEntry } = await import('../components/hold/HoldEntry');
+  const root = await mount(createElement(HoldEntry, { cluster: 'mainnet-beta' }));
+  assert.equal(root.toJSON(), null);
 });

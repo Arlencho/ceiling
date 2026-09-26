@@ -3,8 +3,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, fonts, radii, space, touchTarget } from '../theme';
 
-export function HoldEntry() {
+export function HoldEntry({ cluster }: { cluster: string | null | undefined }) {
   const router = useRouter();
+  if (cluster !== 'devnet' && cluster !== 'testnet') return null;
   return (
     <Pressable
       accessibilityRole="button"

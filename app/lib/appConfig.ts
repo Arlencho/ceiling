@@ -50,6 +50,15 @@ export function configFromExtra(
   extra: Record<string, unknown>,
   env: Record<string, string | undefined> = {},
 ): AppConfig {
+  const explorerCluster =
+    pick(extra, 'vetoExplorerCluster', env, 'EXPO_PUBLIC_VETO_EXPLORER_CLUSTER') || 'devnet';
+  walletChainForCluster(explorerCluster);
+  const rpcFromExtra = typeof extra.vetoRpc === 'string' ? extra.vetoRpc.trim() : '';
+  if (explorerCluster === 'mainnet-beta' && rpcFromExtra.length === 0) {
+    throw new Error(
+      'mainnet-beta requires the dedicated preview RPC baked into the build config. Set the VETO_MAINNET_PREVIEW_RPC EAS secret as documented in app/README.md; the EXPO_PUBLIC_VETO_RPC fallback is refused on mainnet-beta.',
+    );
+  }
   const rpcUrl = pick(extra, 'vetoRpc', env, 'EXPO_PUBLIC_VETO_RPC');
   if (rpcUrl.length === 0) {
     throw new Error(
@@ -64,9 +73,6 @@ export function configFromExtra(
   }
   const mintRaw = pick(extra, 'vetoMint', env, 'EXPO_PUBLIC_VETO_MINT');
   const decimalsRaw = pick(extra, 'vetoMintDecimals', env, 'EXPO_PUBLIC_VETO_MINT_DECIMALS');
-  const explorerCluster =
-    pick(extra, 'vetoExplorerCluster', env, 'EXPO_PUBLIC_VETO_EXPLORER_CLUSTER') || 'devnet';
-  walletChainForCluster(explorerCluster);
   return {
     rpcUrl,
     programId,
