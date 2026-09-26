@@ -731,3 +731,23 @@ test("a withdrawal of zero is rejected before it is described as paid or held", 
     /amount must be positive/,
   );
 });
+
+test("the share preview holds a burst across the old window edge", async () => {
+  const r = rig();
+  const start = NOW - DAY;
+  const installed = install(r.fake, {
+    balance: 800n,
+    dailyLimit: 10_000n,
+    bigShareBps: 2_500,
+    windowStart: start,
+    windowSpent: 201n,
+    dailyBuckets: [{ hour: (NOW - 1n) / 3600n, amount: 201n }],
+  });
+  const outlook = await r.hold.previewWithdrawal({
+    vault: installed.vault,
+    amount: 100n,
+    destination: installed.destination,
+    now: NOW,
+  });
+  assert.deepEqual(outlook, { outcome: "held", reasons: ["over_share"], unlockAt: NOW + DAY });
+});
