@@ -2,14 +2,13 @@ import { redactRpc } from '../lib/rpcPrivacy';
 import { PublicKey } from '@solana/web3.js';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import {
   addressLine,
   agentFieldReady,
   approvalSentence,
   canApprove,
-  capFromRing,
   clampTemplate,
   clampToRequest,
   customDateWithin,
@@ -17,7 +16,7 @@ import {
   durationChipAllowed,
   expiryFromDays,
   formatUntilDate,
-  fractionFromAmount,
+  parseLimitAmount,
   partyDisplay,
   payeeFieldReady,
   purposeFieldReady,
@@ -132,6 +131,7 @@ function ApprovalCard({
     kind: 'days',
     days: request?.days ?? Number(initialTemplate?.fields.expiryDays ?? '7'),
   });
+  const [amountDrafts, setAmountDrafts] = useState<{ max: string | null; cap: string | null }>({ max: null, cap: null });
   const [customDate, setCustomDate] = useState('');
   const [dateError, setDateError] = useState<string | null>(null);
   const [openedAt] = useState(() => Date.now());
@@ -247,11 +247,8 @@ function ApprovalCard({
   }, [choice, openedAt, requestCeiling]);
 
   const applyLimits = (nextCap: bigint, nextMax: bigint) => {
-    if (expiresAt == null) {
-      return;
-    }
     if (requestCeiling) {
-      const clamped = clampToRequest(requestCeiling, { cap: nextCap, max: nextMax, expiresAt });
+      const clamped = clampToRequest(requestCeiling, { cap: nextCap, max: nextMax, expiresAt: expiresAt ?? 0n });
       setCapTouched(clamped.cap);
       setMaxTouched(clamped.max);
       return;
@@ -262,7 +259,7 @@ function ApprovalCard({
     const ceiling = templateCapCeiling(templateLimits(template, decimals).cap);
     const clamped = clampTemplate({
       capCeiling: ceiling,
-      chosen: { cap: nextCap, max: nextMax, expiresAt },
+      chosen: { cap: nextCap, max: nextMax, expiresAt: expiresAt ?? 0n },
     });
     setCapTouched(clamped.cap);
     setMaxTouched(clamped.max);
@@ -274,6 +271,19 @@ function ApprovalCard({
       ? templateCapCeiling(templateLimits(template, decimals).cap)
       : null;
   const maxCeiling = cap != null && request ? (request.max < cap ? request.max : cap) : cap;
+
+  const amountError = (which: 'max' | 'cap') => {
+    const draft = amountDrafts[which];
+    if (draft == null || decimals == null) return null;
+    const parsed = parseLimitAmount(draft, decimals);
+    const ceiling = which === 'max' ? maxCeiling : capCeiling;
+    if (parsed == null) return 'Enter a non-negative decimal amount.';
+    if (ceiling != null && parsed > ceiling) return `Enter at most ${formatBaseUnits(ceiling, decimals)}.`;
+    return null;
+  };
+  const maxError = amountError('max');
+  const capError = amountError('cap');
+  const amountsReady = cap != null && cap > 0n && maxPay != null && maxPay > 0n && !maxError && !capError;
 
   const agentParty = partyDisplay({
     address: agentCanonical,
@@ -315,7 +325,7 @@ function ApprovalCard({
         balanceKnown: liveObservation?.mintReadable === true && cap != null,
       },
     });
-  const ready = canApprove({
+  const ready = amountsReady && canApprove({
     checks,
     payeeReady: payeeFieldReady(payeeText),
     agentReady: agentFieldReady(agentText, wallet.ownerPublicKey, payeeCanonical),
@@ -333,6 +343,7 @@ function ApprovalCard({
     setChoice({ kind: 'days', days: Number(next.fields.expiryDays) });
     setCustomDate('');
     setDateError(null);
+    setAmountDrafts({ max: null, cap: null });
     setCapTouched(null);
     setMaxTouched(null);
   };
@@ -472,12 +483,29 @@ function ApprovalCard({
     if (cap == null || maxPay == null || decimals == null || capCeiling == null || maxCeiling == null) {
       return;
     }
+    setAmountDrafts({ max: null, cap: null });
     if (which === 'max') {
       applyLimits(cap, nudge(maxPay, maxCeiling, direction, decimals));
       return;
     }
     const nextCap = nudge(cap, capCeiling, direction, decimals);
     applyLimits(nextCap, maxPay > nextCap ? nextCap : maxPay);
+  };
+
+  const typeAmount = (which: 'max' | 'cap', text: string) => {
+    setAmountDrafts((drafts) => ({ ...drafts, [which]: text }));
+    if (decimals == null || cap == null || maxPay == null) return;
+    const parsed = parseLimitAmount(text, decimals);
+    const ceiling = which === 'max' ? maxCeiling : capCeiling;
+    if (parsed == null || ceiling == null || parsed > ceiling) return;
+    if (which === 'max') applyLimits(cap, parsed);
+    else {
+      setAmountDrafts({ max: null, cap: text });
+      applyLimits(parsed, maxPay > parsed ? parsed : maxPay);
+    }
+  };
+  const finishAmount = (which: 'max' | 'cap') => {
+    if (!amountError(which)) setAmountDrafts((drafts) => ({ ...drafts, [which]: null }));
   };
 
   const nudgeDays = (direction: 1 | -1) => {
@@ -528,7 +556,7 @@ function ApprovalCard({
           <View style={styles.block}>
             <View style={styles.limitHead}>
               <Text style={styles.kicker}>{`Set your agent's limits`}</Text>
-              <Text style={styles.fix}>Tap + or - to change</Text>
+              <Text style={styles.fix}>Tap +/- for 1 token or type an amount</Text>
             </View>
             <LimitDial
               label="May only pay"
@@ -541,6 +569,10 @@ function ApprovalCard({
               label="Most per payment"
               hint="Anything above is refused"
               value={maxText}
+              inputValue={amountDrafts.max ?? formatBaseUnits(maxPay, decimals)}
+              onChangeText={(text) => typeAmount('max', text)}
+              onBlur={() => finishAmount('max')}
+              error={maxError}
               spoken={`Most per payment: ${maxText}`}
               onLower={() => nudgeAmount('max', -1)}
               onRaise={() => nudgeAmount('max', 1)}
@@ -551,12 +583,17 @@ function ApprovalCard({
               label="Most in total, ever"
               hint="Set aside for this rule only"
               value={capText}
+              inputValue={amountDrafts.cap ?? formatBaseUnits(cap, decimals)}
+              onChangeText={(text) => typeAmount('cap', text)}
+              onBlur={() => finishAmount('cap')}
+              error={capError}
               spoken={`Most in total: ${capText}`}
               onLower={() => nudgeAmount('cap', -1)}
               onRaise={() => nudgeAmount('cap', 1)}
               lowerLabel="Lower the total"
               raiseLabel="Raise the total"
             />
+            {!amountsReady && !maxError && !capError ? <Text style={styles.fix}>Both limits must be greater than zero to approve.</Text> : null}
             {dayCount != null ? (
               <AmountDial
                 label="Rule ends in"
@@ -736,6 +773,7 @@ function ApprovalCard({
   );
 }
 
+/** A tap moves one whole token, stopping at zero or the exact ceiling. */
 function nudge(current: bigint, ceiling: bigint, direction: 1 | -1, decimals: number): bigint {
   if (ceiling <= 0n) {
     return 0n;
@@ -748,7 +786,7 @@ function nudge(current: bigint, ceiling: bigint, direction: 1 | -1, decimals: nu
   if (stepped > ceiling) {
     stepped = ceiling;
   }
-  return capFromRing({ ceiling, fraction: fractionFromAmount(stepped, ceiling) });
+  return stepped;
 }
 
 function AmountDial({
@@ -760,6 +798,10 @@ function AmountDial({
   onRaise,
   lowerLabel,
   raiseLabel,
+  inputValue,
+  onChangeText,
+  onBlur,
+  error,
 }: {
   label: string;
   hint: string;
@@ -769,6 +811,10 @@ function AmountDial({
   onRaise: () => void;
   lowerLabel: string;
   raiseLabel: string;
+  inputValue?: string;
+  onChangeText?: (text: string) => void;
+  onBlur?: () => void;
+  error?: string | null;
 }) {
   return (
     <View style={styles.dial}>
@@ -776,9 +822,23 @@ function AmountDial({
         <Text style={styles.eyebrow}>{label}</Text>
         <Text style={styles.fix}>{hint}</Text>
       </View>
-      <Text accessibilityLabel={spoken} style={styles.reel}>
-        {value}
-      </Text>
+      {onChangeText ? (
+        <View style={styles.amountEntry}>
+          <TextInput
+            accessibilityLabel={label}
+            accessibilityHint={spoken}
+            keyboardType="decimal-pad"
+            value={inputValue}
+            onChangeText={onChangeText}
+            onBlur={onBlur}
+            maxLength={100}
+            selectTextOnFocus
+            style={[styles.reel, styles.amountInput]}
+          />
+          <Text style={styles.fix}>{value}</Text>
+          {error ? <Text accessibilityRole="alert" style={styles.fix}>{error}</Text> : null}
+        </View>
+      ) : <Text accessibilityLabel={spoken} style={styles.reel}>{value}</Text>}
       <Pressable accessibilityRole="button" accessibilityLabel={lowerLabel} onPress={onLower} style={styles.step}>
         <Text style={styles.stepText}>-</Text>
       </Pressable>
@@ -952,6 +1012,7 @@ const styles = StyleSheet.create({
   },
   dial: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: space.md,
     minHeight: 64,
@@ -963,6 +1024,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
+  amountEntry: { flexGrow: 1, flexShrink: 1, minWidth: 100 },
+  amountInput: { borderBottomWidth: 1, borderColor: colors.brass, minHeight: 44 },
   dialCopy: {
     flex: 1,
     gap: 3,

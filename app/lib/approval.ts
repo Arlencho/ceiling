@@ -95,8 +95,8 @@ export function clampToRequest(ceiling: ApprovalLimits, chosen: ApprovalLimits):
   if (cap > ceiling.cap) {
     cap = ceiling.cap;
   }
-  if (cap < 1n) {
-    cap = 1n;
+  if (cap < 0n) {
+    cap = 0n;
   }
   let max = chosen.max;
   if (max > ceiling.max) {
@@ -105,8 +105,8 @@ export function clampToRequest(ceiling: ApprovalLimits, chosen: ApprovalLimits):
   if (max > cap) {
     max = cap;
   }
-  if (max < 1n) {
-    max = 1n;
+  if (max < 0n) {
+    max = 0n;
   }
   let expiresAt = chosen.expiresAt;
   if (expiresAt > ceiling.expiresAt) {
@@ -128,15 +128,15 @@ export function clampTemplate(args: { capCeiling: bigint; chosen: ApprovalLimits
   if (cap > args.capCeiling) {
     cap = args.capCeiling;
   }
-  if (cap < 1n) {
-    cap = 1n;
+  if (cap < 0n) {
+    cap = 0n;
   }
   let max = args.chosen.max;
   if (max > cap) {
     max = cap;
   }
-  if (max < 1n) {
-    max = 1n;
+  if (max < 0n) {
+    max = 0n;
   }
   return { cap, max, expiresAt: args.chosen.expiresAt };
 }
@@ -284,4 +284,14 @@ function claimLine(label: string | null | undefined): string | null {
     return null;
   }
   return `calls itself ${trimmed}`;
+}
+
+/** Round non-negative decimal input to the nearest base unit, with ties rounded up. */
+export function parseLimitAmount(text: string, decimals: number): bigint | null {
+  const raw = text.trim().replace(',', '.');
+  if (raw.length > 100 || !/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw)) return null;
+  const [whole, fraction = ''] = raw.split('.');
+  const scale = 10n ** BigInt(decimals);
+  const units = BigInt(whole || '0') * scale + BigInt(fraction.slice(0, decimals).padEnd(decimals, '0') || '0');
+  return units + ((fraction[decimals] ?? '0') >= '5' ? 1n : 0n);
 }
