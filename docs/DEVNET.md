@@ -154,6 +154,184 @@ Length: 36 (0x24) bytes
 
 ## Upgrades
 
+### Hold upgrade, 2026-09-26
+
+The lead completed the upgrade after the initial upload stopped on HTTP 429.
+The continuation verified the deployed bytes and replaced the demo fixture;
+it did not deploy or roll back the program.
+
+- Program: `3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV`.
+- Source: main commit `49b8de3f339b2df87138858c7f7be6116209e994`, containing [PR 330](https://github.com/Arlencho/veto/pull/330) and [PR 337](https://github.com/Arlencho/veto/pull/337). The task branch was rebased on main; main was still at this commit.
+- Main CI: all 11 jobs passed in [run 36247614460](https://github.com/Arlencho/veto/actions/runs/36247614460).
+- Deploy build: `anchor build --ignore-keys`, with `ANCHOR_BUILD_SBF_ARCH` unset and the previous artifact removed. Size 591920 bytes; SHA-256 `21144f18b9d9e5be1e6c0130a18b4620f1400d9e735fe3a11422d9d33fb565ca`. The lead's build was identical to the earlier preserved build.
+- Upgrade signature: `3MwpwAsHvdTXoPJcBWpfG78xx1unCYA7WKU43CLzwTwhLfgzZW1YbkXLpAMyoHDeESVs2So2Efo1hWqjHs8AtNxt` ([transaction](https://explorer.solana.com/tx/3MwpwAsHvdTXoPJcBWpfG78xx1unCYA7WKU43CLzwTwhLfgzZW1YbkXLpAMyoHDeESVs2So2Efo1hWqjHs8AtNxt?cluster=devnet)). Program data account `7KhczbWwnrJYLF2YA3oyxosZLoqaPZDXh64tQJmsAAcM`, deployed slot 504440763.
+- The lead verified that dumped program data matched the build over all 591920 bytes, with zero padding after. The continuation independently hashed those bytes after the 45-byte loader header and obtained the same SHA-256; the remaining 800 bytes were all zero. No capacity extension was needed.
+- The earlier partial buffer `syUuvzqbbPCprVRLZ7E2rTcRPMNaD29g4EcxZb91vt9` was closed and its SOL returned by the lead. The continuation confirmed `getAccountInfo` returned null. Do not resume that buffer.
+- The earlier `make test` at the source commit passed 134 tests, 0 failed: unit 4, Hold 24, Hold red-team 18, payment red-team 20, refusal recording 6, SKR mint 2, token-swap fixture 3, trade 27, trade red-team 30; doc-tests 0.
+
+#### Demo Hold replacement
+
+Old vault `8n9EcgXwSWVbQgnunw6oin8hYcpRDr1CkkvozhpiAyVj` cannot be closed:
+there is no Hold close instruction. It remains 1291 bytes, and the upgraded
+program requires 1691 bytes, including for Recover. Its token account
+`6ANFiGcMZgL9WbRcqRLc1Y4tTYyPVxNHnhh8m4vVQ9Ai` still held 5000000 base
+units (5 USDC) at confirmed slot 504441389. Recovery before the upgrade was
+missed. This run did not recover those tokens, reclaim rent, or roll back.
+Do not fund the old vault. Its 5 USDC remains stranded pending a separately
+authorized recovery procedure; replacement does not mean it was emptied.
+
+The replacement uses the available repository demo owner `keys/owner.json`,
+`EGQdANFMq6xVjKcSrij4gWiH91q8TvhdY5e87KjjF2yc`. The previous owner was the
+phone wallet `GtA2Vxhomfm2WGaBcvz5oCBrqkAecKHMAL3UTn4HVFzq`; that signer
+was not available to this device-free run. The new fixture therefore belongs
+to the repository demo owner, not the phone wallet. No phone was accessed.
+
+| Setting | Replacement |
+|---|---|
+| Vault | `7BNXEuccpJVHuDgCSRZ3TsBovkHe9tJSC5qcHytWbwy8` |
+| Vault ID | `20260926` |
+| Ledger | `AtFRamHNWVi2gsbeZ9nDkGAk32qwa8u3odF81pLfJxCC` |
+| Vault token account | `DVaHLGLrHLfpGHSwnRxRTHGpZg76kRuCrqBZkYTeafnn` |
+| Mint | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` (devnet USDC, 6 decimals) |
+| Deposit and verified balance | `5000000` base units (5 USDC) |
+| Daily limit | `1000000` base units (1 USDC) |
+| Delay | `86400` seconds (1 day) |
+| Share | `2500` basis points (25%) |
+| Guardian and safe address | `4KsiU8i6USAbZXXzUt8RWeGjCRdQYrUYSFP6d7c7Hn2C`, from `keys/hold-guardian-demo.json` |
+| Verified account length | `1691` bytes |
+
+- Init signature: `28u27kyrhU2ZWkdKMbRyTaDeHQnHbTvjDqdv8vANsh81fhMZxKnJGie2p9JzwYLkSPDY2kVkAVtx9AKRsqfeqRPZ`.
+- Funding signature: `2pTraB6A5FNTgibw1nCkzge6Nejj5isQ3idt2oqGYAg8Xr1nMBg6xdNRsUShjoxK1JbCNFQaxow7zHsgda5rVZFj`. The deployer supplied 4000578 base units to the owner's USDC account, which already held 999422. These funds were independent of the old vault.
+- Deposit signature: `51xTcbqM9yPZSnfvkhT3H44eXAVvkCowCaSXvHDS5nKJXb8w8kmyAxcB7Ze6Yyw4JyqJoRTW7W3QUqxzVy5XkfRi`.
+- `HoldVault.fetchVault` and SPL `getAccount` verified the new rules, guardian, safe address, mint, layout, and 5 USDC balance after confirmation.
+
+#### Post-upgrade journeys
+
+`make e2e-devnet` completed on the upgraded program. Six decision exports
+were `VERDICT: CONFIRMED`; the tampered amount was `VERDICT: REJECTED`.
+Both temporary rules were closed. Cleanup returned 2250000 USDC base units
+and remaining SOL to the funder. Summary lines:
+
+```text
+✔ devnet journey opens two rules, pays, refuses, overrides, revokes, closes, and verifies every decision (267506.602458ms)
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+```
+
+`make hold-e2e-devnet` used `VETO_FUNDER_KEYPAIR` pointing at the gitignored
+deployer key, so funding did not depend on the public faucet. This journey
+uses its own test mint and vault, separate from the 5 USDC demo replacement.
+Its output was:
+
+```text
+cluster: devnet https://api.devnet.solana.com
+vault: Ck35gBmb57h8NrLA7LB5rmuJqnYzEpcDsYPANpsB5piz
+mint: CqDyhwYPxqB7qQWpnWFZWfioYVPwDsJDcAc7ga1A2R72
+init: guardian and safe address set
+deposit: 1000000000
+everyday paid at once: 10000000 to 4FtUjevxbNppiCJHKGsQXv42cQohBuqhuKjLidUvZ8rw
+big withdrawal held: 300000000, unlock 1790520340
+execute before unlock: refused, balances unchanged
+execute after unlock: not run (devnet does not warp; unlock is one day out)
+guardian stopped held withdrawal 3
+freeze: guardian
+recover while frozen: 989000000 to safe 7iTkcYxfiyTr3MWqrUpjAoaE6fvBcgfzXsVFExPecCgs
+unfreeze: owner and guardian
+loosening share to 5000 waits until 1790520364
+tightening daily limit applied at once: 40000000
+✔ a Hold vault pays a known everyday withdrawal at once, holds a big one, and lets the guardian stop, freeze, and recover (63619.516208ms)
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+```
+
+Payment after the one-day wait and applying the loosening after its delay
+were not run on devnet; no time warp or device was used. The payment journey's
+automatic Markdown report writes were suppressed for this run; stdout is the
+evidence recorded here. A temporary fetch preload paced public RPC requests
+by 450 ms and retried HTTP 429 with 15, 30, 60 and 120 second back-offs.
+
+#### Trade fixture refresh
+
+The first `TRADE_DEMO_AMOUNT=1000000 make trade-demo-devnet` used the previous
+rule `91D7FjbUXcsZ6a1rAnS2u4XHd7rFhc1Y7zxiApV7w3jY`. Its daily allowance
+remaining was only 1000007 input base units, and the current pool quote was
+below its old price floor. The expected successful trade was correctly
+refused with reason 14, so that run exited nonzero:
+
+```text
+refused amount_in=1000000 amount_out=0 reason=14 quote below floor suggested_override=0 signature=MWa1DWdvaatyiF2cHwNzPQhe8AERCRTzfPd3sv7U5v3vQpPd9hrASbHN52es77XHAT69NmKoGM2uhtsRFeEALeY slot=504443312
+expected reason 0, got refused reason 14
+```
+
+A fresh rule was opened using `keys/owner.json` and the same demo pool and
+agent. It keeps the previous limits: 0.002 SOL per trade, 0.01 SOL per day,
+0.05 SOL total, 30 days, and a floor set to 90 percent of the spot at open.
+No existing rule was loosened or overridden. The previous rule remains on
+chain. The gitignored `keys/trade-config.json` now selects this fresh fixture.
+
+- Rule: `Bu8iqFUznmUy8Pr6cJNrxKA893um6tKgk1MxiT5zYBHs`, rule ID `20260926`.
+- Ledger: `6rKX4kubpJEJrE8RxTqm8MGkHBm4BUL4N76i4eZwkqBd`.
+- Source: `AzQHiWcB9HKzQqe6bTvSLxzFhnaGLh23NDFJD3MyTwzg`.
+- Destination: `HcyMqQuodBgL9RzMMbEwAM6zYZhoFrSnoPuVbqVh6wgg`.
+- Floor: `16886871/177507734`; expires at `1793026039`.
+- Open signature: `2CSpvcUK9YXhoXmvYGzsiVhSFDKkLaiV2XZ1pmjsJtcuoEzSFbNkDXHaJMqCjD4LBNE2FnWk7NvyeHpEcZGyk94X`.
+- The existing second trader was topped up to 0.3 SOL by the deployer, adding 222001862 lamports, signature `5yRySq41c7Rv4nAVkd9CgkymmX6rtuzt4YrqXtxGfWkKsR9pQchdjfmYkJvizwyTc4DNWWpQbzdyzLQ3q6JSreHR`.
+
+The rerun of `TRADE_DEMO_AMOUNT=1000000 make trade-demo-devnet` exited 0.
+The hostile demo moved the pool below the floor using the second trader,
+verified the refusal, restored the pool with the received output, then
+verified an honest trade and daily-limit refusal. Exact decision summary lines:
+
+```text
+traded amount_in=999993 amount_out=104797 reason=0 ok suggested_override=0 signature=3P54TykYeNd1Axe7rqcD57Zv5GcCVaBJyovqWdsMRmaXzcakGXhj1P5KSuCgKaAo25ajjW7JcPdXxYWgWLLX6o8o slot=504443703
+a.destination refused amount_in=1000000 amount_out=0 reason=11 output account not allowed suggested_override=0 signature=2M11FMoqWUHMBZy3YHfb5xVFMANNnbzADpbRkkXRKAjYxRvrr8W9WrsjTEd2NXnF7bA5UZWNTB6QH3WbMVGcz5Jg slot=504443744
+b.pool refused amount_in=1000000 amount_out=0 reason=12 pool account not allowed suggested_override=0 signature=2ok3hHJkQdrYNbcunnwZryzDosHsPvnh28dSf22ipMPfvMuaPEHLnE7VKhoSwEF7ba64fkCFRMa3sWxN7CSqBoCV slot=504443828
+c.per_trade refused amount_in=2000001 amount_out=0 reason=5 over per-payment maximum suggested_override=2000001 signature=3snrmjAUvNKHiNqhqv2eHM7pA3ptpfgnqCN6M2EuCnhB7Wud2DEMmXh7vEoHTy9ZXdCf41BJafPD4bziriCX7dsw slot=504443840
+d.floor refused amount_in=1000000 amount_out=0 reason=14 quote below floor suggested_override=0 signature=3LixuHjux9vbNr9wdTKfoU6QsPjbSH9E2hPRHbPnucXWaSebeo74pL4AXsrPXjMpboVhGDXbpb6z5J2USppbNe4Q slot=504443883
+e.honest traded amount_in=999998 amount_out=103323 reason=0 ok suggested_override=0 signature=3Vj7UtqEDeBcAjEUnbGhVbUfGoEEbARAdoCp1ZYfsNsQXNzSwmFpDSkjQY958huLBoJrc1wrEwaQyQQU8cFtDhQc slot=504443920
+f.fill traded amount_in=1999994 amount_out=203247 reason=0 ok suggested_override=0 signature=r5oqNz4QV6BfzDDoEotHWyASBLkb8Pxn5DLRXiYuMPNEiDA1kYL6RroitCwxMbTmcaKMQxyN6bSSjqBTNX3k7di slot=504443934
+f.fill traded amount_in=1999992 amount_out=198836 reason=0 ok suggested_override=0 signature=rLVDekB9DWXHErZ8eXFmbdTyBAK7HfWbFTCrRu6a1r8E8t4Yh1Gm11bDF6FAi6ThvgVJEVb6JzABsRn85pTDLNt slot=504443947
+f.fill traded amount_in=2000000 amount_out=194568 reason=0 ok suggested_override=0 signature=4HzbWQERhZBC9ayQTHrwuekAnNJLFDgz2peSeRM7DkoMSyShcWTX7UCVhu9Z116YeUaQ8VNtrSXpTdmC27dsut62 slot=504443960
+f.fill traded amount_in=1000019 amount_out=95727 reason=0 ok suggested_override=0 signature=3FHTqzHUksZmebiopPV4EniQ31qCe4JDiMTFNtVsKvfNm8WSoevknocCyJuN2KNDD1nb6M1deAzAwnsDttX7H7nX slot=504443973
+f.daily refused amount_in=2000000 amount_out=0 reason=13 over daily limit suggested_override=0 signature=43MdToJxcB8ZMV1HAYnjVQ8iZBJt4je4GeE3DFx1b3kaCCfhPV3bmGknAq7xUQW1g4TA4HX3Esj9fNy8rAMnHTSh slot=504443986
+```
+
+The deliberate pool move used signature
+`3gqMp6fJQ2gQu5jCfd1VXsWxcNQRK9162GwHtqg8pUo7skPE5zqw3UAmNkEd8jkX6esAydwsYJ8wEoq6RZenQSJV`;
+the reverse swap used
+`5S2UGQCyT6qXSyLkmM4CoNizqYMwnqXfMjpU6e1nP3NutZEPt4NnpaNzfsxykgccsKbPdEjmE4PhjV1Xfn6ecv2z`.
+The demo consumed most of this rule's rolling daily allowance. A later rerun
+must check its remaining allowance and the current pool price first.
+
+#### IDL verification
+
+`anchor idl build -p veto -o /tmp/veto-hold-deployed-idl.json -- --lib`
+generated a fresh IDL from the exact deployed source commit. The library-only
+flag avoids compiling integration tests that embed a local `veto.so`; no
+program binary was rebuilt or deployed by this command.
+
+All four committed copies (`sdk/idl/veto.json`, `tools/idl/veto.json`,
+`watcher/idl/veto.json`, `indexer/idl/veto.json`) matched that generated IDL
+byte for byte: 22 instructions, SHA-256
+`1fe1039020453d5a66c9c692fde97e242419651719a5d4e10cc52c33db204808`.
+The program source and these copies have no diff from `49b8de3`. Combined
+with the deployed binary hash and the live 1691-byte vault verification,
+this ties the client IDLs to the deployed program. This is source/build
+verification, not a claim that an on-chain IDL account was published.
+
+#### Local validation and review
+
+- `make test-scripts`: exit 0. The first run caught a literal devnet explorer query in the template; it was changed to use the cluster placeholder. A subsequent run hit the existing cloud deployment fixture's `PAP create failure message: error: required API monitoring.googleapis.com is not enabled` failure. That fixture passed standalone, and the full target then passed without changing cloud deployment code or tests.
+- `bash -n scripts/devnet-setup.sh`, `shellcheck -S error scripts/devnet-setup.sh`, and `git diff --check`: exit 0.
+- `scripts/docs-phase2-191.critic-r2-pr209.test.sh`: `docs phase 2 critic r2 checks: 1 passed, 0 failed`; the template renders this document byte for byte.
+- Independent DevOps Critic review of the final evidence and template changes: no findings. Changes in the shell script are confined to the `write_docs` heredoc; deployment commands are unchanged.
+
+Every operator command set `VETO_RPC=https://api.devnet.solana.com`. RPC
+requests were paced, with HTTP 429 back-off capped at 120 seconds. No keyed
+RPC URL or private key was printed or committed.
+
 ### Trade upgrade, 2026-09-25
 
 On 2026-09-25T22:58:50Z the program `3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV` was upgraded on devnet in slot 504196958. This completes the 2026-09-25T22:21:37Z attempt, which had stopped before deployment because `VETO_RPC` was unset in the run environment.
@@ -260,22 +438,25 @@ Export and verify of one refused and one traded row (`tools/export.ts --signatur
 
 ## Hold rolling daily limit upgrade (issue 322)
 
-The next upgrade changes HoldVault from 1291 to 1691 bytes. It appends 25
+The 2026-09-26 upgrade changed HoldVault from 1291 to 1691 bytes. It appends 25
 hourly buckets, shared with the trade rule's rolling counter. Every release
 in the last 24 hours counts, including the whole oldest hour. Daily allowance
-can therefore take up to 25 hours to return. The original fixed counter now
-serves only the unchanged big-door share calculation. Execute and Skip still
-count releases without imposing the everyday limit on those doors.
+can therefore take up to 25 hours to return. PR 337 also made the share cap
+use this rolling total, so a fixed-window reset cannot reopen that allowance.
+Execute and Skip still count releases without imposing the everyday limit
+on those doors.
 
 The decision for demo vault `8n9EcgXwSWVbQgnunw6oin8hYcpRDr1CkkvozhpiAyVj`
-is to retire it and reopen after the next upgrade, with no realloc migration.
+was to retire it and reopen after the upgrade, with no realloc migration.
+The replacement above is live, but the old vault was not emptied before the
+upgrade and still holds 5 USDC. The recovery procedure below was not executed.
 There is **no Hold close instruction** in the existing program. Neither the
 old nor the new binary can reclaim its account rent. Here, retiring means
 recovering all tokens to the configured safe address, leaving the old empty
 accounts, and opening a new vault with a different vault ID. Do not try to
 initialize the existing PDA again.
 
-Recovery procedure for the release operator:
+Recovery procedure for a separately authorized release operator:
 
 1. Before upgrading, retain the actual currently deployed program binary and
    its matching IDL/client. Read the demo vault with that client and record its
@@ -303,5 +484,6 @@ Recovery procedure for the release operator:
    docs with the confirmed new address. Known destinations must be learned
    again through the normal delayed withdrawal flow.
 
-These are release steps, not actions performed by this code change. No devnet
-upgrade, token movement or account retirement is part of its test run.
+These recovery steps were not performed by this continuation. The completed
+upgrade and replacement funding are recorded above; no rollback is authorized
+by this record.
