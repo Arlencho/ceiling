@@ -38,4 +38,3 @@ loadtest-replay: ## Replay synthetic events into the local Postgres service
 
 loadtest-scale: ## Assemble measured reports into docs/SCALE.md
 	node offchain/run/scale.mjs
->>>>>>> b977188 (feat: add shared-ingest replay and scale report generator)

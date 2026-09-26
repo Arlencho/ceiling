@@ -13,8 +13,16 @@ for (const name of ['cu', 'validator', 'replay']) {
   try { report = JSON.parse(await readFile(new URL(`${name}.json`, reports), 'utf8')); }
   catch (error) { if (error.code === 'ENOENT' && name === 'validator') { lines.push('Validator report absent; validator throughput not measured.', ''); continue; } throw error; }
   const m = report.metadata ?? {};
+  let duration = m.duration_seconds ?? report.run_wall_seconds;
+  if (duration === undefined && Array.isArray(report)) {
+    const durations = [...new Set(report.map(entry => entry?.durationSeconds).filter(d => d !== undefined))];
+    if (durations.length === 1) duration = durations[0];
+  }
+  // Compute units are deterministic cost per instruction, so the lower-bound
+  // throughput caveat does not apply to them.
   const context = ['machine', 'os', 'node', 'postgres', 'commit'].map(k => `${k}=${m[k] ?? 'not recorded'}`).join('; ')
-    + `; duration=${m.duration_seconds ?? report.run_wall_seconds ?? 'not recorded'} seconds; conditions=${m.conditions ?? report.measurement ?? 'not recorded'}; single-machine lower bound`;
+    + `; duration=${duration ?? 'not recorded'} seconds; conditions=${m.conditions ?? report.measurement ?? 'not recorded'}`
+    + (name === 'cu' ? '' : '; single-machine lower bound');
   for (const [key, value] of flatten(report)) {
     if (key.startsWith('metadata.')) continue;
     lines.push(`- ${name}.${key}: ${JSON.stringify(value)} | ${context}`);
