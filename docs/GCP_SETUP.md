@@ -155,3 +155,98 @@ Both jobs were updated to image `europe-north1-docker.pkg.dev/veto-watcher-26092
 Before the update, mandate `UsRHyKtm41XMpQUcFGevYKgdWJEHQUf44QDCxLjEGWh` was read through the SDK against the job's RPC. It is the PDA for owner `GtA2Vxhomfm2WGaBcvz5oCBrqkAecKHMAL3UTn4HVFzq` and mandate id `1790347056578` under program `3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV`. Status was active (`0`), expiry `1793802976` was still in the future, agent was `6YwqYUj4Kyy8dnPss34jMWgKAtLGAghmA1dRgYUGSV5w`, mint was USDC `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`, source was `8eyjxUJNHuuqYrbqoFxacu4Qx54ystkGirewxigfJtLm`, and merchant was `6i99pFwsoV9wBWSaNtXxpXgCWjpCkMbZ4UE6T4cSPdCG`. Cap `20000000`, per-transaction max `500000`, spent `0`, last nonce `0`.
 
 Cloud Build's default service account for this project is `472736420070-compute@developer.gserviceaccount.com`. It could not read the Cloud Build source bucket, so the image build could not start. `roles/storage.objectViewer` was added on `gs://veto-watcher-260921_cloudbuild` and `roles/artifactregistry.writer` was added on repository `veto-watcher` in `europe-north1`, both for that account. No project-level role was added, and the agent secret was not read or changed.
+
+# The index service on Google Cloud
+
+`scripts/deploy-index-cloud.sh` puts the `service/` package (read API, webhook receiver,
+backfill) on Cloud Run with a Cloud SQL Postgres 16 database. It mirrors the watcher
+deploy: owner-run, idempotent, refuses before creating anything when an input is
+missing. Unlike the watcher script it has no default project or region: both must be
+passed explicitly, and the working tree must be clean so the image tag matches a commit.
+
+The script is verified offline only: `--check`, `--dry-run`, and the stubbed `gcloud`
+runs in `scripts/deploy-index-cloud.test.sh`. No live project has been created from it.
+Run it first with `--dry-run` and read the plan.
+
+```bash
+export PROJECT=my-index-project       # no default, required
+export REGION=europe-north1           # no default, required
+export INDEX_WEBHOOK_AUTH='...'       # exact Authorization header Helius sends
+export VETO_RPC='https://...'         # never printed, stored in Secret Manager
+./scripts/deploy-index-cloud.sh --check
+./scripts/deploy-index-cloud.sh --dry-run
+./scripts/deploy-index-cloud.sh
+```
+
+## What the index deploy creates
+
+| | |
+|---|---|
+| Service account | `veto-index@<PROJECT>.iam.gserviceaccount.com`. Roles: `roles/secretmanager.secretAccessor` on each of the three secrets (per-secret binding), `roles/cloudsql.client` on the project for the connector, `roles/run.invoker` on the backfill job. Nothing else. |
+| Cloud SQL | Instance `veto-index-pg`, Postgres 16, `db-f1-micro`, 10 GB HDD, zonal, no deletion protection. Public IP with no authorized networks: only the Cloud SQL connector can reach it. Database `veto_index`, user `veto_index_app`. |
+| Secrets | `veto-index-webhook-auth` (from `INDEX_WEBHOOK_AUTH`), `veto-index-database-url` (generated once, paired with the database user), `veto-index-rpc-url` (from `VETO_RPC`). Values are staged in a private temp directory and passed with `--data-file`; they are never printed and never appear on a logged command line. The generated database password is masked as `***` in `--dry-run` output. |
+| Artifact Registry | Repository `veto-index`; the image tag is the short commit of `HEAD`. |
+| Cloud Run services | `veto-index` (read API) and `veto-index-webhook`, each with `--min-instances=1`, 1 vCPU, 512 MiB, the Cloud SQL connector, and only the secrets each one needs. Both allow unauthenticated ingress: the read API is public GET only, and the webhook returns 401 without the auth header. |
+| Cloud Run jobs | `veto-index-migrate` and `veto-index-backfill`. On every deploy the migration job is deployed with the new image and executed to completion first; only then do the new service revisions roll out. |
+| Cloud Scheduler | `veto-index-backfill-hourly` in `europe-west1` (Scheduler is not offered in `europe-north1`), hourly at minute 13, Europe/Stockholm, invoking the backfill job as the service account. |
+
+The container entrypoint translates `DATABASE_URL` into the `PG*` variables
+node-postgres reads; the socket path in the URL (`host=/cloudsql/...`) is what routes
+the connection through the connector. If the database user and the database-url secret
+get out of sync (exactly one exists), the script refuses rather than guess, because the
+password is not recoverable.
+
+## Cost per month (estimate)
+
+Smallest tiers, list prices from the Cloud Run, Cloud SQL, Secret Manager, Scheduler,
+and Artifact Registry pricing pages as of September 2026, `europe-north1`, no free tier
+assumed. Re-check the pricing pages before budgeting; these numbers are a basis, not a
+quote.
+
+| Item | Basis | Estimate |
+|---|---|---|
+| Cloud SQL `db-f1-micro` | about $0.0116 per hour, always on | about $8.50 |
+| Cloud SQL storage and backups | 10 GB HDD at $0.09 per GB, 10 GB backup at $0.08 per GB | about $1.70 |
+| Cloud Run min instances | 2 services x 1 idle vCPU ($0.0000025 per vCPU-second) and 0.5 GiB ($0.0000025 per GiB-second) | about $19.00 |
+| Backfill job | 720 hourly runs x 30 s at 1 vCPU and 512 MiB | under $1.00 |
+| Cloud Scheduler | 1 job at $0.10 per month | $0.10 |
+| Secret Manager | 3 active secret versions at $0.06 plus access operations | under $0.50 |
+| Artifact Registry | about 0.5 GB at $0.10 per GB | under $0.10 |
+
+Total: roughly $30 per month, dominated by the two always-on Cloud Run instances and
+the Cloud SQL instance. Dropping `--min-instances` to 0 on the webhook service saves
+about $9.50 per month at the cost of a cold start on the first delivery after idle;
+Helius retries, so ingestion catches up.
+
+## Rolling back the index service
+
+A bad revision: traffic moves back in one command, because old revisions are kept.
+List revisions with `gcloud run revisions list --service=veto-index --region=$REGION
+--project=$PROJECT`, then:
+
+```
+gcloud run services update-traffic veto-index \
+  --to-revisions=<previous-revision>=100 \
+  --region=$REGION --project=$PROJECT
+```
+
+Do the same for `veto-index-webhook`. Rolling back the revision does not roll back
+migrations: the migration runner is additive (new tables and columns), and the previous
+image keeps working against the migrated schema. If a migration itself is the problem,
+restore the Cloud SQL instance from its automated backup to a new instance and point a
+fresh deployment at it; do not hand-edit the schema.
+
+Full teardown, in this order:
+
+```
+gcloud scheduler jobs delete veto-index-backfill-hourly --location=europe-west1 --project=$PROJECT --quiet
+gcloud run jobs delete veto-index-migrate veto-index-backfill --region=$REGION --project=$PROJECT --quiet
+gcloud run services delete veto-index veto-index-webhook --region=$REGION --project=$PROJECT --quiet
+gcloud secrets delete veto-index-webhook-auth veto-index-database-url veto-index-rpc-url --project=$PROJECT --quiet
+gcloud artifacts repositories delete veto-index --location=$REGION --project=$PROJECT --quiet
+gcloud sql instances delete veto-index-pg --project=$PROJECT --quiet
+```
+
+The instance is created with `--no-deletion-protection` so the last command works.
+Deleting the database destroys the indexed history; it is rebuildable from the chain
+with a backfill, but the rebuild takes hours against public devnet RPC limits.

@@ -74,6 +74,7 @@ test-scripts: ## Run script checks that do not need a cluster
 	./scripts/gcp-verify-secrets.test.sh
 	./scripts/deploy-watcher-cloud.test.sh
 	./scripts/deploy-watcher-cloud.critic.round3.test.sh
+	./scripts/deploy-index-cloud.test.sh
 	./scripts/watcher-silent-alert.test.sh
 	./scripts/watcher-alert-round3.test.sh
 	./scripts/journey158-path3.critic-r1-pr184.test.sh
