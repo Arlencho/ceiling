@@ -5,7 +5,13 @@ function pluginName(plugin) {
 }
 
 function shapeConfig(config, env) {
-  const production = env.EAS_BUILD_PROFILE === 'production';
+  const mainnetPreview = env.EAS_BUILD_PROFILE === 'mainnet-preview';
+  const production = env.EAS_BUILD_PROFILE === 'production' || mainnetPreview;
+  // VETO_MAINNET_PREVIEW_RPC must be an EAS secret in the preview environment.
+  const rpc = mainnetPreview ? env.VETO_MAINNET_PREVIEW_RPC : env.EXPO_PUBLIC_VETO_RPC;
+  if (mainnetPreview && env.EAS_BUILD === 'true' && !rpc?.trim()) {
+    throw new Error('Set the VETO_MAINNET_PREVIEW_RPC EAS secret before building mainnet-preview.');
+  }
   const plugins = [...(config.plugins ?? [])];
   const nextPlugins = production
     ? [
@@ -15,10 +21,15 @@ function shapeConfig(config, env) {
     : plugins;
   return {
     ...config,
+    ...(mainnetPreview ? {
+      name: `${config.name} Mainnet preview`,
+      scheme: 'veto-mainnet-preview',
+      android: { ...config.android, package: `${config.android.package}.mainnetpreview` },
+    } : {}),
     plugins: nextPlugins,
     extra: {
       ...(config.extra ?? {}),
-      vetoRpc: env.EXPO_PUBLIC_VETO_RPC ?? '',
+      vetoRpc: rpc ?? '',
       vetoProgramId: env.EXPO_PUBLIC_VETO_PROGRAM_ID ?? '',
       vetoMint: env.EXPO_PUBLIC_VETO_MINT ?? '',
       vetoExplorerCluster: env.EXPO_PUBLIC_VETO_EXPLORER_CLUSTER ?? 'devnet',

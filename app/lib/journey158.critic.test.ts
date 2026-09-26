@@ -1,55 +1,44 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import test from 'node:test';
+import test, { mock } from 'node:test';
 
 import { Buffer } from 'buffer';
 import { PublicKey } from '@solana/web3.js';
 
 import { configFromExtra } from './appConfig';
-import { authorize, type MwaWallet } from './wallet';
+import type { MwaWallet } from './wallet';
 
 const OWNER = new PublicKey(Buffer.alloc(32, 3)).toBase58();
 const PROGRAM = new PublicKey(Buffer.alloc(32, 1)).toBase58();
 
-// Path 1 and 4. The RPC url and explorer cluster come from EXPO_PUBLIC_* at
-// build time, but the chain named to the wallet is a constant. A build whose
-// config points at another cluster still authorizes the wallet on devnet.
+// Path 1 and 4. On mainnet-beta the RPC url is baked into the build config
+// from the dedicated VETO_MAINNET_PREVIEW_RPC secret (app.config.js extra);
+// the EXPO_PUBLIC_VETO_RPC fallback is refused. The chain named to the wallet
+// still follows the configured cluster instead of a fixed devnet constant.
+const MAINNET_EXTRA = {
+  vetoRpc: 'https://api.mainnet-beta.solana.com',
+  vetoProgramId: PROGRAM,
+  vetoExplorerCluster: 'mainnet-beta',
+};
+
+mock.module('expo-constants', { defaultExport: { expoConfig: { extra: MAINNET_EXTRA } } });
+
 test('the wallet chain follows the configured cluster instead of a fixed devnet constant', async () => {
-  const env = {
-    EXPO_PUBLIC_VETO_RPC: 'https://api.mainnet-beta.solana.com',
-    EXPO_PUBLIC_VETO_PROGRAM_ID: PROGRAM,
-    EXPO_PUBLIC_VETO_EXPLORER_CLUSTER: 'mainnet-beta',
+  const { authorize } = await import('./wallet');
+  const config = configFromExtra(MAINNET_EXTRA);
+  const chains: string[] = [];
+  const wallet: MwaWallet = {
+    async authorize(params) {
+      chains.push(params.chain ?? '');
+      return { accounts: [{ address: OWNER }], auth_token: 'token' };
+    },
+    async deauthorize() {
+      return null;
+    },
   };
-  const previous = {
-    EXPO_PUBLIC_VETO_RPC: process.env.EXPO_PUBLIC_VETO_RPC,
-    EXPO_PUBLIC_VETO_PROGRAM_ID: process.env.EXPO_PUBLIC_VETO_PROGRAM_ID,
-    EXPO_PUBLIC_VETO_EXPLORER_CLUSTER: process.env.EXPO_PUBLIC_VETO_EXPLORER_CLUSTER,
-  };
-  Object.assign(process.env, env);
-  try {
-    const config = configFromExtra({}, env);
-    const chains: string[] = [];
-    const wallet: MwaWallet = {
-      async authorize(params) {
-        chains.push(params.chain ?? '');
-        return { accounts: [{ address: OWNER }], auth_token: 'token' };
-      },
-      async deauthorize() {
-        return null;
-      },
-    };
-    await authorize(wallet);
-    assert.equal(config.explorerCluster, 'mainnet-beta');
-    assert.equal(chains[0], 'solana:mainnet');
-  } finally {
-    for (const [key, value] of Object.entries(previous)) {
-      if (value === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = value;
-      }
-    }
-  }
+  await authorize(wallet);
+  assert.equal(config.explorerCluster, 'mainnet-beta');
+  assert.equal(chains[0], 'solana:mainnet');
 });
 
 // Path 4. The permissions in the release manifest come from Expo's bare

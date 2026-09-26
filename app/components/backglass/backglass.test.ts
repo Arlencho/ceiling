@@ -448,6 +448,31 @@ describe('backglass components', { concurrency: 1 }, () => {
     }
   });
 
+  test('the first-run strip hides the Protect stage on mainnet-beta', async () => {
+    const { ProgressStrip } = await import('./ProgressStrip');
+    const root = await mount(
+      createElement(ProgressStrip, {
+        current: 'live',
+        done: ['learn', 'connect', 'agent', 'approve'],
+        cluster: 'mainnet-beta',
+      }),
+    );
+    assert.equal(
+      root.root.findByProps({ accessibilityRole: 'list' }).props.accessibilityLabel,
+      'Your setup: step 5 of 5, Live',
+    );
+    assert.equal(root.root.findAllByProps({ accessibilityLabel: 'Protect, not yet' }).length, 0);
+    assert.equal(visibleText(root).includes('Protect'), false);
+    const devnet = await mount(
+      createElement(ProgressStrip, { current: 'live', cluster: 'devnet' }),
+    );
+    assert.equal(
+      devnet.root.findByProps({ accessibilityRole: 'list' }).props.accessibilityLabel,
+      'Your setup: step 5 of 6, Live',
+    );
+    assert.ok(devnet.root.findByProps({ accessibilityLabel: 'Protect, not yet' }));
+  });
+
   test('the machine diagram names the lit stations and holds them still when reduced motion is on', async () => {
     const { MachineDiagram } = await import('./MachineDiagram');
     motion.reduced = true;
