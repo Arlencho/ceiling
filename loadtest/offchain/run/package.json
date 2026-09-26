@@ -4,6 +4,6 @@
   "type": "module",
   "scripts": {
     "typecheck": "../../../service/node_modules/.bin/tsc --noEmit -p tsconfig.json",
-    "test": "../../../service/node_modules/.bin/tsx --test replay.test.ts"
+    "test": "node --test scale.test.mjs && ../../../service/node_modules/.bin/tsx --test replay.test.ts"
   }
 }
