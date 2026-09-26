@@ -41,11 +41,16 @@ These are operator containment rules. The deploy script does not configure payme
 
 ## Deployment gates
 
-Deploy commit: TBD
+After reviewing and committing all deployment changes, create an annotated attestation tag on the exact commit to deploy. Tags do not change HEAD or dirty the checkout:
 
-Deployment is intentionally blocked. The script requires this line to equal the full current `git rev-parse HEAD` and the entire working tree to be clean, including untracked files. A tracked file cannot practically contain the hash of its own commit: editing this line dirties the tree, and committing it changes HEAD again. Both requested guards remain enforced. A separately approved change to the commit-attestation policy is needed before real deployment is possible; do not bypass either check.
+```bash
+git tag -a mainnet-deploy-YYYYMMDD-1 -m "Reviewed mainnet deployment: describe the approved changes" HEAD
+git push origin mainnet-deploy-YYYYMMDD-1
+```
 
-With that policy resolved, the guarded entry points are:
+Choose a unique tag name and replace the message with the review details. The script requires a clean tree, including untracked files, and an exact annotated tag matching `mainnet-deploy-*` on HEAD. Lightweight tags and tags on ancestor commits are rejected. It prints the selected tag and its message for operator review. Fetch the attestation tag when deploying from another checkout. An annotated tag records review intent; it is not a cryptographic signature or an identity authorization check.
+
+The guarded entry points are:
 
 ```bash
 ./scripts/mainnet-deploy.sh --dry-run
@@ -54,10 +59,21 @@ With that policy resolved, the guarded entry points are:
 
 Supply `VETO_MAINNET_RPC` through the environment. The script never prints the endpoint, and suppresses CLI diagnostics that might contain query-string credentials. It does not change the local Solana CLI configuration.
 
-Both modes require the backed-up keys, matching program identity, clean checkout, approved commit, mainnet genesis hash, at least 5 SOL in the deployer wallet, a fresh Anchor deployment build and the exact confirmation `DEPLOY`. Dry run makes read-only RPC calls, builds, reports size, rent and SHA256, and exits without deploying or changing this file. It is not an offline mode.
+Both modes require the backed-up keys, matching program identity, clean checkout, annotated attestation tag, mainnet genesis hash, at least 5 SOL in the deployer wallet, a fresh Anchor deployment build and the exact confirmation `DEPLOY`. Dry run makes read-only RPC calls, builds, reports size, rent and SHA256, and exits without deploying or changing this file. It is not an offline mode.
 
 The build unsets `ANCHOR_BUILD_SBF_ARCH`, removes `target/deploy/veto.so` and runs `anchor build --no-idl`, as in the devnet setup. It never reuses the v0 test ELF. The script prints the rent for the program and program data accounts plus the temporary buffer; upgrades may already have rent locked. Fees are additional. Deployment sets the deployer explicitly as fee payer and upgrade authority, with a compute unit price of 5000 micro-lamports.
 
 After deployment, `solana program show` verifies the program and authority. The script appends UTC date, deployed slot, transaction signature, binary SHA256 and commit below. Commit that public log separately. If deployment succeeds but verification or log writing fails, reconcile the chain state before retrying.
+
+If a deploy fails, inspect the program state before retrying. List buffers owned by the deployer with `solana program show --buffers --buffer-authority <deployer>`, then reclaim an identified abandoned buffer with `solana program close <buffer>`. Use the explicit mainnet RPC and the deployer signing key for these commands:
+
+```bash
+solana program show --buffers --buffer-authority <deployer> --url "$VETO_MAINNET_RPC"
+solana program close <buffer> --keypair keys/deployer.json --url "$VETO_MAINNET_RPC"
+```
+
+Replace the angle-bracket placeholders with the deployer public key and the abandoned buffer address. Confirm the buffer is no longer needed before closing it. Do not close the program account. A successful deployment followed by failed verification or log writing also needs reconciliation before another attempt.
+
+Because deployment reserves only the current binary size with `--max-len`, a larger future binary needs `solana program extend` first to increase the program data allocation, with enough SOL for the additional rent.
 
 ## Deploy log
