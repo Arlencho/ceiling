@@ -499,6 +499,7 @@ Export and verify of one refused and one traded row (`tools/export.ts --signatur
 - This script never deploys to mainnet and never prints private keys.
 - `declare_id!` in `programs/veto/src/lib.rs` is left as committed. The live program address is the Program row above. A later program-side change can sync `declare_id!` in its own PR.
 - The agent must keep holding zero tokens apart from the trade-demo amount recorded under Trade rule on devnet. The setup does not mint to it and does not create an agent token account.
+
 ## Hold rolling daily limit upgrade (issue 322)
 
 The next upgrade changes HoldVault from 1291 to 1691 bytes. It appends 25
