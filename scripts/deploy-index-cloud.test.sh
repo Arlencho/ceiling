@@ -21,6 +21,33 @@ mkdir -p "$FAKE_BIN"
 FAKE_LOG="${DIR}/gcloud.log"
 CURL_LOG="${DIR}/curl.log"
 
+# Use a disposable repository containing ignored operator files. The stub
+# checks the actual upload directory, not the printed command.
+python3 - "$ROOT" "$DIR/repo" "$DIR/expected-context" <<'PYFIXTURE'
+from pathlib import Path
+import shutil
+import sys
+root, fixture, manifest = map(Path, sys.argv[1:])
+for name in ("scripts", "service", "indexer"):
+    shutil.copytree(root / name, fixture / name,
+                    ignore=shutil.ignore_patterns("node_modules", "dist", ".git"))
+fixed = {"service/Dockerfile", "service/docker-entrypoint.sh",
+         "service/package.json", "service/package-lock.json", "service/tsconfig.json",
+         "indexer/package.json", "indexer/package-lock.json", "indexer/idl/veto.json"}
+for tree in ("service/src", "indexer/src"):
+    for path in (fixture / tree).rglob("*"):
+        if path.is_file() and path.suffix in (".ts", ".sql") and not path.name.endswith(".test.ts"):
+            fixed.add(path.relative_to(fixture).as_posix())
+manifest.write_text("\n".join(sorted(fixed)))
+for name in ("app/credentials.json", "app/signing.p8", "app/signing.p12",
+             "app/signing.key", "tools/.local/key.json", "watcher/data/key.json",
+             "watcher/logs/run.log", "keys/wallet.json", ".env"):
+    path = fixture / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("offline-secret-canary")
+PYFIXTURE
+SCRIPT="${DIR}/repo/scripts/deploy-index-cloud.sh"
+
 # The gcloud stub records argv like a deploy log would. gcloud itself never
 # echoes a --password value in its own output, so the stub records it masked:
 # the recorded log is what an operator could paste, and it must carry no
@@ -31,6 +58,20 @@ set -u
 args="$*"
 mode="${FAKE_GCLOUD_MODE:-existing}"
 printf '%s\n' "$args" | sed -E 's/--password=[^ ]*/--password=***/' >> "${FAKE_GCLOUD_LOG}"
+
+if [[ "$1 $2" == 'builds submit' ]]; then
+  python3 - "${@: -1}" "${HOME}/expected-context" <<'PYCHECK'
+from pathlib import Path
+import sys
+context, manifest = map(Path, sys.argv[1:])
+expected = set(manifest.read_text().splitlines())
+actual = {p.relative_to(context).as_posix() for p in context.rglob("*") if p.is_file()}
+assert actual == expected, f"unsafe upload context: extra={actual - expected}, missing={expected - actual}"
+assert not any(p.is_symlink() for p in context.rglob("*")), "symlink in upload"
+assert not any(b"offline-secret-canary" in p.read_bytes() for p in context.rglob("*") if p.is_file())
+PYCHECK
+  exit $?
+fi
 
 if [[ "$args" == *'auth list'* ]]; then
   printf 'owner@example.com\n'
@@ -354,8 +395,8 @@ else
   bad "deploy against existing resources should succeed: ${out}"
 fi
 
-exec_line="$(grep -nF 'run jobs execute' "$FAKE_LOG" | head -1 | cut -d: -f1)"
-svc_line="$(grep -nF 'run deploy veto-index ' "$FAKE_LOG" | head -1 | cut -d: -f1)"
+exec_line="$(grep -nF 'run jobs execute' "$FAKE_LOG" | head -1 | cut -d: -f1 || true)"
+svc_line="$(grep -nF 'run deploy veto-index ' "$FAKE_LOG" | head -1 | cut -d: -f1 || true)"
 if [[ -n "$exec_line" && -n "$svc_line" && "$exec_line" -lt "$svc_line" ]]; then
   pass "migrations execute before the new revision is deployed"
 else
@@ -406,6 +447,41 @@ else
     bad "user-without-secret message: ${out}"
   fi
 fi
+
+# Unsafe files inside a required source tree must fail before upload.
+for unsafe in keys/wallet.ts .env credentials.json account.json signing.p8 signing.p12 signing.key logs/run.ts; do
+  target="${DIR}/repo/service/src/${unsafe}"
+  mkdir -p "$(dirname "$target")"
+  printf 'offline-secret-canary' > "$target"
+  : > "$FAKE_LOG"
+  if out="$(run_full existing 2>&1)"; then
+    bad "unsafe source ${unsafe} must refuse"
+  elif grep -q 'builds submit' "$FAKE_LOG"; then
+    bad "unsafe source ${unsafe} reached upload"
+  else
+    pass "unsafe source ${unsafe} refuses before upload"
+  fi
+  rm "$target"
+  case "$unsafe" in */*) rmdir "$(dirname "$target")" ;; esac
+done
+ln -s "${DIR}/repo/.env" "${DIR}/repo/service/src/leak.ts"
+: > "$FAKE_LOG"
+if out="$(run_full existing 2>&1)" || grep -q 'builds submit' "$FAKE_LOG"; then
+  bad "source symlink must refuse before upload"
+else
+  pass "source symlink refuses before upload"
+fi
+rm "${DIR}/repo/service/src/leak.ts"
+
+cp "${DIR}/repo/service/package.json" "${DIR}/package-backup.json"
+printf '{"private_key":"offline-secret-canary"}' > "${DIR}/repo/service/package.json"
+: > "$FAKE_LOG"
+if out="$(run_full existing 2>&1)" || grep -q 'builds submit' "$FAKE_LOG"; then
+  bad "credentials in an allowed JSON path must refuse before upload"
+else
+  pass "credentials in an allowed JSON path refuse before upload"
+fi
+mv "${DIR}/package-backup.json" "${DIR}/repo/service/package.json"
 
 if [[ "$fail" -ne 0 ]]; then
   exit 1

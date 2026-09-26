@@ -337,12 +337,13 @@ ensure_ar_repo() {
     --project="$PROJECT"
 }
 
-# The build context is the repository root: the compiled service imports the
-# IDL and the event parser from indexer/. The config is written to a temp
-# file so the Dockerfile can stay at service/Dockerfile.
+# Stage only Dockerfile inputs. Nested ignore files cannot protect a repo-root
+# upload. Keep the context separate from the temporary secret files and config.
 build_image() {
   local image="$1"
   ensure_tmpdir
+  local context="${tmpdir}/context"
+  python3 "${ROOT}/scripts/stage-index-context.py" "$ROOT" "$context"
   local cb="${tmpdir}/cloudbuild.yaml"
   cat > "$cb" <<EOF
 steps:
@@ -350,11 +351,11 @@ steps:
     args: ['build', '-t', '${image}', '-f', 'service/Dockerfile', '.']
 images: ['${image}']
 EOF
-  log "image build: docker build -t ${image} -f service/Dockerfile . (context: repo root)"
+  log "image build: docker build -t ${image} -f service/Dockerfile . (context: minimal staged inputs)"
   run gcloud builds submit \
     --config="$cb" \
     --project="$PROJECT" \
-    "$ROOT"
+    "$context"
 }
 
 ensure_scheduler() {
