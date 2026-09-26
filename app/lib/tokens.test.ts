@@ -13,6 +13,7 @@ import {
   VTEST_DEVNET_NOTE,
   VTEST_MINT,
   devnetTestTokenNote,
+  mainnetPreviewNote,
   formatTokenAmount,
   knownToken,
   rulesTokenSummary,
@@ -125,4 +126,16 @@ test('no screen adds amounts across rules with different mints', () => {
     rulesTokenSummary([VTEST_MINT, DEVNET_USDC_MINT]),
     '1 rule in VTEST. 1 rule in USDC.',
   );
+});
+
+
+test('mainnet preview warns about real SKR only for SKR on mainnet', () => {
+  assert.equal(mainnetPreviewNote(SKR_MINT, 'mainnet-beta'), 'Mainnet preview. Real SKR. Small caps on purpose.');
+  assert.equal(mainnetPreviewNote(` ${SKR_MINT} `, ' mainnet-beta '), 'Mainnet preview. Real SKR. Small caps on purpose.');
+  for (const cluster of ['devnet', 'testnet', '', null, undefined]) {
+    assert.equal(mainnetPreviewNote(SKR_MINT, cluster), null);
+  }
+  for (const mint of [VTEST_MINT, MAINNET_USDC_MINT, '', null, undefined]) {
+    assert.equal(mainnetPreviewNote(mint, 'mainnet-beta'), null);
+  }
 });

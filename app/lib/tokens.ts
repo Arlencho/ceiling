@@ -138,3 +138,14 @@ export function rulesTokenSummary(mints: readonly string[]): string | null {
   });
   return `${parts.join('. ')}.`;
 }
+
+
+/** Real SKR warning for the contained mainnet preview. */
+export function mainnetPreviewNote(
+  mint: string | null | undefined,
+  cluster: string | null | undefined,
+): string | null {
+  return mint?.trim() === SKR_MINT && cluster?.trim() === 'mainnet-beta'
+    ? 'Mainnet preview. Real SKR. Small caps on purpose.'
+    : null;
+}

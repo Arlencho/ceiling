@@ -13,26 +13,35 @@ export const FIRST_RUN_STAGES = [
 
 export type FirstRunStage = (typeof FIRST_RUN_STAGES)[number]['id'];
 
+export function firstRunStages(cluster?: string | null): readonly (typeof FIRST_RUN_STAGES)[number][] {
+  if (cluster === 'mainnet-beta') {
+    return FIRST_RUN_STAGES.filter((stage) => stage.id !== 'protect');
+  }
+  return FIRST_RUN_STAGES;
+}
+
 type ProgressStripProps = {
   current: FirstRunStage;
   done?: readonly FirstRunStage[];
+  cluster?: string | null;
 };
 
-export function ProgressStrip({ current, done = [] }: ProgressStripProps) {
+export function ProgressStrip({ current, done = [], cluster = null }: ProgressStripProps) {
+  const stages = firstRunStages(cluster);
   const doneSet = new Set(done);
   const index = Math.max(
     0,
-    FIRST_RUN_STAGES.findIndex((stage) => stage.id === current),
+    stages.findIndex((stage) => stage.id === current),
   );
-  const currentLabel = FIRST_RUN_STAGES[index]?.label ?? FIRST_RUN_STAGES[0].label;
+  const currentLabel = stages[index]?.label ?? FIRST_RUN_STAGES[0].label;
 
   return (
     <View
       accessibilityRole="list"
-      accessibilityLabel={`Your setup: step ${index + 1} of ${FIRST_RUN_STAGES.length}, ${currentLabel}`}
+      accessibilityLabel={`Your setup: step ${index + 1} of ${stages.length}, ${currentLabel}`}
       style={styles.row}
     >
-      {FIRST_RUN_STAGES.map((stage) => {
+      {stages.map((stage) => {
         const isCurrent = stage.id === current;
         const isDone = doneSet.has(stage.id);
         const lit = isCurrent || isDone;

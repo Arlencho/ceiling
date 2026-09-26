@@ -20,7 +20,7 @@ import type { MandateAccount } from './mandate';
 import { VTEST_MINT } from './tokens';
 import type { RingEntry } from './ring';
 
-mock.module('expo-constants', { defaultExport: { expoConfig: { extra: {} } } });
+mock.module('expo-constants', { defaultExport: { expoConfig: { extra: {}, scheme: 'veto-widget-test' } } });
 
 const data = import('./widgetData');
 
@@ -172,7 +172,14 @@ test('a rule face shows what that agent can still spend from the mandate', async
   assert.equal(face.decisionLine, 'Last paid 4 VTEST, yesterday 18:02');
   assert.equal(face.tally, '2 paid, 1 refused');
   assert.equal(face.uri, ruleWidgetUri(ADDRESS));
-  assert.equal(face.uri.startsWith('veto://rule/'), true);
+  assert.equal(face.uri.startsWith('veto-widget-test://rule/'), true);
+});
+
+test('the rule widget uri starts with the configured app scheme', async () => {
+  const { ruleWidgetUri } = await data;
+  const uri = ruleWidgetUri(ADDRESS);
+  assert.equal(uri, `veto-widget-test://rule/${encodeURIComponent(ADDRESS)}`);
+  assert.equal(uri.startsWith('veto://'), false);
 });
 
 test('the large widget follows the selected rule and a small widget follows its binding', async () => {

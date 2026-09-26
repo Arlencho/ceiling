@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import test from 'node:test';
 
 const require = createRequire(import.meta.url);
-const { stripDevClientSchemes } = require('../plugins/withoutDevClientScheme.js') as {
+const { stripDevClientSchemes, stripsDevClientScheme } = require('../plugins/withoutDevClientScheme.js') as {
   stripDevClientSchemes: (manifest: {
     manifest: {
       application: Array<{
@@ -22,6 +22,7 @@ const { stripDevClientSchemes } = require('../plugins/withoutDevClientScheme.js'
       }>;
     };
   };
+  stripsDevClientScheme: (profile: string | undefined) => boolean;
 };
 const { shapeConfig } = require('../app.config.js') as {
   shapeConfig: (
@@ -67,6 +68,13 @@ test('a production manifest keeps the app scheme and drops the dev-client scheme
   };
   const next = stripDevClientSchemes(manifest);
   assert.deepEqual(schemes(next), ['veto']);
+});
+
+test('the dev-client scheme strip applies to the production and mainnet-preview profiles only', () => {
+  assert.equal(stripsDevClientScheme('production'), true);
+  assert.equal(stripsDevClientScheme('mainnet-preview'), true);
+  assert.equal(stripsDevClientScheme('development'), false);
+  assert.equal(stripsDevClientScheme(undefined), false);
 });
 
 test('the production config does not apply the dev client and still blocks unused permissions', () => {
