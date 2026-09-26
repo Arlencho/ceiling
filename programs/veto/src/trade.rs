@@ -450,34 +450,12 @@ fn pool_verdict(reason: u8, rule: &TradeRule) -> Verdict {
 /// bucket. Every sale in the last 24 hours is included. Future buckets also
 /// count defensively if the clock moves backwards.
 pub fn current_window_spent(rule: &TradeRule, now: i64) -> Result<u64> {
-    let oldest = now.div_euclid(TRADE_BUCKET_SECS) - 24;
-    rule.daily_buckets
-        .iter()
-        .filter(|bucket| bucket.hour >= oldest)
-        .try_fold(0u64, |total, bucket| {
-            total
-                .checked_add(bucket.amount)
-                .ok_or(error!(VetoError::MathOverflow))
-        })
+    crate::rolling_window::spent(&rule.daily_buckets, now).ok_or(error!(VetoError::MathOverflow))
 }
 
 fn commit_window(rule: &mut TradeRule, amount_in: u64, now: i64) -> Result<()> {
-    let hour = now.div_euclid(TRADE_BUCKET_SECS);
-    let slot = hour.rem_euclid(TRADE_BUCKET_COUNT as i64) as usize;
-    let bucket = &mut rule.daily_buckets[slot];
-    if bucket.hour != hour {
-        // Never discard a future bucket after a backwards clock adjustment.
-        require!(
-            bucket.amount == 0 || bucket.hour < hour - 24,
-            VetoError::MathOverflow
-        );
-        *bucket = TradeBucket { hour, amount: 0 };
-    }
-    bucket.amount = bucket
-        .amount
-        .checked_add(amount_in)
-        .ok_or(error!(VetoError::MathOverflow))?;
-    Ok(())
+    crate::rolling_window::commit(&mut rule.daily_buckets, amount_in, now)
+        .ok_or(error!(VetoError::MathOverflow))
 }
 
 /// Trade fee the pinned exchange takes out of the input, per `FEE_DEN`.

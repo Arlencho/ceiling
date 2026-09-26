@@ -45,6 +45,8 @@ pub fn init_vault(ctx: Context<InitVault>, args: InitVaultArgs) -> Result<()> {
     vault.vault_id = args.vault_id;
     vault.daily_limit = args.daily_limit;
     vault.window_spent = 0;
+    vault.daily_buckets =
+        [crate::rolling_window::TradeBucket::default(); crate::rolling_window::BUCKET_COUNT];
     vault.window_start = now;
     vault.delay_secs = args.delay_secs;
     vault.unfreeze_at = 0;
@@ -763,7 +765,12 @@ fn can_pay_now(
     let Some(next) = next_window_spent(vault, amount, now)? else {
         return Ok(false);
     };
-    if next > vault.daily_limit {
+    let Some(daily_next) = crate::rolling_window::spent(&vault.daily_buckets, now)
+        .and_then(|spent| spent.checked_add(amount))
+    else {
+        return Ok(false);
+    };
+    if daily_next > vault.daily_limit {
         return Ok(false);
     }
     let cap = share_cap(balance, vault.big_share_bps)?;
@@ -780,6 +787,7 @@ fn next_window_spent(vault: &HoldVault, amount: u64, now: i64) -> Result<Option<
 }
 
 fn commit_window(vault: &mut HoldVault, amount: u64, now: i64) -> Result<()> {
+    crate::rolling_window::record_release(&mut vault.daily_buckets, amount, now);
     let end = vault
         .window_start
         .checked_add(HOLD_WINDOW_SECS)

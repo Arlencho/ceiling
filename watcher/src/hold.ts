@@ -10,7 +10,7 @@ import { logError, logLine } from "./log.js";
 const HOUR = 3_600n;
 const HOLD_PENDING_CAPACITY = 8;
 const HOLD_LEDGER_CAPACITY = 32;
-const VAULT_LEN = 1291;
+const VAULT_LEN = 1691;
 const LEDGER_LEN = 2096;
 const PENDING_SIZE = 57;
 const ENTRY_SIZE = 64;

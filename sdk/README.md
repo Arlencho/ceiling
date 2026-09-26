@@ -288,6 +288,15 @@ veto://rule-request?v=2&kind=trade&agent=<base58>&inMint=<base58>&outMint=<base5
 
 `HoldVault` builds and sends `init_vault`, `deposit`, `withdraw`, `execute`, `stop`, `freeze`, `unfreeze` (owner and guardian), `skip` (owner and guardian), `recover`, `propose_change`, `apply_change`, and `cancel_change`. `readVault` reads the vault account, its pending withdrawals, and its ledger. `withdrawalOutlook` says whether a planned withdrawal would pay at once or be held, and why: frozen, a new address, over the daily limit, or over the share. A withdrawal the vault cannot cover is refused. A withdrawal that would wait when the pending list is already full (8) is refused. A withdrawal that can pay at once is not blocked by a full pending list.
 
+The daily limit uses the same conservative rolling day as trade rules: 25 hourly
+buckets retain the current hour and the preceding 24 hours. Allowance can take
+up to 25 hours to return. `dailyBuckets` contains this accounting; `windowSpent`
+and `windowStart` remain only for the separate big-door share calculation.
+The client requires the new 1691-byte layout. Retire the old devnet demo vault
+and reopen it using the recovery procedure in [docs/DEVNET.md](../docs/DEVNET.md)
+before using this client against the upgraded program.
+
+
 The vault PDA is `["hold", owner, vault_id]` with `vault_id` as a little-endian u64. The known-destination list holds 16 addresses. The hold ledger is a 32-entry ring. The instructions and the account fields are in `programs/veto/src/hold.rs`.
 
 Hold is merged and tested, and live on devnet. These methods target the program recorded in [docs/DEVNET.md](../docs/DEVNET.md). The app screens exist, and a device check with a real vault follows. The package that exports `HoldVault` is published from this checkout by the maintainer.

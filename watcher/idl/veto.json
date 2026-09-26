@@ -3282,6 +3282,9 @@
           },
           {
             "name": "window_spent",
+            "docs": [
+              "Fixed window used only for the unchanged big-door share calculation."
+            ],
             "type": "u64"
           },
           {
@@ -3356,6 +3359,23 @@
               "defined": {
                 "name": "PendingChange"
               }
+            }
+          },
+          {
+            "name": "daily_buckets",
+            "docs": [
+              "Rolling daily accounting, retaining the current and preceding 24 hours.",
+              "Appended so all existing field offsets remain stable."
+            ],
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "TradeBucket"
+                  }
+                },
+                25
+              ]
             }
           }
         ]

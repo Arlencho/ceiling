@@ -34,10 +34,12 @@ export const HOLD_PENDING_CAPACITY = 8;
 /** Decisions kept on the hold ledger. Older ones fall out of the ring. */
 export const HOLD_LEDGER_CAPACITY = 32;
 export const HOLD_WINDOW_SECS = 86_400n;
+export const HOLD_BUCKET_SECS = 3_600n;
+export const HOLD_BUCKET_COUNT = 25;
 export const HOLD_BPS_DENOMINATOR = 10_000n;
 
 const WITHDRAWAL_PENDING = 1;
-const VAULT_LEN = 1291;
+const VAULT_LEN = 1691;
 const LEDGER_LEN = 2096;
 const ENTRY_SIZE = 64;
 const ENTRY_BASE = 48;
@@ -64,6 +66,8 @@ const OFF_LEDGER_BUMP = 230;
 const OFF_KNOWN = 231;
 const OFF_PENDING = 743;
 const OFF_CHANGE = 1199;
+const OFF_DAILY_BUCKETS = 1291;
+const BUCKET_SIZE = 16;
 
 const I64_MIN = -9223372036854775808n;
 const I64_MAX = 9223372036854775807n;
@@ -98,6 +102,8 @@ export type HoldVaultAccount = {
   vaultToken: PublicKey;
   vaultId: bigint;
   dailyLimit: bigint;
+  dailyBuckets: { hour: bigint; amount: bigint }[];
+  /** Fixed window retained only for the big-door share calculation. */
   windowSpent: bigint;
   windowStart: bigint;
   delaySecs: bigint;
@@ -262,6 +268,10 @@ export function decodeHoldVault(data: Buffer, address: PublicKey): HoldVaultAcco
     vaultToken: new PublicKey(data.subarray(OFF_VAULT_TOKEN, OFF_VAULT_TOKEN + 32)),
     vaultId: data.readBigUInt64LE(OFF_VAULT_ID),
     dailyLimit: data.readBigUInt64LE(OFF_DAILY),
+    dailyBuckets: Array.from({ length: HOLD_BUCKET_COUNT }, (_, i) => ({
+      hour: data.readBigInt64LE(OFF_DAILY_BUCKETS + i * BUCKET_SIZE),
+      amount: data.readBigUInt64LE(OFF_DAILY_BUCKETS + i * BUCKET_SIZE + 8),
+    })),
     windowSpent: data.readBigUInt64LE(OFF_WINDOW_SPENT),
     windowStart: data.readBigInt64LE(OFF_WINDOW_START),
     delaySecs: data.readBigInt64LE(OFF_DELAY),
@@ -360,7 +370,11 @@ export function withdrawalOutlook(
   const base = now >= windowEnd ? 0n : vault.windowSpent;
   const next = base + amount;
   const overflow = next > U64_MAX;
-  if (overflow || next > vault.dailyLimit) reasons.push("over_daily_limit");
+  // BigInt division truncates toward zero; chain hours use floor division.
+  const hour = now >= 0n ? now / HOLD_BUCKET_SECS : (now - HOLD_BUCKET_SECS + 1n) / HOLD_BUCKET_SECS;
+  const dailyNext = vault.dailyBuckets.filter((bucket) => bucket.hour >= hour - 24n)
+    .reduce((total, bucket) => total + bucket.amount, amount);
+  if (overflow || dailyNext > U64_MAX || dailyNext > vault.dailyLimit) reasons.push("over_daily_limit");
   if (!overflow && next > shareCap(balance, vault.bigShareBps)) reasons.push("over_share");
   if (reasons.length === 0) return { outcome: "at_once" };
   if (vault.pending.length >= HOLD_PENDING_CAPACITY) {

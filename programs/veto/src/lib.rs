@@ -34,6 +34,7 @@ use trade::OpenTradeRuleArgs;
 
 pub mod hold;
 pub mod hold_state;
+pub mod rolling_window;
 pub mod state;
 pub mod trade;
 pub mod trade_state;

@@ -10,16 +10,10 @@ use crate::state::PURPOSE_MAX_LEN;
 /// Decisions kept on the trade ledger. Older ones fall out of the ring.
 pub const TRADE_LEDGER_CAPACITY: usize = 32;
 
-/// Every rolling interval of this length must stay within the daily limit.
-pub const TRADE_WINDOW_SECS: i64 = 24 * 60 * 60;
-pub const TRADE_BUCKET_SECS: i64 = 60 * 60;
-pub const TRADE_BUCKET_COUNT: usize = 25;
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
-pub struct TradeBucket {
-    pub hour: i64,
-    pub amount: u64,
-}
+pub use crate::rolling_window::{
+    TradeBucket, BUCKET_COUNT as TRADE_BUCKET_COUNT, BUCKET_SECS as TRADE_BUCKET_SECS,
+    WINDOW_SECS as TRADE_WINDOW_SECS,
+};
 
 /// `exchange_kind` for the SPL token-swap program at `SPL_TOKEN_SWAP_ID`.
 pub const EXCHANGE_KIND_SPL_TOKEN_SWAP: u8 = 0;

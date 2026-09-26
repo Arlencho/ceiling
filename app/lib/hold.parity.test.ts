@@ -40,7 +40,7 @@ import {
 
 const DAY = 86_400n;
 const NOW = 1_700_000_000n;
-const VAULT_LEN = 1291;
+const VAULT_LEN = 1691;
 const LEDGER_LEN = 2096;
 const PENDING_SIZE = 57;
 const ENTRY_SIZE = 64;
@@ -85,6 +85,7 @@ type VaultSpec = {
   vaultToken: PublicKey;
   vaultId: bigint;
   dailyLimit: bigint;
+  dailyBuckets: { hour: bigint; amount: bigint }[];
   windowSpent: bigint;
   windowStart: bigint;
   delaySecs: bigint;
@@ -186,6 +187,10 @@ function vaultBytes(spec: VaultSpec): Buffer {
   data.set(spec.vaultToken.toBuffer(), 136);
   data.writeBigUInt64LE(spec.vaultId, 168);
   data.writeBigUInt64LE(spec.dailyLimit, 176);
+  spec.dailyBuckets.forEach((bucket, i) => {
+    data.writeBigInt64LE(bucket.hour, 1291 + i * 16);
+    data.writeBigUInt64LE(bucket.amount, 1299 + i * 16);
+  });
   data.writeBigUInt64LE(spec.windowSpent, 184);
   data.writeBigInt64LE(spec.windowStart, 192);
   data.writeBigInt64LE(spec.delaySecs, 200);
@@ -238,6 +243,7 @@ function plainVault(account: {
   vaultToken: PublicKey;
   vaultId: bigint;
   dailyLimit: bigint;
+  dailyBuckets: { hour: bigint; amount: bigint }[];
   windowSpent: bigint;
   windowStart: bigint;
   delaySecs: bigint;
@@ -261,6 +267,7 @@ function plainVault(account: {
     vaultToken: keyText(account.vaultToken),
     vaultId: intText(account.vaultId),
     dailyLimit: intText(account.dailyLimit),
+    dailyBuckets: account.dailyBuckets.map((b) => ({ hour: intText(b.hour), amount: intText(b.amount) })),
     windowSpent: intText(account.windowSpent),
     windowStart: intText(account.windowStart),
     delaySecs: intText(account.delaySecs),
@@ -302,6 +309,7 @@ function expectedVault(spec: VaultSpec, address: PublicKey) {
     vaultToken: keyText(spec.vaultToken),
     vaultId: intText(spec.vaultId),
     dailyLimit: intText(spec.dailyLimit),
+    dailyBuckets: Array.from({ length: 25 }, (_, i) => ({ hour: intText(spec.dailyBuckets[i]?.hour ?? 0n), amount: intText(spec.dailyBuckets[i]?.amount ?? 0n) })),
     windowSpent: intText(spec.windowSpent),
     windowStart: intText(spec.windowStart),
     delaySecs: intText(spec.delaySecs),
@@ -375,6 +383,7 @@ function baseVault(over: Partial<VaultSpec> = {}): VaultSpec {
     tokenBump: 2,
     ledgerBump: 3,
     ...over,
+    dailyBuckets: over.dailyBuckets ?? [{ hour: ((over.windowStart ?? NOW - 10n) / 3600n), amount: over.windowSpent ?? 0n }],
   };
 }
 
@@ -871,11 +880,11 @@ test('a ninth withdrawal is refused when eight are already waiting', () => {
   );
 });
 
-test('spending from the previous window does not hold a withdrawal', () => {
+test('the oldest hourly bucket still holds a withdrawal at the old window edge', () => {
   sameOutlook(
     baseVault({ windowStart: NOW - DAY, windowSpent: 40n }),
     { amount: 20n, destination: knownDest, balance: 1_000n, now: NOW },
-    { outcome: 'at_once' },
+    { outcome: 'held', reasons: ['over_daily_limit'], unlockAt: intText(NOW + DAY) },
   );
 });
 
@@ -925,4 +934,29 @@ test('shipped app modules do not import the sdk or node crypto', () => {
     }
   }
   assert.deepEqual(offenders, []);
+});
+
+
+test('all 25 rolling buckets preserve signed hours and large amounts in both clients', () => {
+  const buckets = Array.from({ length: 25 }, (_, i) => ({ hour: BigInt(i - 1), amount: 9007199254740993n + BigInt(i) }));
+  const vaultKey = Keypair.generate().publicKey;
+  const data = vaultBytes(baseVault({ dailyBuckets: buckets }));
+  assert.deepEqual(decodeHoldVault(data, vaultKey).dailyBuckets, buckets);
+  assert.deepEqual(sdkDecodeHoldVault(data, vaultKey).dailyBuckets, buckets);
+  assert.throws(() => decodeHoldVault(data.subarray(0, 1291), vaultKey), /1691/);
+  assert.throws(() => sdkDecodeHoldVault(data.subarray(0, 1291), vaultKey), /1691/);
+});
+
+test('rolling preview counts multiple hours and future buckets after a clock rewind', () => {
+  const hour = NOW / 3600n;
+  sameOutlook(
+    baseVault({ dailyBuckets: [
+      { hour: hour - 24n, amount: 15n },
+      { hour: hour - 1n, amount: 15n },
+      { hour: hour + 1n, amount: 15n },
+      { hour: hour - 25n, amount: 1000n },
+    ] }),
+    { amount: 10n, destination: knownDest, balance: 1000n, now: NOW },
+    { outcome: 'held', reasons: ['over_daily_limit'], unlockAt: intText(NOW + DAY) },
+  );
 });

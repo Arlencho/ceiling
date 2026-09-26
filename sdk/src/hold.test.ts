@@ -9,7 +9,7 @@ import { HOLD_LEDGER_DISCRIMINATOR, HOLD_VAULT_DISCRIMINATOR, PROGRAM_ID } from 
 import { FakeConnection, asConnection } from "./testkit.js";
 
 const DAY = 86_400n;
-const VAULT_LEN = 1291;
+const VAULT_LEN = 1691;
 const LEDGER_LEN = 2096;
 
 function disc(name: string): Buffer {
@@ -494,6 +494,7 @@ function install(
   fake: FakeConnection,
   spec: {
     dailyLimit?: bigint;
+    dailyBuckets?: { hour: bigint; amount: bigint }[];
     windowSpent?: bigint;
     windowStart?: bigint;
     delaySecs?: bigint;
@@ -512,6 +513,11 @@ function install(
   data.set(HOLD_VAULT_DISCRIMINATOR, 0);
   data.set(token.toBuffer(), 136);
   data.writeBigUInt64LE(spec.dailyLimit ?? 1_000_000n, 176);
+  const buckets = spec.dailyBuckets ?? [{ hour: (spec.windowStart ?? 0n) / 3600n, amount: spec.windowSpent ?? 0n }];
+  buckets.forEach((bucket, i) => {
+    data.writeBigInt64LE(bucket.hour, 1291 + i * 16);
+    data.writeBigUInt64LE(bucket.amount, 1299 + i * 16);
+  });
   data.writeBigUInt64LE(spec.windowSpent ?? 0n, 184);
   data.writeBigInt64LE(spec.windowStart ?? 0n, 192);
   data.writeBigInt64LE(spec.delaySecs ?? DAY, 200);
@@ -685,7 +691,7 @@ test("a withdrawal that pays at once still pays when the pending list is full", 
   assert.deepEqual(outlook, { outcome: "at_once" });
 });
 
-test("a new 24 hour window does not count the previous window's spend", async () => {
+test("allowance returns only after the oldest hourly bucket expires", async () => {
   const r = rig();
   const start = 1_000_000n;
   const installed = install(r.fake, {
@@ -699,7 +705,7 @@ test("a new 24 hour window does not count the previous window's spend", async ()
     vault: installed.vault,
     amount: 1n,
     destination: installed.destination,
-    now: start + DAY,
+    now: (start / 3600n + 25n) * 3600n,
   });
   assert.deepEqual(open, { outcome: "at_once" });
   const still = await r.hold.previewWithdrawal({

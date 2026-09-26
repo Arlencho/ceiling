@@ -675,7 +675,7 @@ fn arm_known(w: &mut World, dest: &Pubkey) {
     warp(&mut w.svm, row.unlock_at);
     execute(w, row.id, dest, &owner).expect("execute the first payment");
     assert_eq!(token_balance(&w.svm, dest), 1);
-    warp(&mut w.svm, row.unlock_at + HOLD_WINDOW_SECS);
+    warp(&mut w.svm, row.unlock_at + HOLD_WINDOW_SECS + 3600);
 }
 
 fn known_world(rules: Rules) -> (World, Pubkey) {
@@ -1488,7 +1488,7 @@ fn share_and_daily_limit_arithmetic_holds_at_u64_edges() {
 }
 
 #[test]
-fn the_24_hour_window_resets_at_the_boundary_and_not_one_second_before() {
+fn daily_allowance_returns_only_when_the_oldest_hour_expires() {
     let (mut w, dest) = known_world(Rules::default());
     let vault_before = token_balance(&w.svm, &w.vault_token);
     let logs = withdraw(&mut w, 100 * ONE, &dest).unwrap();
@@ -1509,13 +1509,14 @@ fn the_24_hour_window_resets_at_the_boundary_and_not_one_second_before() {
     assert_eq!(still.window_start, start);
     assert_eq!(still.window_spent, 100 * ONE);
 
-    warp(&mut w.svm, start + HOLD_WINDOW_SECS);
+    let expiry = (start.div_euclid(3600) + 25) * 3600;
+    warp(&mut w.svm, expiry);
     let logs = withdraw(&mut w, 100 * ONE, &dest).unwrap();
     assert_paid(&logs);
     assert_eq!(token_balance(&w.svm, &w.vault_token), filled - 100 * ONE);
     assert_eq!(token_balance(&w.svm, &dest), dest_filled + 100 * ONE);
     let rolled = read_vault(&w.svm, &w.vault);
-    assert_eq!(rolled.window_start, start + HOLD_WINDOW_SECS);
+    assert_eq!(rolled.window_start, expiry);
     assert_eq!(rolled.window_spent, 100 * ONE);
 }
 

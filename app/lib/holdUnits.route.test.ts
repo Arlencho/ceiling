@@ -9,9 +9,15 @@ import { DEVNET_USDC_MINT } from './tokens';
 const key = Keypair.generate().publicKey;
 const account = {
   address: key, owner: key, mint: new PublicKey(DEVNET_USDC_MINT), vaultToken: key,
-  guardian: key, safeAddress: key, dailyLimit: 1_000_000n, delaySecs: 86400n,
-  windowStart: 0n, windowSpent: 0n, bigShareBps: 1000, known: [], frozen: false,
-  pending: [{ id: 1n, amount: 2_000_000n, destination: key, unlockAt: 1800000000n }],
+  guardian: key, safeAddress: key, vaultId: 1n, dailyLimit: 1_000_000n,
+  dailyBuckets: [], windowStart: 0n, windowSpent: 0n, delaySecs: 86400n,
+  unfreezeAt: 0n, nextWithdrawalId: 2n, bigShareBps: 1000, known: [], frozen: false,
+  pending: [{ id: 1n, amount: 2_000_000n, destination: key, unlockAt: 1800000000n, status: 1 }],
+  change: {
+    active: false, fields: 0, bigShareBps: 0, dailyLimit: 0n, delaySecs: 0n,
+    guardian: PublicKey.default, safeAddress: PublicKey.default, effectiveAt: 0n,
+  },
+  bump: 0, tokenBump: 0, ledgerBump: 0,
 };
 const session = {
   client: {}, config: { mint: DEVNET_USDC_MINT }, owner: key, chain: { configError: null },
