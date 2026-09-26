@@ -1,6 +1,6 @@
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
-import type { RuleRequestV1 } from '../../lib/ruleRequest';
+import { canonicalAddress, parseRuleRequest, type RuleRequestV1 } from '../../lib/ruleRequest';
 import { truncateAddress } from '../../lib/wallet';
 import { colors, fonts, radii, space, type as typeScale } from '../theme';
 import { BrassButton, FirstRunChrome, QuietButton, type ScreenView } from './Chrome';
@@ -62,8 +62,13 @@ export function NameAgentScreen({
   onPaste?: (value: string) => void;
   showPaste?: boolean;
 }) {
+  const pastedText = showPaste ? (paste ?? '').trim() : '';
+  const validPaste = Boolean(canonicalAddress(pastedText)) || parseRuleRequest(pastedText).ok;
+  const pasteError = pastedText && !validPaste
+    ? 'That is not an agent address or a rule request.'
+    : null;
   const resolved =
-    view ?? (error ? 'error' : address ? 'normal' : showPaste ? 'normal' : 'empty');
+    view ?? (showPaste ? 'normal' : error ? 'error' : address ? 'normal' : 'empty');
   return (
     <FirstRunChrome
       stage="agent"
@@ -71,11 +76,11 @@ export function NameAgentScreen({
       title="Agent found"
       onBack={onBack}
       view={resolved}
-      error={error}
+      error={pasteError ?? error}
       empty="No agent yet. Scan a code, paste an address, or create a test agent."
       footer={
         <>
-          <BrassButton label="Review the rule" onPress={onReview} disabled={!address} />
+          <BrassButton label="Review the rule" onPress={onReview} disabled={!address && !validPaste} />
           <QuietButton label="Not my agent" onPress={onReject} />
         </>
       }
