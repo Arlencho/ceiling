@@ -1454,7 +1454,7 @@ fn share_and_daily_limit_arithmetic_holds_at_u64_edges() {
     assert_eq!(token_balance(&huge.svm, &dest), paid);
 
     // Recycle a near-max payment back into the vault inside the same window.
-    // The next instant amount overflows u64 when added to window_spent.
+    // The next instant amount overflows u64 when added to rolling spend.
     let mut edge = open_vault(Rules {
         vault_id: 13,
         daily_limit: u64::MAX,
@@ -1475,8 +1475,10 @@ fn share_and_daily_limit_arithmetic_holds_at_u64_edges() {
     assert_eq!(token_balance(&edge.svm, &owner_dest), almost);
     deposit_from(&mut edge, &owner_dest, almost).unwrap();
     let vault_state = read_vault(&edge.svm, &edge.vault);
-    assert_eq!(vault_state.window_spent, almost);
-    assert!(now(&edge.svm) < vault_state.window_start + HOLD_WINDOW_SECS);
+    assert_eq!(
+        veto::rolling_window::spent(&vault_state.daily_buckets, now(&edge.svm)),
+        Some(almost)
+    );
     let before = token_balance(&edge.svm, &edge.vault_token);
     let dest_before = token_balance(&edge.svm, &owner_dest);
     let result = withdraw(&mut edge, 11, &owner_dest);
@@ -1493,9 +1495,11 @@ fn daily_allowance_returns_only_when_the_oldest_hour_expires() {
     let vault_before = token_balance(&w.svm, &w.vault_token);
     let logs = withdraw(&mut w, 100 * ONE, &dest).unwrap();
     assert_paid(&logs);
-    let start = read_vault(&w.svm, &w.vault).window_start;
-    assert_eq!(start, now(&w.svm));
-    assert_eq!(read_vault(&w.svm, &w.vault).window_spent, 100 * ONE);
+    let start = now(&w.svm);
+    assert_eq!(
+        veto::rolling_window::spent(&read_vault(&w.svm, &w.vault).daily_buckets, start),
+        Some(100 * ONE)
+    );
     let filled = token_balance(&w.svm, &w.vault_token);
     let dest_filled = token_balance(&w.svm, &dest);
     assert_eq!(filled, vault_before - 100 * ONE);
@@ -1506,8 +1510,10 @@ fn daily_allowance_returns_only_when_the_oldest_hour_expires() {
     assert_eq!(token_balance(&w.svm, &w.vault_token), filled);
     assert_eq!(token_balance(&w.svm, &dest), dest_filled);
     let still = read_vault(&w.svm, &w.vault);
-    assert_eq!(still.window_start, start);
-    assert_eq!(still.window_spent, 100 * ONE);
+    assert_eq!(
+        veto::rolling_window::spent(&still.daily_buckets, now(&w.svm)),
+        Some(100 * ONE)
+    );
 
     let expiry = (start.div_euclid(3600) + 25) * 3600;
     warp(&mut w.svm, expiry);
@@ -1516,8 +1522,10 @@ fn daily_allowance_returns_only_when_the_oldest_hour_expires() {
     assert_eq!(token_balance(&w.svm, &w.vault_token), filled - 100 * ONE);
     assert_eq!(token_balance(&w.svm, &dest), dest_filled + 100 * ONE);
     let rolled = read_vault(&w.svm, &w.vault);
-    assert_eq!(rolled.window_start, expiry);
-    assert_eq!(rolled.window_spent, 100 * ONE);
+    assert_eq!(
+        veto::rolling_window::spent(&rolled.daily_buckets, expiry),
+        Some(100 * ONE)
+    );
 }
 
 #[test]

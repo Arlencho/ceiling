@@ -308,22 +308,15 @@ export function holdWithdrawalOutlook(
   const { amount, balance, now, destination } = args;
   if (amount <= 0n) throw new Error('amount must be positive');
   if (amount > balance) return { outcome: 'refused', reason: 'insufficient_funds' };
-  if (vault.windowStart > I64_MAX - HOLD_WINDOW_SECS) {
-    throw new Error('window end overflows');
-  }
   const reasons: HoldWaitReason[] = [];
   if (vault.frozen) reasons.push('frozen');
   if (!vault.known.some((key) => key.equals(destination))) reasons.push('new_address');
-  const windowEnd = vault.windowStart + HOLD_WINDOW_SECS;
-  const base = now >= windowEnd ? 0n : vault.windowSpent;
-  const next = base + amount;
-  const overflow = next > U64_MAX;
   // BigInt division truncates toward zero; chain hours use floor division.
   const hour = now >= 0n ? now / HOLD_BUCKET_SECS : (now - HOLD_BUCKET_SECS + 1n) / HOLD_BUCKET_SECS;
   const dailyNext = vault.dailyBuckets.filter((bucket) => bucket.hour >= hour - 24n)
     .reduce((total, bucket) => total + bucket.amount, amount);
-  if (overflow || dailyNext > U64_MAX || dailyNext > vault.dailyLimit) reasons.push('over_daily_limit');
-  if (!overflow && next > shareCap(balance, vault.bigShareBps)) reasons.push('over_share');
+  if (dailyNext > U64_MAX || dailyNext > vault.dailyLimit) reasons.push('over_daily_limit');
+  if (dailyNext > shareCap(balance, vault.bigShareBps)) reasons.push('over_share');
   if (reasons.length === 0) return { outcome: 'at_once' };
   if (vault.pending.length >= HOLD_PENDING_CAPACITY) {
     return { outcome: 'refused', reason: 'pending_full' };

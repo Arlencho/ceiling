@@ -3283,7 +3283,7 @@
           {
             "name": "window_spent",
             "docs": [
-              "Fixed window used only for the unchanged big-door share calculation."
+              "Unused legacy fixed-window fields, retained to preserve account layout."
             ],
             "type": "u64"
           },
@@ -3364,7 +3364,7 @@
           {
             "name": "daily_buckets",
             "docs": [
-              "Rolling daily accounting, retaining the current and preceding 24 hours.",
+              "Rolling daily and share accounting, retaining the current and preceding 24 hours.",
               "Appended so all existing field offsets remain stable."
             ],
             "type": {

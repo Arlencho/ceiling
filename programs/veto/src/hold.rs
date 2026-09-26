@@ -47,7 +47,7 @@ pub fn init_vault(ctx: Context<InitVault>, args: InitVaultArgs) -> Result<()> {
     vault.window_spent = 0;
     vault.daily_buckets =
         [crate::rolling_window::TradeBucket::default(); crate::rolling_window::BUCKET_COUNT];
-    vault.window_start = now;
+    vault.window_start = 0;
     vault.delay_secs = args.delay_secs;
     vault.unfreeze_at = 0;
     vault.next_withdrawal_id = 1;
@@ -144,7 +144,7 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     }
 
     if can_pay_now(&ctx.accounts.vault, balance, destination, amount, now)? {
-        commit_window(&mut ctx.accounts.vault, amount, now)?;
+        record_release(&mut ctx.accounts.vault, amount, now);
         transfer_out(&ctx, amount)?;
         let vault_key = ctx.accounts.vault.key();
         write_record(
@@ -226,7 +226,7 @@ pub fn execute(ctx: Context<Execute>, id: u64) -> Result<()> {
         VetoError::HoldInsufficientFunds
     );
 
-    commit_window(&mut ctx.accounts.vault, row.amount, now)?;
+    record_release(&mut ctx.accounts.vault, row.amount, now);
     let info = ctx.accounts.vault.to_account_info();
     transfer_out_parts(
         info,
@@ -415,7 +415,7 @@ pub fn skip(ctx: Context<Skip>, id: u64) -> Result<()> {
         VetoError::HoldInsufficientFunds
     );
 
-    commit_window(&mut ctx.accounts.vault, row.amount, now)?;
+    record_release(&mut ctx.accounts.vault, row.amount, now);
     let info = ctx.accounts.vault.to_account_info();
     transfer_out_parts(
         info,
@@ -762,9 +762,6 @@ fn can_pay_now(
     if vault.frozen || !is_known(vault, &destination) {
         return Ok(false);
     }
-    let Some(next) = next_window_spent(vault, amount, now)? else {
-        return Ok(false);
-    };
     let Some(daily_next) = crate::rolling_window::spent(&vault.daily_buckets, now)
         .and_then(|spent| spent.checked_add(amount))
     else {
@@ -774,33 +771,11 @@ fn can_pay_now(
         return Ok(false);
     }
     let cap = share_cap(balance, vault.big_share_bps)?;
-    Ok(next <= cap)
+    Ok(daily_next <= cap)
 }
 
-fn next_window_spent(vault: &HoldVault, amount: u64, now: i64) -> Result<Option<u64>> {
-    let end = vault
-        .window_start
-        .checked_add(HOLD_WINDOW_SECS)
-        .ok_or(error!(VetoError::HoldMathOverflow))?;
-    let base = if now >= end { 0 } else { vault.window_spent };
-    Ok(base.checked_add(amount))
-}
-
-fn commit_window(vault: &mut HoldVault, amount: u64, now: i64) -> Result<()> {
+fn record_release(vault: &mut HoldVault, amount: u64, now: i64) {
     crate::rolling_window::record_release(&mut vault.daily_buckets, amount, now);
-    let end = vault
-        .window_start
-        .checked_add(HOLD_WINDOW_SECS)
-        .ok_or(error!(VetoError::HoldMathOverflow))?;
-    if now >= end {
-        vault.window_start = now;
-        vault.window_spent = 0;
-    }
-    vault.window_spent = vault
-        .window_spent
-        .checked_add(amount)
-        .ok_or(error!(VetoError::HoldMathOverflow))?;
-    Ok(())
 }
 
 fn share_cap(balance: u64, bps: u16) -> Result<u64> {

@@ -960,3 +960,17 @@ test('rolling preview counts multiple hours and future buckets after a clock rew
     { outcome: 'held', reasons: ['over_daily_limit'], unlockAt: intText(NOW + DAY) },
   );
 });
+
+test('the share preview holds a burst across the old window edge', () => {
+  sameOutlook(
+    baseVault({
+      dailyLimit: 10_000n,
+      bigShareBps: 2_500,
+      windowStart: NOW - DAY,
+      windowSpent: 201n,
+      dailyBuckets: [{ hour: (NOW - 1n) / 3600n, amount: 201n }],
+    }),
+    { amount: 100n, destination: knownDest, balance: 800n, now: NOW },
+    { outcome: 'held', reasons: ['over_share'], unlockAt: intText(NOW + DAY) },
+  );
+});
