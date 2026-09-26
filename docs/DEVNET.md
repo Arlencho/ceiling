@@ -154,6 +154,26 @@ Length: 36 (0x24) bytes
 
 ## Upgrades
 
+### Hold upgrade attempt, 2026-09-26
+
+Stopped at step 4 because the public devnet RPC repeatedly returned HTTP 429.
+The final metadata read confirms the program stayed at its previous deploy slot.
+Do not treat this entry as a completed release.
+
+- Source commit: `49b8de3f339b2df87138858c7f7be6116209e994`, a clean checkout of main containing [PR 330](https://github.com/Arlencho/veto/pull/330) and [PR 337](https://github.com/Arlencho/veto/pull/337).
+- Main CI: all 11 jobs passed in [run 36247614460](https://github.com/Arlencho/veto/actions/runs/36247614460) before the build started.
+- Build: removed `target/deploy/veto.so`, unset `ANCHOR_BUILD_SBF_ARCH`, then ran `anchor build --ignore-keys` with no v0 flag. Command review rejected `rm -f`, so Python removed only that artifact instead. The deploy binary is 591920 bytes, SHA-256 `21144f18b9d9e5be1e6c0130a18b4620f1400d9e735fe3a11422d9d33fb565ca`. It was preserved separately before the test build replaced `target/deploy/veto.so`.
+- `make test` from the same commit: 134 passed, 0 failed. Counts: unit 4, Hold 24, Hold red-team 18, payment red-team 20, refusal recording 6, SKR mint 2, token-swap fixture 3, trade 27, trade red-team 30; doc-tests 0.
+- Before the attempt, program data account `7KhczbWwnrJYLF2YA3oyxosZLoqaPZDXh64tQJmsAAcM` had 592720 bytes of program capacity and last deploy slot 504196958. No extension was needed. The existing deployed binary was saved locally before attempting the upgrade.
+- The existing `keys/deployer.json` public key matched upgrade authority `GYus8c91vyc7XDrgqfDaYcmVTERb4hQWcf6fLr2SyR1`. Its balance before the attempt was 6.337041981 SOL.
+- The deploy command used the preserved deploy binary, the recorded program ID, `keys/deployer.json` as upgrade authority and fee payer, `--with-compute-unit-price 5000`, `--max-sign-attempts 10`, and `--use-rpc`. The explicit resumable buffer was `syUuvzqbbPCprVRLZ7E2rTcRPMNaD29g4EcxZb91vt9`; its signer remains in gitignored `keys/hold-upgrade-buffer.json` in the task worktree.
+- The buffer metadata read returned `HTTP status client error (429 Too Many Requests)` from `https://api.devnet.solana.com/`. Read retries after 20-second and 40-second back-offs also returned HTTP 429. The upload had produced no success result or signature and was interrupted with exit 130. After stopping the upload, a final metadata read at confirmed slot 504438500 succeeded: the program still had last deploy slot 504196958, and buffer `syUuvzqbbPCprVRLZ7E2rTcRPMNaD29g4EcxZb91vt9` existed with 591957 bytes and 3007832440 lamports. The upload did not upgrade the program. The buffer is retained for resumption; its content was not verified. Check the current program and buffer before resuming or reclaiming its rent.
+- No post-upgrade dump comparison was possible. No vault close, recovery, or replacement was attempted. No new demo vault address exists from this run.
+- Before the upload, old demo vault `8n9EcgXwSWVbQgnunw6oin8hYcpRDr1CkkvozhpiAyVj` was 1291 bytes. Recorded settings: owner `GtA2Vxhomfm2WGaBcvz5oCBrqkAecKHMAL3UTn4HVFzq`, vault ID 1, USDC mint `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`, daily limit 1000000 base units, delay 86400 seconds, share 2500 basis points, guardian and safe address both `4KsiU8i6USAbZXXzUt8RWeGjCRdQYrUYSFP6d7c7Hn2C`. The requested replacement deposit is 5 USDC; this run did not verify the old token balance or move funds.
+- The program has no Hold close instruction. The recovery procedure below requires the old binary to empty a 1291-byte vault; the new binary rejects that layout. Confirm the deployed binary before any recovery attempt.
+- `make e2e-devnet`, `make hold-e2e-devnet`, `make trade-demo-devnet`, and deployed-program IDL verification were not run because step 4 did not complete. There are no journey summary lines or deployed IDL match claims for this attempt.
+- Every operator command used `VETO_RPC=https://api.devnet.solana.com`. No keyed RPC endpoint or private key was printed or committed.
+
 ### Trade upgrade, 2026-09-25
 
 On 2026-09-25T22:58:50Z the program `3zNp5EuQ61pR9stq4rzYsRQnjg4AYAgW8nxRje6koQmV` was upgraded on devnet in slot 504196958. This completes the 2026-09-25T22:21:37Z attempt, which had stopped before deployment because `VETO_RPC` was unset in the run environment.
