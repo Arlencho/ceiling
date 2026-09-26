@@ -19,8 +19,12 @@ function stripDevClientSchemes(manifest) {
   return manifest;
 }
 
+function stripsDevClientScheme(profile) {
+  return profile === 'production' || profile === 'mainnet-preview';
+}
+
 function withProductionDevClientScheme(config) {
-  if (process.env.EAS_BUILD_PROFILE !== 'production') {
+  if (!stripsDevClientScheme(process.env.EAS_BUILD_PROFILE)) {
     return config;
   }
   return withAndroidManifest(config, (next) => {
@@ -31,5 +35,6 @@ function withProductionDevClientScheme(config) {
 
 module.exports = {
   stripDevClientSchemes,
+  stripsDevClientScheme,
   withProductionDevClientScheme,
 };

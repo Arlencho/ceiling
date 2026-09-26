@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 import { BrassButton, FirstRunChrome } from '../../components/firstrun/Chrome';
@@ -7,8 +7,16 @@ import { type as typeScale } from '../../components/theme';
 import { isActive } from '../../lib/mandate';
 import { listHoldVaults } from '../../lib/holdChain';
 import { useHoldSession } from '../../lib/holdSession';
+import { useWallet } from '../../lib/useWallet';
 
 export default function FinishRoute() {
+  const { cluster } = useWallet();
+  if (!cluster) return null;
+  if (cluster === 'mainnet-beta') return <Redirect href="/(tabs)" />;
+  return <FinishRouteContent />;
+}
+
+function FinishRouteContent() {
   const router = useRouter();
   const session = useHoldSession();
   const [now] = useState(() => BigInt(Math.floor(Date.now() / 1000)));

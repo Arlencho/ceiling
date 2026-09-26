@@ -1,5 +1,6 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Redirect, Stack, useLocalSearchParams } from 'expo-router';
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { useWallet } from '../../lib/useWallet';
 
 import { colors } from '../../components/theme';
 import {
@@ -91,6 +92,13 @@ export function useHoldDraft(): DraftApi {
 }
 
 export default function HoldLayout() {
+  const { cluster } = useWallet();
+  if (!cluster) return null;
+  if (cluster === 'mainnet-beta') return <Redirect href="/(tabs)" />;
+  return <HoldLayoutContent />;
+}
+
+function HoldLayoutContent() {
   return (
     <DraftProvider>
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />
