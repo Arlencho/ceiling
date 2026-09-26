@@ -341,6 +341,10 @@ test('the rule form offers devnet USDC when the wallet is short of the cap', asy
     });
     assert.deepEqual(copiedText, [owner.toBase58()]);
     assert.deepEqual(openedUrls, ['https://faucet.circle.com']);
+    await act(async () => amountInput(root, 'Most in total, ever').props.onChangeText('0.000001'));
+    await act(async () => amountInput(root, 'Most in total, ever').props.onBlur());
+    assert.equal(amountInput(root, 'Most in total, ever').props.value, '0.000001');
+    assert.equal(visibleText(root).includes('Get devnet USDC'), false);
     await act(async () => root.unmount());
   } finally {
     chainStub.config.mint = savedMint;
@@ -418,4 +422,73 @@ test('an invalid request, a missing payee, and a readable request each show thei
     });
   }
   assert.match(visibleText(empty), /Scan or paste the payee address|Your agent asks you for this rule/);
+});
+
+async function limitForm() {
+  observation.decimals = 6;
+  observation.ownerTokenBalance = 100_000_000n;
+  const { ApprovalScreen } = await import('../components/ApprovalScreen');
+  return mount(createElement(ApprovalScreen, {
+    mode: 'request', invalidReason: null,
+    request: {
+      v: 1, agent: agent.toBase58(), payee: payee.toBase58(), mint: mint.toBase58(),
+      cap: 12_000_000n, max: 12_000_000n, days: 7, purpose: 'Charge the car',
+      agentLabel: null, payeeLabel: null,
+    },
+  }));
+}
+
+function amountInput(root: ReactTestRenderer, label: string) {
+  return root.root.findAll((node) => (node.type as unknown) === 'TextInput')
+    .find((node) => node.props.accessibilityLabel === label)!;
+}
+
+test('eleven minus taps from 12 give exactly 1 token', async () => {
+  const root = await limitForm();
+  try {
+    for (let i = 0; i < 11; i += 1) {
+      await act(async () => holdButton(root, 'Lower the total').props.onPress());
+    }
+    assert.match(visibleText(root), /1 payments of 1 [^\n]+ at most/);
+  } finally { await act(async () => root.unmount()); }
+});
+
+test('limits clamp at zero and the ceiling, and plus from zero gives one', async () => {
+  const root = await limitForm();
+  try {
+    for (let i = 0; i < 14; i += 1) {
+      await act(async () => holdButton(root, 'Lower the total').props.onPress());
+    }
+    assert.equal(amountInput(root, 'Most in total, ever').props.value, '0');
+    assert.equal(amountInput(root, 'Most per payment').props.value, '0');
+    assert.equal(hold(root).props.disabled, true);
+    await act(async () => holdButton(root, 'Raise the total').props.onPress());
+    await act(async () => holdButton(root, 'Raise the most per payment').props.onPress());
+    assert.equal(amountInput(root, 'Most per payment').props.value, '1');
+    for (let i = 0; i < 14; i += 1) {
+      await act(async () => holdButton(root, 'Raise the total').props.onPress());
+      await act(async () => holdButton(root, 'Raise the most per payment').props.onPress());
+    }
+    assert.equal(amountInput(root, 'Most in total, ever').props.value, '12');
+    assert.equal(amountInput(root, 'Most per payment').props.value, '12');
+  } finally { await act(async () => root.unmount()); }
+});
+
+test('typed limits round to token precision, constrain per payment, and reject invalid input', async () => {
+  const root = await limitForm();
+  try {
+    await act(async () => amountInput(root, 'Most in total, ever').props.onChangeText('1.2345678'));
+    await act(async () => amountInput(root, 'Most in total, ever').props.onBlur());
+    assert.equal(amountInput(root, 'Most in total, ever').props.value, '1.234568');
+    assert.equal(amountInput(root, 'Most per payment').props.value, '1.234568');
+    assert.match(visibleText(root), /1 payments of 1\.234568 [^\n]+ at most/);
+    for (const invalid of ['', '-1', 'abc', '1e3', '13']) {
+      await act(async () => amountInput(root, 'Most per payment').props.onChangeText(invalid));
+      assert.equal(hold(root).props.disabled, true);
+    }
+    await act(async () => amountInput(root, 'Most per payment').props.onChangeText('0.5'));
+    await act(async () => amountInput(root, 'Most per payment').props.onBlur());
+    assert.equal(amountInput(root, 'Most per payment').props.value, '0.5');
+    assert.equal(hold(root).props.disabled, false);
+  } finally { await act(async () => root.unmount()); }
 });
