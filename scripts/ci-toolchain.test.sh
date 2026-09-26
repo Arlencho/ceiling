@@ -13,6 +13,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT="${CI_TOOLCHAIN_UNDER_TEST:-$ROOT/scripts/ci-toolchain.sh}"
 
+BASE_PATH="$PATH"
 pass=0; fail=0
 ok()  { printf 'ok - %s\n' "$1"; pass=$((pass+1)); }
 bad() { printf 'not ok - %s\n' "$1"; fail=$((fail+1)); }
@@ -25,7 +26,7 @@ new_scratch() {
     mkdir -p "$STUB_DIR/bin" "$STUB_DIR/home"
     export STUB_DIR
     export HOME="$STUB_DIR/home"
-    export PATH="$STUB_DIR/bin:$PATH"
+    export PATH="$STUB_DIR/bin:$BASE_PATH"
     write_common_stubs
 }
 
@@ -40,6 +41,8 @@ echo "cargo $*" >> "$STUB_DIR/cargo.log"
 if [ "${1:-}" = "install" ]; then
   cp "$STUB_DIR/avm_stub.sh" "$STUB_DIR/bin/avm"
   chmod +x "$STUB_DIR/bin/avm"
+  # Model a failed cargo install that still leaves an executable behind.
+  [ ! -f "$STUB_DIR/cargo_fail" ] || exit 1
 fi
 EOF
     # The avm stub honors two control files in STUB_DIR:
@@ -69,8 +72,10 @@ case "${1:-}" in
 exit 0
 INNER
     chmod +x "$HOME/.avm/bin/anchor-1.2.0"
+    [ ! -f "$STUB_DIR/attestation_fail" ] || exit 1
     ;;
   use)
+    [ ! -f "$STUB_DIR/avm_use_fail" ] || exit 1
     ln -sf "$HOME/.avm/bin/anchor-1.2.0" "$STUB_DIR/bin/anchor"
     ;;
 esac
@@ -84,6 +89,10 @@ echo "$n" > "$STUB_DIR/curl_count"
 fail_times=$(cat "$STUB_DIR/curl_fail_times" 2>/dev/null || echo 0)
 if [ "$n" -le "$fail_times" ]; then
   exit 22
+fi
+if [ -f "$STUB_DIR/installer_fail" ]; then
+  echo 'exit 1'
+  exit 0
 fi
 cat <<'INSTALLER'
 mkdir -p "$HOME/.local/share/solana/install/active_release/bin"
@@ -238,6 +247,91 @@ if bash "$SCRIPT" verify-solana >/dev/null 2>&1; then
     bad "verify-solana refuses a runner with no solana installed"
 else
     ok "verify-solana refuses a runner with no solana installed"
+fi
+rm -rf "$STUB_DIR"
+
+# Failed commands cannot be masked by a valid binary from a previous install.
+for failure in attestation_fail avm_use_fail; do
+    new_scratch
+    bash "$SCRIPT" install-anchor >/dev/null 2>&1
+    : > "$STUB_DIR/$failure"
+    # Keep a correct-looking binary independent of the cleaned download path.
+    cp "$HOME/.avm/bin/anchor-1.2.0" "$STUB_DIR/bin/cached-anchor"
+    ln -sf "$STUB_DIR/bin/cached-anchor" "$STUB_DIR/bin/anchor"
+    : > "$STUB_DIR/avm.log"
+    if bash "$SCRIPT" install-anchor >"$STUB_DIR/result.log" 2>&1; then
+        bad "$failure rejects a correct-looking cached binary"
+    elif [ "$(count_lines_matching 'failed verification' "$STUB_DIR/result.log")" = 3 ]; then
+        ok "$failure rejects a correct-looking cached binary after three attempts"
+    else
+        bad "$failure exhausts exactly three attempts"
+    fi
+    rm -rf "$STUB_DIR"
+done
+
+# Cargo can fail after creating avm. That attempt must fail before avm runs.
+new_scratch
+rm -f "$STUB_DIR/bin/avm"
+: > "$STUB_DIR/cargo_fail"
+if bash "$SCRIPT" install-anchor >/dev/null 2>&1 \
+    && [ "$(cat "$STUB_DIR/sleep.log" 2>/dev/null)" = "sleep 10" ] \
+    && [ "$(count_lines_matching 'avm install' "$STUB_DIR/avm.log")" = 1 ]; then
+    ok "failed cargo install retries before using the executable it left behind"
+else
+    bad "failed cargo install retries before using the executable it left behind"
+fi
+rm -rf "$STUB_DIR"
+
+# Execute the actual workflow install step with a cache hit and failed attestation.
+new_scratch
+bash "$SCRIPT" install-anchor >/dev/null 2>&1
+: > "$STUB_DIR/attestation_fail"
+: > "$STUB_DIR/avm.log"
+awk '
+  /- name: Install Anchor/ { step=1; next }
+  step && /^      - name:/ { exit }
+  step && /run: \|/ { body=1; next }
+  body {
+    sub(/^          /, "")
+    gsub(/\$\{\{[^}]*\}\}/, "true")
+    print
+  }
+' "$ROOT/.github/workflows/ci.yml" > "$STUB_DIR/cache-step.sh"
+if (cd "$ROOT" && bash -e "$STUB_DIR/cache-step.sh") >/dev/null 2>&1; then
+    bad "Anchor cache hit must still pass provenance verification"
+elif [ "$(count_lines_matching 'avm install --force' "$STUB_DIR/avm.log")" = 3 ]; then
+    ok "Anchor cache hit must still pass provenance verification on every retry"
+else
+    bad "Anchor cache hit retries provenance verification three times"
+fi
+rm -rf "$STUB_DIR"
+
+for failure in curl_fail_times installer_fail; do
+    new_scratch
+    bash "$SCRIPT" install-solana >/dev/null 2>&1
+    printf '9' > "$STUB_DIR/$failure"
+    : > "$STUB_DIR/curl.log"
+    if bash "$SCRIPT" install-solana >/dev/null 2>&1; then
+        bad "$failure rejects an existing runnable Solana binary"
+    elif [ "$(count_lines_matching curl "$STUB_DIR/curl.log")" = 3 ]; then
+        ok "$failure rejects an existing runnable Solana binary after three attempts"
+    else
+        bad "$failure exhausts exactly three Solana attempts"
+    fi
+    rm -rf "$STUB_DIR"
+done
+
+# A cached Solana binary must not short-circuit a transient download retry.
+new_scratch
+bash "$SCRIPT" install-solana >/dev/null 2>&1
+printf '0' > "$STUB_DIR/curl_count"
+printf '1' > "$STUB_DIR/curl_fail_times"
+if bash "$SCRIPT" install-solana >/dev/null 2>&1 \
+    && [ "$(cat "$STUB_DIR/curl_count")" = 2 ] \
+    && bash "$SCRIPT" verify-solana; then
+    ok "transient download failure retries before accepting cached Solana"
+else
+    bad "transient download failure retries before accepting cached Solana"
 fi
 rm -rf "$STUB_DIR"
 

@@ -13,7 +13,7 @@
 # the downloaded binary by default; the dangerous --skip-attestation flag is
 # never passed. On top of the installer's checks, each attempt ends by running
 # the installed binary and matching its reported version, and the workflow
-# runs the same verify command against a restored cache before trusting it.
+# reruns the Anchor install and attestation check even after a cache restore.
 #
 # Subcommands:
 #   install-anchor   retry loop: cargo install avm, avm install, avm use, verify
@@ -47,20 +47,24 @@ backoff() {
 verify_anchor() {
   command -v avm >/dev/null 2>&1 || return 1
   command -v anchor >/dev/null 2>&1 || return 1
-  [ "$(anchor --version 2>/dev/null)" = "$ANCHOR_VERSION_OUTPUT" ]
+  local version
+  version=$(anchor --version 2>/dev/null) || return 1
+  [ "$version" = "$ANCHOR_VERSION_OUTPUT" ]
 }
 
 install_anchor_once() {
+  # The caller uses this function as a condition, so errexit is disabled.
+  # Explicitly propagate each failure before checking the installed version.
   # avm itself is compiled once per runner; a later attempt reuses it instead
   # of paying for another cargo build.
   if ! command -v avm >/dev/null 2>&1; then
-    cargo install --git https://github.com/coral-xyz/anchor avm --force
+    cargo install --git https://github.com/coral-xyz/anchor avm --force || return 1
   fi
   # --force re-downloads even when a previous attempt left a binary behind,
   # so the provenance attestation check really runs on every attempt.
-  avm install --force "$ANCHOR_VERSION"
-  avm use "$ANCHOR_VERSION"
-  verify_anchor
+  avm install --force "$ANCHOR_VERSION" || return 1
+  avm use "$ANCHOR_VERSION" || return 1
+  verify_anchor || return 1
 }
 
 install_anchor() {
@@ -89,8 +93,10 @@ verify_solana() {
 install_solana_once() {
   # The installer checks the release it downloads; that check runs on every
   # attempt because the whole installer runs on every attempt.
-  sh -c "$(curl -sSfL "$SOLANA_INSTALL_URL")"
-  verify_solana
+  local installer
+  installer=$(curl -sSfL "$SOLANA_INSTALL_URL") || return 1
+  sh -c "$installer" || return 1
+  verify_solana || return 1
 }
 
 install_solana() {
